@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createProduct, updateProduct, deleteProduct, uploadPaidAsset, type ProductInput } from "@/lib/admin";
+import { requireAdmin } from "@/lib/admin-guard";
 
 const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
 
@@ -35,6 +36,7 @@ const schema = z.object({
 export type SaveState = { error?: string };
 
 export async function saveProduct(_prev: SaveState, formData: FormData): Promise<SaveState> {
+  await requireAdmin();
   const parsed = schema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues.map((i) => i.message).join(", ") };
@@ -73,6 +75,7 @@ const MAX_ASSET_BYTES = 100 * 1024 * 1024; // 100MB
 export type UploadState = { error?: string; path?: string };
 
 export async function uploadAsset(_prev: UploadState, formData: FormData): Promise<UploadState> {
+  await requireAdmin();
   const productId = formData.get("productId");
   const file = formData.get("file");
   if (typeof productId !== "string" || !productId) return { error: "Missing product" };
@@ -92,6 +95,7 @@ export async function uploadAsset(_prev: UploadState, formData: FormData): Promi
 }
 
 export async function removeProduct(formData: FormData): Promise<void> {
+  await requireAdmin();
   const id = formData.get("id");
   if (typeof id === "string" && id) {
     await deleteProduct(id);

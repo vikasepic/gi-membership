@@ -2,22 +2,18 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-// - Blocks /admin in production until real owner-auth (phase 2 auth).
+// - Gates /admin to admin users (ADMIN_EMAILS); redirects others to /login.
 // - Refreshes the Supabase auth session so server components see it.
 // - Ensures a first-party anon id cookie so attribution can be captured on
 //   landing (events don't send until phase 6, but the id must exist now or
 //   early traffic is permanently unattributable).
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-
-  if (process.env.NODE_ENV === "production" && pathname.startsWith("/admin")) {
-    return new NextResponse("Not found", { status: 404 });
-  }
-
   const res = NextResponse.next({ request: req });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  let userEmail: string | null = null;
   if (url && key) {
     const supabase = createServerClient(url, key, {
       cookies: {
@@ -25,7 +21,24 @@ export async function middleware(req: NextRequest) {
         setAll: (list) => list.forEach(({ name, value, options }) => res.cookies.set(name, value, options)),
       },
     });
-    await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    userEmail = user?.email ?? null;
+  }
+
+  // Admin gate — only ADMIN_EMAILS accounts reach /admin.
+  if (pathname.startsWith("/admin")) {
+    const admins = (process.env.ADMIN_EMAILS ?? "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    if (!userEmail || !admins.includes(userEmail.toLowerCase())) {
+      const to = req.nextUrl.clone();
+      to.pathname = "/login";
+      to.search = "";
+      return NextResponse.redirect(to);
+    }
   }
 
   if (!req.cookies.get("gi_anon")) {

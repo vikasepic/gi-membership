@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createOffer, updateOffer, deleteOffer, type OfferInput } from "@/lib/admin";
+import { requireAdmin } from "@/lib/admin-guard";
 
 const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
 const uuidish = z
@@ -50,6 +51,7 @@ const schema = z
 export type SaveState = { error?: string };
 
 export async function saveOffer(_prev: SaveState, formData: FormData): Promise<SaveState> {
+  await requireAdmin();
   const parsed = schema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     return { error: parsed.error.issues.map((i) => i.message).join(", ") };
@@ -94,6 +96,7 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
 }
 
 export async function removeOffer(formData: FormData): Promise<void> {
+  await requireAdmin();
   const id = formData.get("id");
   if (typeof id === "string" && id) {
     await deleteOffer(id);

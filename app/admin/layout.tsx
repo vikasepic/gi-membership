@@ -4,9 +4,8 @@ import { Logo } from "@/components/logo";
 // Admin — always dynamic (server data uses runtime-only env, never prerender).
 export const dynamic = "force-dynamic";
 
-// ponytail: admin is UNGUARDED for local dev. middleware.ts blocks it in
-// production until real owner-auth lands in phase 2 (accounts). Do not deploy
-// without that gate.
+// Admin access is gated in middleware.ts (ADMIN_EMAILS); mutating actions also
+// call requireAdmin() as defense in depth.
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col">
