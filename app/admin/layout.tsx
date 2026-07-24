@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 
+// Admin — always dynamic (server data uses runtime-only env, never prerender).
+export const dynamic = "force-dynamic";
+
 // ponytail: admin is UNGUARDED for local dev. middleware.ts blocks it in
 // production until real owner-auth lands in phase 2 (accounts). Do not deploy
 // without that gate.
