@@ -1,26 +1,114 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+  Greater Inside brand tokens.
+  Terracotta = primary + CTA (max twice per screen, never decorative).
+  Navy / plum used sparingly. Inter on display (600), Poppins on body.
+  Light + dark. Semantic tokens flip; raw brand hues stay fixed.
+*/
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root {
+  /* raw brand */
+  --gi-terracotta: #c8653d;
+  --gi-terracotta-600: #b0532f;
+  --gi-navy: #11325b;
+  --gi-plum: #832a63;
+  --gi-cream: #fafaf8;
+  --gi-cream-200: #f1efe9;
+  --gi-ink: #0b0b0d;
+  --gi-ink-800: #141418;
+
+  /* semantic — light */
+  --bg: var(--gi-cream);
+  --surface: #ffffff;
+  --surface-2: var(--gi-cream-200);
+  --fg: var(--gi-ink);
+  --muted: #5b5b63;
+  --border: #e4e1d9;
+  --primary: var(--gi-terracotta);
+  --primary-hover: var(--gi-terracotta-600);
+  --primary-fg: #ffffff;
+  --navy: var(--gi-navy);
+  --plum: var(--gi-plum);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: var(--gi-ink);
+    --surface: var(--gi-ink-800);
+    --surface-2: #1d1d22;
+    --fg: #f3f2ee;
+    --muted: #9a9aa2;
+    --border: #2a2a30;
+    --primary: var(--gi-terracotta);
+    --primary-hover: #d67a55;
+    --primary-fg: #ffffff;
   }
 }
 
+/* Explicit theme override wins over the OS preference in both directions. */
+:root[data-theme="light"] {
+  --bg: var(--gi-cream); --surface: #ffffff; --surface-2: var(--gi-cream-200);
+  --fg: var(--gi-ink); --muted: #5b5b63; --border: #e4e1d9; --primary-hover: var(--gi-terracotta-600);
+}
+:root[data-theme="dark"] {
+  --bg: var(--gi-ink); --surface: var(--gi-ink-800); --surface-2: #1d1d22;
+  --fg: #f3f2ee; --muted: #9a9aa2; --border: #2a2a30; --primary-hover: #d67a55;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-navy: var(--navy);
+  --color-plum: var(--plum);
+
+  --font-display: var(--font-inter);
+  --font-sans: var(--font-poppins);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Editorial atmosphere: faint navy/plum washes bled from the corners over
+     the base. Sparse, not decorative — keeps desktop from reading as flat. */
+  background:
+    radial-gradient(115% 85% at 100% -10%, color-mix(in srgb, var(--plum) 7%, transparent), transparent 55%),
+    radial-gradient(100% 75% at -10% 0%, color-mix(in srgb, var(--navy) 8%, transparent), transparent 50%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--fg);
+  font-family: var(--font-poppins), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* Small-caps editorial kicker/label. */
+.kicker {
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* Staggered load reveal (opt-in via .rise + inline animation-delay). */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+.rise { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rise { animation: none; }
+  body { background-attachment: scroll; }
 }
