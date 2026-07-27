@@ -52,23 +52,52 @@ Tests: 86 passing, including real Stripe test-mode refunds proving revocation.
 
 Set them in Coolify env on the app and redeploy; the code activates itself.
 
+## Consent (EU/UK confirmed — built 2026-07-27)
+
+Ajit confirmed the store takes EU/UK traffic, so GDPR applies and tracking is
+opt-in. `lib/consent.ts` fails closed: anything other than an explicit
+`granted` means no tracking.
+
+- Banner with **equal-weight Accept / Decline** (GDPR requires declining to be
+  as easy as accepting), no pre-selection, no dismiss-as-consent.
+- `/api/track` refuses to store click ids, UTMs or user agent without consent —
+  verified: no cookie → refused, `denied` → refused, `granted` → stored.
+- Consent is captured at checkout and stored on the order (`orders.tracking_consent`)
+  because the Stripe webhook finalizes orders with **no cookies**; `finalizeOrder`
+  will not send a conversion for an order that lacks consent.
+- 180-day cookie, then the visitor is asked again.
+
+## Stripe Tax (confirmed yes — built, OFF until activated)
+
+Digital-services VAT is owed at the buyer's country rate, so checkout now
+collects a **country** and the PaymentIntent charges `price + calculated tax`.
+The sale is recorded as a Stripe Tax transaction for reporting.
+
+**Currently disabled.** `STRIPE_TAX_ENABLED` is unset, and a probe against the
+account returned: *"Stripe Tax has not been activated on your account."*
+
+To turn it on:
+1. Activate Stripe Tax at `dashboard.stripe.com/test/tax` (needs your business
+   origin address).
+2. **Add your VAT registrations.** Stripe only charges tax where you are
+   registered — activating Tax does not by itself make you compliant, and for
+   EU sales this usually means a UK VAT registration and/or EU OSS.
+3. Set `STRIPE_TAX_ENABLED=true` in Coolify env and redeploy.
+4. Re-run the money-path tests: the charged amount changes, so this is a
+   money-path change, not a config tweak.
+
+Until step 3, tax is zero and the money path behaves exactly as it does today.
+
 ## Deliberately not built
 
 - **Browser pixel.** The server event is authoritative and dedupes on
   `event_id`; adding a browser pixel is a small follow-up once the pixel id
   exists, and is only needed for view/add-to-cart style events.
-- **Consent mode.** Still gated on an unanswered question: does this store take
-  EU/UK traffic? If yes, consent mode is legally required before any tracking
-  is switched on, because hashed email is still personal data under GDPR.
-  Nothing is sent today, so there is no current exposure.
-- **Stripe Tax.** Not enabled. Turning it on changes the amount charged, so it
-  needs an explicit decision and a re-run of the money-path tests.
 
 ## Before running paid traffic
 
 1. Add the credentials above and verify one live event lands in Events Manager /
    GA4 DebugView.
-2. Answer the EU/UK question and add consent mode if yes.
-3. Decide on Stripe Tax.
-4. Point the Stripe **live** webhook at `/api/webhooks/stripe` with the live
+2. Activate Stripe Tax + add VAT registrations, then set STRIPE_TAX_ENABLED.
+3. Point the Stripe **live** webhook at `/api/webhooks/stripe` with the live
    signing secret — the current endpoint is test mode only.
