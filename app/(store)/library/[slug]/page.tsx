@@ -2,6 +2,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getOwnedProduct, getProductProgress } from "@/lib/library";
+import { listCurriculum, rollupProgress } from "@/lib/curriculum";
+import { flattenPlayable, firstIncomplete } from "@/lib/curriculum-student";
+import { completedItemIds } from "@/lib/progress";
 import { markCompleteAction } from "../actions";
 
 export default async function ConsumePage({
@@ -22,6 +25,13 @@ export default async function ConsumePage({
   const { product, lessons } = owned;
   const progress = await getProductProgress(user.id, product.id);
 
+  // listCurriculum is published-only by default — students never see drafts.
+  const nodes = await listCurriculum(product.id);
+  const doneIds = await completedItemIds(user.id, product.id);
+  const flat = flattenPlayable(nodes);
+  const roll = rollupProgress(nodes.flatMap((n) => [n, ...n.children]), doneIds);
+  const resume = firstIncomplete(flat, doneIds);
+
   const assetUrl = `/api/asset/${product.id}`;
   const hasUpload = product.mediaMode === "upload" && !!product.mediaPath;
 
@@ -38,7 +48,66 @@ export default async function ConsumePage({
         {product.tagline && <p className="text-muted">{product.tagline}</p>}
       </div>
 
+      {/* A course with curriculum items replaces the single-media view below
+          entirely — products without chapters still fall through to it. */}
+      {nodes.length > 0 && (
+        <section className="flex flex-col gap-5">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted">{roll.done} of {roll.total} complete</span>
+            {resume && (
+              <Link
+                href={`/library/${product.slug}/${resume.id}`}
+                className="rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg hover:bg-primary-hover"
+              >
+                Continue &rarr; {resume.title}
+              </Link>
+            )}
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{ width: roll.total ? `${(roll.done / roll.total) * 100}%` : "0%" }}
+            />
+          </div>
+          <ol className="flex flex-col gap-3">
+            {nodes.map((ch) => (
+              <li key={ch.id} className="rounded-2xl border border-border bg-surface">
+                <div className="flex items-center justify-between px-5 py-4">
+                  {ch.children.length === 0 ? (
+                    <Link href={`/library/${product.slug}/${ch.id}`} className="hover:underline">
+                      {product.chapterLabel} &middot; {ch.title}
+                    </Link>
+                  ) : (
+                    <span>{product.chapterLabel} &middot; {ch.title}</span>
+                  )}
+                  <span className="text-xs text-muted">
+                    {ch.children.filter((c) => doneIds.has(c.id)).length}/{ch.children.length || 1}
+                  </span>
+                </div>
+                {ch.children.length > 0 && (
+                  <ol className="flex flex-col border-t border-border">
+                    {ch.children.map((ls) => (
+                      <li key={ls.id}>
+                        <Link
+                          href={`/library/${product.slug}/${ls.id}`}
+                          className="flex items-center gap-3 px-5 py-3 pl-8 text-sm hover:bg-surface-2"
+                        >
+                          <span className="text-muted">{doneIds.has(ls.id) ? "✓" : "○"}</span>
+                          {product.lessonLabel}: {ls.title}
+                        </Link>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
+
       {/* Delivery by type. Uploads go through the ownership-gated asset route. */}
+      {nodes.length === 0 && (
+        <>
       {product.type === "video" && product.mediaEmbedUrl && (
         <div className="aspect-video w-full overflow-hidden rounded-2xl border border-border">
           <iframe
@@ -80,6 +149,8 @@ export default async function ConsumePage({
           </button>
         </div>
       )}
+        </>
+      )}
 
       {product.description && (
         <section className="flex flex-col gap-2 border-t border-border pt-6">
@@ -88,7 +159,7 @@ export default async function ConsumePage({
         </section>
       )}
 
-      {lessons.length > 0 && (
+      {nodes.length === 0 && lessons.length > 0 && (
         <section className="flex flex-col gap-3 border-t border-border pt-6">
           <h2 className="kicker text-muted">Lessons</h2>
           <ol className="flex flex-col gap-2">
@@ -105,7 +176,7 @@ export default async function ConsumePage({
         </section>
       )}
 
-      {!progress?.completed && (
+      {nodes.length === 0 && !progress?.completed && (
         <form action={markCompleteAction}>
           <input type="hidden" name="productId" value={product.id} />
           <button className="w-fit rounded-full bg-primary px-6 py-3 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover">

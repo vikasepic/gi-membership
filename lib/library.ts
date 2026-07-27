@@ -12,7 +12,7 @@ const OFFER_COLUMNS =
 // PRIVATE bucket and are only ever reached through an ownership check here.
 
 const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order";
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order, chapter_label, lesson_label";
 
 export type Lesson = CourseItem;
 
