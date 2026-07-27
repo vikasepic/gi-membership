@@ -452,16 +452,16 @@ export const ITEM_COLUMNS =
 
 const bySort = (a: CourseItem, b: CourseItem) => a.sortOrder - b.sortOrder;
 
+// Orphans — a parentId pointing at a missing chapter — are excluded by
+// construction: they attach to no chapter, so they render nowhere.
 export function buildTree(items: CourseItem[]): CurriculumNode[] {
-  const chapters = items.filter((i) => i.parentId === null);
-  const chapterIds = new Set(chapters.map((c) => c.id));
-  return chapters.sort(bySort).map((c) => ({
-    ...c,
-    children: items.filter((i) => i.parentId === c.id).sort(bySort),
-  }));
-  // Orphans (parentId pointing at a missing/deleted chapter) are excluded by
-  // construction — they belong to no chapter, so they render nowhere.
-  void chapterIds;
+  return items
+    .filter((i) => i.parentId === null)
+    .sort(bySort)
+    .map((c) => ({
+      ...c,
+      children: items.filter((i) => i.parentId === c.id).sort(bySort),
+    }));
 }
 
 // A chapter WITH children is a container, not a completable unit. Countable
