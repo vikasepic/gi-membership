@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ownsProduct } from "@/lib/library";
-import { setItemCompletion, type CompletionSource } from "@/lib/progress";
+import { setItemCompletion, isItemCompleted, type CompletionSource } from "@/lib/progress";
 
 const SOURCES: CompletionSource[] = ["manual", "video", "download", "dwell"];
 
@@ -35,5 +35,6 @@ export async function POST(req: Request) {
   }
 
   await setItemCompletion(user.id, productId, itemId, completed, source);
-  return NextResponse.json({ ok: true });
+  const actual = await isItemCompleted(user.id, itemId);
+  return NextResponse.json({ ok: true, completed: actual });
 }

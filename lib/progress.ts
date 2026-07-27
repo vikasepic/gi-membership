@@ -93,6 +93,21 @@ export async function setItemCompletion(
   throw new Error(`setItemCompletion: ${error.message}`);
 }
 
+// Authoritative completion state for one item, post-write. Used by the API
+// route to tell the client what actually happened (manual_override may have
+// silently refused the write).
+export async function isItemCompleted(userId: string, itemId: string): Promise<boolean> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("progress")
+    .select("completed")
+    .eq("user_id", userId)
+    .eq("lesson_id", itemId)
+    .maybeSingle();
+  if (error) throw new Error(`isItemCompleted: ${error.message}`);
+  return data?.completed ?? false;
+}
+
 export async function completedItemIds(userId: string, productId: string): Promise<Set<string>> {
   const db = createServiceClient();
   const { data, error } = await db

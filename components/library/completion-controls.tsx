@@ -23,12 +23,20 @@ export function CompletionControls({
   const sent = useRef(false);
 
   async function send(next: boolean, source: "manual" | "video" | "download" | "dwell") {
-    await fetch("/api/progress", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ itemId, productId, completed: next, source }),
-    }).catch(() => {});
-    setIsDone(next);
+    try {
+      const res = await fetch("/api/progress", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ itemId, productId, completed: next, source }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      // Trust the server's answer, not our optimistic guess: manual_override
+      // may have silently refused this write, and the DB is the source of truth.
+      setIsDone(Boolean(data.completed));
+    } catch {
+      return;
+    }
     router.refresh();
   }
 
@@ -101,7 +109,13 @@ export function CompletionControls({
   return (
     <div className="flex flex-wrap items-center gap-4 border-t border-border pt-6">
       <button
-        onClick={() => send(!isDone, "manual")}
+        onClick={() => {
+          // Manual intent wins permanently (server enforces via manual_override).
+          // Stop the automatic effects from competing once the student has
+          // taken manual control in this session.
+          sent.current = true;
+          send(!isDone, "manual");
+        }}
         className={
           isDone
             ? "rounded-full border border-border px-5 py-2.5 text-sm text-muted hover:text-fg"
