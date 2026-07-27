@@ -41,7 +41,7 @@ export default async function ConsumePage({
         <Link href="/library" className="kicker w-fit text-muted hover:text-fg">&larr; Library</Link>
         <div className="flex items-center gap-3">
           <h1 className="text-3xl">{product.title}</h1>
-          {progress?.completed && (
+          {(nodes.length > 0 ? roll.total > 0 && roll.done === roll.total : progress?.completed) && (
             <span className="kicker rounded-full bg-navy/10 px-2.5 py-1 text-navy">Completed</span>
           )}
         </div>

@@ -26,6 +26,8 @@ export async function GET(
     return new NextResponse("Forbidden", { status: 403 });
   }
 
+  if (!item.isPublished) return new NextResponse("Not found", { status: 404 });
+
   const attachment = item.attachments[Number(index)];
   if (!attachment) return new NextResponse("Not found", { status: 404 });
 
