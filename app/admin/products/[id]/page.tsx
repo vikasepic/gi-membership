@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductForm } from "@/components/admin/product-form";
 import { AssetUpload } from "@/components/admin/asset-upload";
+import { CurriculumOutline } from "@/components/admin/curriculum-outline";
 import { getProductById, listOfferOptions } from "@/lib/admin";
+import { listCurriculum } from "@/lib/curriculum";
 
 export default async function EditProductPage({
   params,
@@ -10,7 +12,11 @@ export default async function EditProductPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [product, offers] = await Promise.all([getProductById(id), listOfferOptions()]);
+  const [product, offers, nodes] = await Promise.all([
+    getProductById(id),
+    listOfferOptions(),
+    listCurriculum(id, { includeDrafts: true }),
+  ]);
   if (!product) notFound();
 
   return (
@@ -20,6 +26,13 @@ export default async function EditProductPage({
         <h1 className="text-2xl">{product.title}</h1>
       </div>
       <ProductForm product={product} offers={offers} />
+
+      <CurriculumOutline
+        productId={product.id}
+        nodes={nodes}
+        chapterLabel={product.chapterLabel ?? "Chapter"}
+        lessonLabel={product.lessonLabel ?? "Lesson"}
+      />
 
       {product.type !== "video" && product.type !== "app" && (
         <AssetUpload productId={product.id} currentPath={product.mediaPath} />

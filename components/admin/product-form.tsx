@@ -117,6 +117,15 @@ export function ProductForm({
             </select>
           </Field>
         </div>
+
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <Field label="Call chapters" hint="e.g. Module, Week, Part">
+            <input name="chapterLabel" defaultValue={product?.chapterLabel ?? "Chapter"} className={input} />
+          </Field>
+          <Field label="Call lessons" hint="e.g. Session, Day, Video">
+            <input name="lessonLabel" defaultValue={product?.lessonLabel ?? "Lesson"} className={input} />
+          </Field>
+        </div>
       </fieldset>
 
       {state.error && (

@@ -31,6 +31,8 @@ const schema = z.object({
   status: z.enum(["draft", "published"]),
   bumpOfferId: z.preprocess(emptyToNull, uuidish.nullable()),
   upsellOfferId: z.preprocess(emptyToNull, uuidish.nullable()),
+  chapterLabel: z.string().trim().min(1).default("Chapter"),
+  lessonLabel: z.string().trim().min(1).default("Lesson"),
 });
 
 export type SaveState = { error?: string };
@@ -56,6 +58,8 @@ export async function saveProduct(_prev: SaveState, formData: FormData): Promise
     status: v.status,
     bumpOfferId: v.bumpOfferId,
     upsellOfferId: v.upsellOfferId,
+    chapterLabel: v.chapterLabel,
+    lessonLabel: v.lessonLabel,
   };
 
   try {
