@@ -20,9 +20,8 @@ export default async function ConsumePage({
   if (!user) redirect("/login");
 
   // Ownership is enforced here — getOwnedProduct returns null if not owned.
-  const owned = await getOwnedProduct(user.id, slug);
-  if (!owned) redirect("/library");
-  const { product, lessons } = owned;
+  const product = await getOwnedProduct(user.id, slug);
+  if (!product) redirect("/library");
   const progress = await getProductProgress(user.id, product.id);
 
   // listCurriculum is published-only by default — students never see drafts.
@@ -156,23 +155,6 @@ export default async function ConsumePage({
         <section className="flex flex-col gap-2 border-t border-border pt-6">
           <h2 className="kicker text-muted">About</h2>
           <p className="whitespace-pre-line leading-relaxed text-fg/90">{product.description}</p>
-        </section>
-      )}
-
-      {nodes.length === 0 && lessons.length > 0 && (
-        <section className="flex flex-col gap-3 border-t border-border pt-6">
-          <h2 className="kicker text-muted">Lessons</h2>
-          <ol className="flex flex-col gap-2">
-            {lessons.map((l, i) => (
-              <li key={l.id} className="flex gap-3 rounded-xl border border-border bg-surface p-4">
-                <span className="font-display text-muted">{String(i + 1).padStart(2, "0")}</span>
-                <div className="flex flex-col">
-                  <span>{l.title}</span>
-                  {l.subtitle && <span className="text-sm text-muted">{l.subtitle}</span>}
-                </div>
-              </li>
-            ))}
-          </ol>
         </section>
       )}
 

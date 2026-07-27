@@ -28,6 +28,13 @@ export async function GET(
 
   if (!item.isPublished) return new NextResponse("Not found", { status: 404 });
 
+  // A draft chapter hides everything beneath it: even if this lesson row is
+  // published, an unpublished parent chapter must block its attachments too.
+  if (item.parentId) {
+    const parent = await getCourseItem(item.parentId);
+    if (!parent || !parent.isPublished) return new NextResponse("Not found", { status: 404 });
+  }
+
   const attachment = item.attachments[Number(index)];
   if (!attachment) return new NextResponse("Not found", { status: 404 });
 

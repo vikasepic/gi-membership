@@ -20,25 +20,32 @@ export default async function ItemPage({
   if (!user) redirect("/login");
 
   // Ownership is enforced here — getOwnedProduct returns null if not owned.
-  const owned = await getOwnedProduct(user.id, slug);
-  if (!owned) redirect("/library");
+  const product = await getOwnedProduct(user.id, slug);
+  if (!product) redirect("/library");
 
   // getCourseItem is not published-filtered on its own, so publication and
   // product ownership are both re-checked here before rendering anything.
   const item = await getCourseItem(itemId);
-  if (!item || item.productId !== owned.product.id || !item.isPublished) {
+  if (!item || item.productId !== product.id || !item.isPublished) {
     redirect(`/library/${slug}`);
   }
+  // A draft chapter hides everything beneath it: buildTree drops the lesson
+  // from the curriculum outline as an orphan, but the lesson row itself can
+  // still be published, so its direct URL and attachments must be blocked too.
+  if (item.parentId) {
+    const parent = await getCourseItem(item.parentId);
+    if (!parent || !parent.isPublished) redirect(`/library/${slug}`);
+  }
 
-  const nodes = await listCurriculum(owned.product.id);
+  const nodes = await listCurriculum(product.id);
   const flat = flattenPlayable(nodes);
   const { prev, next } = neighbours(flat, itemId);
-  const done = await completedItemIds(user.id, owned.product.id);
+  const done = await completedItemIds(user.id, product.id);
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 py-4">
       <Link href={`/library/${slug}`} className="kicker w-fit text-muted hover:text-fg">
-        &larr; {owned.product.title}
+        &larr; {product.title}
       </Link>
       <div className="flex flex-col gap-1">
         <h1 className="text-3xl">{item.title}</h1>
@@ -89,7 +96,7 @@ export default async function ItemPage({
 
       <CompletionControls
         itemId={item.id}
-        productId={owned.product.id}
+        productId={product.id}
         completed={done.has(item.id)}
         videoUrl={item.videoEmbedUrl}
         nextHref={next ? `/library/${slug}/${next.id}` : `/library/${slug}`}

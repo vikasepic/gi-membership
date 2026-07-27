@@ -3,7 +3,6 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
 import { getStoreId } from "@/lib/store";
 import type { Product, Offer } from "@/lib/types";
-import type { CourseItem } from "@/lib/curriculum";
 
 const OFFER_COLUMNS =
   "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, stripe_product_id_test, stripe_product_id_live";
@@ -13,8 +12,6 @@ const OFFER_COLUMNS =
 
 const PRODUCT_COLUMNS =
   "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order, chapter_label, lesson_label";
-
-export type Lesson = CourseItem;
 
 export async function listOwnedProducts(userId: string): Promise<Product[]> {
   const db = createServiceClient();
@@ -91,7 +88,7 @@ export async function getStandingOffer(userId: string): Promise<Offer | null> {
 export async function getOwnedProduct(
   userId: string,
   slug: string,
-): Promise<{ product: Product; lessons: Lesson[] } | null> {
+): Promise<Product | null> {
   const db = createServiceClient();
   const { data: p } = await db
     .from("products")
@@ -102,14 +99,7 @@ export async function getOwnedProduct(
   if (!p) return null;
   const product = camelize<Product>(p);
   if (!(await ownsProduct(userId, product.id))) return null;
-
-  const { data: ls } = await db
-    .from("course_items")
-    .select("id, product_id, parent_id, title, subtitle, body_html, video_embed_url, cover_path, attachments, is_published, sort_order")
-    .eq("product_id", product.id)
-    .eq("is_published", true)
-    .order("sort_order", { ascending: true });
-  return { product, lessons: camelize<Lesson[]>(ls ?? []) };
+  return product;
 }
 
 // Mint a short-lived signed URL for a product's private asset — ONLY after the
