@@ -111,11 +111,15 @@ export async function moveItem(itemId: string, dir: "up" | "down"): Promise<void
   const row = camelize<CourseItem>(current.data);
   const writes = swapOrder(await siblingsOf(row.productId, row.parentId), itemId, dir);
   if (writes.length === 0) return;
-  // Park one row at a free position first — the sibling unique index rejects a
-  // direct swap.
-  await db.from("course_items").update({ sort_order: -1 }).eq("id", writes[0].id);
-  await db.from("course_items").update({ sort_order: writes[1].sortOrder }).eq("id", writes[1].id);
-  await db.from("course_items").update({ sort_order: writes[0].sortOrder }).eq("id", writes[0].id);
+  // The sibling unique index rejects a direct two-row swap, so the DB-side
+  // function parks one row at a free position first. Doing that inside a
+  // single Postgres function makes the whole swap one atomic transaction —
+  // no risk of a crash between statements stranding a row at -1.
+  const { error } = await db.rpc("swap_course_item_order", {
+    a_id: writes[0].id,
+    b_id: writes[1].id,
+  });
+  if (error) throw new Error(`moveItem: ${error.message}`);
 }
 
 export async function setCover(itemId: string, coverPath: string): Promise<void> {
