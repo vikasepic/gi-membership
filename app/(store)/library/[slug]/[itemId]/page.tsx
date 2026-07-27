@@ -48,7 +48,11 @@ export default async function ItemPage({
       {item.videoEmbedUrl && (
         <div className="aspect-video w-full overflow-hidden rounded-2xl border border-border">
           <iframe
-            src={item.videoEmbedUrl}
+            src={
+              /youtube\.com|youtu\.be/i.test(item.videoEmbedUrl)
+                ? `${item.videoEmbedUrl}${item.videoEmbedUrl.includes("?") ? "&" : "?"}enablejsapi=1`
+                : item.videoEmbedUrl
+            }
             className="h-full w-full"
             allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
             allowFullScreen
