@@ -13,12 +13,20 @@ const OFFER_COLUMNS =
 const PRODUCT_COLUMNS =
   "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order";
 
+// ponytail: inlined here (not imported from lib/curriculum) because that
+// module doesn't exist yet — it lands in Task 3, which then re-points this
+// to `import type { CourseItem } from "@/lib/curriculum"`.
 export type Lesson = {
   id: string;
+  productId: string;
+  parentId: string | null;
   title: string;
-  description: string | null;
-  mediaMode: "upload" | "embed" | null;
-  mediaEmbedUrl: string | null;
+  subtitle: string | null;
+  bodyHtml: string | null;
+  videoEmbedUrl: string | null;
+  coverPath: string | null;
+  attachments: unknown;
+  isPublished: boolean;
   sortOrder: number;
 };
 
@@ -110,9 +118,10 @@ export async function getOwnedProduct(
   if (!(await ownsProduct(userId, product.id))) return null;
 
   const { data: ls } = await db
-    .from("lessons")
-    .select("id, title, description, media_mode, media_embed_url, sort_order")
+    .from("course_items")
+    .select("id, product_id, parent_id, title, subtitle, body_html, video_embed_url, cover_path, attachments, is_published, sort_order")
     .eq("product_id", product.id)
+    .eq("is_published", true)
     .order("sort_order", { ascending: true });
   return { product, lessons: camelize<Lesson[]>(ls ?? []) };
 }

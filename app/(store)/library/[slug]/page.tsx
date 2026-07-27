@@ -97,7 +97,7 @@ export default async function ConsumePage({
                 <span className="font-display text-muted">{String(i + 1).padStart(2, "0")}</span>
                 <div className="flex flex-col">
                   <span>{l.title}</span>
-                  {l.description && <span className="text-sm text-muted">{l.description}</span>}
+                  {l.subtitle && <span className="text-sm text-muted">{l.subtitle}</span>}
                 </div>
               </li>
             ))}
