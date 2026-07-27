@@ -48,6 +48,7 @@ export function ProductForm({
             <option value="audio">Audio</option>
             <option value="video">Video</option>
             <option value="app">App</option>
+            <option value="course">Course</option>
           </select>
         </Field>
         <Field label="Price ($)" required>

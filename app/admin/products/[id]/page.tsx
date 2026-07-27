@@ -34,7 +34,7 @@ export default async function EditProductPage({
         lessonLabel={product.lessonLabel ?? "Lesson"}
       />
 
-      {product.type !== "video" && product.type !== "app" && (
+      {product.type !== "video" && product.type !== "app" && product.type !== "course" && (
         <AssetUpload productId={product.id} currentPath={product.mediaPath} />
       )}
     </div>

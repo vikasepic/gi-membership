@@ -103,7 +103,7 @@ export function CurriculumOutline({
               <input type="hidden" name="productId" value={productId} />
               <input type="hidden" name="parentId" value={ch.id} />
               <input type="hidden" name="title" value={`New ${lessonLabel}`} />
-              <button className="text-sm text-primary hover:underline">+ Add {lessonLabel}</button>
+              <button className="text-sm text-muted hover:text-fg">+ Add {lessonLabel}</button>
             </form>
           </li>
         ))}

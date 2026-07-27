@@ -2,13 +2,14 @@ import Link from "next/link";
 
 // Catalog card. Type drives a quiet accent (navy/plum/terracotta) on the label
 // and the cover wash — terracotta stays reserved for the primary CTA elsewhere.
-export type ProductType = "pdf" | "audio" | "video" | "app";
+export type ProductType = "pdf" | "audio" | "video" | "app" | "course";
 
 const TYPE_META: Record<ProductType, { label: string; accent: string; wash: string }> = {
-  pdf:   { label: "Guide",   accent: "var(--navy)",  wash: "color-mix(in srgb, var(--navy) 14%, var(--surface))" },
-  audio: { label: "Audio",   accent: "var(--plum)",  wash: "color-mix(in srgb, var(--plum) 14%, var(--surface))" },
-  video: { label: "Video",   accent: "var(--primary)", wash: "color-mix(in srgb, var(--primary) 14%, var(--surface))" },
-  app:   { label: "App",     accent: "var(--navy)",  wash: "color-mix(in srgb, var(--navy) 10%, var(--surface))" },
+  pdf:    { label: "Guide",   accent: "var(--navy)",  wash: "color-mix(in srgb, var(--navy) 14%, var(--surface))" },
+  audio:  { label: "Audio",   accent: "var(--plum)",  wash: "color-mix(in srgb, var(--plum) 14%, var(--surface))" },
+  video:  { label: "Video",   accent: "var(--primary)", wash: "color-mix(in srgb, var(--primary) 14%, var(--surface))" },
+  app:    { label: "App",     accent: "var(--navy)",  wash: "color-mix(in srgb, var(--navy) 10%, var(--surface))" },
+  course: { label: "Course",  accent: "var(--plum)",  wash: "color-mix(in srgb, var(--plum) 14%, var(--surface))" },
 };
 
 export type CatalogItem = {

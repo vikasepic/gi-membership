@@ -21,7 +21,7 @@ const schema = z.object({
   title: z.string().trim().min(1, "Title required"),
   tagline: z.preprocess(emptyToNull, z.string().nullable()),
   description: z.preprocess(emptyToNull, z.string().nullable()),
-  type: z.enum(["pdf", "audio", "video", "app"]),
+  type: z.enum(["pdf", "audio", "video", "app", "course"]),
   // dollars from the form -> cents
   price: z.coerce.number().min(0, "Price must be ≥ 0"),
   compareAt: z.preprocess(emptyToNull, z.coerce.number().min(0).nullable()),
