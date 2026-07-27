@@ -80,7 +80,9 @@ export default async function ConsumePage({
                     <span>{product.chapterLabel} &middot; {ch.title}</span>
                   )}
                   <span className="text-xs text-muted">
-                    {ch.children.filter((c) => doneIds.has(c.id)).length}/{ch.children.length || 1}
+                    {ch.children.length > 0
+                      ? `${ch.children.filter((c) => doneIds.has(c.id)).length}/${ch.children.length}`
+                      : `${doneIds.has(ch.id) ? 1 : 0}/1`}
                   </span>
                 </div>
                 {ch.children.length > 0 && (
