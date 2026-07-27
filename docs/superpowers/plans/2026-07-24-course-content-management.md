@@ -337,7 +337,7 @@ git commit -m "feat: server-side HTML sanitizer for lesson bodies"
   - `type CurriculumNode = CourseItem & { children: CourseItem[] }`
   - `buildTree(items: CourseItem[]): CurriculumNode[]` (pure, exported for tests)
   - `rollupProgress(items: CourseItem[], completedIds: Set<string>): { done: number; total: number }` (pure)
-  - `listCurriculum(productId: string, opts?: { publishedOnly?: boolean }): Promise<CurriculumNode[]>`
+  - `listCurriculum(productId: string, opts?: { includeDrafts?: boolean }): Promise<CurriculumNode[]>` — defaults to published-only; admin callers must pass `{ includeDrafts: true }` to see drafts
   - `getCourseItem(itemId: string): Promise<CourseItem | null>`
 
 - [ ] **Step 1: Write the failing test**
@@ -479,13 +479,16 @@ export function rollupProgress(
   };
 }
 
+// Default: published items only (fail safe). Admin callers must opt in with
+// includeDrafts: true to see unpublished items. This prevents draft lessons
+// from accidentally leaking to paying students.
 export async function listCurriculum(
   productId: string,
-  opts: { publishedOnly?: boolean } = {},
+  opts: { includeDrafts?: boolean } = {},
 ): Promise<CurriculumNode[]> {
   const db = createServiceClient();
   let q = db.from("course_items").select(ITEM_COLUMNS).eq("product_id", productId);
-  if (opts.publishedOnly) q = q.eq("is_published", true);
+  if (!opts.includeDrafts) q = q.eq("is_published", true);
   const { data, error } = await q.order("sort_order", { ascending: true });
   if (error) throw new Error(`listCurriculum: ${error.message}`);
   return buildTree(camelize<CourseItem[]>(data ?? []));
@@ -1336,7 +1339,7 @@ Change the data fetch to also load the curriculum:
   const [product, offers, nodes] = await Promise.all([
     getProductById(id),
     listOfferOptions(),
-    listCurriculum(id),
+    listCurriculum(id, { includeDrafts: true }),
   ]);
 ```
 
@@ -1875,7 +1878,7 @@ export default async function ItemPage({
     redirect(`/library/${slug}`);
   }
 
-  const nodes = await listCurriculum(owned.product.id, { publishedOnly: true });
+  const nodes = await listCurriculum(owned.product.id);
   const flat = flattenPlayable(nodes);
   const { prev, next } = neighbours(flat, itemId);
   const done = await completedItemIds(user.id, owned.product.id);
@@ -1954,7 +1957,7 @@ export default async function ItemPage({
 In `app/(store)/library/[slug]/page.tsx`, after loading `owned`, add:
 
 ```tsx
-  const nodes = await listCurriculum(owned.product.id, { publishedOnly: true });
+  const nodes = await listCurriculum(owned.product.id);
   const doneIds = await completedItemIds(user.id, owned.product.id);
   const flat = flattenPlayable(nodes);
   const roll = rollupProgress(nodes.flatMap((n) => [n, ...n.children]), doneIds);

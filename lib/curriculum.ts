@@ -55,13 +55,16 @@ export function rollupProgress(
   };
 }
 
+// Default: published items only (fail safe). Admin callers must opt in with
+// includeDrafts: true to see unpublished items. This prevents draft lessons
+// from accidentally leaking to paying students.
 export async function listCurriculum(
   productId: string,
-  opts: { publishedOnly?: boolean } = {},
+  opts: { includeDrafts?: boolean } = {},
 ): Promise<CurriculumNode[]> {
   const db = createServiceClient();
   let q = db.from("course_items").select(ITEM_COLUMNS).eq("product_id", productId);
-  if (opts.publishedOnly) q = q.eq("is_published", true);
+  if (!opts.includeDrafts) q = q.eq("is_published", true);
   const { data, error } = await q.order("sort_order", { ascending: true });
   if (error) throw new Error(`listCurriculum: ${error.message}`);
   return buildTree(camelize<CourseItem[]>(data ?? []));
