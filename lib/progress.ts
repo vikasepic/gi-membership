@@ -18,6 +18,27 @@ export function shouldApply(
   return completed && !existing.completed;
 }
 
+async function readExisting(
+  db: ReturnType<typeof createServiceClient>,
+  userId: string,
+  itemId: string,
+) {
+  const { data, error } = await db
+    .from("progress")
+    .select("id, completed, manual_override")
+    .eq("user_id", userId)
+    .eq("lesson_id", itemId)
+    .maybeSingle();
+  if (error) throw new Error(`setItemCompletion: ${error.message}`);
+  return data
+    ? {
+        id: data.id as string,
+        completed: data.completed as boolean,
+        manualOverride: data.manual_override as boolean,
+      }
+    : null;
+}
+
 export async function setItemCompletion(
   userId: string,
   productId: string,
@@ -26,16 +47,7 @@ export async function setItemCompletion(
   source: CompletionSource,
 ): Promise<void> {
   const db = createServiceClient();
-  const { data } = await db
-    .from("progress")
-    .select("id, completed, manual_override")
-    .eq("user_id", userId)
-    .eq("lesson_id", itemId)
-    .maybeSingle();
-
-  const existing = data
-    ? { completed: data.completed as boolean, manualOverride: data.manual_override as boolean }
-    : null;
+  const existing = await readExisting(db, userId, itemId);
   if (!shouldApply(existing, source, completed)) return;
 
   const patch = {
@@ -44,27 +56,52 @@ export async function setItemCompletion(
     manual_override: source === "manual" ? true : (existing?.manualOverride ?? false),
   };
 
-  if (data) {
-    await db.from("progress").update(patch).eq("id", data.id);
-  } else {
-    await db.from("progress").insert({
-      store_id: await getStoreId(),
-      user_id: userId,
-      product_id: productId,
-      lesson_id: itemId,
-      ...patch,
-    });
+  if (existing) {
+    const { error } = await db.from("progress").update(patch).eq("id", existing.id);
+    if (error) throw new Error(`setItemCompletion: ${error.message}`);
+    return;
   }
+
+  const { error } = await db.from("progress").insert({
+    store_id: await getStoreId(),
+    user_id: userId,
+    product_id: productId,
+    lesson_id: itemId,
+    ...patch,
+  });
+  if (!error) return;
+
+  // Unique violation on (store_id, user_id, lesson_id): another writer
+  // (manual toggle vs. auto signal) inserted the first-ever row for this
+  // item between our read and our insert. Re-read the row that won and
+  // re-decide against its current state — do NOT blindly retry the insert.
+  if (error.code === "23505") {
+    const raced = await readExisting(db, userId, itemId);
+    if (!raced || !shouldApply(raced, source, completed)) return;
+    const { error: updateError } = await db
+      .from("progress")
+      .update({
+        completed,
+        completed_source: source,
+        manual_override: source === "manual" ? true : raced.manualOverride,
+      })
+      .eq("id", raced.id);
+    if (updateError) throw new Error(`setItemCompletion: ${updateError.message}`);
+    return;
+  }
+
+  throw new Error(`setItemCompletion: ${error.message}`);
 }
 
 export async function completedItemIds(userId: string, productId: string): Promise<Set<string>> {
   const db = createServiceClient();
-  const { data } = await db
+  const { data, error } = await db
     .from("progress")
     .select("lesson_id")
     .eq("user_id", userId)
     .eq("product_id", productId)
     .eq("completed", true)
     .not("lesson_id", "is", null);
+  if (error) throw new Error(`completedItemIds: ${error.message}`);
   return new Set((data ?? []).map((r) => r.lesson_id as string));
 }
