@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin-guard";
-import { createItem, moveItem, deleteItem, updateItem, addAttachment, removeAttachment } from "@/lib/curriculum-admin";
-import { validateUpload, uploadAttachment } from "@/lib/media";
+import { createItem, moveItem, deleteItem, updateItem, addAttachment, removeAttachment, setCover } from "@/lib/curriculum-admin";
+import { validateUpload, uploadAttachment, uploadCover } from "@/lib/media";
 
 export async function addChapterAction(formData: FormData) {
   await requireAdmin();
@@ -78,7 +78,22 @@ export async function uploadAttachmentAction(formData: FormData) {
   const file = formData.get("file");
   if (file instanceof File && file.size > 0) {
     const check = validateUpload({ type: file.type, size: file.size }, "attachment");
-    if (check.ok) await addAttachment(itemId, await uploadAttachment(itemId, file));
+    if (!check.ok) redirect(`/admin/products/${productId}/curriculum/${itemId}?error=${encodeURIComponent(check.error)}`);
+    await addAttachment(itemId, await uploadAttachment(itemId, file));
+  }
+  revalidatePath(`/admin/products/${productId}/curriculum/${itemId}`);
+}
+
+export async function uploadCoverAction(formData: FormData) {
+  await requireAdmin();
+  const productId = String(formData.get("productId"));
+  const itemId = String(formData.get("itemId"));
+  const file = formData.get("file");
+  if (file instanceof File && file.size > 0) {
+    const check = validateUpload({ type: file.type, size: file.size }, "cover");
+    if (!check.ok) redirect(`/admin/products/${productId}/curriculum/${itemId}?error=${encodeURIComponent(check.error)}`);
+    const path = await uploadCover(itemId, file);
+    await setCover(itemId, path);
   }
   revalidatePath(`/admin/products/${productId}/curriculum/${itemId}`);
 }

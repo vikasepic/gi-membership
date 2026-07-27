@@ -7,10 +7,13 @@ import { ItemEditor } from "@/components/admin/item-editor";
 
 export default async function ItemEditorPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string; itemId: string }>;
+  searchParams: Promise<{ error?: string }>;
 }) {
   const { id, itemId } = await params;
+  const { error } = await searchParams;
   const [item, product] = await Promise.all([getCourseItem(itemId), getProductById(id)]);
   if (!item || !product) notFound();
 
@@ -31,6 +34,7 @@ export default async function ItemEditorPage({
         productId={id}
         kindLabel={kindLabel}
         childCount={await countChildren(itemId)}
+        error={error}
       />
     </div>
   );

@@ -13,7 +13,7 @@ export function RichText({ name, value }: { name: string; value: string }) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({ heading: { levels: [2, 3, 4] } }),
+      StarterKit.configure({ heading: { levels: [2, 3, 4] }, link: false }),
       Link.configure({ openOnClick: false }),
       Image,
     ],

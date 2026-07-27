@@ -7,6 +7,7 @@ import {
   saveItemAction,
   deleteItemAction,
   uploadAttachmentAction,
+  uploadCoverAction,
   removeAttachmentAction,
 } from "@/app/admin/products/[id]/curriculum/actions";
 
@@ -25,15 +26,22 @@ export function ItemEditor({
   productId,
   kindLabel,
   childCount,
+  error,
 }: {
   item: CourseItem;
   productId: string;
   kindLabel: string;
   childCount: number;
+  error?: string;
 }) {
   const cover = publicCoverUrl(item.coverPath);
   return (
     <div className="flex flex-col gap-8">
+      {error && (
+        <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">
+          {error}
+        </p>
+      )}
       <form action={saveItemAction} className="flex flex-col gap-6">
         <input type="hidden" name="productId" value={productId} />
         <input type="hidden" name="itemId" value={item.id} />
@@ -81,7 +89,8 @@ export function ItemEditor({
       <section className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5">
         <span className="kicker text-muted">Cover image</span>
         {cover && <img src={cover} alt="" className="h-32 w-auto rounded-lg border border-border" />}
-        <form action="/api/media/cover" method="post" encType="multipart/form-data" className="flex flex-col gap-3">
+        <form action={uploadCoverAction} className="flex flex-col gap-3">
+          <input type="hidden" name="productId" value={productId} />
           <input type="hidden" name="itemId" value={item.id} />
           <input type="file" name="file" accept="image/*" className="text-sm" />
           <button className="w-fit rounded-full border border-border px-5 py-2 text-sm hover:border-primary">
@@ -101,7 +110,7 @@ export function ItemEditor({
                 <input type="hidden" name="productId" value={productId} />
                 <input type="hidden" name="itemId" value={item.id} />
                 <input type="hidden" name="path" value={a.path} />
-                <button className="text-xs text-muted hover:text-primary">Remove</button>
+                <button className="text-xs text-muted hover:text-fg">Remove</button>
               </form>
             </li>
           ))}
@@ -119,7 +128,7 @@ export function ItemEditor({
       <form action={deleteItemAction} className="border-t border-border pt-6">
         <input type="hidden" name="productId" value={productId} />
         <input type="hidden" name="itemId" value={item.id} />
-        <button className="text-sm text-muted hover:text-primary">
+        <button className="text-sm text-muted hover:text-fg">
           Delete this {kindLabel.toLowerCase()}
           {childCount > 0 && ` and its ${childCount} child item(s) and their progress`}
         </button>
