@@ -3,9 +3,9 @@ import { RichText } from "@/components/editor/rich-text";
 import { inputClass as input, Field } from "@/components/admin/form-controls";
 import { publicCoverUrl } from "@/lib/media";
 import type { CourseItem } from "@/lib/curriculum";
+import { DeleteItemButton } from "@/components/admin/delete-item-button";
 import {
   saveItemAction,
-  deleteItemAction,
   uploadAttachmentAction,
   uploadCoverAction,
   removeAttachmentAction,
@@ -125,14 +125,13 @@ export function ItemEditor({
         </form>
       </section>
 
-      <form action={deleteItemAction} className="border-t border-border pt-6">
-        <input type="hidden" name="productId" value={productId} />
-        <input type="hidden" name="itemId" value={item.id} />
-        <button className="text-sm text-muted hover:text-fg">
-          Delete this {kindLabel.toLowerCase()}
-          {childCount > 0 && ` and its ${childCount} child item(s) and their progress`}
-        </button>
-      </form>
+      <DeleteItemButton
+        productId={productId}
+        itemId={item.id}
+        itemTitle={item.title}
+        itemKindLabel={kindLabel}
+        childCount={childCount}
+      />
     </div>
   );
 }
