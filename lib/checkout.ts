@@ -5,6 +5,7 @@ import { getStoreId, getProductBySlug, getOffer } from "@/lib/store";
 import { isOfferEligible, immediateChargeCents, type Ownership } from "@/lib/offers";
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
 import { provisionAppSubscription } from "@/lib/apps";
+import { trackPurchase } from "@/lib/tracking";
 import { stripe, stripeMode } from "@/lib/stripe";
 import { otoSigningSecret } from "@/lib/env";
 import type { Offer } from "@/lib/types";
@@ -228,7 +229,7 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
   const db = createServiceClient();
   const { data: order } = await db
     .from("orders")
-    .select("id, store_id, user_id, status, stripe_customer_id, email")
+    .select("id, store_id, user_id, status, stripe_customer_id, email, visitor_id")
     .eq("stripe_payment_intent_id", paymentIntentId)
     .maybeSingle();
   if (!order || !order.user_id) return;
@@ -279,6 +280,29 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
         stripe_payment_intent_id: result.paymentIntentId ?? null,
       });
     }
+  }
+
+  // Report the conversion server-side. Guarded so a tracking outage can never
+  // fail a paid order — finalizeOrder has already committed everything above.
+  // The PaymentIntent id doubles as the dedup event_id: the browser pixel (when
+  // added) sends the same value, and finalizeOrder is idempotent, so a webhook
+  // + thank-you double-call cannot double-count a conversion.
+  try {
+    const { data: visitor } = order.visitor_id
+      ? await db.from("visitors").select("click_ids").eq("id", order.visitor_id).maybeSingle()
+      : { data: null };
+    await trackPurchase({
+      eventId: paymentIntentId,
+      eventName: "Purchase",
+      email: order.email as string,
+      valueCents: pi.amount,
+      currency: pi.currency,
+      orderId: order.id as string,
+      clickIds: (visitor?.click_ids as Record<string, string>) ?? {},
+      occurredAt: Math.floor(Date.now() / 1000),
+    });
+  } catch (e) {
+    console.error("[finalizeOrder] tracking failed (order is still complete):", e);
   }
 }
 
