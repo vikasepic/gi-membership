@@ -55,6 +55,7 @@ export default async function ItemPage({
       {item.videoEmbedUrl && (
         <div className="aspect-video w-full overflow-hidden rounded-2xl border border-border">
           <iframe
+            data-gi-video
             src={
               /youtube\.com|youtu\.be/i.test(item.videoEmbedUrl)
                 ? `${item.videoEmbedUrl}${item.videoEmbedUrl.includes("?") ? "&" : "?"}enablejsapi=1`

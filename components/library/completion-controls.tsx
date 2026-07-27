@@ -73,15 +73,49 @@ export function CompletionControls({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDone, itemId]);
 
-  // Video: YouTube and Vimeo expose progress cross-origin; other providers do
-  // not, and simply fall through to the dwell timer.
+  // Video: YouTube and Vimeo expose progress cross-origin, but only after the
+  // parent sends a handshake ("listening" / addEventListener) to the iframe —
+  // neither player emits anything unprompted. Other providers are not
+  // supported here and simply fall through to the dwell timer.
   useEffect(() => {
     if (isDone || !videoUrl) return;
     const isVimeo = /vimeo\.com/i.test(videoUrl);
     const isYouTube = /youtube\.com|youtu\.be/i.test(videoUrl);
     if (!isVimeo && !isYouTube) return;
 
+    const ALLOWED_ORIGINS = [
+      "https://www.youtube.com",
+      "https://www.youtube-nocookie.com",
+      "https://player.vimeo.com",
+    ];
+
+    // The handshake is lost if sent before the player's script has finished
+    // loading inside the iframe, so it's retried on an interval until the
+    // first reply from that provider arrives.
+    let handshakeAcked = false;
+    let handshakeTimer: ReturnType<typeof setInterval> | undefined;
+    const iframe = document.querySelector<HTMLIFrameElement>("[data-gi-video]");
+    if (iframe) {
+      const targetOrigin = isYouTube ? "https://www.youtube.com" : "https://player.vimeo.com";
+      const payload = isYouTube
+        ? JSON.stringify({ event: "listening", id: 1, channel: "widget" })
+        : JSON.stringify({ method: "addEventListener", value: "timeupdate" });
+      const sendHandshake = () => {
+        if (handshakeAcked) return;
+        iframe.contentWindow?.postMessage(payload, targetOrigin);
+      };
+      sendHandshake();
+      handshakeTimer = setInterval(sendHandshake, 1000);
+    }
+
     const onMessage = (e: MessageEvent) => {
+      // Any frame could otherwise forge a completion by posting a message —
+      // only trust the known player origins.
+      if (!ALLOWED_ORIGINS.includes(e.origin)) return;
+      if (!handshakeAcked) {
+        handshakeAcked = true;
+        if (handshakeTimer) clearInterval(handshakeTimer);
+      }
       if (sent.current) return;
       try {
         const d = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
@@ -102,7 +136,10 @@ export function CompletionControls({
       }
     };
     window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      if (handshakeTimer) clearInterval(handshakeTimer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDone, videoUrl, itemId]);
 
