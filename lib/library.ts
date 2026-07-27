@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
 import { getStoreId } from "@/lib/store";
 import type { Product, Offer } from "@/lib/types";
+import type { CourseItem } from "@/lib/curriculum";
 
 const OFFER_COLUMNS =
   "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, stripe_product_id_test, stripe_product_id_live";
@@ -13,22 +14,7 @@ const OFFER_COLUMNS =
 const PRODUCT_COLUMNS =
   "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order";
 
-// ponytail: inlined here (not imported from lib/curriculum) because that
-// module doesn't exist yet — it lands in Task 3, which then re-points this
-// to `import type { CourseItem } from "@/lib/curriculum"`.
-export type Lesson = {
-  id: string;
-  productId: string;
-  parentId: string | null;
-  title: string;
-  subtitle: string | null;
-  bodyHtml: string | null;
-  videoEmbedUrl: string | null;
-  coverPath: string | null;
-  attachments: unknown;
-  isPublished: boolean;
-  sortOrder: number;
-};
+export type Lesson = CourseItem;
 
 export async function listOwnedProducts(userId: string): Promise<Product[]> {
   const db = createServiceClient();
