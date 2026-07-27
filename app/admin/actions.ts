@@ -21,7 +21,7 @@ const schema = z.object({
   title: z.string().trim().min(1, "Title required"),
   tagline: z.preprocess(emptyToNull, z.string().nullable()),
   description: z.preprocess(emptyToNull, z.string().nullable()),
-  type: z.enum(["pdf", "audio", "video", "app"]),
+  type: z.enum(["pdf", "audio", "video", "app", "course"]),
   // dollars from the form -> cents
   price: z.coerce.number().min(0, "Price must be ≥ 0"),
   compareAt: z.preprocess(emptyToNull, z.coerce.number().min(0).nullable()),
@@ -31,6 +31,8 @@ const schema = z.object({
   status: z.enum(["draft", "published"]),
   bumpOfferId: z.preprocess(emptyToNull, uuidish.nullable()),
   upsellOfferId: z.preprocess(emptyToNull, uuidish.nullable()),
+  chapterLabel: z.string().trim().min(1).default("Chapter"),
+  lessonLabel: z.string().trim().min(1).default("Lesson"),
 });
 
 export type SaveState = { error?: string };
@@ -56,6 +58,8 @@ export async function saveProduct(_prev: SaveState, formData: FormData): Promise
     status: v.status,
     bumpOfferId: v.bumpOfferId,
     upsellOfferId: v.upsellOfferId,
+    chapterLabel: v.chapterLabel,
+    lessonLabel: v.lessonLabel,
   };
 
   try {

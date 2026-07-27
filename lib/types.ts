@@ -1,5 +1,5 @@
 // camelCase domain types (API boundary). DB is snake_case; see lib/case.ts.
-export type ProductType = "pdf" | "audio" | "video" | "app";
+export type ProductType = "pdf" | "audio" | "video" | "app" | "course";
 export type MediaMode = "upload" | "embed";
 export type ProductStatus = "draft" | "published";
 
@@ -22,6 +22,8 @@ export type Product = {
   upsellOfferId: string | null;
   isPlaceholder: boolean;
   sortOrder: number;
+  chapterLabel: string;
+  lessonLabel: string;
 };
 
 export type GrantType = "product" | "subscription";

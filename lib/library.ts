@@ -11,16 +11,7 @@ const OFFER_COLUMNS =
 // PRIVATE bucket and are only ever reached through an ownership check here.
 
 const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order";
-
-export type Lesson = {
-  id: string;
-  title: string;
-  description: string | null;
-  mediaMode: "upload" | "embed" | null;
-  mediaEmbedUrl: string | null;
-  sortOrder: number;
-};
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order, chapter_label, lesson_label";
 
 export async function listOwnedProducts(userId: string): Promise<Product[]> {
   const db = createServiceClient();
@@ -97,7 +88,7 @@ export async function getStandingOffer(userId: string): Promise<Offer | null> {
 export async function getOwnedProduct(
   userId: string,
   slug: string,
-): Promise<{ product: Product; lessons: Lesson[] } | null> {
+): Promise<Product | null> {
   const db = createServiceClient();
   const { data: p } = await db
     .from("products")
@@ -108,13 +99,7 @@ export async function getOwnedProduct(
   if (!p) return null;
   const product = camelize<Product>(p);
   if (!(await ownsProduct(userId, product.id))) return null;
-
-  const { data: ls } = await db
-    .from("lessons")
-    .select("id, title, description, media_mode, media_embed_url, sort_order")
-    .eq("product_id", product.id)
-    .order("sort_order", { ascending: true });
-  return { product, lessons: camelize<Lesson[]>(ls ?? []) };
+  return product;
 }
 
 // Mint a short-lived signed URL for a product's private asset — ONLY after the

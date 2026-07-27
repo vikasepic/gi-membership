@@ -48,6 +48,7 @@ export function ProductForm({
             <option value="audio">Audio</option>
             <option value="video">Video</option>
             <option value="app">App</option>
+            <option value="course">Course</option>
           </select>
         </Field>
         <Field label="Price ($)" required>
@@ -115,6 +116,15 @@ export function ProductForm({
                 <option key={o.id} value={o.id}>{offerLabel(o)}</option>
               ))}
             </select>
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <Field label="Call chapters" hint="e.g. Module, Week, Part">
+            <input name="chapterLabel" defaultValue={product?.chapterLabel ?? "Chapter"} className={input} />
+          </Field>
+          <Field label="Call lessons" hint="e.g. Session, Day, Video">
+            <input name="lessonLabel" defaultValue={product?.lessonLabel ?? "Lesson"} className={input} />
           </Field>
         </div>
       </fieldset>
