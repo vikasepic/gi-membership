@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { cookies } from "next/headers";
 import { createCheckoutIntent, finalizeOrder, type CheckoutResult } from "@/lib/checkout";
+import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
 
 const schema = z.object({
   productSlug: z.string().min(1),
@@ -12,6 +13,7 @@ const schema = z.object({
   bumpTaken: z
     .union([z.boolean(), z.string()])
     .transform((v) => v === true || v === "true" || v === "on"),
+  country: z.string().trim().optional().nullable(),
 });
 
 export async function startCheckout(input: unknown): Promise<CheckoutResult> {
@@ -19,8 +21,12 @@ export async function startCheckout(input: unknown): Promise<CheckoutResult> {
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues.map((i) => i.message).join(", ") };
   }
-  const anonId = (await cookies()).get("gi_anon")?.value ?? null;
-  return createCheckoutIntent({ ...parsed.data, anonId });
+  // Consent is read server-side from the cookie, never trusted from the client
+  // payload, and stored on the order so the (cookie-less) webhook can honour it.
+  const jar = await cookies();
+  const anonId = jar.get("gi_anon")?.value ?? null;
+  const trackingConsent = mayTrack(parseConsent(jar.get(CONSENT_COOKIE)?.value));
+  return createCheckoutIntent({ ...parsed.data, anonId, trackingConsent });
 }
 
 // Called by the thank-you page after Stripe redirects back. Idempotent — the

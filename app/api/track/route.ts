@@ -1,12 +1,21 @@
 import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
+import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
 
 // Records a visitor for attribution. First-touch wins (ignoreDuplicates), so a
 // later pageview never overwrites the landing UTMs / click ids.
+//
+// Click ids, UTMs and user-agent are personal data under GDPR and this store
+// takes EU/UK traffic, so nothing is stored without explicit consent.
 export async function POST(req: Request) {
-  const anon = (await cookies()).get("gi_anon")?.value;
+  const jar = await cookies();
+  const anon = jar.get("gi_anon")?.value;
   if (!anon) return Response.json({ ok: false });
+
+  if (!mayTrack(parseConsent(jar.get(CONSENT_COOKIE)?.value))) {
+    return Response.json({ ok: true, stored: false, reason: "no-consent" });
+  }
 
   const body = (await req.json().catch(() => ({}))) as {
     landingUrl?: string;
@@ -29,5 +38,5 @@ export async function POST(req: Request) {
     { onConflict: "store_id,anon_id", ignoreDuplicates: true },
   );
 
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, stored: true });
 }

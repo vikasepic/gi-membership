@@ -5,6 +5,14 @@ import { getStoreId, getProductBySlug, getOffer } from "@/lib/store";
 import { isOfferEligible, immediateChargeCents, type Ownership } from "@/lib/offers";
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
 import { provisionAppSubscription } from "@/lib/apps";
+import { trackPurchase } from "@/lib/tracking";
+import {
+  TAX_ENABLED,
+  calculateTax,
+  needsTaxLocation,
+  normalizeCountry,
+  recordTaxTransaction,
+} from "@/lib/tax";
 import { stripe, stripeMode } from "@/lib/stripe";
 import { otoSigningSecret } from "@/lib/env";
 import type { Offer } from "@/lib/types";
@@ -40,6 +48,8 @@ export type CheckoutInput = {
   password: string;
   bumpTaken: boolean;
   anonId?: string | null; // attribution visitor cookie, read by the action layer
+  country?: string | null; // ISO-2, required when Stripe Tax is enabled
+  trackingConsent?: boolean; // GDPR opt-in, read from the cookie by the action layer
 };
 
 export type CheckoutResult =
@@ -109,9 +119,23 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
     metadata: { storeId, userId },
   });
 
-  // Base $27 PaymentIntent — saves the card for off-session offer fulfilment.
+  // VAT for EU/UK digital sales is charged at the buyer's country rate, so the
+  // amount charged is price + calculated tax. Returns zero tax (and behaves
+  // exactly as before) when tax is disabled or no country is known.
+  const country = normalizeCountry(input.country);
+  if (needsTaxLocation(TAX_ENABLED, country)) {
+    return { ok: false, error: "Please select your country so we can calculate tax." };
+  }
+  const tax = await calculateTax({
+    priceCents: product.priceCents,
+    currency: product.currency,
+    country,
+    reference: `${product.slug}-${userId}`,
+  });
+
+  // Base PaymentIntent — saves the card for off-session offer fulfilment.
   const pi = await stripe().paymentIntents.create({
-    amount: product.priceCents,
+    amount: tax.totalCents,
     currency: product.currency,
     customer: customer.id,
     setup_future_usage: "off_session",
@@ -121,6 +145,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       userId,
       productId: product.id,
       bumpOfferId: bumpOffer?.id ?? "",
+      taxCalculationId: tax.calculationId ?? "",
     },
   });
 
@@ -145,7 +170,11 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       status: "pending",
       currency: product.currency,
       subtotal_cents: product.priceCents,
-      total_cents: product.priceCents,
+      total_cents: tax.totalCents,
+      tax_cents: tax.taxCents,
+      buyer_country: country,
+      stripe_tax_calculation_id: tax.calculationId,
+      tracking_consent: input.trackingConsent === true,
       stripe_customer_id: customer.id,
       stripe_payment_intent_id: pi.id,
       visitor_id: visitorId,
@@ -228,7 +257,9 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
   const db = createServiceClient();
   const { data: order } = await db
     .from("orders")
-    .select("id, store_id, user_id, status, stripe_customer_id, email")
+    .select(
+      "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id",
+    )
     .eq("stripe_payment_intent_id", paymentIntentId)
     .maybeSingle();
   if (!order || !order.user_id) return;
@@ -279,6 +310,40 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
         stripe_payment_intent_id: result.paymentIntentId ?? null,
       });
     }
+  }
+
+  // Record the sale against its tax calculation so it appears in Stripe's tax
+  // reporting. Never throws — a reporting failure must not undo a paid order.
+  if (order.stripe_tax_calculation_id) {
+    await recordTaxTransaction(order.stripe_tax_calculation_id as string, order.id as string);
+  }
+
+  // Report the conversion server-side — ONLY with the buyer's explicit consent,
+  // captured at checkout (the webhook has no cookies). EU/UK traffic means GDPR
+  // applies, and hashed email plus click ids are still personal data.
+  if (order.tracking_consent !== true) return;
+
+  // Guarded so a tracking outage can never fail a paid order — finalizeOrder has
+  // already committed everything above. The PaymentIntent id doubles as the dedup
+  // event_id: the browser pixel (when added) sends the same value, and
+  // finalizeOrder is idempotent, so a webhook + thank-you double-call cannot
+  // double-count a conversion.
+  try {
+    const { data: visitor } = order.visitor_id
+      ? await db.from("visitors").select("click_ids").eq("id", order.visitor_id).maybeSingle()
+      : { data: null };
+    await trackPurchase({
+      eventId: paymentIntentId,
+      eventName: "Purchase",
+      email: order.email as string,
+      valueCents: pi.amount,
+      currency: pi.currency,
+      orderId: order.id as string,
+      clickIds: (visitor?.click_ids as Record<string, string>) ?? {},
+      occurredAt: Math.floor(Date.now() / 1000),
+    });
+  } catch (e) {
+    console.error("[finalizeOrder] tracking failed (order is still complete):", e);
   }
 }
 

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createProduct, updateProduct, deleteProduct, uploadPaidAsset, type ProductInput } from "@/lib/admin";
 import { requireAdmin } from "@/lib/admin-guard";
+import { setProductCourses } from "@/lib/courses";
 
 const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
 
@@ -31,8 +32,6 @@ const schema = z.object({
   status: z.enum(["draft", "published"]),
   bumpOfferId: z.preprocess(emptyToNull, uuidish.nullable()),
   upsellOfferId: z.preprocess(emptyToNull, uuidish.nullable()),
-  chapterLabel: z.string().trim().min(1).default("Chapter"),
-  lessonLabel: z.string().trim().min(1).default("Lesson"),
 });
 
 export type SaveState = { error?: string };
@@ -58,13 +57,12 @@ export async function saveProduct(_prev: SaveState, formData: FormData): Promise
     status: v.status,
     bumpOfferId: v.bumpOfferId,
     upsellOfferId: v.upsellOfferId,
-    chapterLabel: v.chapterLabel,
-    lessonLabel: v.lessonLabel,
   };
 
   try {
-    if (v.id) await updateProduct(v.id, input);
-    else await createProduct(input);
+    const productId = v.id ? (await updateProduct(v.id, input), v.id) : await createProduct(input);
+    // Which courses this product unlocks. Empty list = a simple one-file product.
+    await setProductCourses(productId, formData.getAll("courseIds").map(String));
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Save failed" };
   }

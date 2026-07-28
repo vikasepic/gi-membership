@@ -23,6 +23,23 @@ export type CheckoutProduct = {
 const money = (c: number, cur: string) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(c / 100);
 
+// Buyer country drives the VAT rate. Common markets first, then the rest of the
+// EU/UK where digital-services VAT applies at the buyer's rate.
+const COUNTRIES = [
+  { code: "US", name: "United States" }, { code: "GB", name: "United Kingdom" },
+  { code: "CA", name: "Canada" }, { code: "AU", name: "Australia" },
+  { code: "IN", name: "India" }, { code: "IE", name: "Ireland" },
+  { code: "DE", name: "Germany" }, { code: "FR", name: "France" },
+  { code: "ES", name: "Spain" }, { code: "IT", name: "Italy" },
+  { code: "NL", name: "Netherlands" }, { code: "BE", name: "Belgium" },
+  { code: "AT", name: "Austria" }, { code: "PT", name: "Portugal" },
+  { code: "SE", name: "Sweden" }, { code: "DK", name: "Denmark" },
+  { code: "FI", name: "Finland" }, { code: "PL", name: "Poland" },
+  { code: "NO", name: "Norway" }, { code: "CH", name: "Switzerland" },
+  { code: "NZ", name: "New Zealand" }, { code: "SG", name: "Singapore" },
+  { code: "AE", name: "United Arab Emirates" }, { code: "ZA", name: "South Africa" },
+];
+
 export function CheckoutForm({
   product,
   bump,
@@ -55,6 +72,7 @@ function Inner({ product, bump }: { product: CheckoutProduct; bump: BumpSummary 
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [country, setCountry] = useState("");
   const [bumpTaken, setBumpTaken] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,6 +99,7 @@ function Inner({ product, bump }: { product: CheckoutProduct; bump: BumpSummary 
       username,
       password,
       bumpTaken,
+      country,
     });
     if (!res.ok) {
       setError(res.error);
@@ -114,6 +133,20 @@ function Inner({ product, bump }: { product: CheckoutProduct; bump: BumpSummary 
           type="password" required placeholder="Password (min 8 chars)" value={password}
           onChange={(e) => setPassword(e.target.value)} className={input}
         />
+        {/* Country determines the VAT rate on digital sales — Stripe cannot
+            calculate tax without it. */}
+        <select
+          required
+          value={country}
+          onChange={(e) => setCountry(e.target.value)}
+          className={input}
+          aria-label="Country"
+        >
+          <option value="">Country…</option>
+          {COUNTRIES.map((c) => (
+            <option key={c.code} value={c.code}>{c.name}</option>
+          ))}
+        </select>
       </fieldset>
 
       <fieldset className="flex flex-col gap-3">

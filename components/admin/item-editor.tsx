@@ -1,70 +1,127 @@
 import Link from "next/link";
 import { RichText } from "@/components/editor/rich-text";
-import { inputClass as input, Field } from "@/components/admin/form-controls";
+import { DeleteItemButton } from "@/components/admin/delete-item-button";
+import { inputClass as input, Field, Section } from "@/components/admin/form-controls";
 import { publicCoverUrl } from "@/lib/media";
 import type { CourseItem } from "@/lib/curriculum";
-import { DeleteItemButton } from "@/components/admin/delete-item-button";
 import {
   saveItemAction,
-  uploadAttachmentAction,
   uploadCoverAction,
+  uploadAttachmentAction,
   removeAttachmentAction,
-} from "@/app/admin/products/[id]/curriculum/actions";
+} from "@/app/admin/courses/[id]/items/actions";
 
 // YouTube and Vimeo expose playback position cross-origin; other providers do
-// not, so their items complete on the dwell timer instead. Say so in the UI
+// not, so their lessons complete on the dwell timer instead. Say which applies
 // rather than letting it look broken.
 function trackingNote(url: string | null): string {
   if (!url) return "";
   return /youtube\.com|youtu\.be|vimeo\.com/i.test(url)
-    ? "Progress tracking: supported — completes at 50% watched."
-    : "Progress tracking: unsupported for this provider — completes on time-on-page instead.";
+    ? "Auto-completes at 50% watched."
+    : "This provider can't report progress — completes on time-on-page instead.";
 }
+
+const TYPE_LABEL: Record<string, string> = {
+  video: "Video",
+  audio: "Audio",
+  pdf: "PDF",
+  text: "Text",
+};
 
 export function ItemEditor({
   item,
-  productId,
+  courseId,
   kindLabel,
   childCount,
   error,
 }: {
   item: CourseItem;
-  productId: string;
+  courseId: string;
   kindLabel: string;
   childCount: number;
   error?: string;
 }) {
   const cover = publicCoverUrl(item.coverPath);
+  const isChapter = item.parentId === null;
+
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       {error && (
         <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">
           {error}
         </p>
       )}
+
       <form action={saveItemAction} className="flex flex-col gap-6">
-        <input type="hidden" name="productId" value={productId} />
+        <input type="hidden" name="courseId" value={courseId} />
         <input type="hidden" name="itemId" value={item.id} />
 
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <Field label={`${kindLabel} title`} required>
-            <input name="title" defaultValue={item.title} required className={input} />
-          </Field>
+        <Section title={`${kindLabel} details`}>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+            <div className="sm:col-span-2">
+              <Field label="Title" required>
+                <input name="title" defaultValue={item.title} required className={input} />
+              </Field>
+            </div>
+            <Field label="Type" hint="decides the fields below">
+              <select name="itemType" defaultValue={item.itemType} className={input}>
+                {Object.entries(TYPE_LABEL).map(([v, l]) => (
+                  <option key={v} value={v}>{l}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
           <Field label="Subtitle" hint="optional">
             <input name="subtitle" defaultValue={item.subtitle ?? ""} className={input} />
           </Field>
-        </div>
+        </Section>
 
-        <Field label="Video URL" hint="Vimeo, YouTube or Loom — embed only">
-          <input name="videoEmbedUrl" defaultValue={item.videoEmbedUrl ?? ""} className={input} />
-        </Field>
-        {item.videoEmbedUrl && (
-          <p className="-mt-3 text-xs text-muted">{trackingNote(item.videoEmbedUrl)}</p>
+        {/* Only the fields this type actually needs. A PDF lesson has no video
+            URL to fill in; a video lesson doesn't pretend to be a worksheet. */}
+        {item.itemType === "video" && (
+          <Section title="Video" hint="Vimeo, YouTube or Loom — paste the embed URL.">
+            <Field label="Video URL">
+              <input name="videoEmbedUrl" defaultValue={item.videoEmbedUrl ?? ""} className={input} />
+            </Field>
+            {item.videoEmbedUrl && (
+              <p className="-mt-2 text-xs text-muted">{trackingNote(item.videoEmbedUrl)}</p>
+            )}
+          </Section>
         )}
 
-        <Field label="Body">
+        {item.itemType === "audio" && (
+          <Section
+            title="Audio"
+            hint="Upload the audio file below under Files — it plays in the waveform player."
+          >
+            <p className="text-sm text-muted">
+              {item.attachments.some((a) => a.mime.startsWith("audio/"))
+                ? "Audio file attached."
+                : "No audio file yet — add one under Files."}
+            </p>
+          </Section>
+        )}
+
+        {item.itemType === "pdf" && (
+          <Section title="PDF" hint="Upload the PDF below under Files — students read it inline.">
+            <p className="text-sm text-muted">
+              {item.attachments.some((a) => a.mime === "application/pdf")
+                ? "PDF attached."
+                : "No PDF yet — add one under Files."}
+            </p>
+          </Section>
+        )}
+
+        <Section
+          title="Body"
+          hint={
+            item.itemType === "text"
+              ? "The written lesson."
+              : "Notes shown under the media — optional."
+          }
+        >
           <RichText name="bodyHtml" value={item.bodyHtml ?? ""} />
-        </Field>
+        </Section>
 
         <label className="flex items-center gap-2.5 text-sm">
           <input
@@ -73,41 +130,51 @@ export function ItemEditor({
             defaultChecked={item.isPublished}
             className="size-4 accent-[var(--primary)]"
           />
-          Published (visible to students)
+          Published — visible to students
+          {isChapter && (
+            <span className="text-muted">(a draft chapter hides its lessons too)</span>
+          )}
         </label>
 
         <div className="flex items-center gap-4">
-          <button className="rounded-full bg-primary px-6 py-3 font-medium text-primary-fg hover:bg-primary-hover">
+          <button className="rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover">
             Save changes
           </button>
-          <Link href={`/admin/products/${productId}`} className="text-sm text-muted hover:text-fg">
+          <Link href={`/admin/courses/${courseId}`} className="text-sm text-muted hover:text-fg">
             Back to curriculum
           </Link>
         </div>
       </form>
 
-      <section className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5">
-        <span className="kicker text-muted">Cover image</span>
-        {cover && <img src={cover} alt="" className="h-32 w-auto rounded-lg border border-border" />}
+      <Section title="Cover image" hint="Optional thumbnail. Public — don't put paid content here.">
+        {cover && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={cover} alt="" className="h-32 w-auto rounded-lg border border-border" />
+        )}
         <form action={uploadCoverAction} className="flex flex-col gap-3">
-          <input type="hidden" name="productId" value={productId} />
+          <input type="hidden" name="courseId" value={courseId} />
           <input type="hidden" name="itemId" value={item.id} />
           <input type="file" name="file" accept="image/*" className="text-sm" />
           <button className="w-fit rounded-full border border-border px-5 py-2 text-sm hover:border-primary">
             Upload cover
           </button>
         </form>
-      </section>
+      </Section>
 
-      <section className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5">
-        <span className="kicker text-muted">Attachments</span>
+      <Section
+        title="Files"
+        hint="Audio, PDFs and downloads. Private — only people who own this can reach them."
+      >
         {item.attachments.length === 0 && <p className="text-sm text-muted">No files yet.</p>}
         <ul className="flex flex-col gap-2">
           {item.attachments.map((a) => (
-            <li key={a.path} className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm">
+            <li
+              key={a.path}
+              className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2 text-sm"
+            >
               <span className="truncate">{a.name}</span>
               <form action={removeAttachmentAction}>
-                <input type="hidden" name="productId" value={productId} />
+                <input type="hidden" name="courseId" value={courseId} />
                 <input type="hidden" name="itemId" value={item.id} />
                 <input type="hidden" name="path" value={a.path} />
                 <button className="text-xs text-muted hover:text-fg">Remove</button>
@@ -116,22 +183,24 @@ export function ItemEditor({
           ))}
         </ul>
         <form action={uploadAttachmentAction} className="flex flex-col gap-3">
-          <input type="hidden" name="productId" value={productId} />
+          <input type="hidden" name="courseId" value={courseId} />
           <input type="hidden" name="itemId" value={item.id} />
           <input type="file" name="file" className="text-sm" />
           <button className="w-fit rounded-full border border-border px-5 py-2 text-sm hover:border-primary">
             Add file
           </button>
         </form>
-      </section>
+      </Section>
 
-      <DeleteItemButton
-        productId={productId}
-        itemId={item.id}
-        itemTitle={item.title}
-        itemKindLabel={kindLabel}
-        childCount={childCount}
-      />
+      <div className="border-t border-border pt-6">
+        <DeleteItemButton
+          courseId={courseId}
+          itemId={item.id}
+          itemTitle={item.title}
+          itemKindLabel={kindLabel}
+          childCount={childCount}
+        />
+      </div>
     </div>
   );
 }

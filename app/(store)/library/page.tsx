@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { listOwnedProducts, getStandingOffer, listOwnedApps } from "@/lib/library";
+import { getStandingOffer, listOwnedApps } from "@/lib/library";
+import { coursesForUser } from "@/lib/courses";
 import { immediateChargeCents } from "@/lib/offers";
 import { acceptStandingOfferAction, openAppAction } from "./actions";
 
@@ -21,7 +22,7 @@ export default async function LibraryPage({
   if (!user) redirect("/login");
 
   const { offer: offerStatus } = await searchParams;
-  const products = await listOwnedProducts(user.id);
+  const courses = await coursesForUser(user.id);
   const apps = await listOwnedApps(user.id);
   const standing = await getStandingOffer(user.id);
 
@@ -35,22 +36,22 @@ export default async function LibraryPage({
         </p>
       )}
 
-      {products.length === 0 ? (
+      {courses.length === 0 ? (
         <p className="text-muted">
           Nothing here yet.{" "}
           <Link href="/" className="text-primary hover:underline">Browse the store</Link>.
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {products.map((p) => (
+          {courses.map((p) => (
             <Link
               key={p.id}
               href={`/library/${p.slug}`}
               className="group flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5 transition-colors hover:border-primary"
             >
-              <span className="kicker text-muted">{TYPE_LABEL[p.type] ?? p.type}</span>
+              <span className="kicker text-muted">Course</span>
               <h2 className="text-lg leading-snug">{p.title}</h2>
-              {p.tagline && <p className="flex-1 text-sm text-muted">{p.tagline}</p>}
+              {p.subtitle && <p className="flex-1 text-sm text-muted">{p.subtitle}</p>}
               <span className="text-sm text-primary group-hover:underline">Open &rarr;</span>
             </Link>
           ))}

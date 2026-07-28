@@ -22,8 +22,6 @@ export type Product = {
   upsellOfferId: string | null;
   isPlaceholder: boolean;
   sortOrder: number;
-  chapterLabel: string;
-  lessonLabel: string;
 };
 
 export type GrantType = "product" | "subscription";

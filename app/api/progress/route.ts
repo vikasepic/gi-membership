@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { ownsProduct } from "@/lib/library";
+import { userOwnsCourse } from "@/lib/courses";
 import { setItemCompletion, isItemCompleted, type CompletionSource } from "@/lib/progress";
 
 const SOURCES: CompletionSource[] = ["manual", "video", "download", "dwell"];
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   ) {
     return NextResponse.json({ error: "Bad request" }, { status: 400 });
   }
-  if (!(await ownsProduct(user.id, productId))) {
+  if (!(await userOwnsCourse(user.id, productId))) {
     return new NextResponse("Forbidden", { status: 403 });
   }
 

@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { saveOffer, removeOffer, type SaveState } from "@/app/admin/offers/actions";
-import { inputClass as input, Field } from "@/components/admin/form-controls";
+import { inputClass as input, Field, Section } from "@/components/admin/form-controls";
 import type { Offer } from "@/lib/types";
 import type { ProductOption, AppOption } from "@/lib/admin";
 
@@ -21,6 +21,7 @@ export function OfferForm({
     <form action={action} className="flex flex-col gap-6">
       {offer && <input type="hidden" name="id" value={offer.id} />}
 
+      <Section title="What this offer is" hint="Internal naming — buyers never see these.">
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <Field label="Name" required hint="internal label">
           <input name="name" defaultValue={offer?.name ?? ""} required className={input} />
@@ -29,10 +30,10 @@ export function OfferForm({
           <input name="key" defaultValue={offer?.key ?? ""} required className={input} />
         </Field>
       </div>
+      </Section>
 
       {/* Grant — what the offer gives. */}
-      <fieldset className="flex flex-col gap-5 rounded-2xl border border-border p-5">
-        <legend className="kicker px-2 text-muted">Grant</legend>
+      <Section title="What the buyer gets" hint="Either a product they own outright, or access to a connected app.">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
           <Field label="Grant type" required>
             <select name="grantType" defaultValue={offer?.grantType ?? "product"} className={input}>
@@ -60,11 +61,10 @@ export function OfferForm({
         <Field label="Entitlement key" hint="what the app grants, e.g. content-engine">
           <input name="grantEntitlementKey" defaultValue={offer?.grantEntitlementKey ?? ""} className={input} />
         </Field>
-      </fieldset>
+      </Section>
 
       {/* Billing. */}
-      <fieldset className="flex flex-col gap-5 rounded-2xl border border-border p-5">
-        <legend className="kicker px-2 text-muted">Billing</legend>
+      <Section title="How it bills" hint="One-time is charged once. Recurring bills on a schedule — add trial days for a free period first.">
         <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
           <Field label="Billing type" required>
             <select name="billingType" defaultValue={offer?.billingType ?? "one_time"} className={input}>
@@ -88,9 +88,9 @@ export function OfferForm({
             <input name="trialDays" type="number" min="0" defaultValue={offer?.trialDays ?? ""} className={input} />
           </Field>
         </div>
-      </fieldset>
+      </Section>
 
-      {/* Pricing. */}
+      <Section title="Price" hint="Charged on the card already saved at checkout — no re-entry.">
       <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
         <Field label="Price ($)" required>
           <input name="price" type="number" min="0" step="1" defaultValue={offer ? offer.priceCents / 100 : ""} required className={input} />
@@ -102,10 +102,10 @@ export function OfferForm({
           <input name="currency" defaultValue={offer?.currency ?? "usd"} className={input} />
         </Field>
       </div>
+      </Section>
 
       {/* Presentation — how the offer renders in bump/OTO slots. */}
-      <fieldset className="flex flex-col gap-5 rounded-2xl border border-border p-5">
-        <legend className="kicker px-2 text-muted">Presentation</legend>
+      <Section title="What the buyer sees" hint="The headline and bullets shown on the checkout bump and the upsell page.">
         <Field label="Headline" required>
           <input name="headline" defaultValue={offer?.headline ?? ""} required className={input} />
         </Field>
@@ -126,7 +126,7 @@ export function OfferForm({
         <Field label="Image URL" hint="optional">
           <input name="imageUrl" defaultValue={offer?.imageUrl ?? ""} className={input} />
         </Field>
-      </fieldset>
+      </Section>
 
       <label className="flex items-center gap-2.5 text-sm">
         <input type="checkbox" name="active" defaultChecked={offer ? offer.active : true} className="size-4 accent-[var(--primary)]" />

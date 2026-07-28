@@ -23,3 +23,25 @@ export function Field({
     </label>
   );
 }
+
+// Groups related fields under a heading and a plain-English explanation, so a
+// long admin form reads as a few decisions instead of one wall of inputs.
+export function Section({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-5 rounded-2xl border border-border bg-surface p-6">
+      <div className="flex flex-col gap-1">
+        <h2 className="font-display text-base">{title}</h2>
+        {hint && <p className="text-sm text-muted">{hint}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}

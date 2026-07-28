@@ -41,7 +41,7 @@ async function readExisting(
 
 export async function setItemCompletion(
   userId: string,
-  productId: string,
+  courseId: string,
   itemId: string,
   completed: boolean,
   source: CompletionSource,
@@ -65,7 +65,7 @@ export async function setItemCompletion(
   const { error } = await db.from("progress").insert({
     store_id: await getStoreId(),
     user_id: userId,
-    product_id: productId,
+    course_id: courseId,
     lesson_id: itemId,
     ...patch,
   });
@@ -108,13 +108,15 @@ export async function isItemCompleted(userId: string, itemId: string): Promise<b
   return data?.completed ?? false;
 }
 
-export async function completedItemIds(userId: string, productId: string): Promise<Set<string>> {
+// Scoped by COURSE: progress follows content, and one course may be sold
+// through several products.
+export async function completedItemIds(userId: string, courseId: string): Promise<Set<string>> {
   const db = createServiceClient();
   const { data, error } = await db
     .from("progress")
     .select("lesson_id")
     .eq("user_id", userId)
-    .eq("product_id", productId)
+    .eq("course_id", courseId)
     .eq("completed", true)
     .not("lesson_id", "is", null);
   if (error) throw new Error(`completedItemIds: ${error.message}`);

@@ -7,10 +7,15 @@ import { camelize } from "@/lib/case";
 
 export type Attachment = { path: string; name: string; size: number; mime: string };
 
+// Per-lesson media type. This drives which fields the editor shows and how the
+// student page renders, so one course can mix video, audio, PDF and text.
+export type ItemType = "video" | "audio" | "pdf" | "text";
+
 export type CourseItem = {
   id: string;
-  productId: string;
+  courseId: string;
   parentId: string | null;
+  itemType: ItemType;
   title: string;
   subtitle: string | null;
   bodyHtml: string | null;
@@ -24,7 +29,7 @@ export type CourseItem = {
 export type CurriculumNode = CourseItem & { children: CourseItem[] };
 
 export const ITEM_COLUMNS =
-  "id, product_id, parent_id, title, subtitle, body_html, video_embed_url, cover_path, attachments, is_published, sort_order";
+  "id, course_id, parent_id, item_type, title, subtitle, body_html, video_embed_url, cover_path, attachments, is_published, sort_order";
 
 const bySort = (a: CourseItem, b: CourseItem) => a.sortOrder - b.sortOrder;
 
@@ -59,11 +64,11 @@ export function rollupProgress(
 // includeDrafts: true to see unpublished items. This prevents draft lessons
 // from accidentally leaking to paying students.
 export async function listCurriculum(
-  productId: string,
+  courseId: string,
   opts: { includeDrafts?: boolean } = {},
 ): Promise<CurriculumNode[]> {
   const db = createServiceClient();
-  let q = db.from("course_items").select(ITEM_COLUMNS).eq("product_id", productId);
+  let q = db.from("course_items").select(ITEM_COLUMNS).eq("course_id", courseId);
   if (!opts.includeDrafts) q = q.eq("is_published", true);
   const { data, error } = await q.order("sort_order", { ascending: true });
   if (error) throw new Error(`listCurriculum: ${error.message}`);

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { logout } from "./actions";
+import { logout, openBillingPortal } from "./actions";
 
 export default async function AccountPage() {
   const supabase = await createClient();
@@ -28,6 +28,19 @@ export default async function AccountPage() {
         <span className="kicker text-muted">Signed in as</span>
         <span>{user.email}</span>
       </div>
+      <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
+        <span className="kicker text-muted">Billing</span>
+        <p className="text-sm text-muted">
+          Update your card, change or cancel a subscription, and download invoices.
+          Handled securely by Stripe.
+        </p>
+        <form action={openBillingPortal}>
+          <button className="w-fit rounded-full border border-border px-5 py-2.5 text-sm hover:border-primary">
+            Manage billing &rarr;
+          </button>
+        </form>
+      </section>
+
       <div className="flex items-center justify-between">
         <Link href="/library" className="text-primary hover:underline">Go to your library</Link>
         <form action={logout}>
