@@ -73,6 +73,11 @@
   --font-sans: var(--font-poppins);
 }
 
+html {
+  /* Stops iOS resizing text when the phone rotates. */
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   /* Editorial atmosphere: faint navy/plum washes bled from the corners over
      the base. Sparse, not decorative — keeps desktop from reading as flat. */
@@ -84,6 +89,52 @@ body {
   color: var(--fg);
   font-family: var(--font-poppins), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* No rubber-band overscroll or accidental pull-to-refresh inside the shell —
+     the page should feel anchored the way an app screen does, not like a
+     document that can be dragged around. */
+  overscroll-behavior-y: none;
+  /* Kill the grey flash Safari paints over tapped elements; we provide our own
+     pressed states instead. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Touch feedback. Hover does not exist on a phone, so without this every
+   control feels dead on press. Pointer-coarse only, so mice keep hover. */
+@media (hover: none) and (pointer: coarse) {
+  button:active,
+  a:active,
+  [role="button"]:active,
+  label:active {
+    transform: scale(0.97);
+    opacity: 0.85;
+  }
+  button,
+  a,
+  [role="button"],
+  label {
+    transition: transform 120ms cubic-bezier(0.2, 0.7, 0.2, 1), opacity 120ms ease-out;
+  }
+}
+
+/* iOS zooms the whole page when a focused input is under 16px, and never zooms
+   back out. That fires on the checkout email/password fields, which is the
+   worst place for it — so form controls are 16px on touch regardless of the
+   utility class used. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:active,
+  a:active,
+  [role="button"]:active,
+  label:active {
+    transform: none;
+  }
 }
 
 h1, h2, h3, h4 {

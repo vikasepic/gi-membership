@@ -30,23 +30,25 @@ export function ConsentBanner() {
     <div
       role="dialog"
       aria-label="Cookie and tracking consent"
-      className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-surface/95 p-5 backdrop-blur md:bottom-4 md:left-4 md:right-auto md:max-w-md md:rounded-2xl md:border"
+      className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-surface/95 px-4 py-3 backdrop-blur md:bottom-4 md:left-4 md:right-auto md:max-w-md md:rounded-2xl md:border md:p-5"
+      // Clears the home indicator, and sits above the bottom tab bar.
+      style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
     >
-      <div className="flex flex-col gap-3">
-        <p className="text-sm leading-relaxed">
-          We use cookies to measure which ads bring people here. That&rsquo;s only set if
-          you agree — the store works exactly the same either way.
+      <div className="mx-auto flex max-w-md flex-col gap-2.5 md:gap-3">
+        <p className="text-[13px] leading-snug md:text-sm md:leading-relaxed">
+          We use cookies to measure which ads bring people here — only if you agree.
+          The store works the same either way.
         </p>
         <div className="flex gap-3">
           <button
             onClick={() => choose("granted")}
-            className="flex-1 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+            className="flex-1 rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
           >
             Accept
           </button>
           <button
             onClick={() => choose("denied")}
-            className="flex-1 rounded-full border border-border px-5 py-2.5 text-sm font-medium transition-colors hover:border-fg"
+            className="flex-1 rounded-full border border-border px-5 py-2 text-sm font-medium transition-colors hover:border-fg"
           >
             Decline
           </button>
