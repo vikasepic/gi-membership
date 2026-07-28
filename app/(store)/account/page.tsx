@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout, openBillingPortal } from "./actions";
+import { ThemeToggle } from "@/components/theme-toggle";
 
-export default async function AccountPage() {
+export default async function AccountPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ billing?: string }>;
+}) {
+  const { billing } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -29,16 +35,29 @@ export default async function AccountPage() {
         <span>{user.email}</span>
       </div>
       <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
+        <span className="kicker text-muted">Appearance</span>
+        <ThemeToggle />
+      </section>
+
+      <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
         <span className="kicker text-muted">Billing</span>
-        <p className="text-sm text-muted">
-          Update your card, change or cancel a subscription, and download invoices.
-          Handled securely by Stripe.
-        </p>
-        <form action={openBillingPortal}>
-          <button className="w-fit rounded-full border border-border px-5 py-2.5 text-sm hover:border-primary">
-            Manage billing &rarr;
-          </button>
-        </form>
+        {billing === "none" ? (
+          <p className="text-sm text-muted">
+            Nothing to manage yet — billing appears here after your first purchase.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-muted">
+              Update your card, change or cancel a subscription, and download invoices.
+              Handled securely by Stripe.
+            </p>
+            <form action={openBillingPortal}>
+              <button className="w-fit rounded-full border border-border px-5 py-2.5 text-sm hover:border-primary">
+                Manage billing &rarr;
+              </button>
+            </form>
+          </>
+        )}
       </section>
 
       <div className="flex items-center justify-between">

@@ -146,3 +146,45 @@ describe.skipIf(!canRun)("OTO token vs failed charge (integration)", () => {
     expect(second).not.toEqual({ ok: false, error: "used" });
   });
 });
+
+// --- Standing offer must not 500 on a failed off-session charge ------------
+import { acceptStandingOffer } from "@/lib/checkout";
+import { getStandingOffer } from "@/lib/library";
+
+describe.skipIf(!canRun)("standing offer vs failed charge (integration)", () => {
+  it("returns charge_failed instead of throwing, so the library can say what happened", async () => {
+    const email = `standfail_${Date.now()}@example.com`;
+    createdEmails.push(email);
+    const res = await createCheckoutIntent({
+      productSlug: "placeholder-offer",
+      email,
+      username: "standfail",
+      password: "password12345",
+      bumpTaken: false, // decline, so the subscription is still on offer
+    });
+    if (!res.ok) throw new Error(res.error);
+    const piId = res.clientSecret.split("_secret_")[0];
+    await stripe().paymentIntents.confirm(piId, {
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/checkout/complete",
+    });
+    await finalizeOrder(piId);
+
+    const db = createServiceClient();
+    const { data: user } = await db.from("users").select("id").eq("email", email).single();
+    const offer = await getStandingOffer(user!.id);
+    if (!offer) return; // no subscription offer configured here — nothing to assert
+
+    // Same forced failure as the OTO case: a customer Stripe does not have.
+    await db
+      .from("orders")
+      .update({ stripe_customer_id: "cus_nonexistent_for_test" })
+      .eq("stripe_payment_intent_id", piId);
+
+    // A declined card is a normal outcome, not a crash.
+    await expect(acceptStandingOffer(user!.id, offer.id)).resolves.toEqual({
+      ok: false,
+      error: "charge_failed",
+    });
+  });
+});

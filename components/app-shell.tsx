@@ -26,7 +26,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-20 flex items-center justify-center border-b border-border bg-surface/85 px-5 py-3.5 backdrop-blur md:hidden"
         style={{ paddingTop: "calc(0.875rem + env(safe-area-inset-top))" }}>
         <Link href="/" aria-label="Greater Inside">
-          <Logo className="h-5 w-auto text-fg" />
+          <Logo className="h-7 w-auto text-fg" />
         </Link>
       </header>
 
@@ -34,7 +34,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-20 hidden border-b border-border bg-surface/80 backdrop-blur md:block">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <Link href="/" aria-label="Greater Inside">
-            <Logo className="h-6 w-auto text-fg" />
+            <Logo className="h-7 w-auto text-fg" />
           </Link>
           <nav className="flex items-center gap-1">
             {NAV.map((item) => (

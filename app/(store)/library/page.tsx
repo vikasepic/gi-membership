@@ -7,6 +7,19 @@ import { immediateChargeCents } from "@/lib/offers";
 import { acceptStandingOfferAction, openAppAction } from "./actions";
 
 const TYPE_LABEL: Record<string, string> = { pdf: "Guide", audio: "Audio", video: "Video", app: "App" };
+
+// Every outcome of acceptStandingOfferAction, in the buyer's words. Without an
+// entry here the redirect lands silently and the button reads as broken — which
+// is exactly how it behaved when only "added" was handled.
+const OFFER_STATUS: Record<string, string> = {
+  added: "Added — it’s ready in your library.",
+  already_owned: "You already have this — nothing was charged.",
+  unavailable: "That offer isn’t available any more.",
+  no_saved_card:
+    "We don’t have a card on file for you yet. Buy anything from the store once and this becomes one tap.",
+  charge_failed:
+    "Your saved card was declined, so nothing was charged. Update it under Account → Manage billing, then try again.",
+};
 const money = (c: number, cur: string) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(c / 100);
 
@@ -30,9 +43,15 @@ export default async function LibraryPage({
     <div className="flex flex-col gap-10 py-4">
       <h1 className="text-3xl">Your library</h1>
 
-      {offerStatus === "added" && (
-        <p className="rounded-xl border border-navy/30 bg-navy/5 px-4 py-3 text-sm text-navy">
-          Added — it&rsquo;s ready in your library.
+      {offerStatus && OFFER_STATUS[offerStatus] && (
+        <p
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            offerStatus === "added"
+              ? "border-navy/30 bg-navy/5 text-navy"
+              : "border-primary/30 bg-primary/5 text-fg"
+          }`}
+        >
+          {OFFER_STATUS[offerStatus]}
         </p>
       )}
 

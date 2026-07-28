@@ -32,21 +32,10 @@
   --plum: var(--gi-plum);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: var(--gi-ink);
-    --surface: var(--gi-ink-800);
-    --surface-2: #1d1d22;
-    --fg: #f3f2ee;
-    --muted: #9a9aa2;
-    --border: #2a2a30;
-    --primary: var(--gi-terracotta);
-    --primary-hover: #d67a55;
-    --primary-fg: #ffffff;
-  }
-}
-
-/* Explicit theme override wins over the OS preference in both directions. */
+/* Light is the default; dark is opted into (stored per person and applied
+   before paint by the script in the root layout). We deliberately do NOT follow
+   prefers-color-scheme: a store should look the way its owner designed it
+   unless the reader asks for otherwise. */
 :root[data-theme="light"] {
   --bg: var(--gi-cream); --surface: #ffffff; --surface-2: var(--gi-cream-200);
   --fg: var(--gi-ink); --muted: #5b5b63; --border: #e4e1d9; --primary-hover: var(--gi-terracotta-600);
@@ -152,12 +141,16 @@ h1, h2, h3, h4 {
   text-transform: uppercase;
 }
 
-/* Staggered load reveal (opt-in via .rise + inline animation-delay). */
+/* Entrance motion that only ever ADDS to an already-visible default. The
+   previous version started at opacity 0, so whenever animations didn't run —
+   a backgrounded tab, a headless render, reduced-motion tooling — the content
+   stayed invisible. Content must never depend on an animation to be readable,
+   so this moves the element without ever hiding it. */
 @keyframes rise {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: none; }
+  from { transform: translateY(10px); }
+  to   { transform: none; }
 }
-.rise { animation: rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.rise { animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 
 @media (prefers-reduced-motion: reduce) {
   .rise { animation: none; }

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { themeInitScript } from "@/components/theme-toggle";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], weight: ["600"] });
 const poppins = Poppins({
@@ -30,10 +31,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#FAFAF8" },
-    { media: "(prefers-color-scheme: dark)", color: "#0B0B0D" },
-  ],
+  themeColor: "#FAFAF8",
 };
 
 // Root: fonts, providers, html/body only. Chrome lives per route group —
@@ -41,6 +39,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${poppins.variable} h-full`}>
+      <head>
+        {/* Applies a saved dark preference before first paint, so a returning
+            reader never sees a white flash. Must be inline and synchronous. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
       <body className="min-h-full">
         <Providers>{children}</Providers>
       </body>

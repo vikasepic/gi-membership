@@ -23,7 +23,7 @@ export default async function Home() {
             <span className="h-px flex-1 bg-border" />
             <span className="kicker text-muted">Est. Store</span>
           </div>
-          <h1 className="text-[2.6rem] leading-[1.02] tracking-tight sm:text-6xl md:text-[4.4rem]">
+          <h1 className="text-[2.05rem] leading-[1.08] tracking-tight text-balance sm:text-5xl sm:leading-[1.02] md:text-[4.2rem]">
             A store for the work that goes deeper.
           </h1>
           <p className="max-w-md text-lg text-muted">

@@ -12,7 +12,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <header className="sticky top-0 z-20 border-b border-border bg-surface/85 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-3.5 md:px-6">
           <div className="flex items-center gap-3">
-            <Logo className="h-5 w-auto text-fg" />
+            <Logo className="h-6 w-auto text-fg" />
             <span className="kicker rounded-full bg-surface-2 px-2.5 py-1 text-muted">Admin</span>
           </div>
           <nav className="flex items-center gap-4 text-sm">

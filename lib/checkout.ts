@@ -526,11 +526,21 @@ export async function acceptStandingOffer(
   const pm = typeof pi.payment_method === "string" ? pi.payment_method : pi.payment_method?.id;
   if (!pm) return { ok: false, error: "no_saved_card" };
 
-  const result = await fulfilOffer({
-    order: { id: order.id as string, stripeCustomerId: order.stripe_customer_id as string },
-    offer,
-    paymentMethodId: pm,
-  });
+  // A saved card can decline off-session, and an expired/removed Stripe
+  // customer 404s. Both are ordinary outcomes of pressing this button, not
+  // crashes — let them through and the server action 500s with nothing on
+  // screen. Grant and order_items stay outside: they must only run on success.
+  let result: { subscriptionId?: string; paymentIntentId?: string };
+  try {
+    result = await fulfilOffer({
+      order: { id: order.id as string, stripeCustomerId: order.stripe_customer_id as string },
+      offer,
+      paymentMethodId: pm,
+    });
+  } catch {
+    return { ok: false, error: "charge_failed" };
+  }
+
   await grantOfferOwnership(order.store_id as string, userId, offer, "grant", result.subscriptionId ?? null, {
     email: order.email as string,
     stripeCustomerId: order.stripe_customer_id as string,
