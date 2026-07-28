@@ -18,13 +18,15 @@ export type CatalogItem = {
   tagline: string;
   type: ProductType;
   priceCents: number;
+  owned?: boolean;
+  accessHref?: string;
 };
 
 export function ProductCard({ item, index = 0 }: { item: CatalogItem; index?: number }) {
   const meta = TYPE_META[item.type];
   return (
     <Link
-      href={`/p/${item.slug}`}
+      href={item.owned ? (item.accessHref ?? "/library") : `/p/${item.slug}`}
       className="rise group flex flex-col overflow-hidden rounded-2xl border border-border bg-surface transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.45)]"
       style={{ animationDelay: `${120 + index * 70}ms` }}
     >
@@ -42,10 +44,19 @@ export function ProductCard({ item, index = 0 }: { item: CatalogItem; index?: nu
       <div className="flex flex-1 flex-col gap-2 p-5">
         <h3 className="text-lg leading-snug">{item.title}</h3>
         <p className="flex-1 text-sm text-muted">{item.tagline}</p>
+        {/* Owned: the price is no longer the point — say so and offer the way in. */}
         <div className="mt-2 flex items-center justify-between border-t border-border pt-3">
-          <span className="font-display text-lg">${(item.priceCents / 100).toFixed(0)}</span>
-          <span className="text-sm text-muted transition-colors group-hover:text-fg">
-            View &rarr;
+          {item.owned ? (
+            <span className="kicker text-plum">Owned</span>
+          ) : (
+            <span className="font-display text-lg">${(item.priceCents / 100).toFixed(0)}</span>
+          )}
+          <span
+            className={`text-sm transition-colors ${
+              item.owned ? "text-primary group-hover:underline" : "text-muted group-hover:text-fg"
+            }`}
+          >
+            {item.owned ? "Access now →" : "View →"}
           </span>
         </div>
       </div>

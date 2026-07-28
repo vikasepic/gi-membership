@@ -2,6 +2,9 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
 import { getStoreId } from "@/lib/store";
+import { savedPaymentMethodFor, ownershipFor } from "@/lib/checkout";
+import { createClient } from "@/lib/supabase/server";
+import { coursesForProduct } from "@/lib/courses";
 import type { Product, Offer } from "@/lib/types";
 
 const OFFER_COLUMNS =
@@ -163,4 +166,41 @@ export async function setProductProgress(
       position_seconds: patch.positionSeconds ?? null,
     });
   }
+}
+
+// Whether we can charge this member off-session without asking for a card.
+// Drives which control the standing offer renders: a one-tap accept, or a link
+// to the offer checkout. A button that cannot work should not be a button.
+export async function hasSavedCard(userId: string): Promise<boolean> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("orders")
+    .select("stripe_customer_id")
+    .eq("user_id", userId)
+    .not("stripe_customer_id", "is", null)
+    .limit(1)
+    .maybeSingle();
+  if (!data?.stripe_customer_id) return false;
+  return (await savedPaymentMethodFor(data.stripe_customer_id as string)) !== null;
+}
+
+// What the person currently browsing the store already owns. Anonymous
+// visitors own nothing, so the store keeps its normal buy CTAs for them.
+// Lets the catalog and product pages offer "Access now" instead of asking
+// someone to buy what they already have.
+export async function ownedProductIdsForViewer(): Promise<Set<string>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return new Set();
+  const { productIds } = await ownershipFor(user.id);
+  return productIds;
+}
+
+// Where "Access now" should land for an owned product: straight into the
+// course when the product grants exactly one, otherwise the library index.
+export async function accessHrefForProduct(productId: string): Promise<string> {
+  const courses = await coursesForProduct(productId);
+  return courses.length === 1 ? `/library/${courses[0].slug}` : "/library";
 }

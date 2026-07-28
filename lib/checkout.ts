@@ -60,7 +60,7 @@ export type CheckoutResult =
 const normEmail = (e: string) => e.trim().toLowerCase();
 
 // Look up what a user already owns — drives bump eligibility.
-async function ownershipFor(userId: string): Promise<Ownership> {
+export async function ownershipFor(userId: string): Promise<Ownership> {
   const db = createServiceClient();
   const { data } = await db
     .from("ownership")
@@ -204,9 +204,14 @@ export async function fulfilOffer(args: {
   order: { id: string; stripeCustomerId: string };
   offer: Offer;
   paymentMethodId: string;
+  // Override for flows where the order row itself is created per attempt (the
+  // standalone offer checkout mints a fresh $0 order each visit). Keying on the
+  // SetupIntent instead makes Stripe dedupe the subscription even if two orders
+  // exist, which the default order-derived key could not do.
+  idempotencyKey?: string;
 }): Promise<{ subscriptionId?: string; paymentIntentId?: string }> {
   const { order, offer, paymentMethodId } = args;
-  const idem = `fulfil_${order.id}_${offer.id}`;
+  const idem = args.idempotencyKey ?? `fulfil_${order.id}_${offer.id}`;
 
   if (offer.billingType === "recurring") {
     const productId = await ensureStripeProduct(offer);
@@ -387,7 +392,7 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
   }
 }
 
-async function grantOfferOwnership(
+export async function grantOfferOwnership(
   storeId: string,
   userId: string,
   offer: Offer,
@@ -496,9 +501,34 @@ async function mintOtoToken(
   return token;
 }
 
+// The card we can charge off-session for this customer. Prefers the one Stripe
+// treats as default, falling back to the most recently attached card.
+//
+// Deliberately asks Stripe rather than re-reading the PaymentMethod off an old
+// PaymentIntent: a buyer who started via the standalone offer checkout has a
+// saved card but no PaymentIntent at all, and anyone who has since updated
+// their card in the billing portal would otherwise be charged on the stale one.
+// Returns null rather than throwing when Stripe can't answer (deleted customer,
+// API trouble): "we could not find a card to charge" is the same outcome for
+// every caller, and this runs before their charge guard — throwing here would
+// escape it and 500 the page.
+export async function savedPaymentMethodFor(customerId: string): Promise<string | null> {
+  try {
+    const customer = await stripe().customers.retrieve(customerId);
+    if (!customer.deleted) {
+      const dflt = customer.invoice_settings?.default_payment_method;
+      if (dflt) return typeof dflt === "string" ? dflt : dflt.id;
+    }
+    const cards = await stripe().paymentMethods.list({ customer: customerId, type: "card", limit: 1 });
+    return cards.data[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Accept a standing offer from the library (buyer who declined the OTO). Uses
-// the saved card from their most recent paid order. Eligibility is re-checked,
-// so it can't grant something already owned.
+// the card on file. Eligibility is re-checked, so it can't grant something
+// already owned.
 export async function acceptStandingOffer(
   userId: string,
   offerId: string,
@@ -518,12 +548,11 @@ export async function acceptStandingOffer(
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  if (!order?.stripe_customer_id || !order.stripe_payment_intent_id) {
-    return { ok: false, error: "no_saved_card" };
-  }
+  // A customer is enough — a buyer whose only order is a $0 trial start has a
+  // saved card but no PaymentIntent behind it.
+  if (!order?.stripe_customer_id) return { ok: false, error: "no_saved_card" };
 
-  const pi = await stripe().paymentIntents.retrieve(order.stripe_payment_intent_id as string);
-  const pm = typeof pi.payment_method === "string" ? pi.payment_method : pi.payment_method?.id;
+  const pm = await savedPaymentMethodFor(order.stripe_customer_id as string);
   if (!pm) return { ok: false, error: "no_saved_card" };
 
   // A saved card can decline off-session, and an expired/removed Stripe

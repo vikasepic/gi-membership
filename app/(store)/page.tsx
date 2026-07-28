@@ -1,15 +1,38 @@
 import { ProductCard, type CatalogItem } from "@/components/product-card";
 import { Logo } from "@/components/logo";
 import { listPublishedProducts } from "@/lib/store";
+import { ownedProductIdsForViewer, accessHrefForProduct } from "@/lib/library";
 import type { Product } from "@/lib/types";
 
-function toCard(p: Product): CatalogItem {
-  return { slug: p.slug, title: p.title, tagline: p.tagline ?? "", type: p.type, priceCents: p.priceCents };
+function toCard(p: Product, owned: boolean, accessHref?: string): CatalogItem {
+  return {
+    slug: p.slug,
+    title: p.title,
+    tagline: p.tagline ?? "",
+    type: p.type,
+    priceCents: p.priceCents,
+    owned,
+    accessHref,
+  };
 }
 
 export default async function Home() {
   const products = await listPublishedProducts();
   const featured = products[0];
+  // Anonymous visitors own nothing, so this is an empty set and the store
+  // renders exactly as before for them.
+  const ownedIds = await ownedProductIdsForViewer();
+  const featuredOwned = featured ? ownedIds.has(featured.id) : false;
+  // Deep-link each owned product to its course; only owned ones are looked up,
+  // so an anonymous visitor costs no extra queries.
+  const accessHrefs = new Map(
+    await Promise.all(
+      products
+        .filter((p) => ownedIds.has(p.id))
+        .map(async (p) => [p.id, await accessHrefForProduct(p.id)] as const),
+    ),
+  );
+  const featuredHref = featured ? accessHrefs.get(featured.id) : undefined;
   const fromPrice =
     products.length > 0 ? Math.min(...products.map((p) => p.priceCents)) : 0;
 
@@ -66,14 +89,18 @@ export default async function Home() {
               <p className="text-sm text-muted">{featured.tagline}</p>
             </div>
             <div className="mt-6 flex items-center justify-between border-t border-border pt-5">
-              <span className="font-display text-3xl">
-                ${(featured.priceCents / 100).toFixed(0)}
-              </span>
+              {featuredOwned ? (
+                <span className="kicker text-plum">Owned</span>
+              ) : (
+                <span className="font-display text-3xl">
+                  ${(featured.priceCents / 100).toFixed(0)}
+                </span>
+              )}
               <a
-                href={`/p/${featured.slug}`}
+                href={featuredOwned ? (featuredHref ?? "/library") : `/p/${featured.slug}`}
                 className="text-sm font-medium text-fg underline-offset-4 hover:underline"
               >
-                Get it &rarr;
+                {featuredOwned ? "Access now →" : "Get it →"}
               </a>
             </div>
           </aside>
@@ -91,7 +118,7 @@ export default async function Home() {
         ) : (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {products.map((p, i) => (
-              <ProductCard key={p.slug} item={toCard(p)} index={i} />
+              <ProductCard key={p.slug} item={toCard(p, ownedIds.has(p.id), accessHrefs.get(p.id))} index={i} />
             ))}
           </div>
         )}

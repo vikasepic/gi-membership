@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getProductBySlug } from "@/lib/store";
+import { ownedProductIdsForViewer, accessHrefForProduct } from "@/lib/library";
 
 const TYPE_LABEL: Record<string, string> = {
   pdf: "Guide",
@@ -17,6 +18,9 @@ export default async function ProductPage({
   const { slug } = await params;
   const product = await getProductBySlug(slug);
   if (!product || product.status !== "published") notFound();
+
+  const owned = (await ownedProductIdsForViewer()).has(product.id);
+  const accessHref = owned ? await accessHrefForProduct(product.id) : "/library";
 
   return (
     <div className="flex flex-col gap-10 md:gap-14">
@@ -40,25 +44,39 @@ export default async function ProductPage({
           <h1 className="text-3xl leading-tight md:text-4xl">{product.title}</h1>
           {product.tagline && <p className="text-lg text-muted">{product.tagline}</p>}
 
-          <div className="mt-2 flex items-baseline gap-3">
-            <span className="font-display text-3xl">
-              ${(product.priceCents / 100).toFixed(0)}
-            </span>
-            {product.compareAtCents && (
-              <span className="text-muted line-through">
-                ${(product.compareAtCents / 100).toFixed(0)}
+          {/* Price is only news to someone who hasn't bought it. */}
+          {!owned && (
+            <div className="mt-2 flex items-baseline gap-3">
+              <span className="font-display text-3xl">
+                ${(product.priceCents / 100).toFixed(0)}
               </span>
-            )}
-          </div>
+              {product.compareAtCents && (
+                <span className="text-muted line-through">
+                  ${(product.compareAtCents / 100).toFixed(0)}
+                </span>
+              )}
+            </div>
+          )}
 
-          {/* ponytail: checkout is phase 2 — this links to a route that doesn't
-              exist yet, intentionally. Wire to the Payment Element then. */}
-          <Link
-            href={`/checkout?product=${product.slug}`}
-            className="mt-2 w-fit rounded-full bg-primary px-7 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover"
-          >
-            Get it
-          </Link>
+          {/* Never ask someone to buy what they already own — send them to it. */}
+          {owned ? (
+            <div className="mt-2 flex flex-col gap-2">
+              <Link
+                href={accessHref}
+                className="w-fit rounded-full bg-primary px-7 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+              >
+                Access now &rarr;
+              </Link>
+              <span className="text-sm text-muted">You already own this.</span>
+            </div>
+          ) : (
+            <Link
+              href={`/checkout?product=${product.slug}`}
+              className="mt-2 w-fit rounded-full bg-primary px-7 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+            >
+              Get it
+            </Link>
+          )}
         </div>
       </div>
 

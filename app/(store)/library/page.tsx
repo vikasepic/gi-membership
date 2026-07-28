@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getStandingOffer, listOwnedApps } from "@/lib/library";
+import { getStandingOffer, listOwnedApps, hasSavedCard } from "@/lib/library";
 import { coursesForUser } from "@/lib/courses";
 import { immediateChargeCents } from "@/lib/offers";
 import { acceptStandingOfferAction, openAppAction } from "./actions";
@@ -38,6 +38,7 @@ export default async function LibraryPage({
   const courses = await coursesForUser(user.id);
   const apps = await listOwnedApps(user.id);
   const standing = await getStandingOffer(user.id);
+  const cardOnFile = standing ? await hasSavedCard(user.id) : false;
 
   return (
     <div className="flex flex-col gap-10 py-4">
@@ -127,12 +128,24 @@ export default async function LibraryPage({
                 {standing.trialDays ? ` after a ${standing.trialDays}-day trial` : ""}
               </span>
             )}
-            <form action={acceptStandingOfferAction} className="ml-auto">
-              <input type="hidden" name="offerId" value={standing.id} />
-              <button className="rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover">
+            {/* One tap only when there's genuinely a card to charge. Otherwise
+                this goes to checkout to collect one, rather than offering a
+                button whose only possible outcome is an error. */}
+            {cardOnFile ? (
+              <form action={acceptStandingOfferAction} className="ml-auto">
+                <input type="hidden" name="offerId" value={standing.id} />
+                <button className="rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover">
+                  {standing.acceptLabel}
+                </button>
+              </form>
+            ) : (
+              <Link
+                href={`/checkout/offer?offer=${standing.id}`}
+                className="ml-auto rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+              >
                 {standing.acceptLabel}
-              </button>
-            </form>
+              </Link>
+            )}
           </div>
         </section>
       )}
