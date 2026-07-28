@@ -104,3 +104,45 @@ afterAll(async () => {
     }
   }
 });
+
+// --- OTO token must survive a failed off-session charge --------------------
+import { resolveOtoForOrder, acceptOto } from "@/lib/checkout";
+
+describe.skipIf(!canRun)("OTO token vs failed charge (integration)", () => {
+  it("releases the single-use token when the charge fails, so the buyer can retry", async () => {
+    const email = `otofail_${Date.now()}@example.com`;
+    createdEmails.push(email);
+    const res = await createCheckoutIntent({
+      productSlug: "placeholder-offer",
+      email,
+      username: "otofail",
+      password: "password12345",
+      bumpTaken: false, // decline the bump so an OTO is offered
+    });
+    if (!res.ok) throw new Error(res.error);
+    const piId = res.clientSecret.split("_secret_")[0];
+    await stripe().paymentIntents.confirm(piId, {
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/checkout/complete",
+    });
+    await finalizeOrder(piId);
+
+    const token = await resolveOtoForOrder(piId);
+    if (!token) return; // no OTO configured here — nothing to assert
+
+    // Force the off-session charge to fail the way a declined card would, by
+    // pointing the order at a customer Stripe does not have.
+    const db = createServiceClient();
+    await db
+      .from("orders")
+      .update({ stripe_customer_id: "cus_nonexistent_for_test" })
+      .eq("stripe_payment_intent_id", piId);
+
+    const first = await acceptOto(token);
+    expect(first).toEqual({ ok: false, error: "charge_failed" });
+
+    // The token must NOT be burned — presenting it again is not "used".
+    const second = await acceptOto(token);
+    expect(second).not.toEqual({ ok: false, error: "used" });
+  });
+});

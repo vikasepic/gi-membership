@@ -1,0 +1,41 @@
+name: CI
+
+# Runs on every push and PR. The production deploy is triggered by a Coolify
+# webhook on push, so this is the only thing standing between a broken commit
+# and the live store — keep it fast and keep it required.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx next lint
+
+      # Integration suites self-skip without STRIPE_SECRET_KEY / Supabase, so CI
+      # runs the pure logic: offers, tokens, sanitizer, progress, tax, consent.
+      - name: Unit tests
+        run: npm test
+
+# ---------------------------------------------------------------------------
+# NOT ACTIVE YET. The deploy token lacks GitHub's `workflow` scope, so it cannot
+# push files under .github/workflows/. To turn CI on, either:
+#   a) copy this file to .github/workflows/ci.yml via the GitHub web UI, or
+#   b) grant the PAT the `workflow` scope and let it be pushed normally.
+# Until then, pushing to main deploys to production with nothing running tests.
+# ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import { isOfferEligible, immediateChargeCents, type Ownership } from "@/lib/off
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
 import { provisionAppSubscription } from "@/lib/apps";
 import { trackPurchase } from "@/lib/tracking";
+import { sendEmail, buildWelcomeEmail, buildReceiptEmail } from "@/lib/email";
 import {
   TAX_ENABLED,
   calculateTax,
@@ -258,7 +259,7 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
   const { data: order } = await db
     .from("orders")
     .select(
-      "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id",
+      "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents",
     )
     .eq("stripe_payment_intent_id", paymentIntentId)
     .maybeSingle();
@@ -316,6 +317,45 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
   // reporting. Never throws — a reporting failure must not undo a paid order.
   if (order.stripe_tax_calculation_id) {
     await recordTaxTransaction(order.stripe_tax_calculation_id as string, order.id as string);
+  }
+
+  // Welcome + receipt. Without these the buyer has an account they were never
+  // told about, and no proof of purchase. Sent before the consent gate below
+  // because transactional email is contractual, not marketing — it does not
+  // require tracking consent.
+  try {
+    const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://grow.greaterinside.com";
+    const { data: items } = await db
+      .from("order_items")
+      .select("description, amount_cents")
+      .eq("order_id", order.id);
+    const lines = (items ?? []).map((i) => ({
+      description: i.description as string,
+      amountCents: (i.amount_cents as number) ?? 0,
+    }));
+    const to = order.email as string;
+
+    await sendEmail(
+      to,
+      buildWelcomeEmail({
+        email: to,
+        productTitle: lines[0]?.description ?? "your purchase",
+        siteUrl: site,
+      }),
+    );
+    await sendEmail(
+      to,
+      buildReceiptEmail({
+        email: to,
+        orderId: order.id as string,
+        lines,
+        totalCents: pi.amount,
+        taxCents: (order.tax_cents as number) ?? 0,
+        currency: pi.currency,
+      }),
+    );
+  } catch (e) {
+    console.error("[finalizeOrder] email failed (order is still complete):", e);
   }
 
   // Report the conversion server-side — ONLY with the buyer's explicit consent,
@@ -508,7 +548,9 @@ export async function acceptStandingOffer(
   return { ok: true };
 }
 
-export type OtoAcceptResult = { ok: true } | { ok: false; error: "invalid" | "expired" | "used" };
+export type OtoAcceptResult =
+  | { ok: true }
+  | { ok: false; error: "invalid" | "expired" | "used" | "charge_failed" };
 
 // Accept the OTO. POST-only, single-use: an atomic pending→completed update is
 // the replay guard, so a back-button/refresh/replay can never double-charge.
@@ -539,11 +581,26 @@ export async function acceptOto(token: string): Promise<OtoAcceptResult> {
   const pm = typeof pi.payment_method === "string" ? pi.payment_method : pi.payment_method?.id;
   if (!order.stripe_customer_id || !pm) return { ok: false, error: "invalid" };
 
-  const result = await fulfilOffer({
-    order: { id: order.id, stripeCustomerId: order.stripe_customer_id as string },
-    offer,
-    paymentMethodId: pm,
-  });
+  // The token is already claimed above — that is the replay guard, and it must
+  // happen before charging so two concurrent accepts cannot both charge. But an
+  // off-session charge genuinely fails sometimes (that is why dunning exists),
+  // and burning the buyer's one-time offer on a declined card loses the sale for
+  // good. So: release the claim if the charge fails, letting them retry.
+  let result: { subscriptionId?: string; paymentIntentId?: string };
+  try {
+    result = await fulfilOffer({
+      order: { id: order.id, stripeCustomerId: order.stripe_customer_id as string },
+      offer,
+      paymentMethodId: pm,
+    });
+  } catch {
+    await db
+      .from("oto_tokens")
+      .update({ status: "pending", consumed_at: null })
+      .eq("token_hash", sha256(token));
+    return { ok: false, error: "charge_failed" };
+  }
+
   await grantOfferOwnership(order.store_id as string, userId, offer, "oto", result.subscriptionId ?? null, {
     email: order.email as string,
     stripeCustomerId: order.stripe_customer_id as string,
