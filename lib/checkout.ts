@@ -16,6 +16,7 @@ import {
 } from "@/lib/tax";
 import { stripe, stripeMode } from "@/lib/stripe";
 import { otoSigningSecret } from "@/lib/env";
+import { ensureUserProfile } from "@/lib/users";
 import type { Offer } from "@/lib/types";
 
 const OTO_TTL_SECONDS = 15 * 60; // 15 minutes
@@ -119,14 +120,13 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
 
   if (input.existingUserId) {
     // Already signed in: no account to create, and nothing to ask them for.
-    const { data: profile } = await db
-      .from("users")
-      .select("email")
-      .eq("id", input.existingUserId)
-      .maybeSingle();
-    if (!profile?.email) return { ok: false, error: "Account not found — please log in again." };
-    userId = input.existingUserId;
-    email = profile.email as string;
+    // ensureUserProfile also backfills members who authenticate but have no
+    // profile row (created outside checkout) — otherwise they'd be told their
+    // account doesn't exist while looking at their own email on screen.
+    const profile = await ensureUserProfile(input.existingUserId);
+    if (!profile) return { ok: false, error: "Account not found — please log in again." };
+    userId = profile.id;
+    email = profile.email;
 
     // Don't let a member pay twice for something they already have.
     const already = await ownershipFor(userId);

@@ -5,6 +5,7 @@ import { isOfferEligible, immediateChargeCents } from "@/lib/offers";
 import { ownershipFor, fulfilOffer, grantOfferOwnership, customerForUser } from "@/lib/checkout";
 import { stripe } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
+import { ensureUserProfile } from "@/lib/users";
 
 // Standalone checkout for a single offer, for a member who has no card on file
 // yet (they were gifted access, or their only purchase predates a saved card).
@@ -80,8 +81,9 @@ export async function completeOfferCheckout(
   });
 
   const db = createServiceClient();
-  const { data: user } = await db.from("users").select("email").eq("id", userId).maybeSingle();
-  const email = (user?.email as string) ?? "";
+  // Same backfill as the product checkout: a member may authenticate without
+  // ever having had a profile row created for them.
+  const email = (await ensureUserProfile(userId))?.email ?? "";
 
   // order_items.order_id is NOT NULL, so a standalone offer still books an
   // order. It is genuinely a $0 order when the offer is a trial.
