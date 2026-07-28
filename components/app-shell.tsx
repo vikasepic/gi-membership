@@ -23,7 +23,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh flex-col">
       {/* Mobile top bar — brand only; navigation lives in the bottom tabs. */}
-      <header className="sticky top-0 z-20 flex items-center justify-center border-b border-border bg-surface/85 px-5 py-3.5 backdrop-blur md:hidden">
+      <header className="sticky top-0 z-20 flex items-center justify-center border-b border-border bg-surface/85 px-5 py-3.5 backdrop-blur md:hidden"
+        style={{ paddingTop: "calc(0.875rem + env(safe-area-inset-top))" }}>
         <Link href="/" aria-label="Greater Inside">
           <Logo className="h-5 w-auto text-fg" />
         </Link>
@@ -53,12 +54,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-5 pb-24 pt-6 md:px-6 md:pb-10">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-5 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-10">
         {children}
       </main>
 
       {/* Mobile bottom tab bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/90 backdrop-blur md:hidden">
+      <nav
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/90 backdrop-blur md:hidden"
+        // Sits above the home indicator instead of underneath it.
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
         <div className="mx-auto flex max-w-md items-stretch justify-around">
           {NAV.map((item) => (
             <Link
