@@ -16,7 +16,7 @@ import type {
 // Admin-side reads/writes. Service-role; callers are admin server actions/pages.
 
 const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order, chapter_label, lesson_label";
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order";
 
 const OFFER_COLUMNS =
   "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, stripe_product_id_test, stripe_product_id_live";
@@ -43,8 +43,6 @@ export type ProductInput = {
   status: ProductStatus;
   bumpOfferId: string | null;
   upsellOfferId: string | null;
-  chapterLabel: string;
-  lessonLabel: string;
 };
 
 export async function listAllProducts(): Promise<Product[]> {
@@ -95,8 +93,6 @@ function toRow(input: ProductInput, storeId: string) {
     status: input.status,
     bump_offer_id: input.bumpOfferId,
     upsell_offer_id: input.upsellOfferId,
-    chapter_label: input.chapterLabel,
-    lesson_label: input.lessonLabel,
   };
 }
 

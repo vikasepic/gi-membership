@@ -3,9 +3,10 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
 import { getStoreId } from "@/lib/store";
 import { sanitizeBodyHtml } from "@/lib/sanitize-html";
-import { ITEM_COLUMNS, type Attachment, type CourseItem } from "@/lib/curriculum";
+import { ITEM_COLUMNS, type Attachment, type CourseItem, type ItemType } from "@/lib/curriculum";
 
 export type ItemInput = {
+  itemType: ItemType;
   title: string;
   subtitle: string | null;
   bodyHtml: string | null;
@@ -35,27 +36,28 @@ export function swapOrder<T extends { id: string; sortOrder: number }>(
   ];
 }
 
-async function siblingsOf(productId: string, parentId: string | null): Promise<CourseItem[]> {
+async function siblingsOf(courseId: string, parentId: string | null): Promise<CourseItem[]> {
   const db = createServiceClient();
-  let q = db.from("course_items").select(ITEM_COLUMNS).eq("product_id", productId);
+  let q = db.from("course_items").select(ITEM_COLUMNS).eq("course_id", courseId);
   q = parentId === null ? q.is("parent_id", null) : q.eq("parent_id", parentId);
   const { data } = await q;
   return camelize<CourseItem[]>(data ?? []);
 }
 
 export async function createItem(
-  productId: string,
+  courseId: string,
   parentId: string | null,
   input: ItemInput,
 ): Promise<string> {
   const db = createServiceClient();
-  const sort = nextSortOrder(await siblingsOf(productId, parentId));
+  const sort = nextSortOrder(await siblingsOf(courseId, parentId));
   const { data, error } = await db
     .from("course_items")
     .insert({
       store_id: await getStoreId(),
-      product_id: productId,
+      course_id: courseId,
       parent_id: parentId,
+      item_type: input.itemType,
       title: input.title,
       subtitle: input.subtitle,
       body_html: sanitizeBodyHtml(input.bodyHtml ?? ""),
@@ -74,6 +76,7 @@ export async function updateItem(itemId: string, input: ItemInput): Promise<void
   const { error } = await db
     .from("course_items")
     .update({
+      item_type: input.itemType,
       title: input.title,
       subtitle: input.subtitle,
       body_html: sanitizeBodyHtml(input.bodyHtml ?? ""),
@@ -104,12 +107,12 @@ export async function moveItem(itemId: string, dir: "up" | "down"): Promise<void
   const db = createServiceClient();
   const current = await db
     .from("course_items")
-    .select("id, product_id, parent_id, sort_order")
+    .select("id, course_id, parent_id, sort_order")
     .eq("id", itemId)
     .single();
   if (current.error || !current.data) throw new Error("moveItem: item not found");
   const row = camelize<CourseItem>(current.data);
-  const writes = swapOrder(await siblingsOf(row.productId, row.parentId), itemId, dir);
+  const writes = swapOrder(await siblingsOf(row.courseId, row.parentId), itemId, dir);
   if (writes.length === 0) return;
   // The sibling unique index rejects a direct two-row swap, so the DB-side
   // function parks one row at a free position first. Doing that inside a

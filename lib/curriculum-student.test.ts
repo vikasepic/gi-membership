@@ -3,7 +3,7 @@ import { flattenPlayable, neighbours, firstIncomplete } from "@/lib/curriculum-s
 import type { CurriculumNode, CourseItem } from "@/lib/curriculum";
 
 const base = (id: string, parentId: string | null = null): CourseItem => ({
-  id, productId: "p", parentId, title: id, subtitle: null, bodyHtml: null,
+  id, courseId: "c", parentId, itemType: "text" as const, title: id, subtitle: null, bodyHtml: null,
   videoEmbedUrl: null, coverPath: null, attachments: [], isPublished: true, sortOrder: 0,
 });
 const node = (id: string, children: CourseItem[] = []): CurriculumNode => ({ ...base(id), children });

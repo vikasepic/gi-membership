@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCourseItem } from "@/lib/curriculum";
-import { ownsProduct } from "@/lib/library";
+import { userOwnsCourse } from "@/lib/courses";
 import { signedItemAsset } from "@/lib/media";
 
 // Attachments and inline lesson images are paid content. Every request
@@ -22,7 +22,7 @@ export async function GET(
   const item = await getCourseItem(itemId);
   if (!item) return new NextResponse("Not found", { status: 404 });
 
-  if (!(await ownsProduct(user.id, item.productId))) {
+  if (!(await userOwnsCourse(user.id, item.courseId))) {
     return new NextResponse("Forbidden", { status: 403 });
   }
 

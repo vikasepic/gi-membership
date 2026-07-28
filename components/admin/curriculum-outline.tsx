@@ -1,15 +1,15 @@
 import Link from "next/link";
 import type { CurriculumNode } from "@/lib/curriculum";
-import { addChapterAction, addLessonAction, moveItemAction } from "@/app/admin/products/[id]/curriculum/actions";
+import { addChapterAction, addLessonAction, moveItemAction } from "@/app/admin/courses/[id]/items/actions";
 
 const pad = (n: number) => String(n + 1).padStart(2, "0");
 
-function MoveButtons({ productId, itemId }: { productId: string; itemId: string }) {
+function MoveButtons({ courseId, itemId }: { courseId: string; itemId: string }) {
   return (
     <span className="flex items-center gap-1">
       {(["up", "down"] as const).map((dir) => (
         <form action={moveItemAction} key={dir}>
-          <input type="hidden" name="productId" value={productId} />
+          <input type="hidden" name="courseId" value={courseId} />
           <input type="hidden" name="itemId" value={itemId} />
           <input type="hidden" name="dir" value={dir} />
           <button
@@ -25,12 +25,12 @@ function MoveButtons({ productId, itemId }: { productId: string; itemId: string 
 }
 
 export function CurriculumOutline({
-  productId,
+  courseId,
   nodes,
   chapterLabel,
   lessonLabel,
 }: {
-  productId: string;
+  courseId: string;
   nodes: CurriculumNode[];
   chapterLabel: string;
   lessonLabel: string;
@@ -40,7 +40,7 @@ export function CurriculumOutline({
       <div className="flex items-center justify-between">
         <h2 className="text-lg">Curriculum</h2>
         <form action={addChapterAction}>
-          <input type="hidden" name="productId" value={productId} />
+          <input type="hidden" name="courseId" value={courseId} />
           <input type="hidden" name="title" value={`New ${chapterLabel}`} />
           <button className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-fg hover:bg-primary-hover">
             + Add {chapterLabel}
@@ -60,7 +60,7 @@ export function CurriculumOutline({
             <div className="flex items-center justify-between gap-3 px-4 py-3">
               <span className="flex items-center gap-3">
                 <span className="font-display text-muted">{pad(ci)}</span>
-                <Link href={`/admin/products/${productId}/curriculum/${ch.id}`} className="hover:underline">
+                <Link href={`/admin/courses/${courseId}/items/${ch.id}`} className="hover:underline">
                   {ch.title}
                 </Link>
                 <span className="text-xs text-muted">
@@ -73,7 +73,7 @@ export function CurriculumOutline({
                 <span className={ch.isPublished ? "text-xs text-navy" : "text-xs text-muted"}>
                   {ch.isPublished ? "Published" : "Draft"}
                 </span>
-                <MoveButtons productId={productId} itemId={ch.id} />
+                <MoveButtons courseId={courseId} itemId={ch.id} />
               </span>
             </div>
 
@@ -83,7 +83,7 @@ export function CurriculumOutline({
                   <span className="flex items-center gap-3 text-sm">
                     <span className="font-display text-muted">{pad(li)}</span>
                     <Link
-                      href={`/admin/products/${productId}/curriculum/${ls.id}`}
+                      href={`/admin/courses/${courseId}/items/${ls.id}`}
                       className="hover:underline"
                     >
                       {ls.title}
@@ -93,16 +93,29 @@ export function CurriculumOutline({
                     <span className={ls.isPublished ? "text-xs text-navy" : "text-xs text-muted"}>
                       {ls.isPublished ? "Published" : "Draft"}
                     </span>
-                    <MoveButtons productId={productId} itemId={ls.id} />
+                    <MoveButtons courseId={courseId} itemId={ls.id} />
                   </span>
                 </li>
               ))}
             </ol>
 
-            <form action={addLessonAction} className="border-t border-border px-4 py-2 pl-10">
-              <input type="hidden" name="productId" value={productId} />
+            <form action={addLessonAction} className="flex items-center gap-2 border-t border-border px-4 py-2 pl-10">
+              <input type="hidden" name="courseId" value={courseId} />
               <input type="hidden" name="parentId" value={ch.id} />
               <input type="hidden" name="title" value={`New ${lessonLabel}`} />
+              {/* Type is chosen up front because it decides which fields the
+                  editor shows — a video lesson and a PDF lesson need different things. */}
+              <select
+                name="itemType"
+                defaultValue="video"
+                aria-label={`New ${lessonLabel} type`}
+                className="rounded-lg border border-border bg-surface px-2 py-1 text-xs"
+              >
+                <option value="video">Video</option>
+                <option value="audio">Audio</option>
+                <option value="pdf">PDF</option>
+                <option value="text">Text</option>
+              </select>
               <button className="text-sm text-muted hover:text-fg">+ Add {lessonLabel}</button>
             </form>
           </li>

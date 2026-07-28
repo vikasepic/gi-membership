@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { buildTree, rollupProgress, type CourseItem } from "@/lib/curriculum";
 
 const item = (over: Partial<CourseItem> & { id: string }): CourseItem => ({
-  productId: "p1",
+  courseId: "c1",
+  itemType: "text" as const,
   parentId: null,
   title: "t",
   subtitle: null,
