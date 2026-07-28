@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { createProduct, updateProduct, deleteProduct, uploadPaidAsset, type ProductInput } from "@/lib/admin";
 import { requireAdmin } from "@/lib/admin-guard";
 import { setProductCourses } from "@/lib/courses";
+import { blocksPublish, PUBLISH_WITHOUT_COURSE_ERROR } from "@/lib/product-rules";
 
 const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
 
@@ -59,10 +60,18 @@ export async function saveProduct(_prev: SaveState, formData: FormData): Promise
     upsellOfferId: v.upsellOfferId,
   };
 
+  // Which courses this product unlocks. The library delivers courses and
+  // nothing else, so a published product with no course is one a buyer can pay
+  // for and never receive. Refuse to publish it rather than sell a dead end;
+  // drafts may sit courseless while they're being built.
+  const courseIds = formData.getAll("courseIds").map(String).filter(Boolean);
+  if (blocksPublish(v.status, courseIds)) {
+    return { error: PUBLISH_WITHOUT_COURSE_ERROR };
+  }
+
   try {
     const productId = v.id ? (await updateProduct(v.id, input), v.id) : await createProduct(input);
-    // Which courses this product unlocks. Empty list = a simple one-file product.
-    await setProductCourses(productId, formData.getAll("courseIds").map(String));
+    await setProductCourses(productId, courseIds);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Save failed" };
   }

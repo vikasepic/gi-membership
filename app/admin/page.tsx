@@ -1,11 +1,20 @@
 import Link from "next/link";
 import { listAllProducts } from "@/lib/admin";
+import { productCourseIds } from "@/lib/courses";
 
 const money = (cents: number) => `$${(cents / 100).toFixed(0)}`;
 
 export default async function AdminProductsPage() {
   const products = await listAllProducts();
   const published = products.filter((p) => p.status === "published").length;
+
+  // The library delivers courses, so a published product with no course is
+  // buyable but undeliverable. Saving one is blocked now, but anything already
+  // in that state predates the check and has to be surfaced, not assumed fixed.
+  const courseIdsByProduct = await productCourseIds(products.map((p) => p.id));
+  const undeliverable = products.filter(
+    (p) => p.status === "published" && (courseIdsByProduct.get(p.id)?.length ?? 0) === 0,
+  );
 
   return (
     <div className="flex flex-col gap-8">
@@ -18,6 +27,31 @@ export default async function AdminProductsPage() {
           + New product
         </Link>
       </div>
+
+      {undeliverable.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-2xl border border-primary/40 bg-primary/5 px-5 py-4">
+          <span className="font-medium text-fg">
+            {undeliverable.length} published{" "}
+            {undeliverable.length === 1 ? "product has" : "products have"} no course attached
+          </span>
+          <p className="text-sm text-muted">
+            The library delivers courses, so {undeliverable.length === 1 ? "it is" : "they are"}{" "}
+            on sale but would give a buyer nothing. Attach a course to each, or set{" "}
+            {undeliverable.length === 1 ? "it" : "them"} back to draft.
+          </p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            {undeliverable.map((p) => (
+              <Link
+                key={p.id}
+                href={`/admin/products/${p.id}`}
+                className="rounded-full border border-border bg-surface px-3 py-1 text-sm hover:border-primary"
+              >
+                {p.title}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* KPIs — orders/revenue land in phase 2 (checkout). */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">

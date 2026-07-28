@@ -163,3 +163,23 @@ export async function coursesForUser(userId: string): Promise<Course[]> {
 export async function userOwnsCourse(userId: string, courseId: string): Promise<boolean> {
   return (await coursesForUser(userId)).some((c) => c.id === courseId);
 }
+
+// Course ids per product, batched — the admin list needs this for every row and
+// a per-product query would be one round trip each.
+export async function productCourseIds(
+  productIds: string[],
+): Promise<Map<string, string[]>> {
+  const byProduct = new Map<string, string[]>();
+  if (productIds.length === 0) return byProduct;
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("product_courses")
+    .select("product_id, course_id")
+    .in("product_id", productIds);
+  if (error) throw new Error(`productCourseIds: ${error.message}`);
+  for (const row of data ?? []) {
+    const key = row.product_id as string;
+    byProduct.set(key, [...(byProduct.get(key) ?? []), row.course_id as string]);
+  }
+  return byProduct;
+}
