@@ -2,7 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getOffer } from "@/lib/store";
 import { isOfferEligible, immediateChargeCents } from "@/lib/offers";
-import { ownershipFor, fulfilOffer, grantOfferOwnership } from "@/lib/checkout";
+import { ownershipFor, fulfilOffer, grantOfferOwnership, customerForUser } from "@/lib/checkout";
 import { stripe } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
 
@@ -19,28 +19,6 @@ import { normalizeCountry } from "@/lib/tax";
 export type StartResult =
   | { ok: true; clientSecret: string; customerId: string }
   | { ok: false; error: string };
-
-// Reuse the customer from any prior order so a member doesn't accumulate one
-// Stripe customer per visit (which would scatter their saved cards).
-async function customerForUser(userId: string, email: string, storeId: string): Promise<string> {
-  const db = createServiceClient();
-  const { data: prior } = await db
-    .from("orders")
-    .select("stripe_customer_id")
-    .eq("user_id", userId)
-    .not("stripe_customer_id", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (prior?.stripe_customer_id) return prior.stripe_customer_id as string;
-
-  const customer = await stripe().customers.create(
-    { email, metadata: { storeId, userId } },
-    // One customer per user even if they double-submit the form.
-    { idempotencyKey: `customer_${userId}` },
-  );
-  return customer.id;
-}
 
 export async function startOfferCheckout(args: {
   userId: string;

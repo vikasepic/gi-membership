@@ -44,9 +44,14 @@ async function ensureStripeProduct(offer: Offer): Promise<string> {
 
 export type CheckoutInput = {
   productSlug: string;
-  email: string;
-  username: string;
-  password: string;
+  // Credentials are only for a NEW buyer signing up at checkout. A member who
+  // is already signed in sends none of these.
+  email?: string;
+  username?: string;
+  password?: string;
+  // Set from the session by the action layer — NEVER from the client payload,
+  // or a caller could buy in someone else's name.
+  existingUserId?: string | null;
   bumpTaken: boolean;
   anonId?: string | null; // attribution visitor cookie, read by the action layer
   country?: string | null; // ISO-2, required when Stripe Tax is enabled
@@ -55,9 +60,36 @@ export type CheckoutInput = {
 
 export type CheckoutResult =
   | { ok: true; clientSecret: string }
-  | { ok: false; error: string; code?: "account_exists" };
+  | { ok: false; error: string; code?: "account_exists" | "already_owned" };
 
 const normEmail = (e: string) => e.trim().toLowerCase();
+
+// One Stripe customer per member, reused across purchases. Without this a
+// returning buyer accumulates a customer per order, scattering their saved
+// cards so off-session fulfilment can't find the card they actually use.
+export async function customerForUser(
+  userId: string,
+  email: string,
+  storeId: string,
+): Promise<string> {
+  const db = createServiceClient();
+  const { data: prior } = await db
+    .from("orders")
+    .select("stripe_customer_id")
+    .eq("user_id", userId)
+    .not("stripe_customer_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (prior?.stripe_customer_id) return prior.stripe_customer_id as string;
+
+  const customer = await stripe().customers.create(
+    { email, metadata: { storeId, userId } },
+    // One customer per user even under a double submit.
+    { idempotencyKey: `customer_${userId}` },
+  );
+  return customer.id;
+}
 
 // Look up what a user already owns — drives bump eligibility.
 export async function ownershipFor(userId: string): Promise<Ownership> {
@@ -78,34 +110,58 @@ export async function ownershipFor(userId: string): Promise<Ownership> {
 export async function createCheckoutIntent(input: CheckoutInput): Promise<CheckoutResult> {
   const db = createServiceClient();
   const storeId = await getStoreId();
-  const email = normEmail(input.email);
 
   const product = await getProductBySlug(input.productSlug);
   if (!product || product.status !== "published") return { ok: false, error: "Product not available" };
 
-  // Signup at checkout — create the auth account (auto-confirmed; they're paying).
-  const created = await db.auth.admin.createUser({
-    email,
-    password: input.password,
-    email_confirm: true,
-    user_metadata: { username: input.username },
-  });
-  if (created.error || !created.data.user) {
-    const msg = created.error?.message ?? "Could not create account";
-    if (/already|exists|registered/i.test(msg)) {
-      return { ok: false, error: "An account with this email exists — please log in.", code: "account_exists" };
-    }
-    return { ok: false, error: msg };
-  }
-  const userId = created.data.user.id;
+  let userId: string;
+  let email: string;
 
-  const { error: profileErr } = await db.from("users").insert({
-    id: userId,
-    store_id: storeId,
-    email,
-    username: input.username,
-  });
-  if (profileErr) return { ok: false, error: `profile: ${profileErr.message}` };
+  if (input.existingUserId) {
+    // Already signed in: no account to create, and nothing to ask them for.
+    const { data: profile } = await db
+      .from("users")
+      .select("email")
+      .eq("id", input.existingUserId)
+      .maybeSingle();
+    if (!profile?.email) return { ok: false, error: "Account not found — please log in again." };
+    userId = input.existingUserId;
+    email = profile.email as string;
+
+    // Don't let a member pay twice for something they already have.
+    const already = await ownershipFor(userId);
+    if (already.productIds.has(product.id)) {
+      return { ok: false, error: "You already own this.", code: "already_owned" };
+    }
+  } else {
+    if (!input.email || !input.username || !input.password) {
+      return { ok: false, error: "Enter your details to create an account." };
+    }
+    email = normEmail(input.email);
+    // Signup at checkout — create the auth account (auto-confirmed; they're paying).
+    const created = await db.auth.admin.createUser({
+      email,
+      password: input.password,
+      email_confirm: true,
+      user_metadata: { username: input.username },
+    });
+    if (created.error || !created.data.user) {
+      const msg = created.error?.message ?? "Could not create account";
+      if (/already|exists|registered/i.test(msg)) {
+        return { ok: false, error: "An account with this email exists — please log in.", code: "account_exists" };
+      }
+      return { ok: false, error: msg };
+    }
+    userId = created.data.user.id;
+
+    const { error: profileErr } = await db.from("users").insert({
+      id: userId,
+      store_id: storeId,
+      email,
+      username: input.username,
+    });
+    if (profileErr) return { ok: false, error: `profile: ${profileErr.message}` };
+  }
 
   // Resolve the bump: only if taken, present, and the buyer is eligible.
   const owned = await ownershipFor(userId);
@@ -115,10 +171,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
     if (offer && isOfferEligible(offer, owned)) bumpOffer = offer;
   }
 
-  const customer = await stripe().customers.create({
-    email,
-    metadata: { storeId, userId },
-  });
+  const customerId = await customerForUser(userId, email, storeId);
 
   // VAT for EU/UK digital sales is charged at the buyer's country rate, so the
   // amount charged is price + calculated tax. Returns zero tax (and behaves
@@ -138,7 +191,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   const pi = await stripe().paymentIntents.create({
     amount: tax.totalCents,
     currency: product.currency,
-    customer: customer.id,
+    customer: customerId,
     setup_future_usage: "off_session",
     automatic_payment_methods: { enabled: true },
     metadata: {
@@ -176,7 +229,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       buyer_country: country,
       stripe_tax_calculation_id: tax.calculationId,
       tracking_consent: input.trackingConsent === true,
-      stripe_customer_id: customer.id,
+      stripe_customer_id: customerId,
       stripe_payment_intent_id: pi.id,
       visitor_id: visitorId,
     })

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProductBySlug, getOffer } from "@/lib/store";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { immediateChargeCents } from "@/lib/offers";
 import { stripePublishableKey } from "@/lib/env";
 import { CheckoutForm, type BumpSummary } from "@/components/checkout/checkout-form";
@@ -41,27 +42,47 @@ export default async function CheckoutPage({
     }
   }
 
+  // Signed in? Then we already know who they are — don't ask again. Their last
+  // billing country is reused so a repeat buyer doesn't re-pick it.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let defaultCountry: string | null = null;
+  if (user) {
+    const db = createServiceClient();
+    const { data: prior } = await db
+      .from("orders")
+      .select("buyer_country")
+      .eq("user_id", user.id)
+      .not("buyer_country", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    defaultCountry = (prior?.buyer_country as string) ?? null;
+  }
+
   return (
-    <div className="mx-auto flex max-w-xl flex-col gap-8 py-4">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 py-4">
       <div className="flex flex-col gap-2">
         <Link href={`/p/${product.slug}`} className="kicker w-fit text-muted hover:text-fg">
           &larr; Back
         </Link>
-        <h1 className="text-2xl">Checkout</h1>
-        <p className="text-muted">
-          {product.title} — <span className="text-fg">{money(product.priceCents, product.currency)}</span>
-        </p>
+        <h1 className="text-2xl md:text-3xl">Checkout</h1>
       </div>
 
       <CheckoutForm
         product={{
           slug: product.slug,
           title: product.title,
+          tagline: product.tagline ?? null,
           priceCents: product.priceCents,
           currency: product.currency,
         }}
         bump={bump}
         publishableKey={stripePublishableKey()}
+        signedInEmail={user?.email ?? null}
+        defaultCountry={defaultCountry}
       />
     </div>
   );

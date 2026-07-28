@@ -99,3 +99,54 @@ afterAll(async () => {
     }
   }
 });
+
+// --- Signed-in members buy without signing up again -----------------------
+import { createCheckoutIntent as createIntent } from "@/lib/checkout";
+
+describe.skipIf(!canRun)("signed-in checkout (integration)", () => {
+  it("reuses the member's account and Stripe customer, and refuses a repeat purchase", async () => {
+    // First purchase creates the account the normal signup-at-checkout way.
+    const { email, piId } = await buy(false);
+    await finalizeOrder(piId);
+
+    const db = createServiceClient();
+    const { data: user } = await db.from("users").select("id").eq("email", email).single();
+    const { data: firstOrder } = await db
+      .from("orders")
+      .select("stripe_customer_id")
+      .eq("stripe_payment_intent_id", piId)
+      .single();
+
+    // They already own what they just bought — buying it again must be refused
+    // rather than charged.
+    const repeat = await createIntent({
+      productSlug: "placeholder-offer",
+      existingUserId: user!.id,
+      bumpTaken: false,
+      country: "US",
+    });
+    expect(repeat).toMatchObject({ ok: false, code: "already_owned" });
+
+    // A DIFFERENT product, still signed in: no new account, same Stripe customer.
+    const usersBefore = await db.from("users").select("id").eq("email", email);
+    const second = await createIntent({
+      productSlug: "field-guide",
+      existingUserId: user!.id,
+      bumpTaken: false,
+      country: "US",
+    });
+    if (!second.ok) throw new Error(`signed-in checkout failed: ${second.error}`);
+
+    const usersAfter = await db.from("users").select("id").eq("email", email);
+    expect(usersAfter.data).toHaveLength(usersBefore.data!.length); // no duplicate account
+
+    const secondPi = second.clientSecret.split("_secret_")[0];
+    const { data: secondOrder } = await db
+      .from("orders")
+      .select("stripe_customer_id, user_id")
+      .eq("stripe_payment_intent_id", secondPi)
+      .single();
+    expect(secondOrder!.user_id).toBe(user!.id);
+    expect(secondOrder!.stripe_customer_id).toBe(firstOrder!.stripe_customer_id);
+  });
+});
