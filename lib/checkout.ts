@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getProductBySlug, getOffer } from "@/lib/store";
 import { isOfferEligible, immediateChargeCents, type Ownership } from "@/lib/offers";
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
-import { provisionAppSubscription } from "@/lib/apps";
+import { notifyAppEntitlement } from "@/lib/apps";
 import { trackPurchase } from "@/lib/tracking";
 import { sendEmail, buildWelcomeEmail, buildReceiptEmail } from "@/lib/email";
 import {
@@ -17,6 +17,7 @@ import {
 import { stripe, stripeMode } from "@/lib/stripe";
 import { otoSigningSecret } from "@/lib/env";
 import { ensureUserProfile } from "@/lib/users";
+import { applyPendingEntitlements } from "@/lib/app-sync";
 import type { Offer } from "@/lib/types";
 
 const OTO_TTL_SECONDS = 15 * 60; // 15 minutes
@@ -161,6 +162,11 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       username: input.username,
     });
     if (profileErr) return { ok: false, error: `profile: ${profileErr.message}` };
+
+    // They may already subscribe to a connected app directly. Claim anything an
+    // app reported for this email BEFORE bump eligibility is computed below, or
+    // we would offer them what they already pay for.
+    await applyPendingEntitlements(userId, email);
   }
 
   // Resolve the bump: only if taken, present, and the buyer is eligible.
@@ -471,11 +477,11 @@ export async function grantOfferOwnership(
     // Provision the connected app (best-effort, server-to-server). A failure
     // here never breaks the purchase — the handoff re-provisions on first open.
     if (ctx) {
-      await provisionAppSubscription({
+      await notifyAppEntitlement({
         appId: offer.grantAppId,
-        userId,
         email: ctx.email,
         entitlementKey: offer.grantEntitlementKey,
+        status: trialing ? "trialing" : "active",
         stripeCustomerId: ctx.stripeCustomerId,
         stripeSubscriptionId: subscriptionId,
       });

@@ -1,5 +1,6 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
+import { pushOwnershipStateToApps } from "@/lib/app-sync";
 
 // Subscription lifecycle -> ownership state. This is what keeps a cancelled or
 // refunded customer from retaining app access, and what stops a single failed
@@ -34,18 +35,23 @@ export function hasAccess(status: OwnershipStatus): boolean {
   return status !== "canceled";
 }
 
-// Apply a subscription's current state to the ownership row that tracks it.
+// Apply a subscription's current state to the ownership row that tracks it,
+// then tell the connected app. Without that second step a cancellation updated
+// our records and left the app still serving the customer.
 export async function syncSubscriptionOwnership(
   stripeSubscriptionId: string,
   stripeStatus: string,
 ): Promise<void> {
   const db = createServiceClient();
   const status = mapSubscriptionStatus(stripeStatus);
-  const { error } = await db
+  const { data, error } = await db
     .from("ownership")
     .update({ status })
-    .eq("stripe_subscription_id", stripeSubscriptionId);
+    .eq("stripe_subscription_id", stripeSubscriptionId)
+    .select("id");
   if (error) throw new Error(`syncSubscriptionOwnership: ${error.message}`);
+
+  await pushOwnershipStateToApps((data ?? []).map((r) => r.id as string));
 }
 
 // A refunded order loses what it bought. Scoped to the refunded PaymentIntent's
@@ -93,6 +99,9 @@ export async function revokeOwnershipForPaymentIntent(
       .in("offer_id", offerIds)
       .select("id");
     revoked += data?.length ?? 0;
+    // A refund must reach the app too, or the customer keeps the access they
+    // were just refunded for.
+    await pushOwnershipStateToApps((data ?? []).map((r) => r.id as string));
   }
   return { revoked };
 }

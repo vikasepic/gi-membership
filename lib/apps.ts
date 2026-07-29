@@ -58,13 +58,20 @@ export function buildHandoffUrl(app: AppRow, user: { id: string; email: string }
   return `${app.baseUrl}${app.handoffEndpoint}${sep}token=${encodeURIComponent(token)}`;
 }
 
-// Server-to-server provision. Best-effort: never throws into the purchase flow.
-// Records the outcome on the ownership row so failures can be retried.
-export async function provisionAppSubscription(args: {
+// Server-to-server entitlement state. Sent when access is granted AND on every
+// later change — trial converting, dunning, cancellation, refund. The app
+// applies whatever `status` says, so this one call covers provisioning and
+// deprovisioning and stays idempotent: re-sending the same state is a no-op.
+//
+// Best-effort by design: an app that is down must never break a purchase, a
+// webhook, or a refund. `hasAccess` is included so an app doesn't have to
+// encode our status semantics (past_due keeps access — Stripe is still
+// retrying a card that may well succeed).
+export async function notifyAppEntitlement(args: {
   appId: string;
-  userId: string;
   email: string;
   entitlementKey: string | null;
+  status: "active" | "trialing" | "canceled" | "past_due";
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
 }): Promise<{ ok: boolean; status?: number; error?: string }> {
@@ -79,14 +86,18 @@ export async function provisionAppSubscription(args: {
       body: JSON.stringify({
         email: args.email,
         entitlementKey: args.entitlementKey,
+        status: args.status,
+        hasAccess: args.status !== "canceled",
         stripeCustomerId: args.stripeCustomerId,
         stripeSubscriptionId: args.stripeSubscriptionId,
+        occurredAt: Math.floor(Date.now() / 1000),
       }),
       signal: AbortSignal.timeout(5000),
     });
-    // ponytail: on failure, a retry queue would live here — needs a
-    // provisioning-status column on ownership. The handoff also re-provisions
-    // on first arrival, so a one-off failure self-heals when the user opens the app.
+    // ponytail: no retry queue. A missed grant self-heals when the user opens
+    // the app (the handoff re-provisions); a missed REVOKE does not, which is
+    // why the guide tells apps to expire access on a window rather than trust
+    // this call to always land.
     return { ok: res.ok, status: res.status };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "fetch_failed" };

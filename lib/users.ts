@@ -1,6 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
+import { applyPendingEntitlements } from "@/lib/app-sync";
 
 export type UserProfile = { id: string; email: string };
 
@@ -41,6 +42,10 @@ export async function ensureUserProfile(userId: string): Promise<UserProfile | n
   });
   // 23505 = someone else inserted it between our read and write. Not an error.
   if (insertErr && insertErr.code !== "23505") return null;
+
+  // A connected app may have reported this person before they had a store
+  // account. Now that they do, turn that into real ownership.
+  await applyPendingEntitlements(userId, email);
 
   return { id: userId, email };
 }

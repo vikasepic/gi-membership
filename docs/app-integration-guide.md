@@ -4,8 +4,9 @@
 (`grow.greaterinside.com`). This document assumes **no prior knowledge** of the
 store's codebase. Everything you need to implement is here.
 
-**Effort:** two HTTP endpoints. No SDK, no library, no dependency on our code.
-Any language or framework works.
+**Effort:** two HTTP endpoints you host, plus one you call if your app sells
+access on its own. No SDK, no library, no dependency on our code. Any language
+or framework works.
 
 ---
 
@@ -33,15 +34,19 @@ password, and you never authenticate against the store.
    customer ───────────────────────────────┘  "Open the app"
 ```
 
-You implement two endpoints:
+You implement two endpoints, and optionally call a third:
 
-| # | Endpoint | Called by | When |
+| # | Endpoint | Direction | When |
 |---|---|---|---|
-| 1 | `POST /api/store/provision` | Store server | The instant access is granted |
-| 2 | `GET /auth/store-handoff` | The user's browser | Every time they click "Open the app" |
+| 1 | `POST /api/store/provision` | Store → you | Access granted, **and every later change** |
+| 2 | `GET /auth/store-handoff` | Store → you (browser) | Every time they click "Open the app" |
+| 3 | `POST /api/apps/entitlement` | **You → store** | Someone subscribes/cancels *inside your app* |
 
-Both paths are configurable per app — tell us yours if you prefer different
-ones. The defaults above are assumed throughout this document.
+The first two paths are configurable per app — tell us yours if you prefer
+different ones. The defaults above are assumed throughout this document. The
+third lives on the store and is fixed.
+
+**Endpoint 3 is not optional if your app can sell access on its own.** See §5.
 
 ---
 
@@ -83,7 +88,12 @@ The full journey:
 
 ---
 
-## 3. Endpoint 1 — Provision
+## 3. Endpoint 1 — Entitlement state (grant *and* revoke)
+
+Despite the name, this is not only called at purchase. **It is called on every
+state change**: trial converting to paid, a failed renewal, cancellation, and
+refund. Apply whatever `status` says and this one endpoint covers provisioning
+and deprovisioning.
 
 ```
 POST https://your-app.example.com/api/store/provision
@@ -93,8 +103,11 @@ x-store-secret: <the shared secret we give you>
 {
   "email": "buyer@example.com",
   "entitlementKey": "content-engine",
+  "status": "active",
+  "hasAccess": true,
   "stripeCustomerId": "cus_ABC123",
-  "stripeSubscriptionId": "sub_XYZ789"
+  "stripeSubscriptionId": "sub_XYZ789",
+  "occurredAt": 1785300000
 }
 ```
 
@@ -104,8 +117,16 @@ x-store-secret: <the shared secret we give you>
 |---|---|---|
 | `email` | string | **Already lowercased.** The shared identifier. |
 | `entitlementKey` | string \| null | Which access level to grant. Agreed with us up front. **May be null** if the offer grants generic access — decide your default and document it. |
-| `stripeCustomerId` | string \| null | The Stripe customer **in the store's Stripe account**. See §6 before assuming you can use it. |
+| `status` | string | `active` \| `trialing` \| `past_due` \| `canceled`. The current state. Apply it as given. |
+| `hasAccess` | boolean | Whether this status should permit access. Provided so you don't have to encode our semantics — see the note below. |
+| `stripeCustomerId` | string \| null | The Stripe customer **in the store's Stripe account**. See §7 before assuming you can use it. |
 | `stripeSubscriptionId` | string \| null | The store-created subscription. Null for one-off, non-subscription grants. |
+| `occurredAt` | number | Unix seconds. Use it to discard a stale message that arrives out of order. |
+
+**`past_due` keeps access** (`hasAccess: true`). Stripe retries a failed renewal
+for days, and cutting someone off over a card that is about to succeed is worse
+than a few days of grace. Only `canceled` removes access. If you just honour
+`hasAccess` you get this right without thinking about it.
 
 ### You must
 
@@ -113,7 +134,11 @@ x-store-secret: <the shared secret we give you>
   timing-safe comparison. Mismatch → `401`, do nothing else.
 - **Be idempotent by email.** We retry, and the handoff re-drives provisioning.
   The same call twice must not create two users, two entitlements, or two
-  subscriptions. Find-or-create; never blind-insert.
+  subscriptions. Find-or-create; never blind-insert. Re-sending the same status
+  must be a no-op.
+- **Honour `status`, including revocation.** A call with `status: "canceled"`
+  means take access away. Treating this endpoint as grant-only leaves you
+  serving cancelled customers.
 - **Respond within 5 seconds.** We abort the request after that. Do slow work
   (welcome emails, workspace seeding) asynchronously.
 - **Respond `200`** with any JSON body (`{"ok":true}` is fine). We only check
@@ -277,32 +302,74 @@ app.get("/auth/store-handoff", async (req, res) => {
 
 ---
 
-## 5. Lifecycle — read this before you ship
+## 5. Two-way sync — when access starts, changes, and ends
 
-**The store tells you when access STARTS. It does not tell you when access
-ENDS.**
+### The store tells you (endpoint 1)
 
-`provision` fires once, at the moment of granting. Cancellations, refunds,
-failed payments, and expiries update the store's records and **send you
-nothing.** There is no deprovision callback, no status webhook, and no endpoint
-on the store you can poll.
+`POST /api/store/provision` fires on **every** transition, not just purchase:
 
-That is a real limitation, not an oversight you should design around silently.
-Pick one:
+| What happened | `status` sent |
+|---|---|
+| Bought / trial started | `trialing` |
+| Trial converted, renewal paid | `active` |
+| Renewal failed, card declined | `past_due` (access continues) |
+| Cancelled, expired | `canceled` (**take access away**) |
+| Order refunded | `canceled` (**take access away**) |
 
-- **Share the Stripe account.** If your app already handles Stripe webhooks on
-  the *same* Stripe account the store bills through, you will receive
-  `customer.subscription.*` events for store-created subscriptions directly.
-  Read §6 first — this has a serious catch.
-- **Expire optimistically.** Grant access in windows (e.g. 35 days) refreshed
-  on each successful provision or handoff. Access lapses on its own if the
-  customer stops coming back through the store. Crude, but it fails closed.
-- **Ask us for a deprovision callback.** It does not exist yet. It is a small
-  change on our side — request it and we will add it to the contract rather
-  than leaving you to guess.
+Apply the status you are given. That is the whole contract.
 
-Do not assume a cancelled customer loses access automatically. Today they do
-not.
+**One honest caveat.** These calls are best-effort and there is no retry queue.
+A missed *grant* self-heals — the handoff re-provisions when the user next opens
+your app. A missed *revoke* does not: nothing brings the user back to trigger a
+correction. If revocation matters to your margins, add a belt-and-braces
+expiry: grant access in windows (say 35 days) refreshed on every `active` or
+`trialing` message, so access lapses on its own if our messages stop arriving.
+Ask us if you want a stronger guarantee — a retry queue is a change we can make.
+
+### You tell the store (endpoint 3)
+
+**If your app can sell access on its own, you must report it.** Otherwise the
+store does not know, and will offer that customer the very subscription they
+already pay for. If they accept, they get a *second* subscription and are
+billed twice. This is the single most expensive way to get the integration
+wrong.
+
+```
+POST https://grow.greaterinside.com/api/apps/entitlement
+Content-Type: application/json
+x-store-secret: <your shared secret — the same one>
+
+{
+  "email": "buyer@example.com",
+  "entitlementKey": "content-engine",
+  "status": "active",
+  "stripeSubscriptionId": "sub_YOURS"
+}
+```
+
+Send this whenever access changes in your app: someone subscribes directly,
+cancels, lapses, or is comped. `status` takes the same four values.
+
+**Response**
+
+```json
+{ "ok": true, "linked": true }
+```
+
+`linked: false` means there is no store account with that email **yet**. That is
+success, not an error — do not retry. We park it and apply it automatically the
+moment they create a store account, so an app-first subscriber is never offered
+what they already have.
+
+| Code | Meaning |
+|---|---|
+| `200` | Recorded. Check `linked` to see whether it attached to an account now or was parked. |
+| `400` | Malformed body — bad email, or a `status` outside the four values. |
+| `401` | Secret missing or wrong. |
+| `500` | Our problem. Safe to retry; the call is idempotent. |
+
+Idempotent by `(your app, email)`: sending the same state repeatedly converges
+on one record.
 
 ---
 
@@ -384,14 +451,31 @@ curl -i -X POST https://your-app.example.com/api/store/provision \
 | Provision with correct secret | `200`, user created + entitled |
 | Provision with wrong/missing secret | `401`, nothing created |
 | Provision twice, same email | `200` both times, exactly one user, one entitlement |
+| Provision `status: "canceled"` | Access **removed** |
+| Provision `status: "past_due"` | Access **kept** (Stripe is still retrying) |
 | Handoff with valid token | Session created, redirected in, no login prompt |
 | Handoff with the same token twice | Second attempt rejected |
 | Handoff with `exp` in the past | Rejected |
 | Handoff with one character of the signature changed | Rejected |
 | Handoff for an email never provisioned | User created and entitled on the spot |
+| You report a direct subscription to the store | `200`; store suppresses its offer for that customer |
 
-That last one is the self-healing path. Test it deliberately — it is what
-covers you when provision fails.
+Two of these are the ones people skip and regret:
+
+- **Handoff for an email never provisioned** is the self-healing path. It is
+  what covers you when a provision call fails.
+- **`status: "canceled"` removes access.** If you wired this endpoint as
+  grant-only, this case silently does nothing and you keep serving refunded
+  customers.
+
+Reporting to the store can be checked with curl:
+
+```bash
+curl -i -X POST https://grow.greaterinside.com/api/apps/entitlement \
+  -H "content-type: application/json" \
+  -H "x-store-secret: $STORE_SHARED_SECRET" \
+  -d '{"email":"test@example.com","entitlementKey":"content-engine","status":"active","stripeSubscriptionId":null}'
+```
 
 ---
 
@@ -418,14 +502,29 @@ test mode will call your provision endpoint for real.
 
 ## 10. Field reference
 
-**Provision request body**
+**Store → you: entitlement state body**
 
 | Field | Type | Nullable |
 |---|---|---|
 | `email` | string (lowercased) | no |
 | `entitlementKey` | string | yes |
+| `status` | `active` \| `trialing` \| `past_due` \| `canceled` | no |
+| `hasAccess` | boolean | no |
 | `stripeCustomerId` | string | yes |
 | `stripeSubscriptionId` | string | yes |
+| `occurredAt` | number (unix seconds) | no |
+
+**You → store: `POST /api/apps/entitlement` body**
+
+| Field | Type | Nullable |
+|---|---|---|
+| `email` | string | no |
+| `entitlementKey` | string | yes |
+| `status` | `active` \| `trialing` \| `past_due` \| `canceled` | no |
+| `stripeSubscriptionId` | string | yes |
+
+Response: `{ "ok": true, "linked": boolean }`. `linked: false` = parked until
+that email has a store account. Not an error.
 
 **Handoff token payload**
 
@@ -440,8 +539,11 @@ test mode will call your provision endpoint for real.
 
 | Header | Endpoint | Purpose |
 |---|---|---|
-| `x-store-secret` | provision | Shared secret, verified timing-safe |
-| `content-type: application/json` | provision | Body encoding |
+| `x-store-secret` | both directions | Shared secret, verified timing-safe at both ends |
+| `content-type: application/json` | both directions | Body encoding |
+
+The **same** secret authenticates you to us and us to you. Presenting it is how
+we identify which app is calling.
 
 ---
 

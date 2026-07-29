@@ -31,10 +31,16 @@ content-type: application/json
 {
   "email": "buyer@example.com",       // lowercased
   "entitlementKey": "content-engine", // from offers.grant_entitlement_key
+  "status": "trialing",               // active | trialing | past_due | canceled
+  "hasAccess": true,                  // false only when canceled
   "stripeCustomerId": "cus_...",
-  "stripeSubscriptionId": "sub_..."   // the store-created subscription
+  "stripeSubscriptionId": "sub_...",  // the store-created subscription
+  "occurredAt": 1785300000
 }
 ```
+
+This fires on EVERY state change, not just the grant — trial conversion,
+dunning, cancellation, refund. `status: "canceled"` means revoke.
 
 **App must:**
 - Reject if `x-store-secret` ≠ the shared secret (401).
@@ -45,8 +51,15 @@ content-type: application/json
 - Respond `200 { ok: true }` (optionally a `handoffUrl`/confirmation).
 
 The store call is **best-effort** and never blocks the purchase. If it fails,
-the handoff (below) re-drives provisioning on first arrival, so provisioning is
-self-healing as long as it stays idempotent.
+the handoff (below) re-drives provisioning on first arrival, so a missed GRANT
+is self-healing as long as it stays idempotent. A missed REVOKE is not — nothing
+brings the user back to correct it. See the guide's §5 for the mitigation.
+
+**Inbound direction:** an app that sells access itself must report it to
+`POST /api/apps/entitlement` on the store (same shared secret), or the store
+will offer that customer a subscription they already have and bill them twice.
+Implemented in `lib/app-sync.ts`; parked by email when no store account exists
+yet and applied on account creation.
 
 ---
 

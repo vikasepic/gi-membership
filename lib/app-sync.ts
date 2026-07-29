@@ -1,0 +1,202 @@
+import "server-only";
+import { createServiceClient } from "@/lib/supabase/server";
+import { getStoreId } from "@/lib/store";
+import { getAppById, notifyAppEntitlement, type AppRow } from "@/lib/apps";
+import type { OwnershipStatus } from "@/lib/subscription-sync";
+
+// Two-way entitlement sync.
+//
+// Outbound: whenever an app-granting ownership row changes state here, the app
+// is told. Previously it was only told when access started, so a cancelled or
+// refunded customer kept app access forever.
+//
+// Inbound: an app reports someone who subscribed inside the app. Without this
+// the store would offer them the same subscription again, which breaks the rule
+// that an offer is never shown to someone who already has what it grants.
+
+const normEmail = (e: string) => e.trim().toLowerCase();
+
+// Tell every app behind these ownership rows what their state is now. Ownership
+// rows carry app_id; the buyer's email and the entitlement key come from the
+// user and the offer that granted it.
+export async function pushOwnershipStateToApps(ownershipIds: string[]): Promise<void> {
+  if (ownershipIds.length === 0) return;
+  const db = createServiceClient();
+
+  const { data: rows } = await db
+    .from("ownership")
+    .select("id, app_id, user_id, status, stripe_subscription_id, offer_id")
+    .in("id", ownershipIds)
+    .not("app_id", "is", null);
+  if (!rows || rows.length === 0) return;
+
+  for (const row of rows) {
+    const { data: user } = await db
+      .from("users")
+      .select("email")
+      .eq("id", row.user_id as string)
+      .maybeSingle();
+    if (!user?.email) continue;
+
+    let entitlementKey: string | null = null;
+    if (row.offer_id) {
+      const { data: offer } = await db
+        .from("offers")
+        .select("grant_entitlement_key")
+        .eq("id", row.offer_id as string)
+        .maybeSingle();
+      entitlementKey = (offer?.grant_entitlement_key as string) ?? null;
+    }
+
+    // Best-effort, exactly like the original provision call: an app being down
+    // must never break a webhook or a refund.
+    await notifyAppEntitlement({
+      appId: row.app_id as string,
+      email: user.email as string,
+      entitlementKey,
+      status: row.status as OwnershipStatus,
+      stripeCustomerId: null,
+      stripeSubscriptionId: (row.stripe_subscription_id as string) ?? null,
+    });
+  }
+}
+
+// Find the app whose shared secret matches. Apps authenticate to the store with
+// the same secret the store uses to sign their handoff tokens, so a caller
+// proves which app it is by presenting it. Compared in constant time.
+export async function appForSecret(presented: string | null): Promise<AppRow | null> {
+  if (!presented) return null;
+  const db = createServiceClient();
+  const { data } = await db
+    .from("apps")
+    .select("id, key, name, base_url, provision_endpoint, handoff_endpoint, shared_secret, entitlement_mapping, active")
+    .eq("store_id", await getStoreId())
+    .eq("active", true);
+
+  const a = Buffer.from(presented, "utf8");
+  for (const row of data ?? []) {
+    const b = Buffer.from((row.shared_secret as string) ?? "", "utf8");
+    // Length differs → not this app. Comparing same-length buffers only, so the
+    // timing-safe compare never throws.
+    if (a.length !== b.length) continue;
+    const { timingSafeEqual } = await import("node:crypto");
+    if (timingSafeEqual(a, b)) return (await getAppById(row.id as string)) ?? null;
+  }
+  return null;
+}
+
+export type InboundResult = { ok: true; linked: boolean };
+
+// An app tells us one of its users has (or no longer has) an entitlement.
+// Idempotent: the same report twice lands on the same single row.
+export async function recordAppEntitlement(args: {
+  app: AppRow;
+  email: string;
+  entitlementKey: string | null;
+  status: OwnershipStatus;
+  stripeSubscriptionId: string | null;
+}): Promise<InboundResult> {
+  const db = createServiceClient();
+  const storeId = await getStoreId();
+  const email = normEmail(args.email);
+
+  const { data: user } = await db
+    .from("users")
+    .select("id")
+    .eq("store_id", storeId)
+    .eq("email", email)
+    .maybeSingle();
+
+  // No store account yet — park it by email. Draining happens the moment they
+  // create one, so an app-first subscriber is never offered what they have.
+  if (!user?.id) {
+    await db
+      .from("pending_app_entitlements")
+      .upsert(
+        {
+          store_id: storeId,
+          app_id: args.app.id,
+          email,
+          entitlement_key: args.entitlementKey,
+          status: args.status,
+          stripe_subscription_id: args.stripeSubscriptionId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "store_id,app_id,email" },
+      );
+    return { ok: true, linked: false };
+  }
+
+  await upsertAppOwnership({
+    storeId,
+    userId: user.id as string,
+    appId: args.app.id,
+    status: args.status,
+    stripeSubscriptionId: args.stripeSubscriptionId,
+  });
+  return { ok: true, linked: true };
+}
+
+// ownership has a partial unique index on (store_id, user_id, app_id), so this
+// is an update-then-insert rather than an upsert: onConflict can't name a
+// partial index.
+async function upsertAppOwnership(args: {
+  storeId: string;
+  userId: string;
+  appId: string;
+  status: OwnershipStatus;
+  stripeSubscriptionId: string | null;
+}): Promise<void> {
+  const db = createServiceClient();
+  const { data: updated } = await db
+    .from("ownership")
+    .update({
+      status: args.status,
+      stripe_subscription_id: args.stripeSubscriptionId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("store_id", args.storeId)
+    .eq("user_id", args.userId)
+    .eq("app_id", args.appId)
+    .select("id");
+  if (updated && updated.length > 0) return;
+
+  const { error } = await db.from("ownership").insert({
+    store_id: args.storeId,
+    user_id: args.userId,
+    app_id: args.appId,
+    source: "app", // originated in the app, not in a store purchase
+    status: args.status,
+    stripe_subscription_id: args.stripeSubscriptionId,
+  });
+  // 23505 = a concurrent insert won. Its row is equivalent; nothing to do.
+  if (error && error.code !== "23505") {
+    throw new Error(`upsertAppOwnership: ${error.message}`);
+  }
+}
+
+// Called the moment a store account exists for an email. Turns anything an app
+// reported earlier into real ownership, so their first visit to the store
+// already reflects what they bought elsewhere.
+export async function applyPendingEntitlements(userId: string, email: string): Promise<number> {
+  const db = createServiceClient();
+  const storeId = await getStoreId();
+  const { data: pending } = await db
+    .from("pending_app_entitlements")
+    .select("id, app_id, status, stripe_subscription_id")
+    .eq("store_id", storeId)
+    .eq("email", normEmail(email));
+  if (!pending || pending.length === 0) return 0;
+
+  for (const row of pending) {
+    await upsertAppOwnership({
+      storeId,
+      userId,
+      appId: row.app_id as string,
+      status: row.status as OwnershipStatus,
+      stripeSubscriptionId: (row.stripe_subscription_id as string) ?? null,
+    });
+    await db.from("pending_app_entitlements").delete().eq("id", row.id as string);
+  }
+  return pending.length;
+}
