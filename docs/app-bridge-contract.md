@@ -5,7 +5,9 @@
 > self-contained, vendor-neutral, and assumes no knowledge of this codebase —
 > including the login model, verified reference implementations in Node and
 > Python, a test matrix, and the lifecycle gaps. This file is the terse internal
-> version and is specific to Content Engine.
+> version and is specific to Content Engine. The values and code conflicts CE
+> needs are in [`content-engine-brief.md`](./content-engine-brief.md) — send
+> that alongside the guide.
 
 The **store** (gi-membership) is the front door and system of record for
 accounts. A connected app (Content Engine first) is a row in the `apps` table:
