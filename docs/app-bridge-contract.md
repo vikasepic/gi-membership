@@ -1,5 +1,12 @@
 # App bridge contract (store ↔ connected app)
 
+> **Sharing this with an external app team? Send them
+> [`app-integration-guide.md`](./app-integration-guide.md) instead.** That one is
+> self-contained, vendor-neutral, and assumes no knowledge of this codebase —
+> including the login model, verified reference implementations in Node and
+> Python, a test matrix, and the lifecycle gaps. This file is the terse internal
+> version and is specific to Content Engine.
+
 The **store** (gi-membership) is the front door and system of record for
 accounts. A connected app (Content Engine first) is a row in the `apps` table:
 `base_url`, `provision_endpoint`, `handoff_endpoint`, `shared_secret`,
