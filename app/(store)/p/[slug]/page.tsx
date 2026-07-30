@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getProductBySlug } from "@/lib/store";
 import { ownedProductIdsForViewer, accessHrefForProduct } from "@/lib/library";
-import { productBadgeTypes, type CourseType } from "@/lib/courses";
+import { productDisplay, type CourseType } from "@/lib/courses";
+import { publicCoverUrl } from "@/lib/media";
 
 const TYPE_LABEL: Record<CourseType, string> = {
   video: "Video",
@@ -23,7 +24,9 @@ export default async function ProductPage({
   const owned = (await ownedProductIdsForViewer()).has(product.id);
   const accessHref = owned ? await accessHrefForProduct(product.id) : "/library";
   // Badge comes from the course this product grants.
-  const badgeType = (await productBadgeTypes([product.id])).get(product.id) ?? null;
+  const display = (await productDisplay([product.id])).get(product.id) ?? null;
+  const badgeType = display?.type ?? null;
+  const coverUrl = publicCoverUrl(display?.coverPath ?? null);
 
   return (
     <div className="flex flex-col gap-10 md:gap-14">
@@ -32,14 +35,25 @@ export default async function ProductPage({
       </Link>
 
       <div className="grid grid-cols-1 gap-10 md:grid-cols-12 md:gap-12">
-        {/* Media / cover */}
+        {/* Media / cover. The gradient remains as the fallback, so a product
+            whose course has no cover looks exactly as it did before. */}
         <div
-          className="rise aspect-[16/10] w-full overflow-hidden rounded-3xl border border-border md:col-span-7"
+          className="rise relative aspect-[16/10] w-full overflow-hidden rounded-3xl border border-border md:col-span-7"
           style={{
             background:
               "linear-gradient(150deg, color-mix(in srgb, var(--primary) 14%, var(--surface)), var(--surface-2))",
           }}
-        />
+        >
+          {coverUrl && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={coverUrl}
+              alt=""
+              decoding="async"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          )}
+        </div>
 
         {/* Details */}
         <div className="rise flex flex-col gap-5 md:col-span-5" style={{ animationDelay: "100ms" }}>

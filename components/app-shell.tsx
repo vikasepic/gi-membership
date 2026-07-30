@@ -54,9 +54,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-5 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-10">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-5 pt-6 md:px-6">
         {children}
       </main>
+
+      {/* Policies have to be reachable from every page, not just the home page —
+          a buyer looking for the refund terms is rarely standing on the home
+          page when they go looking. Bottom padding clears the mobile tab bar. */}
+      <footer className="mx-auto w-full max-w-5xl px-5 pt-10 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-10">
+        <div className="flex flex-col gap-4 border-t border-border pt-6 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
+          <Logo className="h-5 w-auto text-fg" />
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <Link href="/terms" className="hover:text-fg">Terms</Link>
+            <Link href="/privacy" className="hover:text-fg">Privacy</Link>
+            <Link href="/refunds" className="hover:text-fg">Refunds</Link>
+          </div>
+        </div>
+      </footer>
 
       {/* Mobile bottom tab bar */}
       <nav

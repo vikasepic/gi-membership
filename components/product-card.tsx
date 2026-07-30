@@ -20,6 +20,8 @@ export type CatalogItem = {
   title: string;
   tagline: string;
   type: BadgeType | null;
+  /** Cover image from the product's course. Null falls back to the gradient. */
+  coverUrl?: string | null;
   priceCents: number;
   owned?: boolean;
   accessHref?: string;
@@ -34,9 +36,23 @@ export function ProductCard({ item, index = 0 }: { item: CatalogItem; index?: nu
       style={{ animationDelay: `${120 + index * 70}ms` }}
     >
       <div
-        className="relative aspect-[16/10] w-full"
+        className="relative aspect-[16/10] w-full overflow-hidden"
         style={{ background: `linear-gradient(145deg, ${meta.wash}, var(--surface-2))` }}
       >
+        {item.coverUrl && (
+          // The gradient stays underneath as the loading and fallback state, so
+          // a slow or missing image degrades to the old design rather than a
+          // blank box. Decorative: the title next to it already names the thing,
+          // so alt="" keeps a screen reader from reading it twice.
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={item.coverUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+          />
+        )}
         <span
           className="kicker absolute left-4 top-4 rounded-full px-2.5 py-1"
           style={{ color: meta.accent, background: "color-mix(in srgb, var(--surface) 78%, transparent)" }}

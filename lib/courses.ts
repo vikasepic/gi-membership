@@ -221,27 +221,37 @@ export async function productCourseIds(
   return byProduct;
 }
 
-// The storefront badge type for each product, taken from its course. Type lives
-// on the course now, so a product with no course has none (a draft still being
-// built). Batched — the catalog needs it for every row.
-export async function productBadgeTypes(
+// How each product presents itself on the storefront: badge type and cover
+// image, both taken from the course it grants.
+//
+// Both are properties of the CONTENT, so they live on the course — one cover
+// uploader on the course page feeds the catalog card, the featured panel and the
+// product page, and a course sold through two products can't disagree with
+// itself about what it looks like. A product with no course has neither, and the
+// card falls back to its gradient. Batched: the catalog needs it for every row.
+export type ProductDisplay = { type: CourseType; coverPath: string | null };
+
+export async function productDisplay(
   productIds: string[],
-): Promise<Map<string, CourseType>> {
-  const byProduct = new Map<string, CourseType>();
+): Promise<Map<string, ProductDisplay>> {
+  const byProduct = new Map<string, ProductDisplay>();
   if (productIds.length === 0) return byProduct;
   const db = createServiceClient();
   const { data, error } = await db
     .from("product_courses")
-    .select(`product_id, courses (type)`)
+    .select(`product_id, courses (type, cover_path)`)
     .in("product_id", productIds);
-  if (error) throw new Error(`productBadgeTypes: ${error.message}`);
+  if (error) throw new Error(`productDisplay: ${error.message}`);
   for (const row of (data ?? []) as unknown as {
     product_id: string;
-    courses: { type: CourseType } | null;
+    courses: { type: CourseType; cover_path: string | null } | null;
   }[]) {
-    // First course wins; a bundle's badge is its lead course.
+    // First course wins; a bundle presents as its lead course.
     if (row.courses && !byProduct.has(row.product_id)) {
-      byProduct.set(row.product_id, row.courses.type);
+      byProduct.set(row.product_id, {
+        type: row.courses.type,
+        coverPath: row.courses.cover_path,
+      });
     }
   }
   return byProduct;

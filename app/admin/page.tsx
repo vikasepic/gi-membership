@@ -57,7 +57,7 @@ export default async function AdminProductsPage() {
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <Kpi label="Products" value={String(products.length)} />
         <Kpi label="Published" value={String(published)} />
-        <Kpi label="Revenue" value="—" hint="after checkout (phase 2)" />
+        <Kpi label="Revenue" value="—" hint="see Orders" />
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-border">

@@ -60,11 +60,28 @@ export async function revokeOwnershipForPaymentIntent(
   paymentIntentId: string,
 ): Promise<{ revoked: number }> {
   const db = createServiceClient();
+  const { data: order, error: orderErr } = await db
+    .from("orders")
+    .select("id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle();
+  if (orderErr) throw new Error(`revokeOwnership order: ${orderErr.message}`);
+  if (!order) return { revoked: 0 };
+  return revokeOwnershipForOrder(order.id as string);
+}
+
+// Same revocation keyed on the order itself. An order that charged nothing — a
+// $0 trial start books no PaymentIntent — still granted access, so it still has
+// to be revocable.
+export async function revokeOwnershipForOrder(
+  orderId: string,
+): Promise<{ revoked: number }> {
+  const db = createServiceClient();
 
   const { data: order, error: orderErr } = await db
     .from("orders")
     .select("id, user_id")
-    .eq("stripe_payment_intent_id", paymentIntentId)
+    .eq("id", orderId)
     .maybeSingle();
   if (orderErr) throw new Error(`revokeOwnership order: ${orderErr.message}`);
   if (!order?.user_id) return { revoked: 0 };

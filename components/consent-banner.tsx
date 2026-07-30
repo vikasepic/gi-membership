@@ -37,7 +37,12 @@ export function ConsentBanner() {
       <div className="mx-auto flex max-w-md flex-col gap-2.5 md:gap-3">
         <p className="text-[13px] leading-snug md:text-sm md:leading-relaxed">
           We use cookies to measure which ads bring people here — only if you agree.
-          The store works the same either way.
+          The store works the same either way.{" "}
+          {/* A consent banner that can't tell you what you're consenting to isn't
+              informed consent. Opens in place; the choice stays available. */}
+          <a href="/privacy" className="text-primary underline underline-offset-2">
+            What we collect
+          </a>
         </p>
         <div className="flex gap-3">
           <button

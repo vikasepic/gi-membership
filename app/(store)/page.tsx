@@ -1,8 +1,8 @@
 import { ProductCard, type CatalogItem } from "@/components/product-card";
-import { Logo } from "@/components/logo";
 import { listPublishedProducts } from "@/lib/store";
 import { ownedProductIdsForViewer, accessHrefForProduct } from "@/lib/library";
-import { productBadgeTypes } from "@/lib/courses";
+import { productDisplay, type ProductDisplay } from "@/lib/courses";
+import { publicCoverUrl } from "@/lib/media";
 import type { Product } from "@/lib/types";
 
 // Storefront labels for each course type. Mirrors the catalog card.
@@ -15,7 +15,7 @@ const BADGE_LABEL: Record<NonNullable<CatalogItem["type"]>, string> = {
 
 function toCard(
   p: Product,
-  type: CatalogItem["type"],
+  display: ProductDisplay | null,
   owned: boolean,
   accessHref?: string,
 ): CatalogItem {
@@ -23,7 +23,8 @@ function toCard(
     slug: p.slug,
     title: p.title,
     tagline: p.tagline ?? "",
-    type,
+    type: display?.type ?? null,
+    coverUrl: publicCoverUrl(display?.coverPath ?? null),
     priceCents: p.priceCents,
     owned,
     accessHref,
@@ -37,9 +38,10 @@ export default async function Home() {
   // renders exactly as before for them.
   const ownedIds = await ownedProductIdsForViewer();
   // Badge type comes from each product's course now, not the product itself.
-  const badgeTypes = await productBadgeTypes(products.map((p) => p.id));
+  const display = await productDisplay(products.map((p) => p.id));
   const featuredOwned = featured ? ownedIds.has(featured.id) : false;
-  const featuredBadge = featured ? (badgeTypes.get(featured.id) ?? null) : null;
+  const featuredBadge = featured ? (display.get(featured.id)?.type ?? null) : null;
+  const featuredCover = featured ? publicCoverUrl(display.get(featured.id)?.coverPath ?? null) : null;
   // Deep-link each owned product to its course; only owned ones are looked up,
   // so an anonymous visitor costs no extra queries.
   const accessHrefs = new Map(
@@ -103,7 +105,16 @@ export default async function Home() {
                 </span>
               )}
             </div>
-            <div className="flex flex-col gap-2 pt-10">
+            {featuredCover && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={featuredCover}
+                alt=""
+                decoding="async"
+                className="mt-5 aspect-[16/10] w-full rounded-2xl border border-border object-cover"
+              />
+            )}
+            <div className="flex flex-col gap-2 pt-6">
               <h2 className="text-2xl leading-tight">{featured.title}</h2>
               <p className="text-sm text-muted">{featured.tagline}</p>
             </div>
@@ -137,17 +148,12 @@ export default async function Home() {
         ) : (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {products.map((p, i) => (
-              <ProductCard key={p.slug} item={toCard(p, badgeTypes.get(p.id) ?? null, ownedIds.has(p.id), accessHrefs.get(p.id))} index={i} />
+              <ProductCard key={p.slug} item={toCard(p, display.get(p.id) ?? null, ownedIds.has(p.id), accessHrefs.get(p.id))} index={i} />
             ))}
           </div>
         )}
       </section>
 
-      {/* Footer */}
-      <footer className="flex flex-col gap-4 border-t border-border py-8 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-        <Logo className="h-5 w-auto text-fg" />
-        <span>Store, library, and Content Engine — one account.</span>
-      </footer>
     </div>
   );
 }
