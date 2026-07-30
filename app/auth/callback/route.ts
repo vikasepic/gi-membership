@@ -32,12 +32,11 @@ export async function GET(request: Request) {
   // when in fact they had already used it.
   const errorCode = url.searchParams.get("error_code");
   if (errorCode) {
-    const mapped = errorCode === "otp_expired" ? "link_expired" : errorCode;
-    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(mapped)}`, url.origin));
+    return go(`/login?error=${encodeURIComponent(errorCode === "otp_expired" ? "link_expired" : errorCode)}`);
   }
 
-  // Only ever redirect somewhere on our own origin — `next` arrives from a URL
-  // and an open redirect here would hand a session straight to another site.
+  // Only ever redirect somewhere on our own site — `next` arrives from a URL,
+  // and an open redirect here would hand a live session to another origin.
   const requested = url.searchParams.get("next") ?? "/library";
   const next = requested.startsWith("/") && !requested.startsWith("//") ? requested : "/library";
 
@@ -45,8 +44,7 @@ export async function GET(request: Request) {
 
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return NextResponse.redirect(new URL(next, url.origin));
-    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(reason(error.message))}`, url.origin));
+    return go(error ? `/login?error=${encodeURIComponent(reason(error.message))}` : next);
   }
 
   if (tokenHash && type) {
@@ -54,11 +52,23 @@ export async function GET(request: Request) {
       type: type as "magiclink" | "email" | "recovery" | "invite" | "signup" | "email_change",
       token_hash: tokenHash,
     });
-    if (!error) return NextResponse.redirect(new URL(next, url.origin));
-    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(reason(error.message))}`, url.origin));
+    return go(error ? `/login?error=${encodeURIComponent(reason(error.message))}` : next);
   }
 
-  return NextResponse.redirect(new URL("/login?error=missing_link", url.origin));
+  return go("/login?error=missing_link");
+}
+
+// Redirect to a path, never an absolute URL.
+//
+// Behind the production proxy, `request.url` carries the container's internal
+// host, so building an absolute URL from its origin sent people to
+// https://0.0.0.0:3000/… — the session was created and then the browser landed
+// nowhere. A relative Location is resolved by the browser against the address it
+// actually requested, which is right in every environment and, unlike
+// reconstructing the origin from X-Forwarded-* headers, trusts nothing a client
+// can spoof.
+function go(path: string): NextResponse {
+  return new NextResponse(null, { status: 307, headers: { Location: path } });
 }
 
 // GoTrue's messages are accurate but unhelpful to a reader ("both auth code and
