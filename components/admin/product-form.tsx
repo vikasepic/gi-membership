@@ -166,29 +166,55 @@ export function ProductForm({
         title="Content"
         hint="Which courses this unlocks. Tick several to sell a bundle. A published product needs at least one — the library delivers courses."
       >
+        {/* There is deliberately no image field on a product. The storefront
+            picture and the badge both come from the attached course, so one
+            upload serves every product that sells it. Saying so here is the
+            difference between "there's no image option" and knowing where it
+            lives — the checkbox rows below flag any course still missing one. */}
+        <p className="text-sm text-muted">
+          The storefront image comes from the attached course, not from here — upload it on the
+          course itself so every product selling that course shows the same picture.
+        </p>
+
         {allCourses.length === 0 ? (
           <p className="text-sm text-muted">
             No courses yet — create one under Courses, then come back to attach it.
           </p>
         ) : (
           <div className="flex flex-col gap-2">
-            {allCourses.map((c) => (
-              <label
-                key={c.id}
-                className="flex cursor-pointer items-center gap-3 rounded-xl border border-border px-4 py-3 text-sm"
-              >
-                <input
-                  type="checkbox"
-                  checked={courseIds.includes(c.id)}
-                  onChange={() => toggleCourse(c.id)}
-                  className="size-4 accent-[var(--primary)]"
-                />
-                <span className="flex-1">{c.title}</span>
-                <span className="text-xs text-muted">
-                  {c.status === "published" ? "Published" : "Draft"}
-                </span>
-              </label>
-            ))}
+            {allCourses.map((c) => {
+              const ticked = courseIds.includes(c.id);
+              return (
+                <div
+                  key={c.id}
+                  className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 text-sm"
+                >
+                  {/* Label wraps only the checkbox and title, so the edit link
+                      beside it doesn't toggle the box when clicked. */}
+                  <label className="flex flex-1 cursor-pointer items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={ticked}
+                      onChange={() => toggleCourse(c.id)}
+                      className="size-4 accent-[var(--primary)]"
+                    />
+                    <span className="flex-1">{c.title}</span>
+                  </label>
+                  {ticked && !c.coverPath && (
+                    <span className="text-xs text-primary">no cover image</span>
+                  )}
+                  <span className="text-xs text-muted">
+                    {c.status === "published" ? "Published" : "Draft"}
+                  </span>
+                  <a
+                    href={`/admin/courses/${c.id}`}
+                    className="text-xs text-primary hover:underline"
+                  >
+                    Edit
+                  </a>
+                </div>
+              );
+            })}
           </div>
         )}
         {err("courseIds") && <p className="text-sm text-primary">{err("courseIds")}</p>}

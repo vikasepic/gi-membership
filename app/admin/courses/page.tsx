@@ -47,7 +47,13 @@ export default async function AdminCoursesPage() {
               </span>
               <span className="text-lg">{c.title}</span>
               {c.subtitle && <span className="text-sm text-muted">{c.subtitle}</span>}
-              <span className="mt-1 text-xs text-muted">{counts[i]} items</span>
+              <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                <span>{counts[i]} items</span>
+                {/* The cover drives the storefront picture for every product
+                    selling this course, so a missing one is worth seeing from
+                    the list rather than only after opening the course. */}
+                {c.coverPath ? <span>cover set</span> : <span className="text-primary">no cover image</span>}
+              </span>
             </Link>
           ))}
         </div>
