@@ -34,8 +34,14 @@ export function ProductCover({
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-2 p-4">
         {shown ? (
           <div className="flex flex-col gap-1">
+            {/* 16:10 matches the catalog card, so this is the real crop, not a
+                guess. self-start stops the flex column stretching its width. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={shown} alt="" className="h-32 w-auto rounded-lg border border-border object-cover" />
+            <img
+              src={shown}
+              alt=""
+              className="aspect-[16/10] w-full max-w-56 self-start rounded-lg border border-border object-cover"
+            />
             <span className="text-xs text-muted">
               {coverUrl ? "This product's own image." : "Inherited from the attached course."}
             </span>

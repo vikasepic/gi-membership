@@ -149,7 +149,11 @@ export function ItemEditor({
       <Section title="Cover image" hint="Optional thumbnail. Public — don't put paid content here.">
         {cover && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={cover} alt="" className="h-32 w-auto rounded-lg border border-border" />
+          <img
+            src={cover}
+            alt=""
+            className="aspect-[16/10] w-full max-w-56 self-start rounded-lg border border-border object-cover"
+          />
         )}
         <form action={uploadCoverAction} className="flex flex-col gap-3">
           <input type="hidden" name="courseId" value={courseId} />

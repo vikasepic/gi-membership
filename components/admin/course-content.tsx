@@ -71,8 +71,17 @@ function CoverBlock({ courseId, coverUrl }: { courseId: string; coverUrl: string
       <input type="hidden" name="courseId" value={courseId} />
       <span className="text-sm font-medium">Cover image</span>
       {coverUrl && (
+        // Fixed 16:10 box, matching the catalog card, so this preview shows the
+        // crop buyers will actually see. It also has to be `self-start`: a bare
+        // <img> in a flex column inherits align-items:stretch, which forces its
+        // width to the container while h-32 pins the height — that is what made
+        // every preview look squashed.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={coverUrl} alt="" className="h-32 w-auto rounded-lg border border-border" />
+        <img
+          src={coverUrl}
+          alt=""
+          className="aspect-[16/10] w-full max-w-56 self-start rounded-lg border border-border object-cover"
+        />
       )}
       <input
         type="file"
