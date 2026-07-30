@@ -1,82 +1,49 @@
 "use server";
 
-import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createProduct, updateProduct, deleteProduct, uploadPaidAsset, type ProductInput } from "@/lib/admin";
+import { createProduct, updateProduct, deleteProduct, uploadPaidAsset } from "@/lib/admin";
 import { requireAdmin } from "@/lib/admin-guard";
 import { setProductCourses } from "@/lib/courses";
-import { blocksPublish, PUBLISH_WITHOUT_COURSE_ERROR } from "@/lib/product-rules";
+import { blocksPublish, PUBLISH_WITHOUT_COURSE_ERROR, parseProductForm } from "@/lib/product-rules";
 
-const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
-
-// Accept any Postgres uuid shape — not just RFC-4122 v1-8. zod's .uuid()
-// enforces version/variant bits, which rejects deterministic seed ids like
-// 00000000-…-0000000000c1 that Postgres stores fine.
-const uuidish = z
-  .string()
-  .regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, "Invalid id");
-
-const schema = z.object({
-  id: uuidish.optional().or(z.literal("").transform(() => undefined)),
-  slug: z.string().trim().min(1, "Slug required").regex(/^[a-z0-9-]+$/, "lowercase, numbers, hyphens only"),
-  title: z.string().trim().min(1, "Title required"),
-  tagline: z.preprocess(emptyToNull, z.string().nullable()),
-  description: z.preprocess(emptyToNull, z.string().nullable()),
-  // dollars from the form -> cents
-  price: z.coerce.number().min(0, "Price must be ≥ 0"),
-  compareAt: z.preprocess(emptyToNull, z.coerce.number().min(0).nullable()),
-  mediaMode: z.preprocess(emptyToNull, z.enum(["upload", "embed"]).nullable()),
-  mediaEmbedUrl: z.preprocess(emptyToNull, z.string().url("Must be a URL").nullable()),
-  coverImageUrl: z.preprocess(emptyToNull, z.string().url("Must be a URL").nullable()),
-  status: z.enum(["draft", "published"]),
-  bumpOfferId: z.preprocess(emptyToNull, uuidish.nullable()),
-  upsellOfferId: z.preprocess(emptyToNull, uuidish.nullable()),
-});
-
-export type SaveState = { error?: string };
+// Errors are keyed by field so the form can show each one next to its own input
+// and never reload. `_form` carries anything not tied to a single field.
+export type SaveState = { errors?: Record<string, string> };
 
 export async function saveProduct(_prev: SaveState, formData: FormData): Promise<SaveState> {
   await requireAdmin();
-  const parsed = schema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) {
-    return { error: parsed.error.issues.map((i) => i.message).join(", ") };
-  }
-  const v = parsed.data;
-  const input: ProductInput = {
-    slug: v.slug,
-    title: v.title,
-    tagline: v.tagline,
-    description: v.description,
-    priceCents: Math.round(v.price * 100),
-    compareAtCents: v.compareAt == null ? null : Math.round(v.compareAt * 100),
-    mediaMode: v.mediaMode,
-    mediaEmbedUrl: v.mediaEmbedUrl,
-    coverImageUrl: v.coverImageUrl,
-    status: v.status,
-    bumpOfferId: v.bumpOfferId,
-    upsellOfferId: v.upsellOfferId,
-  };
 
-  // Which courses this product unlocks. The library delivers courses and
-  // nothing else, so a published product with no course is one a buyer can pay
-  // for and never receive. Refuse to publish it rather than sell a dead end;
-  // drafts may sit courseless while they're being built.
+  const parsed = parseProductForm(Object.fromEntries(formData));
+  if (!parsed.ok) return { errors: parsed.errors };
+  const { id, ...input } = parsed.data;
+
+  // Which courses this product unlocks. The library delivers courses and nothing
+  // else, so a published product with no course is one a buyer can pay for and
+  // never receive. Refuse to publish it rather than sell a dead end; drafts may
+  // sit courseless while they're being built.
   const courseIds = formData.getAll("courseIds").map(String).filter(Boolean);
-  if (blocksPublish(v.status, courseIds)) {
-    return { error: PUBLISH_WITHOUT_COURSE_ERROR };
+  if (blocksPublish(input.status, courseIds)) {
+    return { errors: { courseIds: PUBLISH_WITHOUT_COURSE_ERROR } };
   }
 
+  let productId: string;
   try {
-    const productId = v.id ? (await updateProduct(v.id, input), v.id) : await createProduct(input);
+    productId = id ? (await updateProduct(id, input), id) : await createProduct(input);
     await setProductCourses(productId, courseIds);
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "Save failed" };
+    const message = e instanceof Error ? e.message : "Save failed";
+    // A duplicate slug is a unique-constraint violation (Postgres 23505). Point
+    // it at the slug field instead of surfacing a raw database error.
+    if (/duplicate key|already exists|23505/i.test(message)) {
+      return { errors: { slug: "That slug is already taken — try another." } };
+    }
+    return { errors: { _form: message } };
   }
 
   revalidatePath("/");
   revalidatePath("/admin");
-  redirect("/admin");
+  redirect(`/admin/products/${productId}`);
 }
 
 const MAX_ASSET_BYTES = 100 * 1024 * 1024; // 100MB

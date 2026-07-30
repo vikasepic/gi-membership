@@ -4,7 +4,6 @@ import { camelize } from "@/lib/case";
 import { getStoreId } from "@/lib/store";
 import type {
   Product,
-  MediaMode,
   ProductStatus,
   Offer,
   GrantType,
@@ -35,9 +34,10 @@ export type ProductInput = {
   description: string | null;
   priceCents: number;
   compareAtCents: number | null;
-  mediaMode: MediaMode | null;
-  mediaEmbedUrl: string | null;
-  coverImageUrl: string | null;
+  // media_mode / media_path / media_embed_url / cover_image_url are NOT here on
+  // purpose. The product form has no inputs for them, and uploadPaidAsset owns
+  // media_mode + media_path — letting a form save write them would null out an
+  // uploaded asset. Saves leave those columns untouched.
   status: ProductStatus;
   bumpOfferId: string | null;
   upsellOfferId: string | null;
@@ -84,9 +84,6 @@ function toRow(input: ProductInput, storeId: string) {
     description: input.description,
     price_cents: input.priceCents,
     compare_at_cents: input.compareAtCents,
-    media_mode: input.mediaMode,
-    media_embed_url: input.mediaEmbedUrl,
-    cover_image_url: input.coverImageUrl,
     status: input.status,
     bump_offer_id: input.bumpOfferId,
     upsell_offer_id: input.upsellOfferId,
