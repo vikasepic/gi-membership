@@ -2,14 +2,28 @@ import { ProductCard, type CatalogItem } from "@/components/product-card";
 import { Logo } from "@/components/logo";
 import { listPublishedProducts } from "@/lib/store";
 import { ownedProductIdsForViewer, accessHrefForProduct } from "@/lib/library";
+import { productBadgeTypes } from "@/lib/courses";
 import type { Product } from "@/lib/types";
 
-function toCard(p: Product, owned: boolean, accessHref?: string): CatalogItem {
+// Storefront labels for each course type. Mirrors the catalog card.
+const BADGE_LABEL: Record<NonNullable<CatalogItem["type"]>, string> = {
+  video: "Video",
+  audio: "Audio",
+  pdf: "Guide",
+  text: "Reading",
+};
+
+function toCard(
+  p: Product,
+  type: CatalogItem["type"],
+  owned: boolean,
+  accessHref?: string,
+): CatalogItem {
   return {
     slug: p.slug,
     title: p.title,
     tagline: p.tagline ?? "",
-    type: p.type,
+    type,
     priceCents: p.priceCents,
     owned,
     accessHref,
@@ -22,7 +36,10 @@ export default async function Home() {
   // Anonymous visitors own nothing, so this is an empty set and the store
   // renders exactly as before for them.
   const ownedIds = await ownedProductIdsForViewer();
+  // Badge type comes from each product's course now, not the product itself.
+  const badgeTypes = await productBadgeTypes(products.map((p) => p.id));
   const featuredOwned = featured ? ownedIds.has(featured.id) : false;
+  const featuredBadge = featured ? (badgeTypes.get(featured.id) ?? null) : null;
   // Deep-link each owned product to its course; only owned ones are looked up,
   // so an anonymous visitor costs no extra queries.
   const accessHrefs = new Map(
@@ -80,9 +97,11 @@ export default async function Home() {
           >
             <div className="flex items-center justify-between">
               <span className="kicker text-muted">Featured</span>
-              <span className="kicker rounded-full border border-border px-2.5 py-1 text-navy">
-                {featured.type}
-              </span>
+              {featuredBadge && (
+                <span className="kicker rounded-full border border-border px-2.5 py-1 text-navy">
+                  {BADGE_LABEL[featuredBadge]}
+                </span>
+              )}
             </div>
             <div className="flex flex-col gap-2 pt-10">
               <h2 className="text-2xl leading-tight">{featured.title}</h2>
@@ -118,7 +137,7 @@ export default async function Home() {
         ) : (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {products.map((p, i) => (
-              <ProductCard key={p.slug} item={toCard(p, ownedIds.has(p.id), accessHrefs.get(p.id))} index={i} />
+              <ProductCard key={p.slug} item={toCard(p, badgeTypes.get(p.id) ?? null, ownedIds.has(p.id), accessHrefs.get(p.id))} index={i} />
             ))}
           </div>
         )}

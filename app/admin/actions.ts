@@ -23,7 +23,6 @@ const schema = z.object({
   title: z.string().trim().min(1, "Title required"),
   tagline: z.preprocess(emptyToNull, z.string().nullable()),
   description: z.preprocess(emptyToNull, z.string().nullable()),
-  type: z.enum(["pdf", "audio", "video", "app", "course"]),
   // dollars from the form -> cents
   price: z.coerce.number().min(0, "Price must be ≥ 0"),
   compareAt: z.preprocess(emptyToNull, z.coerce.number().min(0).nullable()),
@@ -49,7 +48,6 @@ export async function saveProduct(_prev: SaveState, formData: FormData): Promise
     title: v.title,
     tagline: v.tagline,
     description: v.description,
-    type: v.type,
     priceCents: Math.round(v.price * 100),
     compareAtCents: v.compareAt == null ? null : Math.round(v.compareAt * 100),
     mediaMode: v.mediaMode,

@@ -2,12 +2,13 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getProductBySlug } from "@/lib/store";
 import { ownedProductIdsForViewer, accessHrefForProduct } from "@/lib/library";
+import { productBadgeTypes, type CourseType } from "@/lib/courses";
 
-const TYPE_LABEL: Record<string, string> = {
-  pdf: "Guide",
-  audio: "Audio",
+const TYPE_LABEL: Record<CourseType, string> = {
   video: "Video",
-  app: "App",
+  audio: "Audio",
+  pdf: "Guide",
+  text: "Reading",
 };
 
 export default async function ProductPage({
@@ -21,6 +22,8 @@ export default async function ProductPage({
 
   const owned = (await ownedProductIdsForViewer()).has(product.id);
   const accessHref = owned ? await accessHrefForProduct(product.id) : "/library";
+  // Badge comes from the course this product grants.
+  const badgeType = (await productBadgeTypes([product.id])).get(product.id) ?? null;
 
   return (
     <div className="flex flex-col gap-10 md:gap-14">
@@ -40,7 +43,7 @@ export default async function ProductPage({
 
         {/* Details */}
         <div className="rise flex flex-col gap-5 md:col-span-5" style={{ animationDelay: "100ms" }}>
-          <span className="kicker text-primary">{TYPE_LABEL[product.type] ?? product.type}</span>
+          {badgeType && <span className="kicker text-primary">{TYPE_LABEL[badgeType]}</span>}
           <h1 className="text-3xl leading-tight md:text-4xl">{product.title}</h1>
           {product.tagline && <p className="text-lg text-muted">{product.tagline}</p>}
 

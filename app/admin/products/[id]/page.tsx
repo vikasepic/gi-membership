@@ -34,8 +34,10 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         assignedCourseIds={assigned.map((c) => c.id)}
       />
 
-      {/* Simple one-file products still deliver a single asset directly. */}
-      {product.type !== "video" && product.type !== "app" && (
+      {/* Legacy single-file delivery, only for a product with no course yet.
+          Course-backed products deliver through their course, so this uploader
+          would be dead weight there. */}
+      {assigned.length === 0 && (
         <AssetUpload productId={product.id} currentPath={product.mediaPath} />
       )}
     </div>

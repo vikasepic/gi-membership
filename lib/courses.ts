@@ -8,6 +8,9 @@ import { getStoreId } from "@/lib/store";
 // and one bundle product can grant several courses.
 
 export type CourseStatus = "draft" | "published";
+// What the course IS, for the storefront badge. This is the single source of
+// truth for a product's type now — the product no longer carries one.
+export type CourseType = "video" | "audio" | "pdf" | "text";
 
 export type Course = {
   id: string;
@@ -18,11 +21,12 @@ export type Course = {
   coverPath: string | null;
   chapterLabel: string;
   lessonLabel: string;
+  type: CourseType;
   status: CourseStatus;
 };
 
 export const COURSE_COLUMNS =
-  "id, slug, title, subtitle, description, cover_path, chapter_label, lesson_label, status";
+  "id, slug, title, subtitle, description, cover_path, chapter_label, lesson_label, type, status";
 
 export async function listCourses(): Promise<Course[]> {
   const db = createServiceClient();
@@ -61,6 +65,7 @@ export type CourseInput = {
   description: string | null;
   chapterLabel: string;
   lessonLabel: string;
+  type: CourseType;
   status: CourseStatus;
 };
 
@@ -73,6 +78,7 @@ function toRow(input: CourseInput, storeId: string) {
     description: input.description,
     chapter_label: input.chapterLabel,
     lesson_label: input.lessonLabel,
+    type: input.type,
     status: input.status,
   };
 }
@@ -180,6 +186,32 @@ export async function productCourseIds(
   for (const row of data ?? []) {
     const key = row.product_id as string;
     byProduct.set(key, [...(byProduct.get(key) ?? []), row.course_id as string]);
+  }
+  return byProduct;
+}
+
+// The storefront badge type for each product, taken from its course. Type lives
+// on the course now, so a product with no course has none (a draft still being
+// built). Batched — the catalog needs it for every row.
+export async function productBadgeTypes(
+  productIds: string[],
+): Promise<Map<string, CourseType>> {
+  const byProduct = new Map<string, CourseType>();
+  if (productIds.length === 0) return byProduct;
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("product_courses")
+    .select(`product_id, courses (type)`)
+    .in("product_id", productIds);
+  if (error) throw new Error(`productBadgeTypes: ${error.message}`);
+  for (const row of (data ?? []) as unknown as {
+    product_id: string;
+    courses: { type: CourseType } | null;
+  }[]) {
+    // First course wins; a bundle's badge is its lead course.
+    if (row.courses && !byProduct.has(row.product_id)) {
+      byProduct.set(row.product_id, row.courses.type);
+    }
   }
   return byProduct;
 }

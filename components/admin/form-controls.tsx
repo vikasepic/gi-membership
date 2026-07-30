@@ -5,11 +5,16 @@ export function Field({
   label,
   hint,
   required,
+  error,
   children,
 }: {
   label: string;
   hint?: string;
   required?: boolean;
+  // When set, the input reads as invalid and the message shows beneath it. The
+  // form can supply this from client-side checks or a returned server error, so
+  // a bad value is flagged in place without the page reloading.
+  error?: string | null;
   children: React.ReactNode;
 }) {
   return (
@@ -20,6 +25,7 @@ export function Field({
         {hint && <span className="ml-2 font-normal text-muted">{hint}</span>}
       </span>
       {children}
+      {error && <span className="text-sm text-primary">{error}</span>}
     </label>
   );
 }

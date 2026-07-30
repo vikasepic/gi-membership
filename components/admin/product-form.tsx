@@ -51,23 +51,14 @@ export function ProductForm({
         <Field label="Description">
           <textarea name="description" defaultValue={product?.description ?? ""} rows={4} className={input} />
         </Field>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <Field label="Badge type" hint="storefront label only">
-            <select name="type" defaultValue={product?.type ?? "course"} className={input}>
-              <option value="course">Course</option>
-              <option value="pdf">PDF / Guide</option>
-              <option value="audio">Audio</option>
-              <option value="video">Video</option>
-              <option value="app">App</option>
-            </select>
-          </Field>
-          <Field label="Status" required>
-            <select name="status" defaultValue={product?.status ?? "draft"} className={input}>
-              <option value="draft">Draft — hidden from the store</option>
-              <option value="published">Published</option>
-            </select>
-          </Field>
-        </div>
+        {/* No type here — the storefront badge comes from the course this
+            product grants. Type is a property of the content, not the price. */}
+        <Field label="Status" required>
+          <select name="status" defaultValue={product?.status ?? "draft"} className={input}>
+            <option value="draft">Draft — hidden from the store</option>
+            <option value="published">Published</option>
+          </select>
+        </Field>
       </Section>
 
       <Section

@@ -9,7 +9,9 @@ export type Product = {
   title: string;
   tagline: string | null;
   description: string | null;
-  type: ProductType;
+  // Legacy: the storefront badge now comes from the product's course, not this.
+  // Nullable since products are saved without it.
+  type: ProductType | null;
   priceCents: number;
   compareAtCents: number | null;
   currency: string;

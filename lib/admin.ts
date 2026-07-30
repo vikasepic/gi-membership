@@ -4,7 +4,6 @@ import { camelize } from "@/lib/case";
 import { getStoreId } from "@/lib/store";
 import type {
   Product,
-  ProductType,
   MediaMode,
   ProductStatus,
   Offer,
@@ -34,7 +33,6 @@ export type ProductInput = {
   title: string;
   tagline: string | null;
   description: string | null;
-  type: ProductType;
   priceCents: number;
   compareAtCents: number | null;
   mediaMode: MediaMode | null;
@@ -84,7 +82,6 @@ function toRow(input: ProductInput, storeId: string) {
     title: input.title,
     tagline: input.tagline,
     description: input.description,
-    type: input.type,
     price_cents: input.priceCents,
     compare_at_cents: input.compareAtCents,
     media_mode: input.mediaMode,
