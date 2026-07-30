@@ -32,12 +32,17 @@ function invalid(cls: string, hasError: boolean) {
 export function ProductForm({
   product,
   offers,
-  allCourses = [],
+  allCourses,
   assignedCourseIds = [],
 }: {
   product?: Product;
   offers: OfferOption[];
-  allCourses?: Course[];
+  // Required, not defaulted. This used to default to [], which let the
+  // new-product page omit it: the Content section then said "No courses yet"
+  // while courses existed, and since publishing needs a course, no product
+  // could be created at all. A silent default hid a hard dependency — the
+  // compiler should refuse a page that forgets this list.
+  allCourses: Course[];
   assignedCourseIds?: string[];
 }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveProduct, {});
