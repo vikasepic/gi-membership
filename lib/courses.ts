@@ -2,6 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
 import { getStoreId } from "@/lib/store";
+import type { Attachment } from "@/lib/curriculum";
 
 // Courses are CONTENT. Products are what you sell. They are joined many-to-many
 // through product_courses, so one course can be sold through several products
@@ -23,10 +24,14 @@ export type Course = {
   lessonLabel: string;
   type: CourseType;
   status: CourseStatus;
+  // Direct content, for a course with no chapters/lessons. Used by the student
+  // page only when the course has no course_items.
+  attachments: Attachment[];
+  videoEmbedUrl: string | null;
 };
 
 export const COURSE_COLUMNS =
-  "id, slug, title, subtitle, description, cover_path, chapter_label, lesson_label, type, status";
+  "id, slug, title, subtitle, description, cover_path, chapter_label, lesson_label, type, status, attachments, video_embed_url";
 
 export async function listCourses(): Promise<Course[]> {
   const db = createServiceClient();
@@ -110,6 +115,32 @@ export async function setCourseCover(id: string, coverPath: string): Promise<voi
   const db = createServiceClient();
   const { error } = await db.from("courses").update({ cover_path: coverPath }).eq("id", id);
   if (error) throw new Error(`setCourseCover: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
+// Direct course content (a course with no chapters — just a file / video)
+// ---------------------------------------------------------------------------
+
+export async function addCourseAttachment(courseId: string, a: Attachment): Promise<void> {
+  const db = createServiceClient();
+  const { data } = await db.from("courses").select("attachments").eq("id", courseId).maybeSingle();
+  const list = ((data?.attachments as Attachment[]) ?? []).concat(a);
+  const { error } = await db.from("courses").update({ attachments: list }).eq("id", courseId);
+  if (error) throw new Error(`addCourseAttachment: ${error.message}`);
+}
+
+export async function removeCourseAttachment(courseId: string, path: string): Promise<void> {
+  const db = createServiceClient();
+  const { data } = await db.from("courses").select("attachments").eq("id", courseId).maybeSingle();
+  const list = ((data?.attachments as Attachment[]) ?? []).filter((a) => a.path !== path);
+  const { error } = await db.from("courses").update({ attachments: list }).eq("id", courseId);
+  if (error) throw new Error(`removeCourseAttachment: ${error.message}`);
+}
+
+export async function setCourseVideoEmbed(courseId: string, url: string | null): Promise<void> {
+  const db = createServiceClient();
+  const { error } = await db.from("courses").update({ video_embed_url: url }).eq("id", courseId);
+  if (error) throw new Error(`setCourseVideoEmbed: ${error.message}`);
 }
 
 // ---------------------------------------------------------------------------

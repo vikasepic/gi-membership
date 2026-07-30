@@ -69,3 +69,28 @@ export async function signedItemAsset(path: string, ttl = 60): Promise<string | 
   const { data } = await db.storage.from("paid-assets").createSignedUrl(path, ttl);
   return data?.signedUrl ?? null;
 }
+
+// Course-level uploads, for a course that holds its content directly (no
+// chapters). Same buckets and rules as the item versions — cover is public,
+// the file is a paid asset — just filed under courses/ instead of items/.
+export async function uploadCourseCover(courseId: string, file: File): Promise<string> {
+  const db = createServiceClient();
+  const path = `courses/${courseId}/${Date.now()}-${safeName(file.name)}`;
+  const { error } = await db.storage.from("public-media").upload(path, file, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (error) throw new Error(`uploadCourseCover: ${error.message}`);
+  return path;
+}
+
+export async function uploadCourseAttachment(courseId: string, file: File): Promise<Attachment> {
+  const db = createServiceClient();
+  const path = `courses/${courseId}/${Date.now()}-${safeName(file.name)}`;
+  const { error } = await db.storage.from("paid-assets").upload(path, file, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (error) throw new Error(`uploadCourseAttachment: ${error.message}`);
+  return { path, name: file.name, size: file.size, mime: file.type };
+}

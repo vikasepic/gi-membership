@@ -5,6 +5,8 @@ import { getCourseBySlug, userOwnsCourse } from "@/lib/courses";
 import { listCurriculum, rollupProgress } from "@/lib/curriculum";
 import { flattenPlayable, firstIncomplete } from "@/lib/curriculum-student";
 import { completedItemIds } from "@/lib/progress";
+import { publicCoverUrl } from "@/lib/media";
+import { SimpleCourseContent } from "@/components/library/simple-course-content";
 
 export default async function CoursePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -21,6 +23,7 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
   const flat = flattenPlayable(nodes);
   const roll = rollupProgress(nodes.flatMap((n) => [n, ...n.children]), doneIds);
   const resume = firstIncomplete(flat, doneIds);
+  const coverUrl = publicCoverUrl(course.coverPath);
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 py-4">
@@ -35,10 +38,24 @@ export default async function CoursePage({ params }: { params: Promise<{ slug: s
         {course.subtitle && <p className="text-muted">{course.subtitle}</p>}
       </div>
 
+      {coverUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={coverUrl}
+          alt=""
+          className="w-full rounded-3xl border border-border object-cover"
+        />
+      )}
+
       {nodes.length === 0 ? (
-        <p className="rounded-2xl border border-border bg-surface px-5 py-10 text-center text-muted">
-          This course has no published content yet.
-        </p>
+        // A simple course delivers straight from here — cover above, file below,
+        // no chapters. Falls back to a plain notice if nothing's uploaded yet.
+        <SimpleCourseContent
+          courseId={course.id}
+          type={course.type}
+          videoEmbedUrl={course.videoEmbedUrl}
+          attachments={course.attachments}
+        />
       ) : (
         <section className="flex flex-col gap-5">
           <div className="flex items-center justify-between">
