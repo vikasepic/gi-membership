@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProductBySlug, getOffer } from "@/lib/store";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { immediateChargeCents } from "@/lib/offers";
+import { immediateChargeCents, shouldShowOffer } from "@/lib/offers";
+import { ownershipFor } from "@/lib/checkout";
 import { stripePublishableKey } from "@/lib/env";
 import { CheckoutForm, type BumpSummary } from "@/components/checkout/checkout-form";
 
@@ -19,13 +20,27 @@ export default async function CheckoutPage({
   const product = await getProductBySlug(slug);
   if (!product || product.status !== "published") notFound();
 
-  // Bump summary from the product's offer (a fresh buyer owns nothing, so an
-  // attached active offer is eligible; ownership-based filtering matters for
-  // repeat buyers who are already logged in).
+  // Signed in? Then we already know who they are — don't ask again. Their last
+  // billing country is reused so a repeat buyer doesn't re-pick it. This has to
+  // come BEFORE the bump is resolved: what they already own decides whether the
+  // bump may be shown at all.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // An offer is never shown to someone who already has what it grants. An
+  // anonymous visitor owns nothing, so this is empty for them and the bump
+  // renders as before; a signed-in subscriber no longer sees an offer for the
+  // subscription they already pay for.
+  const owned = user
+    ? await ownershipFor(user.id)
+    : { productIds: new Set<string>(), appIds: new Set<string>() };
+
   let bump: BumpSummary | null = null;
   if (product.bumpOfferId) {
     const offer = await getOffer(product.bumpOfferId);
-    if (offer) {
+    if (offer && shouldShowOffer(offer, owned)) {
       const recurringNote =
         offer.billingType === "recurring"
           ? `then ${money(offer.priceCents, offer.currency)}/${offer.interval}${
@@ -41,13 +56,6 @@ export default async function CheckoutPage({
       };
     }
   }
-
-  // Signed in? Then we already know who they are — don't ask again. Their last
-  // billing country is reused so a repeat buyer doesn't re-pick it.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
   let defaultCountry: string | null = null;
   if (user) {
     const db = createServiceClient();

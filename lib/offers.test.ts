@@ -49,3 +49,53 @@ describe("immediateChargeCents", () => {
     expect(immediateChargeCents({ billingType: "recurring", priceCents: 4700, trialDays: null })).toBe(4700);
   });
 });
+
+// --- display-side gate: never show an offer for something already held -----
+import { shouldShowOffer } from "@/lib/offers";
+
+const noneOwned = { productIds: new Set<string>(), appIds: new Set<string>() };
+const subOffer = {
+  grantType: "subscription" as const,
+  grantProductId: null,
+  grantAppId: "app-content-engine",
+  active: true,
+};
+const prodOffer = {
+  grantType: "product" as const,
+  grantProductId: "prod-guide",
+  grantAppId: null,
+  active: true,
+};
+
+describe("shouldShowOffer", () => {
+  it("shows an active offer to someone who owns nothing", () => {
+    expect(shouldShowOffer(subOffer, noneOwned)).toBe(true);
+  });
+
+  it("hides a subscription offer from an existing subscriber", () => {
+    // The exact case that showed the Content Engine bump to a member who was
+    // already subscribed.
+    const owned = { productIds: new Set<string>(), appIds: new Set(["app-content-engine"]) };
+    expect(shouldShowOffer(subOffer, owned)).toBe(false);
+  });
+
+  it("hides a product offer from someone who already owns that product", () => {
+    const owned = { productIds: new Set(["prod-guide"]), appIds: new Set<string>() };
+    expect(shouldShowOffer(prodOffer, owned)).toBe(false);
+  });
+
+  it("hides a deactivated offer even from someone eligible", () => {
+    expect(shouldShowOffer({ ...subOffer, active: false }, noneOwned)).toBe(false);
+  });
+
+  it("hides a missing offer without throwing", () => {
+    expect(shouldShowOffer(null, noneOwned)).toBe(false);
+    expect(shouldShowOffer(undefined, noneOwned)).toBe(false);
+  });
+
+  it("hides a misconfigured offer that grants nothing", () => {
+    expect(
+      shouldShowOffer({ grantType: "subscription", grantProductId: null, grantAppId: null, active: true }, noneOwned),
+    ).toBe(false);
+  });
+});

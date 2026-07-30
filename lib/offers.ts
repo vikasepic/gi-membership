@@ -18,6 +18,25 @@ export function isOfferEligible(offer: GrantTarget, owned: Ownership): boolean {
   return !owned.appIds.has(offer.grantAppId);
 }
 
+// Whether an offer may be SHOWN at all — the display-side counterpart to
+// isOfferEligible, used for the checkout bump and any other surface that
+// presents an offer.
+//
+// Two independent reasons to hide one: it has been deactivated, or the buyer
+// already has what it grants. The second only became reachable once checkout
+// supported signed-in members; before that every buyer was brand new and owned
+// nothing, which is why the bump was rendered unconditionally.
+//
+// Fulfilment re-checks eligibility independently (see createCheckoutIntent), so
+// this is the presentation half of a two-sided guard, not the only one.
+export function shouldShowOffer(
+  offer: (GrantTarget & { active: boolean }) | null | undefined,
+  owned: Ownership,
+): boolean {
+  if (!offer || !offer.active) return false;
+  return isOfferEligible(offer, owned);
+}
+
 // What fulfilling this offer charges the saved card RIGHT NOW. A trial
 // subscription is $0 today (charged after the trial) — one-time + trial can
 // never be a single charge. A recurring offer without a trial bills its first
