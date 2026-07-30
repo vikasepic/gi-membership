@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getProductBySlug, getOffer } from "@/lib/store";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { immediateChargeCents, shouldShowOffer } from "@/lib/offers";
@@ -9,6 +9,20 @@ import { CheckoutForm, type BumpSummary } from "@/components/checkout/checkout-f
 
 const money = (c: number, cur: string) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(c / 100);
+
+// Their last billing country, so a repeat buyer doesn't re-pick it.
+async function lastBillingCountry(userId: string): Promise<string | null> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("orders")
+    .select("buyer_country")
+    .eq("user_id", userId)
+    .not("buyer_country", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data?.buyer_country as string) ?? null;
+}
 
 export default async function CheckoutPage({
   searchParams,
@@ -29,45 +43,40 @@ export default async function CheckoutPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // An offer is never shown to someone who already has what it grants. An
-  // anonymous visitor owns nothing, so this is empty for them and the bump
-  // renders as before; a signed-in subscriber no longer sees an offer for the
-  // subscription they already pay for.
-  const owned = user
-    ? await ownershipFor(user.id)
-    : { productIds: new Set<string>(), appIds: new Set<string>() };
+  // These three are independent of each other, so they run together rather than
+  // adding three round-trips to the time before anything renders.
+  //
+  // `owned` is what the buyer currently holds: an offer is never shown to
+  // someone who already has what it grants. An anonymous visitor owns nothing,
+  // so this is empty for them and the bump renders as before.
+  const [owned, bumpOffer, defaultCountry] = await Promise.all([
+    user
+      ? ownershipFor(user.id)
+      : Promise.resolve({ productIds: new Set<string>(), appIds: new Set<string>() }),
+    product.bumpOfferId ? getOffer(product.bumpOfferId) : Promise.resolve(null),
+    user ? lastBillingCountry(user.id) : Promise.resolve(null),
+  ]);
+
+  // Someone who already owns this would be refused by createCheckoutIntent, but
+  // only after they had filled in a card and pressed pay. Send them to what they
+  // bought instead of rendering a form that cannot succeed.
+  if (owned.productIds.has(product.id)) redirect("/library");
 
   let bump: BumpSummary | null = null;
-  if (product.bumpOfferId) {
-    const offer = await getOffer(product.bumpOfferId);
-    if (offer && shouldShowOffer(offer, owned)) {
-      const recurringNote =
-        offer.billingType === "recurring"
-          ? `then ${money(offer.priceCents, offer.currency)}/${offer.interval}${
-              offer.trialDays ? ` after a ${offer.trialDays}-day trial` : ""
-            }`
-          : null;
-      bump = {
-        headline: offer.headline,
-        description: offer.description,
-        chargeNowCents: immediateChargeCents(offer),
-        recurringNote,
-        acceptLabel: offer.acceptLabel,
-      };
-    }
-  }
-  let defaultCountry: string | null = null;
-  if (user) {
-    const db = createServiceClient();
-    const { data: prior } = await db
-      .from("orders")
-      .select("buyer_country")
-      .eq("user_id", user.id)
-      .not("buyer_country", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    defaultCountry = (prior?.buyer_country as string) ?? null;
+  if (bumpOffer && shouldShowOffer(bumpOffer, owned)) {
+    const recurringNote =
+      bumpOffer.billingType === "recurring"
+        ? `then ${money(bumpOffer.priceCents, bumpOffer.currency)}/${bumpOffer.interval}${
+            bumpOffer.trialDays ? ` after a ${bumpOffer.trialDays}-day trial` : ""
+          }`
+        : null;
+    bump = {
+      headline: bumpOffer.headline,
+      description: bumpOffer.description,
+      chargeNowCents: immediateChargeCents(bumpOffer),
+      recurringNote,
+      acceptLabel: bumpOffer.acceptLabel,
+    };
   }
 
   return (

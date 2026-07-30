@@ -27,8 +27,11 @@ export function isOfferEligible(offer: GrantTarget, owned: Ownership): boolean {
 // supported signed-in members; before that every buyer was brand new and owned
 // nothing, which is why the bump was rendered unconditionally.
 //
-// Fulfilment re-checks eligibility independently (see createCheckoutIntent), so
-// this is the presentation half of a two-sided guard, not the only one.
+// Fulfilment calls this same helper (createCheckoutIntent) and finalizeOrder
+// re-checks `active` before charging, so display and fulfilment cannot drift.
+// An earlier version of this comment claimed a two-sided guard while the
+// fulfilment side checked only eligibility, leaving a withdrawn offer
+// chargeable from a stale page.
 export function shouldShowOffer(
   offer: (GrantTarget & { active: boolean }) | null | undefined,
   owned: Ownership,

@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getProductBySlug, getOffer } from "@/lib/store";
-import { isOfferEligible, immediateChargeCents, type Ownership } from "@/lib/offers";
+import { isOfferEligible, shouldShowOffer, immediateChargeCents, type Ownership } from "@/lib/offers";
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
 import { notifyAppEntitlement } from "@/lib/apps";
 import { trackPurchase } from "@/lib/tracking";
@@ -62,7 +62,7 @@ export type CheckoutInput = {
 
 export type CheckoutResult =
   | { ok: true; clientSecret: string }
-  | { ok: false; error: string; code?: "account_exists" | "already_owned" };
+  | { ok: false; error: string; code?: "account_exists" | "already_owned" | "bump_unavailable" };
 
 const normEmail = (e: string) => e.trim().toLowerCase();
 
@@ -93,13 +93,27 @@ export async function customerForUser(
   return customer.id;
 }
 
-// Look up what a user already owns — drives bump eligibility.
+// What a user currently HOLDS — drives offer eligibility everywhere.
+//
+// Cancelled rows are excluded on purpose. A cancellation keeps the ownership row
+// and only flips its status (see syncSubscriptionOwnership and
+// revokeOwnershipForPaymentIntent), so counting rows by existence meant a lapsed
+// subscriber had no access AND could never be offered the subscription again —
+// on any product, in the library, forever. That matches hasAccess() in
+// lib/subscription-sync.ts; the status is filtered in SQL rather than importing
+// it, because that module imports app-sync which imports this one.
+//
+// Errors throw rather than returning empty. This set decides whether an offer is
+// shown and whether someone is charged, so a failed query must not read as
+// "owns nothing" and quietly re-offer something already held.
 export async function ownershipFor(userId: string): Promise<Ownership> {
   const db = createServiceClient();
-  const { data } = await db
+  const { data, error } = await db
     .from("ownership")
     .select("product_id, app_id")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .neq("status", "canceled");
+  if (error) throw new Error(`ownershipFor: ${error.message}`);
   const productIds = new Set<string>();
   const appIds = new Set<string>();
   for (const row of data ?? []) {
@@ -169,12 +183,29 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
     await applyPendingEntitlements(userId, email);
   }
 
-  // Resolve the bump: only if taken, present, and the buyer is eligible.
+  // Resolve the bump. shouldShowOffer is the same gate the checkout page uses
+  // to decide whether to render it, so display and fulfilment cannot disagree —
+  // previously this checked eligibility but NOT offer.active, leaving a
+  // withdrawn offer chargeable from a stale page or a replayed POST.
   const owned = await ownershipFor(userId);
   let bumpOffer: Offer | null = null;
   if (input.bumpTaken && product.bumpOfferId) {
     const offer = await getOffer(product.bumpOfferId);
-    if (offer && isOfferEligible(offer, owned)) bumpOffer = offer;
+    if (offer && shouldShowOffer(offer, owned)) {
+      bumpOffer = offer;
+    } else {
+      // Refuse rather than drop it silently. An anonymous buyer whose email
+      // already carries the entitlement is shown the bump (we can't know before
+      // they type it), and quietly discarding it charged them for the base
+      // product while ignoring what they ticked — no error, nothing on the
+      // receipt. This happens before any card is charged.
+      return {
+        ok: false,
+        error:
+          "You already have the add-on you selected, so it can't be added again. Untick it to continue.",
+        code: "bump_unavailable",
+      };
+    }
   }
 
   const customerId = await customerForUser(userId, email, storeId);
@@ -354,7 +385,10 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
   const paymentMethodId = typeof pi.payment_method === "string" ? pi.payment_method : pi.payment_method?.id;
   if (bumpOfferId && paymentMethodId && order.stripe_customer_id) {
     const offer = await getOffer(bumpOfferId);
-    if (offer) {
+    // A deactivated offer must not be fulfilled even though the PaymentIntent
+    // still carries its id: an admin may have withdrawn it between intent
+    // creation and confirmation.
+    if (offer?.active) {
       const result = await fulfilOffer({
         order: { id: order.id, stripeCustomerId: order.stripe_customer_id },
         offer,
@@ -463,6 +497,7 @@ export async function grantOfferOwnership(
   const trialing = offer.trialDays && offer.trialDays > 0;
 
   if (offer.grantType === "subscription" && offer.grantAppId) {
+    const status = trialing ? "trialing" : "active";
     const { error } = await db.from("ownership").insert({
       store_id: storeId,
       user_id: userId,
@@ -470,9 +505,30 @@ export async function grantOfferOwnership(
       offer_id: offer.id,
       source,
       stripe_subscription_id: subscriptionId,
-      status: trialing ? "trialing" : "active",
+      status,
     });
-    if (error && error.code !== "23505") throw new Error(`grant offer (app): ${error.message}`);
+    // 23505 means a row for this (store, user, app) already exists. It is NOT
+    // simply a duplicate to ignore: a returning subscriber's old row is still
+    // there marked `canceled`, and now that cancelled rows no longer count as
+    // owned, they can buy again — so the row must be revived. Swallowing the
+    // conflict would leave them paid up with status `canceled` and no access.
+    if (error?.code === "23505") {
+      const { error: reviveErr } = await db
+        .from("ownership")
+        .update({
+          offer_id: offer.id,
+          source,
+          stripe_subscription_id: subscriptionId,
+          status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("store_id", storeId)
+        .eq("user_id", userId)
+        .eq("app_id", offer.grantAppId);
+      if (reviveErr) throw new Error(`grant offer (app revive): ${reviveErr.message}`);
+    } else if (error) {
+      throw new Error(`grant offer (app): ${error.message}`);
+    }
 
     // Provision the connected app (best-effort, server-to-server). A failure
     // here never breaks the purchase — the handoff re-provisions on first open.
@@ -495,7 +551,19 @@ export async function grantOfferOwnership(
       source,
       status: "active",
     });
-    if (error && error.code !== "23505") throw new Error(`grant offer (product): ${error.message}`);
+    // Same reasoning as the subscription branch: a re-purchase after a refund
+    // that only flipped the status must end up active, not left cancelled.
+    if (error?.code === "23505") {
+      const { error: reviveErr } = await db
+        .from("ownership")
+        .update({ offer_id: offer.id, source, status: "active", updated_at: new Date().toISOString() })
+        .eq("store_id", storeId)
+        .eq("user_id", userId)
+        .eq("product_id", offer.grantProductId);
+      if (reviveErr) throw new Error(`grant offer (product revive): ${reviveErr.message}`);
+    } else if (error) {
+      throw new Error(`grant offer (product): ${error.message}`);
+    }
   }
 }
 
@@ -529,12 +597,10 @@ export async function resolveOtoForOrder(paymentIntentId: string): Promise<strin
     .maybeSingle();
   if (!prod?.upsell_offer_id) return null; // empty slot → skip
 
+  // Same gate as the checkout bump: withdrawn, or already held, means no offer.
   const offer = await getOffer(prod.upsell_offer_id as string);
-  if (!offer || !offer.active) return null;
-
-  // Eligibility is correctness: never show an OTO for something already owned.
   const owned = await ownershipFor(userId);
-  if (!isOfferEligible(offer, owned)) return null;
+  if (!offer || !shouldShowOffer(offer, owned)) return null;
 
   return mintOtoToken(order.id, order.store_id as string, offer.id, userId);
 }
@@ -593,9 +659,10 @@ export async function acceptStandingOffer(
   offerId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const offer = await getOffer(offerId);
-  if (!offer || !offer.active) return { ok: false, error: "unavailable" };
-
+  if (!offer) return { ok: false, error: "unavailable" };
   const owned = await ownershipFor(userId);
+  // Distinguish the two reasons so the library can say which one it is.
+  if (!offer.active) return { ok: false, error: "unavailable" };
   if (!isOfferEligible(offer, owned)) return { ok: false, error: "already_owned" };
 
   const db = createServiceClient();
