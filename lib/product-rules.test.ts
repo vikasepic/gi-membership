@@ -69,3 +69,47 @@ describe("publishing a product with no course", () => {
     expect(blocksPublish("draft", [])).toBe(false);
   });
 });
+
+// The glue inside saveProduct: a real FormData shaped exactly as the form
+// submits it, through Object.fromEntries + getAll("courseIds"). This is the last
+// piece between the browser and the parser, and the multi-value courseIds field
+// is the part Object.fromEntries silently mangles if used alone.
+describe("the FormData the product form actually submits", () => {
+  function formDataFromProductForm(courseIds: string[]) {
+    const fd = new FormData();
+    fd.set("id", "0edf6076-9a0e-4452-97fc-59f7687f697f");
+    fd.set("slug", "field-guide");
+    fd.set("title", "The Field Guide");
+    fd.set("tagline", "A field-tested PDF playbook.");
+    fd.set("description", "");
+    fd.set("price", "27");
+    fd.set("compareAt", "");
+    fd.set("status", "published");
+    fd.set("bumpOfferId", "");
+    fd.set("upsellOfferId", "");
+    for (const id of courseIds) fd.append("courseIds", id); // one hidden input each
+    return fd;
+  }
+
+  it("parses, and reads every attached course rather than just the last", () => {
+    const fd = formDataFromProductForm([
+      "61a41256-9001-4995-afe0-202f63c79b7e",
+      "52b1b489-d9c5-4ec6-af60-95caaa240514",
+    ]);
+    const res = parseProductForm(Object.fromEntries(fd) as Record<string, unknown>);
+    if (!res.ok) throw new Error(`parse failed: ${JSON.stringify(res.errors)}`);
+    expect(res.data.title).toBe("The Field Guide");
+
+    // Object.fromEntries keeps only the LAST courseIds value, which is why the
+    // action uses getAll — a bundle would otherwise lose every course but one.
+    expect(fd.getAll("courseIds").map(String)).toHaveLength(2);
+    expect(blocksPublish(res.data.status, fd.getAll("courseIds").map(String))).toBe(false);
+  });
+
+  it("refuses to publish when no course checkbox is ticked", () => {
+    const fd = formDataFromProductForm([]);
+    const res = parseProductForm(Object.fromEntries(fd) as Record<string, unknown>);
+    if (!res.ok) throw new Error("parse failed");
+    expect(blocksPublish(res.data.status, fd.getAll("courseIds").map(String))).toBe(true);
+  });
+});

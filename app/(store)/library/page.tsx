@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getStandingOffer, listOwnedApps, hasSavedCard } from "@/lib/library";
+import { getStandingOffer, listOwnedApps, hasSavedCard, ownedProductIdsForViewer } from "@/lib/library";
 import { coursesForUser } from "@/lib/courses";
 import { immediateChargeCents } from "@/lib/offers";
 import { acceptStandingOfferAction, openAppAction } from "./actions";
@@ -39,6 +39,10 @@ export default async function LibraryPage({
   const apps = await listOwnedApps(user.id);
   const standing = await getStandingOffer(user.id);
   const cardOnFile = standing ? await hasSavedCard(user.id) : false;
+  // Distinguishes "you have bought nothing" from "what you bought has no
+  // content attached" — two very different messages for the reader.
+  const ownedProductCount = (await ownedProductIdsForViewer()).size;
+  const ownsProducts = ownedProductCount > 0;
 
   return (
     <div className="flex flex-col gap-10 py-4">
@@ -57,10 +61,25 @@ export default async function LibraryPage({
       )}
 
       {courses.length === 0 ? (
-        <p className="text-muted">
-          Nothing here yet.{" "}
-          <Link href="/" className="text-primary hover:underline">Browse the store</Link>.
-        </p>
+        ownsProducts ? (
+          // Owning something that delivers nothing is a store misconfiguration,
+          // not an empty library. Saying "nothing here yet" to someone who has
+          // paid reads as a bug and sends them hunting; name the real cause.
+          <div className="flex flex-col gap-2 rounded-2xl border border-primary/30 bg-primary/5 px-5 py-4">
+            <span className="font-medium text-fg">Your purchases don&rsquo;t have content attached yet</span>
+            <p className="text-sm text-muted">
+              You own {ownedProductCount === 1 ? "a product" : `${ownedProductCount} products`}, but
+              no course has been attached to {ownedProductCount === 1 ? "it" : "them"} yet, so
+              there&rsquo;s nothing to open. This is on us, not you — it will appear here as soon as
+              it&rsquo;s published.
+            </p>
+          </div>
+        ) : (
+          <p className="text-muted">
+            Nothing here yet.{" "}
+            <Link href="/" className="text-primary hover:underline">Browse the store</Link>.
+          </p>
+        )
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {courses.map((p) => (
