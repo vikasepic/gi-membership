@@ -19,6 +19,8 @@ export type Product = {
   mediaPath: string | null;
   mediaEmbedUrl: string | null;
   coverImageUrl: string | null;
+  /** Optional storefront image for THIS product; overrides the course cover. */
+  coverPath: string | null;
   status: ProductStatus;
   bumpOfferId: string | null;
   upsellOfferId: string | null;

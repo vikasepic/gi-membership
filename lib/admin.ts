@@ -14,7 +14,7 @@ import type {
 // Admin-side reads/writes. Service-role; callers are admin server actions/pages.
 
 const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order";
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order";
 
 const OFFER_COLUMNS =
   "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, stripe_product_id_test, stripe_product_id_live";
@@ -288,4 +288,17 @@ export async function updateStoreSettings(input: StoreSettings): Promise<void> {
     })
     .eq("id", await getStoreId());
   if (error) throw new Error(`updateStoreSettings: ${error.message}`);
+}
+
+// Storefront image for a single product, overriding whatever its course provides.
+export async function setProductCover(productId: string, coverPath: string): Promise<void> {
+  const db = createServiceClient();
+  const { error } = await db.from("products").update({ cover_path: coverPath }).eq("id", productId);
+  if (error) throw new Error(`setProductCover: ${error.message}`);
+}
+
+export async function clearProductCover(productId: string): Promise<void> {
+  const db = createServiceClient();
+  const { error } = await db.from("products").update({ cover_path: null }).eq("id", productId);
+  if (error) throw new Error(`clearProductCover: ${error.message}`);
 }

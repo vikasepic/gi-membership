@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import {
   uploadCourseCoverAction,
   uploadCourseFileAction,
@@ -10,6 +10,13 @@ import {
 } from "@/app/admin/courses/[id]/content/actions";
 import { Section, inputClass } from "@/components/admin/form-controls";
 import type { Course } from "@/lib/courses";
+
+// Mirrors lib/media.ts. Checked here too so an oversized file is refused
+// instantly and visibly, rather than being swallowed by a request-size limit
+// somewhere between the browser and the action.
+const COVER_MAX = 5 * 1024 * 1024;
+const ATTACH_MAX = 100 * 1024 * 1024;
+const mb = (n: number) => `${Math.round(n / 1024 / 1024)}MB`;
 
 // The "simple course" editor: everything a course needs when it has no chapters
 // — a cover image, the file people download (or a video URL), and that's it.
@@ -48,8 +55,19 @@ export function CourseContent({
 
 function CoverBlock({ courseId, coverUrl }: { courseId: string; coverUrl: string | null }) {
   const [state, action, pending] = useActionState<ContentState, FormData>(uploadCourseCoverAction, {});
+  const [tooBig, setTooBig] = useState<string | null>(null);
+
+  function check(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    setTooBig(f && f.size > COVER_MAX ? `That image is ${mb(f.size)}. Covers must be under ${mb(COVER_MAX)}.` : null);
+  }
+
   return (
-    <form action={action} className="flex flex-col gap-3 rounded-xl border border-border bg-surface-2 p-4">
+    <form
+      action={action}
+      onSubmit={(e) => { if (tooBig) e.preventDefault(); }}
+      className="flex flex-col gap-3 rounded-xl border border-border bg-surface-2 p-4"
+    >
       <input type="hidden" name="courseId" value={courseId} />
       <span className="text-sm font-medium">Cover image</span>
       {coverUrl && (
@@ -60,13 +78,16 @@ function CoverBlock({ courseId, coverUrl }: { courseId: string; coverUrl: string
         type="file"
         name="file"
         accept="image/*"
+        onChange={check}
         className="text-sm file:mr-3 file:rounded-full file:border-0 file:bg-surface file:px-4 file:py-2 file:text-sm file:text-fg"
       />
+      <span className="text-xs text-muted">JPG or PNG, up to {mb(COVER_MAX)}.</span>
+      {tooBig && <p className="text-sm text-primary">{tooBig}</p>}
       {state.error && <p className="text-sm text-primary">{state.error}</p>}
       {state.ok && <p className="text-sm text-navy">Cover updated.</p>}
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || Boolean(tooBig)}
         className="w-fit rounded-full border border-border bg-surface px-5 py-2 text-sm font-medium transition-colors hover:border-primary disabled:opacity-60"
       >
         {pending ? "Uploading…" : coverUrl ? "Replace cover" : "Upload cover"}
@@ -83,6 +104,7 @@ function FileBlock({
   attachments: Course["attachments"];
 }) {
   const [state, action, pending] = useActionState<ContentState, FormData>(uploadCourseFileAction, {});
+  const [tooBig, setTooBig] = useState<string | null>(null);
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-2 p-4">
       <span className="text-sm font-medium">Downloadable file</span>
@@ -105,19 +127,29 @@ function FileBlock({
         </ul>
       )}
 
-      <form action={action} className="flex flex-col gap-3">
+      <form
+        action={action}
+        onSubmit={(e) => { if (tooBig) e.preventDefault(); }}
+        className="flex flex-col gap-3"
+      >
         <input type="hidden" name="courseId" value={courseId} />
         <input
           type="file"
           name="file"
           accept="application/pdf,audio/*"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            setTooBig(f && f.size > ATTACH_MAX ? `That file is ${mb(f.size)}. The limit is ${mb(ATTACH_MAX)}.` : null);
+          }}
           className="text-sm file:mr-3 file:rounded-full file:border-0 file:bg-surface file:px-4 file:py-2 file:text-sm file:text-fg"
         />
+        <span className="text-xs text-muted">PDF or audio, up to {mb(ATTACH_MAX)}.</span>
+        {tooBig && <p className="text-sm text-primary">{tooBig}</p>}
         {state.error && <p className="text-sm text-primary">{state.error}</p>}
         {state.ok && <p className="text-sm text-navy">Uploaded.</p>}
         <button
           type="submit"
-          disabled={pending}
+          disabled={pending || Boolean(tooBig)}
           className="w-fit rounded-full border border-border bg-surface px-5 py-2 text-sm font-medium transition-colors hover:border-primary disabled:opacity-60"
         >
           {pending ? "Uploading…" : "Upload file"}

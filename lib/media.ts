@@ -84,6 +84,17 @@ export async function uploadCourseCover(courseId: string, file: File): Promise<s
   return path;
 }
 
+export async function uploadProductCover(productId: string, file: File): Promise<string> {
+  const db = createServiceClient();
+  const path = `products/${productId}/${Date.now()}-${safeName(file.name)}`;
+  const { error } = await db.storage.from("public-media").upload(path, file, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (error) throw new Error(`uploadProductCover: ${error.message}`);
+  return path;
+}
+
 export async function uploadCourseAttachment(courseId: string, file: File): Promise<Attachment> {
   const db = createServiceClient();
   const path = `courses/${courseId}/${Date.now()}-${safeName(file.name)}`;

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductForm } from "@/components/admin/product-form";
+import { ProductCover } from "@/components/admin/product-cover";
+import { publicCoverUrl } from "@/lib/media";
 import { AssetUpload } from "@/components/admin/asset-upload";
 import { getProductById, listOfferOptions } from "@/lib/admin";
 import { listCourses, coursesForProduct } from "@/lib/courses";
@@ -26,6 +28,12 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
           or attach a single file for a simple one-file sale.
         </p>
       </div>
+
+      <ProductCover
+        productId={product.id}
+        coverUrl={publicCoverUrl(product.coverPath)}
+        inheritedUrl={publicCoverUrl(assigned.find((c) => c.coverPath)?.coverPath ?? null)}
+      />
 
       <ProductForm
         product={product}

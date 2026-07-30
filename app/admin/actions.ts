@@ -2,10 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createProduct, updateProduct, deleteProduct, uploadPaidAsset } from "@/lib/admin";
+import {
+  createProduct, updateProduct, deleteProduct, uploadPaidAsset,
+  setProductCover, clearProductCover,
+} from "@/lib/admin";
 import { requireAdmin } from "@/lib/admin-guard";
 import { setProductCourses } from "@/lib/courses";
 import { blocksPublish, PUBLISH_WITHOUT_COURSE_ERROR, parseProductForm } from "@/lib/product-rules";
+import { validateUpload, uploadProductCover } from "@/lib/media";
 
 // Errors are keyed by field so the form can show each one next to its own input
 // and never reload. `_form` carries anything not tied to a single field.
@@ -79,4 +83,41 @@ export async function removeProduct(formData: FormData): Promise<void> {
     revalidatePath("/admin");
   }
   redirect("/admin");
+}
+
+export type CoverState = { error?: string; ok?: boolean };
+
+// Storefront image for one product. Optional: without it the product shows its
+// course's cover, which is the right default for a single-course product. A
+// bundle, or a listing that wants its own artwork, sets one here.
+export async function uploadProductCoverAction(
+  _prev: CoverState,
+  formData: FormData,
+): Promise<CoverState> {
+  await requireAdmin();
+  const productId = String(formData.get("productId") ?? "");
+  const file = formData.get("file");
+  if (!productId) return { error: "Missing product." };
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose an image." };
+  const check = validateUpload({ type: file.type, size: file.size }, "cover");
+  if (!check.ok) return { error: check.error };
+  try {
+    const path = await uploadProductCover(productId, file);
+    await setProductCover(productId, path);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Upload failed" };
+  }
+  revalidatePath("/");
+  revalidatePath(`/admin/products/${productId}`);
+  return { ok: true };
+}
+
+export async function clearProductCoverAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const productId = String(formData.get("productId") ?? "");
+  if (productId) {
+    await clearProductCover(productId);
+    revalidatePath("/");
+    revalidatePath(`/admin/products/${productId}`);
+  }
 }

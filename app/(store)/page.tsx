@@ -16,6 +16,7 @@ const BADGE_LABEL: Record<NonNullable<CatalogItem["type"]>, string> = {
 function toCard(
   p: Product,
   display: ProductDisplay | null,
+  coverUrl: string | null,
   owned: boolean,
   accessHref?: string,
 ): CatalogItem {
@@ -24,7 +25,7 @@ function toCard(
     title: p.title,
     tagline: p.tagline ?? "",
     type: display?.type ?? null,
-    coverUrl: publicCoverUrl(display?.coverPath ?? null),
+    coverUrl,
     priceCents: p.priceCents,
     owned,
     accessHref,
@@ -41,7 +42,10 @@ export default async function Home() {
   const display = await productDisplay(products.map((p) => p.id));
   const featuredOwned = featured ? ownedIds.has(featured.id) : false;
   const featuredBadge = featured ? (display.get(featured.id)?.type ?? null) : null;
-  const featuredCover = featured ? publicCoverUrl(display.get(featured.id)?.coverPath ?? null) : null;
+  // A product's own image wins; otherwise it inherits its course's.
+  const coverFor = (p: Product) =>
+    publicCoverUrl(p.coverPath ?? display.get(p.id)?.coverPath ?? null);
+  const featuredCover = featured ? coverFor(featured) : null;
   // Deep-link each owned product to its course; only owned ones are looked up,
   // so an anonymous visitor costs no extra queries.
   const accessHrefs = new Map(
@@ -148,7 +152,7 @@ export default async function Home() {
         ) : (
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {products.map((p, i) => (
-              <ProductCard key={p.slug} item={toCard(p, display.get(p.id) ?? null, ownedIds.has(p.id), accessHrefs.get(p.id))} index={i} />
+              <ProductCard key={p.slug} item={toCard(p, display.get(p.id) ?? null, coverFor(p), ownedIds.has(p.id), accessHrefs.get(p.id))} index={i} />
             ))}
           </div>
         )}

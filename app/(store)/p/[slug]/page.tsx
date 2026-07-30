@@ -26,7 +26,8 @@ export default async function ProductPage({
   // Badge comes from the course this product grants.
   const display = (await productDisplay([product.id])).get(product.id) ?? null;
   const badgeType = display?.type ?? null;
-  const coverUrl = publicCoverUrl(display?.coverPath ?? null);
+  // The product's own image wins; otherwise it inherits its course's.
+  const coverUrl = publicCoverUrl(product.coverPath ?? display?.coverPath ?? null);
 
   return (
     <div className="flex flex-col gap-10 md:gap-14">
