@@ -109,6 +109,7 @@ Run the whole path, and check each one:
 | Admin → Orders | Order listed, with its line items |
 | Take the bump too (second purchase) | **Two** Stripe objects — a PaymentIntent AND a separate subscription. Never one merged charge. |
 | Connected app | Content Engine provisioned for that email |
+| **Existing CE subscriber** — sign in as one of the backfilled emails | The CE offer is **not** shown anywhere: no bump, no upsell. This is the double-bill guard, and it is the one that costs real money if it fails. |
 | Refund from Admin → Orders | Money returns, access is removed, order shows `refunded` |
 | Subscription cancel | Access ends, ownership goes `canceled` |
 
