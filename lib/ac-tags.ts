@@ -100,6 +100,31 @@ export async function contactFor(
  * succeeds — so a buyer who completes in two minutes never gets the email, and
  * there is no cron to run, monitor, or notice has stopped.
  */
+/**
+ * Abandoned-cart tag for someone who has given us an email but has no account
+ * and has paid nothing.
+ *
+ * This is the real start of the timer. The tag used to be applied inside
+ * createCheckoutIntent, which only runs once someone presses Pay — so it meant
+ * "the card failed", and the person who typed their address and wandered off
+ * was never tagged at all, which is precisely who an abandoned-cart sequence
+ * exists for.
+ *
+ * Takes an email rather than a user id on purpose: creating an account for
+ * someone who merely typed an address would let anyone squat on another
+ * person's email, and would claim any entitlement parked against it.
+ */
+export async function tagAbandonedForEmail(args: {
+  email: string;
+  fullName?: string | null;
+  productId: string;
+}): Promise<void> {
+  if (!activeCampaignEnabled()) return;
+  const tagIds = await abandonedTagIds([args.productId]);
+  if (tagIds.length === 0) return;
+  await tagOrQueue({ email: args.email.trim().toLowerCase(), fullName: args.fullName ?? null, tagIds });
+}
+
 export async function tagCartStarted(userId: string, productId: string): Promise<void> {
   if (!activeCampaignEnabled()) return;
   const tagIds = await abandonedTagIds([productId]);

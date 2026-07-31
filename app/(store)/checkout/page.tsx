@@ -8,6 +8,7 @@ import { stripePublishableKey } from "@/lib/env";
 import { CheckoutForm, type BumpSummary } from "@/components/checkout/checkout-form";
 import { publicCoverUrl } from "@/lib/media";
 import { productDisplay } from "@/lib/courses";
+import { tagAbandonedForEmail } from "@/lib/ac-tags";
 
 import { money } from "@/lib/money";
 
@@ -62,6 +63,18 @@ export default async function CheckoutPage({
   // only after they had filled in a card and pressed pay. Send them to what they
   // bought instead of rendering a form that cannot succeed.
   if (owned.productIds.has(product.id)) redirect("/library");
+
+  // A signed-in member never types an email, so reaching this page IS the
+  // moment we know they are considering it — the equivalent of the anonymous
+  // buyer filling in the field. Guarded and not awaited for its result: a
+  // marketing timer must not be able to stop a checkout rendering.
+  if (user?.email) {
+    try {
+      await tagAbandonedForEmail({ email: user.email, productId: product.id });
+    } catch {
+      // recordError already ran inside; nothing useful to do here.
+    }
+  }
 
   let bump: BumpSummary | null = null;
   if (bumpOffer && shouldShowOffer(bumpOffer, owned)) {

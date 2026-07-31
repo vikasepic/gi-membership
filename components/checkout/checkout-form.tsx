@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
-import { startCheckout, previewCoupon } from "@/app/(store)/checkout/actions";
+import { startCheckout, previewCoupon, captureAbandonedCart } from "@/app/(store)/checkout/actions";
 
 type AppliedDiscount = { label: string; discountCents: number; clamped: boolean };
 
@@ -105,6 +105,19 @@ function Inner({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Which address we have already reported, so re-focusing the field or
+  // tabbing back through the form does not fire again for the same person.
+  const capturedEmail = useRef<string | null>(null);
+
+  function captureEmail() {
+    const value = email.trim().toLowerCase();
+    if (!value || !value.includes("@") || capturedEmail.current === value) return;
+    capturedEmail.current = value;
+    // Deliberately not awaited: this starts a marketing timer, and the buyer
+    // should never wait on it or see it fail.
+    void captureAbandonedCart(product.slug, value, fullName.trim() || undefined);
+  }
+
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState<AppliedDiscount | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -197,7 +210,12 @@ function Inner({
               <input
                 type="email" required placeholder="Email" value={email}
                 autoComplete="email" aria-label="Email"
-                onChange={(e) => setEmail(e.target.value)} className={input}
+                onChange={(e) => setEmail(e.target.value)}
+                // On blur rather than on every keystroke: mid-typing an address
+                // is a different (and usually invalid) address, and tagging
+                // "jane@gm" would put a junk contact in ActiveCampaign.
+                onBlur={captureEmail}
+                className={input}
               />
             </div>
             {/* Country determines the VAT rate on digital sales — Stripe cannot

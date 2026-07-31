@@ -95,8 +95,21 @@ a product that carried no tag, is a normal thing to do.
 
 Set **Admin → Products → ActiveCampaign → Abandoned-cart tag ID**, per product.
 
-- Applied when someone reaches the payment step for that product (a
-  PaymentIntent exists, nothing is paid).
+**When the timer starts**
+
+| Buyer | Trigger |
+|---|---|
+| Not signed in | The **email field loses focus** with a valid address in it |
+| Signed in | **Opening the checkout page** — they never type an email, so arriving is the equivalent moment |
+| Either | Pressing Pay, as a backstop, if neither of the above fired |
+
+Deliberately not on every keystroke: mid-typing, `jane@gm` is a different and
+invalid address, and tagging it would put junk contacts in ActiveCampaign.
+
+No account is created to do this. Tagging by email rather than by user id
+matters — creating an account for someone who merely typed an address would let
+anyone squat on another person's email and claim any entitlement parked against
+it.
 - Removed the moment that product is paid for, in the same pass that applies
   the purchase tag — so there is no window where someone is both a customer and
   an abandoner.

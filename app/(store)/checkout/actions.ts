@@ -7,6 +7,7 @@ import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
 import { createClient } from "@/lib/supabase/server";
 import { getProductBySlug } from "@/lib/store";
 import { resolveCoupon } from "@/lib/coupons";
+import { tagAbandonedForEmail } from "@/lib/ac-tags";
 
 // Details are only required from a visitor who isn't signed in; a member
 // already has an account, so those fields are optional here and validated
@@ -78,4 +79,38 @@ export async function previewCoupon(
     discountCents: res.coupon.discountCents,
     clamped: res.coupon.clamped,
   };
+}
+
+/**
+ * Start the abandoned-cart timer as soon as we know who they are — on the email
+ * field losing focus, before any card is entered.
+ *
+ * Returns nothing and reports nothing. It is a side effect on a marketing
+ * system; a buyer must never see it fail, and a caller must not be able to
+ * learn anything from its response.
+ */
+export async function captureAbandonedCart(
+  productSlug: string,
+  email: string,
+  fullName?: string,
+): Promise<void> {
+  const parsed = z
+    .object({
+      productSlug: z.string().min(1),
+      email: z.string().email(),
+      fullName: z.string().trim().max(200).optional(),
+    })
+    .safeParse({ productSlug, email, fullName });
+  if (!parsed.success) return;
+
+  const product = await getProductBySlug(parsed.data.productSlug);
+  if (!product || product.status !== "published") return;
+
+  // A signed-in member is tagged from the checkout page itself, so this path
+  // only ever handles someone typing an address into the form.
+  await tagAbandonedForEmail({
+    email: parsed.data.email,
+    fullName: parsed.data.fullName ?? null,
+    productId: product.id,
+  });
 }
