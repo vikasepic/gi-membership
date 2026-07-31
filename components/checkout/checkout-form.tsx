@@ -24,7 +24,6 @@ export type CheckoutProduct = {
 };
 
 import { money } from "@/lib/money";
-import { LEGAL } from "@/lib/legal";
 
 // Buyer country drives the VAT rate. Common markets first, then the rest of the
 // EU/UK where digital-services VAT applies at the buyer's rate.
@@ -280,12 +279,37 @@ function Inner({
             </p>
           )}
 
+          {/* The amount lives in the button so the thing being agreed to is on
+              the thing being pressed — and it moves with the bump, so ticking
+              the add-on visibly changes what you are about to pay. */}
           <button
             type="submit"
             disabled={busy || !stripe}
-            className="rounded-full bg-primary px-6 py-3.5 font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-60"
+            className="group relative flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-full bg-primary px-6 py-4 font-medium text-primary-fg transition-[transform,background-color,box-shadow] duration-200 hover:bg-primary-hover hover:shadow-[0_14px_30px_-12px_color-mix(in_srgb,var(--primary)_70%,transparent)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:scale-100"
           >
-            {busy ? "Processing…" : `Pay ${money(totalNow, product.currency)}`}
+            {busy ? (
+              <>
+                <svg viewBox="0 0 24 24" aria-hidden className="size-4 animate-spin">
+                  <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2.5" opacity="0.3" />
+                  <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                </svg>
+                Processing…
+              </>
+            ) : (
+              <>
+                <svg viewBox="0 0 24 24" aria-hidden className="size-4 shrink-0 fill-current opacity-90">
+                  <path d="M17 9V7a5 5 0 0 0-10 0v2H5v12h14V9h-2ZM9 7a3 3 0 1 1 6 0v2H9V7Z" />
+                </svg>
+                <span>Pay {money(totalNow, product.currency)}</span>
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden
+                  className="size-4 shrink-0 fill-current transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
+                >
+                  <path d="M13 5l7 7-7 7-1.4-1.4 4.6-4.6H4v-2h12.2l-4.6-4.6L13 5Z" />
+                </svg>
+              </>
+            )}
           </button>
 
           <TrustBlock />
@@ -307,44 +331,38 @@ function Inner({
 function TrustBlock() {
   const items = [
     {
-      title: "Secure payment via Stripe",
-      body: "Card details go straight to Stripe over an encrypted connection. We never see or store them.",
-      icon: (
-        <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Zm0 6a2 2 0 0 1 2 2v1h.5a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-5a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5H10v-1a2 2 0 0 1 2-2Zm0 1a1 1 0 0 0-1 1v1h2v-1a1 1 0 0 0-1-1Z" />
-      ),
+      label: "Stripe secure",
+      icon: "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Zm0 6a2 2 0 0 1 2 2v1h.5a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-5a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5H10v-1a2 2 0 0 1 2-2Zm0 1a1 1 0 0 0-1 1v1h2v-1a1 1 0 0 0-1-1Z",
     },
     {
-      title: "Instant access",
-      body: "Your library opens the moment payment clears — nothing to wait for.",
-      icon: <path d="M13 2 3 14h7l-1 8 11-13h-7l1-7Z" />,
+      label: "Card never stored",
+      icon: "M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4H4V6h16v2Zm0 10H4v-6h16v6Z",
     },
     {
-      title: `${LEGAL.refundWindowDays}-day refund`,
-      body: `Not what you expected? Email ${LEGAL.contactEmail} within ${LEGAL.refundWindowDays} days.`,
-      icon: (
-        <path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z" />
-      ),
+      label: "Instant access",
+      icon: "M13 2 3 14h7l-1 8 11-13h-7l1-7Z",
     },
   ];
 
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-4">
-      {items.map((it) => (
-        <div key={it.title} className="flex items-start gap-3">
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden
-            className="mt-0.5 size-4 shrink-0 fill-current text-navy"
-          >
-            {it.icon}
-          </svg>
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs font-medium text-fg">{it.title}</span>
-            <span className="text-xs leading-relaxed text-muted">{it.body}</span>
-          </div>
-        </div>
-      ))}
-      <p className="pt-1 text-center text-[11px] text-muted">
+      {/* Icon plus two or three words. The long-form reassurance that lived here
+          was competing with the button it sits under: at the moment of paying,
+          a paragraph is something to read rather than something that reassures. */}
+      <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+        {items.map((it) => (
+          <li key={it.label} className="flex items-center gap-1.5">
+            <svg viewBox="0 0 24 24" aria-hidden className="size-3.5 shrink-0 fill-current text-navy">
+              <path d={it.icon} />
+            </svg>
+            <span className="text-xs text-muted">{it.label}</span>
+          </li>
+        ))}
+      </ul>
+      {/* Kept deliberately: naming the terms and the withdrawal right at the
+          point of payment is a disclosure obligation for EU/UK digital sales,
+          not decoration. One line of fine print, not a badge. */}
+      <p className="text-center text-[11px] text-muted">
         By paying you agree to our{" "}
         <a href="/terms" className="underline underline-offset-2 hover:text-fg">terms</a> and{" "}
         <a href="/refunds" className="underline underline-offset-2 hover:text-fg">refund policy</a>.
