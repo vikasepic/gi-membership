@@ -60,6 +60,30 @@ describe.skipIf(!canRun)("checkout money path (integration)", () => {
     expect(own).toHaveLength(2); // no duplicate grants from the double finalize
   });
 
+  // The Stripe account is shared with the connected apps, so every object we
+  // create must be identifiable as ours from Stripe alone — that is all Zapier,
+  // the dashboard filters and the CSV exports can see. Asserted against the real
+  // object rather than the call, because metadata that silently stops being sent
+  // looks identical to metadata that was never read.
+  it("tags its Stripe objects as store-created and human-readable", async () => {
+    const { piId } = await buy(true);
+    await finalizeOrder(piId); // the bump subscription is created here, not by buy()
+    const pi = await stripe().paymentIntents.retrieve(piId);
+
+    expect(pi.metadata.store_created).toBe("true");
+    expect(pi.metadata.productSlug).toBe("placeholder-offer");
+    expect(pi.metadata.productTitle).toBeTruthy();
+    expect(pi.description).toContain(pi.metadata.productTitle);
+
+    // The bump subscription is a separate object and needs the same tagging.
+    const subs = await stripe().subscriptions.list({
+      customer: pi.customer as string,
+      limit: 1,
+    });
+    expect(subs.data[0]?.metadata.store_created).toBe("true");
+    expect(subs.data[0]?.metadata.offerName).toBeTruthy();
+  });
+
   it("buy (bump declined) + OTO accept + replay → fulfils once, replay blocked (no double charge)", async () => {
     const { email, piId } = await buy(false);
     await finalizeOrder(piId);

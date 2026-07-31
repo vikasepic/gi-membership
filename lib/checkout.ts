@@ -18,6 +18,7 @@ import { stripe, stripeMode } from "@/lib/stripe";
 import { otoSigningSecret } from "@/lib/env";
 import { ensureUserProfile } from "@/lib/users";
 import { applyPendingEntitlements } from "@/lib/app-sync";
+import { LEGAL } from "@/lib/legal";
 import type { Offer } from "@/lib/types";
 
 const OTO_TTL_SECONDS = 15 * 60; // 15 minutes
@@ -225,16 +226,31 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   });
 
   // Base PaymentIntent — saves the card for off-session offer fulfilment.
+  //
+  // description and the readable metadata below are not decoration. This Stripe
+  // account is shared with the connected apps, so a charge with a blank
+  // description and none but uuid metadata is indistinguishable from theirs in
+  // the dashboard, in exports, and — most importantly — in Zapier, which can
+  // only filter on what Stripe sends it. store_created marks it as ours (the
+  // subscription and bump charges already carry it); productSlug and
+  // productTitle make it routable without a lookup against our database.
+  //
+  // Written at charge time and effectively not backfillable, so it has to be
+  // right before the first live charge, not after.
   const pi = await stripe().paymentIntents.create({
     amount: tax.totalCents,
     currency: product.currency,
     customer: customerId,
     setup_future_usage: "off_session",
     automatic_payment_methods: { enabled: true },
+    description: `${product.title} — ${LEGAL.storeName}`,
     metadata: {
+      store_created: "true",
       storeId,
       userId,
       productId: product.id,
+      productSlug: product.slug,
+      productTitle: product.title,
       bumpOfferId: bumpOffer?.id ?? "",
       taxCalculationId: tax.calculationId ?? "",
     },
@@ -324,7 +340,15 @@ export async function fulfilOffer(args: {
         ],
         trial_period_days: offer.trialDays ?? undefined,
         // Tag as store-created so Content Engine's webhook doesn't clobber it.
-        metadata: { store_created: "true", orderId: order.id, offerId: offer.id },
+        // offerName rides along for the same reason as the base charge: Zapier
+        // and the dashboard can only filter on what Stripe holds.
+        description: `${offer.name} — ${LEGAL.storeName}`,
+        metadata: {
+          store_created: "true",
+          orderId: order.id,
+          offerId: offer.id,
+          offerName: offer.name,
+        },
       },
       { idempotencyKey: idem },
     );
@@ -340,7 +364,13 @@ export async function fulfilOffer(args: {
       payment_method: paymentMethodId,
       off_session: true,
       confirm: true,
-      metadata: { store_created: "true", orderId: order.id, offerId: offer.id },
+      description: `${offer.name} — ${LEGAL.storeName}`,
+      metadata: {
+        store_created: "true",
+        orderId: order.id,
+        offerId: offer.id,
+        offerName: offer.name,
+      },
     },
     { idempotencyKey: idem },
   );
