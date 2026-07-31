@@ -19,9 +19,12 @@ export type CheckoutProduct = {
   tagline: string | null;
   priceCents: number;
   currency: string;
+  /** Cover thumbnail — the buyer should see what they're paying for. */
+  coverUrl?: string | null;
 };
 
 import { money } from "@/lib/money";
+import { LEGAL } from "@/lib/legal";
 
 // Buyer country drives the VAT rate. Common markets first, then the rest of the
 // EU/UK where digital-services VAT applies at the buyer's rate.
@@ -91,8 +94,7 @@ function Inner({
   const stripe = useStripe();
   const elements = useElements();
   const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [country, setCountry] = useState(defaultCountry);
   const [bumpTaken, setBumpTaken] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +120,7 @@ function Inner({
     // session, so nothing here can buy in someone else's name.
     const res = await startCheckout({
       productSlug: product.slug,
-      ...(signedInEmail ? {} : { email, username, password }),
+      ...(signedInEmail ? {} : { email, fullName }),
       bumpTaken,
       country,
     });
@@ -152,22 +154,29 @@ function Inner({
           </div>
         ) : (
           <fieldset className="flex flex-col gap-4">
-            <legend className="kicker mb-2 text-muted">Your account</legend>
-            <input
-              type="email" required placeholder="Email" value={email}
-              autoComplete="email"
-              onChange={(e) => setEmail(e.target.value)} className={input}
-            />
-            <input
-              type="text" required placeholder="Username" value={username}
-              autoComplete="username"
-              onChange={(e) => setUsername(e.target.value)} className={input}
-            />
-            <input
-              type="password" required placeholder="Password (min 8 chars)" value={password}
-              autoComplete="new-password"
-              onChange={(e) => setPassword(e.target.value)} className={input}
-            />
+            <legend className="kicker mb-2 text-muted">Your details</legend>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm text-muted">Full name</span>
+              <input
+                type="text" required placeholder="Jane Cooper" value={fullName}
+                autoComplete="name"
+                onChange={(e) => setFullName(e.target.value)} className={input}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm text-muted">Email</span>
+              <input
+                type="email" required placeholder="you@example.com" value={email}
+                autoComplete="email"
+                onChange={(e) => setEmail(e.target.value)} className={input}
+              />
+              {/* Say where the thing they are buying will arrive, next to the
+                  field that decides it — a typo here is the most expensive
+                  mistake available on this page. */}
+              <span className="text-xs text-muted">
+                Your receipt and access link go here. No password to create.
+              </span>
+            </label>
           </fieldset>
         )}
 
@@ -202,14 +211,29 @@ function Inner({
         <div className="flex flex-col gap-5 rounded-3xl border border-border bg-surface p-6 lg:sticky lg:top-24">
           <span className="kicker text-muted">Order summary</span>
 
-          <div className="flex flex-col gap-1">
-            <span className="font-medium leading-snug">{product.title}</span>
-            {product.tagline && <span className="text-sm text-muted">{product.tagline}</span>}
+          {/* Show the thing being bought, not just its name. A cover beside the
+              title is the cheapest reassurance on the page: it confirms they
+              are paying for what they clicked. */}
+          <div className="flex items-start gap-4">
+            {product.coverUrl ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={product.coverUrl}
+                alt=""
+                className="size-16 shrink-0 rounded-xl border border-border object-cover"
+              />
+            ) : (
+              <div className="size-16 shrink-0 rounded-xl border border-border bg-surface-2" />
+            )}
+            <div className="flex flex-col gap-1">
+              <span className="font-medium leading-snug">{product.title}</span>
+              {product.tagline && <span className="text-sm text-muted">{product.tagline}</span>}
+            </div>
           </div>
 
-          <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center justify-between gap-4 text-sm">
             <span className="text-muted">{product.title}</span>
-            <span>{money(product.priceCents, product.currency)}</span>
+            <span className="shrink-0">{money(product.priceCents, product.currency)}</span>
           </div>
 
           {bumpTaken && bump && (
@@ -263,9 +287,69 @@ function Inner({
           >
             {busy ? "Processing…" : `Pay ${money(totalNow, product.currency)}`}
           </button>
+
+          <TrustBlock />
         </div>
       </aside>
     </form>
+  );
+}
+
+// Reassurance under the pay button, where hesitation actually happens.
+//
+// Every line here is a claim this store can actually keep, and each is true of
+// the code as written: Stripe's Payment Element owns the card fields so no card
+// number ever reaches our server or database; access is granted by finalizeOrder
+// the moment payment succeeds; the refund window is the one the policy pages
+// state. No borrowed security-vendor badges — a logo we have no relationship
+// with is a lie, and the buyers who look closely are the ones who were already
+// hesitating.
+function TrustBlock() {
+  const items = [
+    {
+      title: "Secure payment via Stripe",
+      body: "Card details go straight to Stripe over an encrypted connection. We never see or store them.",
+      icon: (
+        <path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Zm0 6a2 2 0 0 1 2 2v1h.5a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-5a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5H10v-1a2 2 0 0 1 2-2Zm0 1a1 1 0 0 0-1 1v1h2v-1a1 1 0 0 0-1-1Z" />
+      ),
+    },
+    {
+      title: "Instant access",
+      body: "Your library opens the moment payment clears — nothing to wait for.",
+      icon: <path d="M13 2 3 14h7l-1 8 11-13h-7l1-7Z" />,
+    },
+    {
+      title: `${LEGAL.refundWindowDays}-day refund`,
+      body: `Not what you expected? Email ${LEGAL.contactEmail} within ${LEGAL.refundWindowDays} days.`,
+      icon: (
+        <path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z" />
+      ),
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-border pt-4">
+      {items.map((it) => (
+        <div key={it.title} className="flex items-start gap-3">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden
+            className="mt-0.5 size-4 shrink-0 fill-current text-navy"
+          >
+            {it.icon}
+          </svg>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs font-medium text-fg">{it.title}</span>
+            <span className="text-xs leading-relaxed text-muted">{it.body}</span>
+          </div>
+        </div>
+      ))}
+      <p className="pt-1 text-center text-[11px] text-muted">
+        By paying you agree to our{" "}
+        <a href="/terms" className="underline underline-offset-2 hover:text-fg">terms</a> and{" "}
+        <a href="/refunds" className="underline underline-offset-2 hover:text-fg">refund policy</a>.
+      </p>
+    </div>
   );
 }
 

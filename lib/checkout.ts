@@ -51,8 +51,7 @@ export type CheckoutInput = {
   // Credentials are only for a NEW buyer signing up at checkout. A member who
   // is already signed in sends none of these.
   email?: string;
-  username?: string;
-  password?: string;
+  fullName?: string;
   // Set from the session by the action layer — NEVER from the client payload,
   // or a caller could buy in someone else's name.
   existingUserId?: string | null;
@@ -151,16 +150,21 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       return { ok: false, error: "You already own this.", code: "already_owned" };
     }
   } else {
-    if (!input.email || !input.username || !input.password) {
-      return { ok: false, error: "Enter your details to create an account." };
+    if (!input.email || !input.fullName) {
+      return { ok: false, error: "Enter your name and email to continue." };
     }
     email = normEmail(input.email);
-    // Signup at checkout — create the auth account (auto-confirmed; they're paying).
+    // Signup at checkout — create the auth account (auto-confirmed; they're
+    // paying, so the email is already proven by the card).
+    //
+    // No password is set. Asking a buyer to invent one mid-purchase adds two
+    // fields to the highest-friction screen in the store, and they overwhelmingly
+    // forget it before they ever return. They sign in with a link instead, and
+    // can set a password later from /reset if they want one.
     const created = await db.auth.admin.createUser({
       email,
-      password: input.password,
       email_confirm: true,
-      user_metadata: { username: input.username },
+      user_metadata: { full_name: input.fullName },
     });
     if (created.error || !created.data.user) {
       const msg = created.error?.message ?? "Could not create account";
@@ -171,11 +175,14 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
     }
     userId = created.data.user.id;
 
+    // `username` is the display-name column — it carries no uniqueness
+    // constraint and has always been "whatever we should call this person".
+    // The buyer's real name now fills it rather than a handle they invented.
     const { error: profileErr } = await db.from("users").insert({
       id: userId,
       store_id: storeId,
       email,
-      username: input.username,
+      username: input.fullName,
     });
     if (profileErr) return { ok: false, error: `profile: ${profileErr.message}` };
 

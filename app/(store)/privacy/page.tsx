@@ -30,8 +30,8 @@ export default function PrivacyPage() {
       <Clause heading="What we collect">
         <ul className="flex list-disc flex-col gap-2 pl-5">
           <li>
-            <strong>Your account</strong> — email address, and a username if you set one. Created
-            when you buy something or sign in.
+            <strong>Your account</strong> — your name and email address. Created when you buy
+            something or sign in.
           </li>
           <li>
             <strong>Your purchases</strong> — what you bought, when, the amount, the currency, and

@@ -47,22 +47,24 @@ export function buildWelcomeEmail(args: {
     html: shell(`
       <h1 style="font-size:22px;margin:0 0 12px;color:#0b0b0d;">You're in.</h1>
       <p style="color:#5b5b63;line-height:1.6;margin:0 0 20px;">
-        ${args.productTitle} is ready in your library. Sign in with
-        <strong>${args.email}</strong> and the password you chose at checkout.
+        ${args.productTitle} is ready in your library. There is no password to
+        remember — enter <strong>${args.email}</strong> and we email you a link
+        that signs you straight in.
       </p>
       <p style="margin:0 0 24px;">${btn(loginUrl, "Open your library")}</p>
       <p style="color:#5b5b63;font-size:13px;line-height:1.6;margin:0;">
-        Forgotten it already? Reset it at ${args.siteUrl}/reset — no need to buy again.
+        Prefer a password? Set one any time at ${args.siteUrl}/reset.
       </p>
     `),
-    // No password is included: the buyer chose it, and mailing a live credential
-    // would leave it sitting in their inbox forever.
+    // Checkout no longer sets a password, so this must not tell people to use
+    // one. It said "the password you chose at checkout" — advice that would
+    // send every new buyer to a login they cannot complete.
     text: `You're in.
 
 ${args.productTitle} is ready in your library.
-Sign in at ${loginUrl} with ${args.email} and the password you chose at checkout.
+No password needed — go to ${loginUrl}, enter ${args.email}, and we'll email you a link that signs you in.
 
-Forgotten it? Reset at ${args.siteUrl}/reset`,
+Prefer a password? Set one any time at ${args.siteUrl}/reset`,
   };
 }
 

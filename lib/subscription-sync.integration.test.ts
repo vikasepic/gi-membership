@@ -18,8 +18,7 @@ async function buyWithBump() {
   const res = await createCheckoutIntent({
     productSlug: "placeholder-offer",
     email,
-    username: "sync",
-    password: "password12345",
+    fullName: "Test Buyer",
     bumpTaken: true,
   });
   if (!res.ok) throw new Error(`createCheckoutIntent: ${res.error}`);
@@ -115,8 +114,7 @@ describe.skipIf(!canRun)("OTO token vs failed charge (integration)", () => {
     const res = await createCheckoutIntent({
       productSlug: "placeholder-offer",
       email,
-      username: "otofail",
-      password: "password12345",
+      fullName: "Test Buyer",
       bumpTaken: false, // decline the bump so an OTO is offered
     });
     if (!res.ok) throw new Error(res.error);
@@ -158,8 +156,7 @@ describe.skipIf(!canRun)("standing offer vs failed charge (integration)", () => 
     const res = await createCheckoutIntent({
       productSlug: "placeholder-offer",
       email,
-      username: "standfail",
-      password: "password12345",
+      fullName: "Test Buyer",
       bumpTaken: false, // decline, so the subscription is still on offer
     });
     if (!res.ok) throw new Error(res.error);

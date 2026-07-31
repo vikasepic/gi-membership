@@ -6,14 +6,13 @@ import { createCheckoutIntent, finalizeOrder, type CheckoutResult } from "@/lib/
 import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
 import { createClient } from "@/lib/supabase/server";
 
-// Credentials are only required from a visitor who isn't signed in; a member
+// Details are only required from a visitor who isn't signed in; a member
 // already has an account, so those fields are optional here and validated
 // below once we know which case we're in.
 const schema = z.object({
   productSlug: z.string().min(1),
   email: z.string().email("Enter a valid email").optional(),
-  username: z.string().trim().min(2, "Username too short").optional(),
-  password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  fullName: z.string().trim().min(2, "Enter your full name").optional(),
   bumpTaken: z
     .union([z.boolean(), z.string()])
     .transform((v) => v === true || v === "true" || v === "on"),
@@ -34,9 +33,9 @@ export async function startCheckout(input: unknown): Promise<CheckoutResult> {
   const existingUserId = user?.id ?? null;
 
   if (!existingUserId) {
-    const { email, username, password } = parsed.data;
-    if (!email || !username || !password) {
-      return { ok: false, error: "Enter your email, username, and password." };
+    const { email, fullName } = parsed.data;
+    if (!email || !fullName) {
+      return { ok: false, error: "Enter your name and email to continue." };
     }
   }
   // Consent is read server-side from the cookie, never trusted from the client

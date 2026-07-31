@@ -6,6 +6,8 @@ import { immediateChargeCents, shouldShowOffer } from "@/lib/offers";
 import { ownershipFor } from "@/lib/checkout";
 import { stripePublishableKey } from "@/lib/env";
 import { CheckoutForm, type BumpSummary } from "@/components/checkout/checkout-form";
+import { publicCoverUrl } from "@/lib/media";
+import { productDisplay } from "@/lib/courses";
 
 import { money } from "@/lib/money";
 
@@ -94,6 +96,12 @@ export default async function CheckoutPage({
           tagline: product.tagline ?? null,
           priceCents: product.priceCents,
           currency: product.currency,
+          // Own image wins, else the attached course's — same precedence the
+          // storefront card uses, so the thumbnail here is the image they
+          // clicked on to get here.
+          coverUrl: publicCoverUrl(
+            product.coverPath ?? (await productDisplay([product.id])).get(product.id)?.coverPath ?? null,
+          ),
         }}
         bump={bump}
         publishableKey={stripePublishableKey()}

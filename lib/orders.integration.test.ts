@@ -118,8 +118,7 @@ describe.skipIf(!canRunStripe)("refunding a genuinely charged order (integration
     const res = await createCheckoutIntent({
       productSlug: "placeholder-offer",
       email,
-      username: "refundtest",
-      password: "password12345",
+      fullName: "Test Buyer",
       bumpTaken: false,
       country: "US",
     });

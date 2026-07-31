@@ -22,8 +22,7 @@ async function buy(bumpTaken: boolean) {
   const res = await createCheckoutIntent({
     productSlug: "placeholder-offer",
     email,
-    username: "it",
-    password: "password12345",
+    fullName: "Test Buyer",
     bumpTaken,
   });
   if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
