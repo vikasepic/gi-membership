@@ -27,7 +27,6 @@ export function serverEnv() {
 }
 
 const stripeServerSchema = z.object({
-  // test mode only until launch; guard against pointing at live keys.
   STRIPE_SECRET_KEY: z.string().startsWith("sk_", "Must be a Stripe secret key"),
 });
 
@@ -36,10 +35,25 @@ export function stripeSecretKey(): string {
 }
 
 export function stripePublishableKey(): string {
-  return z
+  const key = z
     .string()
     .startsWith("pk_", "Must be a Stripe publishable key")
     .parse(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+
+  // The two keys must belong to the same Stripe mode. Mixing them is the classic
+  // go-live mistake — swap the secret to live but leave the publishable on test
+  // and the Payment Element mints a test PaymentMethod that the live API then
+  // refuses, mid-checkout, with a message that blames the card. Failing here
+  // instead means the mistake surfaces at boot, not at someone's first purchase.
+  const secretLive = (process.env.STRIPE_SECRET_KEY ?? "").startsWith("sk_live_");
+  const publishableLive = key.startsWith("pk_live_");
+  if (secretLive !== publishableLive) {
+    throw new Error(
+      `Stripe key mode mismatch: secret is ${secretLive ? "LIVE" : "TEST"} but publishable is ` +
+        `${publishableLive ? "LIVE" : "TEST"}. Both must be the same mode.`,
+    );
+  }
+  return key;
 }
 
 // Secret for signing single-use OTO tokens.

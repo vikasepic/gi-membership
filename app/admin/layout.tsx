@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Logo } from "@/components/logo";
+import { stripeMode } from "@/lib/stripe";
 
 // Admin — always dynamic (server data uses runtime-only env, never prerender).
 export const dynamic = "force-dynamic";
