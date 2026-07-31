@@ -4,6 +4,7 @@ import { ownedProductIdsForViewer, accessHrefForProduct } from "@/lib/library";
 import { productDisplay, type ProductDisplay } from "@/lib/courses";
 import { publicCoverUrl } from "@/lib/media";
 import type { Product } from "@/lib/types";
+import { money } from "@/lib/money";
 
 // Storefront labels for each course type. Mirrors the catalog card.
 const BADGE_LABEL: Record<NonNullable<CatalogItem["type"]>, string> = {
@@ -85,7 +86,7 @@ export default async function Home() {
             </a>
             {products.length > 0 && (
               <span className="text-sm text-muted">
-                {products.length} products · from ${(fromPrice / 100).toFixed(0)}
+                {products.length} products · from {money(fromPrice)}
               </span>
             )}
           </div>
@@ -127,7 +128,7 @@ export default async function Home() {
                 <span className="kicker text-plum">Owned</span>
               ) : (
                 <span className="font-display text-3xl">
-                  ${(featured.priceCents / 100).toFixed(0)}
+                  {money(featured.priceCents, featured.currency)}
                 </span>
               )}
               <a

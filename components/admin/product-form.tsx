@@ -8,7 +8,7 @@ import type { Product } from "@/lib/types";
 import type { OfferOption } from "@/lib/admin";
 import type { Course } from "@/lib/courses";
 
-const money = (c: number) => `$${(c / 100).toFixed(0)}`;
+import { money } from "@/lib/money";
 const SLUG_RE = /^[a-z0-9-]+$/;
 
 // Client-side checks for the fields with real rules, run before the form is ever

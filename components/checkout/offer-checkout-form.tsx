@@ -15,8 +15,7 @@ export type OfferSummary = {
   currency: string;
 };
 
-const money = (c: number, cur: string) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(c / 100);
+import { money } from "@/lib/money";
 
 export function OfferCheckoutForm({
   offer,

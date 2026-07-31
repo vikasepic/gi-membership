@@ -9,8 +9,7 @@ import { OfferCheckoutForm } from "@/components/checkout/offer-checkout-form";
 
 export const dynamic = "force-dynamic";
 
-const money = (c: number, cur: string) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(c / 100);
+import { money } from "@/lib/money";
 
 // Checkout for a single offer, for a signed-in member with no card on file.
 // The product checkout can't serve this: it creates an account and charges a

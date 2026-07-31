@@ -4,6 +4,7 @@ import { getProductBySlug } from "@/lib/store";
 import { ownedProductIdsForViewer, accessHrefForProduct } from "@/lib/library";
 import { productDisplay, type CourseType } from "@/lib/courses";
 import { publicCoverUrl } from "@/lib/media";
+import { money } from "@/lib/money";
 
 const TYPE_LABEL: Record<CourseType, string> = {
   video: "Video",
@@ -66,11 +67,11 @@ export default async function ProductPage({
           {!owned && (
             <div className="mt-2 flex items-baseline gap-3">
               <span className="font-display text-3xl">
-                ${(product.priceCents / 100).toFixed(0)}
+                {money(product.priceCents, product.currency)}
               </span>
               {product.compareAtCents && (
                 <span className="text-muted line-through">
-                  ${(product.compareAtCents / 100).toFixed(0)}
+                  {money(product.compareAtCents, product.currency)}
                 </span>
               )}
             </div>

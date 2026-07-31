@@ -21,8 +21,7 @@ export type CheckoutProduct = {
   currency: string;
 };
 
-const money = (c: number, cur: string) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(c / 100);
+import { money } from "@/lib/money";
 
 // Buyer country drives the VAT rate. Common markets first, then the rest of the
 // EU/UK where digital-services VAT applies at the buyer's rate.

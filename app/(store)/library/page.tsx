@@ -20,8 +20,7 @@ const OFFER_STATUS: Record<string, string> = {
   charge_failed:
     "Your saved card was declined, so nothing was charged. Update it under Account → Manage billing, then try again.",
 };
-const money = (c: number, cur: string) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(c / 100);
+import { money } from "@/lib/money";
 
 export default async function LibraryPage({
   searchParams,

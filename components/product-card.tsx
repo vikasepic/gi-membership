@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { money } from "@/lib/money";
 
 // Catalog card. Type drives a quiet accent (navy/plum/terracotta) on the label
 // and the cover wash — terracotta stays reserved for the primary CTA elsewhere.
@@ -23,6 +24,8 @@ export type CatalogItem = {
   /** Cover image from the product's course. Null falls back to the gradient. */
   coverUrl?: string | null;
   priceCents: number;
+  /** Defaults to USD when a caller doesn't carry it through. */
+  currency?: string;
   owned?: boolean;
   accessHref?: string;
 };
@@ -68,7 +71,7 @@ export function ProductCard({ item, index = 0 }: { item: CatalogItem; index?: nu
           {item.owned ? (
             <span className="kicker text-plum">Owned</span>
           ) : (
-            <span className="font-display text-lg">${(item.priceCents / 100).toFixed(0)}</span>
+            <span className="font-display text-lg">{money(item.priceCents, item.currency)}</span>
           )}
           <span
             className={`text-sm transition-colors ${

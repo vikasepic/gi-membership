@@ -7,8 +7,7 @@ import { ownershipFor } from "@/lib/checkout";
 import { stripePublishableKey } from "@/lib/env";
 import { CheckoutForm, type BumpSummary } from "@/components/checkout/checkout-form";
 
-const money = (c: number, cur: string) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(c / 100);
+import { money } from "@/lib/money";
 
 // Their last billing country, so a repeat buyer doesn't re-pick it.
 async function lastBillingCountry(userId: string): Promise<string | null> {

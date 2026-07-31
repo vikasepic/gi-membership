@@ -2,7 +2,7 @@ import Link from "next/link";
 import { listAllProducts } from "@/lib/admin";
 import { productCourseIds } from "@/lib/courses";
 
-const money = (cents: number) => `$${(cents / 100).toFixed(0)}`;
+import { money } from "@/lib/money";
 
 export default async function AdminProductsPage() {
   const products = await listAllProducts();

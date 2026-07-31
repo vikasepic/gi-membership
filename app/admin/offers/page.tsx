@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { listOffers } from "@/lib/admin";
 
-const money = (cents: number) => `$${(cents / 100).toFixed(0)}`;
+import { money } from "@/lib/money";
 
 export default async function AdminOffersPage() {
   const offers = await listOffers();

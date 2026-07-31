@@ -1,8 +1,7 @@
 import { listOrders } from "@/lib/orders";
 import { RefundButton } from "@/components/admin/refund-button";
 
-const money = (cents: number, currency: string) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency }).format(cents / 100);
+import { money } from "@/lib/money";
 
 const when = (iso: string) =>
   new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(

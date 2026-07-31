@@ -1,7 +1,7 @@
 import { listMembers } from "@/lib/members";
 import { cancelSubscriptionAction } from "./actions";
 
-const money = (c: number) => `$${(c / 100).toFixed(2)}`;
+import { money } from "@/lib/money";
 const date = (s: string) => new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 export default async function AdminMembersPage() {

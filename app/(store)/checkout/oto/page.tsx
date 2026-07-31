@@ -6,8 +6,7 @@ import { getOffer } from "@/lib/store";
 import { immediateChargeCents } from "@/lib/offers";
 import { acceptOtoAction } from "./actions";
 
-const money = (c: number, cur: string) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(c / 100);
+import { money } from "@/lib/money";
 
 export default async function OtoPage({
   searchParams,
