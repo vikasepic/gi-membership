@@ -20,6 +20,7 @@ import { ensureUserProfile } from "@/lib/users";
 import { applyPendingEntitlements } from "@/lib/app-sync";
 import { sendCrmEvent, type CrmItem } from "@/lib/crm";
 import { resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
+import { tagContact } from "@/lib/activecampaign";
 import { LEGAL } from "@/lib/legal";
 import type { Offer } from "@/lib/types";
 
@@ -554,6 +555,40 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
     });
   } catch (e) {
     console.error("[finalizeOrder] crm failed (order is still complete):", e);
+  }
+
+  // ActiveCampaign: upsert the buyer and apply the tag configured on each
+  // product they bought. Above the consent gate for the same reason as the
+  // receipt — this is the record of a customer relationship, not ad
+  // measurement. Guarded: a CRM outage must not fail a paid order.
+  try {
+    const { data: bought } = await db
+      .from("order_items")
+      .select("product_id")
+      .eq("order_id", order.id)
+      .not("product_id", "is", null);
+    const productIds = (bought ?? []).map((i) => i.product_id as string);
+    let tagIds: string[] = [];
+    if (productIds.length > 0) {
+      const { data: tagged } = await db
+        .from("products")
+        .select("activecampaign_tag_id")
+        .in("id", productIds)
+        .not("activecampaign_tag_id", "is", null);
+      tagIds = (tagged ?? []).map((p) => p.activecampaign_tag_id as string);
+    }
+    const { data: profile } = await db
+      .from("users")
+      .select("username")
+      .eq("id", order.user_id as string)
+      .maybeSingle();
+    await tagContact({
+      email: order.email as string,
+      fullName: (profile?.username as string) ?? null,
+      tagIds,
+    });
+  } catch (e) {
+    console.error("[finalizeOrder] activecampaign failed (order is still complete):", e);
   }
 
   // Report the conversion server-side — ONLY with the buyer's explicit consent,

@@ -21,6 +21,8 @@ export type Product = {
   coverImageUrl: string | null;
   /** Optional storefront image for THIS product; overrides the course cover. */
   coverPath: string | null;
+  /** ActiveCampaign tag applied to the buyer on purchase. Null = no tag. */
+  activecampaignTagId: string | null;
   status: ProductStatus;
   bumpOfferId: string | null;
   upsellOfferId: string | null;

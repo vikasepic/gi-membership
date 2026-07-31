@@ -244,6 +244,25 @@ export function ProductForm({
         </div>
       </Section>
 
+      <Section
+        title="ActiveCampaign"
+        hint="Buyers of this product are added to ActiveCampaign (or updated if they're already there) and given this tag."
+      >
+        <Field
+          label="Tag ID"
+          hint="The numeric id, not the tag name — Contacts → Manage Tags, then read the id from the URL when you edit a tag. Leave empty for no tag."
+          error={err("activecampaignTagId")}
+        >
+          <input
+            name="activecampaignTagId"
+            defaultValue={product?.activecampaignTagId ?? ""}
+            inputMode="numeric"
+            placeholder="e.g. 42"
+            className={inputClass}
+          />
+        </Field>
+      </Section>
+
       {state.errors?._form && (
         <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">
           {state.errors._form}
