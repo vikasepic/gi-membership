@@ -1,21 +1,13 @@
 import Link from "next/link";
 import { money } from "@/lib/money";
+import { TYPE_META, FALLBACK_META, type BadgeType } from "@/components/course-type";
+
+export type { BadgeType };
 
 // Catalog card. Type drives a quiet accent (navy/plum/terracotta) on the label
 // and the cover wash — terracotta stays reserved for the primary CTA elsewhere.
 // The type comes from the product's course now; a product with no course yet
 // (a draft still being built) has none, so we fall back to a neutral badge.
-export type BadgeType = "video" | "audio" | "pdf" | "text";
-
-const TYPE_META: Record<BadgeType, { label: string; accent: string; wash: string }> = {
-  video: { label: "Video",   accent: "var(--primary)", wash: "color-mix(in srgb, var(--primary) 14%, var(--surface))" },
-  audio: { label: "Audio",   accent: "var(--plum)",    wash: "color-mix(in srgb, var(--plum) 14%, var(--surface))" },
-  pdf:   { label: "Guide",   accent: "var(--navy)",    wash: "color-mix(in srgb, var(--navy) 14%, var(--surface))" },
-  text:  { label: "Reading", accent: "var(--plum)",    wash: "color-mix(in srgb, var(--plum) 14%, var(--surface))" },
-};
-
-const FALLBACK_META = { label: "Course", accent: "var(--navy)", wash: "var(--surface-2)" };
-
 export type CatalogItem = {
   slug: string;
   title: string;

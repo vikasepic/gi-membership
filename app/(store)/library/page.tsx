@@ -3,10 +3,10 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getStandingOffer, listOwnedApps, hasSavedCard, ownedProductIdsForViewer } from "@/lib/library";
 import { coursesForUser } from "@/lib/courses";
+import { publicCoverUrl } from "@/lib/media";
+import { LibraryCourseCard } from "@/components/library/course-card";
 import { immediateChargeCents } from "@/lib/offers";
 import { acceptStandingOfferAction, openAppAction } from "./actions";
-
-const TYPE_LABEL: Record<string, string> = { pdf: "Guide", audio: "Audio", video: "Video", app: "App" };
 
 // Every outcome of acceptStandingOfferAction, in the buyer's words. Without an
 // entry here the redirect lands silently and the button reads as broken — which
@@ -80,43 +80,75 @@ export default async function LibraryPage({
           </p>
         )
       ) : (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {courses.map((p) => (
-            <Link
-              key={p.id}
-              href={`/library/${p.slug}`}
-              className="group flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5 transition-colors hover:border-primary"
-            >
-              <span className="kicker text-muted">Course</span>
-              <h2 className="text-lg leading-snug">{p.title}</h2>
-              {p.subtitle && <p className="flex-1 text-sm text-muted">{p.subtitle}</p>}
-              <span className="text-sm text-primary group-hover:underline">Open &rarr;</span>
-            </Link>
-          ))}
-        </div>
+        <section className="flex flex-col gap-5">
+          <div className="flex items-baseline justify-between border-b border-border pb-4">
+            <h2 className="text-xl">
+              {courses.length === 1 ? "Your course" : `Your courses`}
+            </h2>
+            {courses.length > 1 && (
+              <span className="kicker text-muted">{courses.length} in your library</span>
+            )}
+          </div>
+          {/* auto-fit rather than fixed breakpoints: one course fills a
+              comfortable single column instead of a lonely third, and the grid
+              still reflows to three across on a wide screen. */}
+          <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,17rem),1fr))]">
+            {courses.map((c, i) => (
+              <LibraryCourseCard
+                key={c.id}
+                slug={c.slug}
+                title={c.title}
+                subtitle={c.subtitle}
+                type={c.type}
+                coverUrl={publicCoverUrl(c.coverPath)}
+                index={i}
+              />
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Connected apps — signed handoff, lands the user already signed in. */}
       {apps.length > 0 && (
-        <section className="flex flex-col gap-4">
-          <h2 className="kicker text-muted">Your apps</h2>
+        <section className="flex flex-col gap-5">
+          <div className="flex items-baseline justify-between border-b border-border pb-4">
+            <h2 className="text-xl">Your apps</h2>
+            <span className="kicker text-muted">Included with your subscription</span>
+          </div>
           <div className="flex flex-col gap-3">
             {apps.map((a) => (
               <div
                 key={a.id}
-                className="flex items-center justify-between rounded-2xl border border-border bg-surface p-5"
+                /* Stacks on mobile: side-by-side crushed the app name against
+                   the button on a narrow screen, and a wrapped word next to a
+                   full-width button is worse than two clean rows. */
+                className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="flex flex-col">
+                <div className="flex flex-col gap-1">
                   <span className="font-medium">{a.name}</span>
-                  <span className="text-sm text-muted">
-                    {a.status === "trialing" ? "On trial" : a.status}
+                  <span className="flex items-center gap-2 text-sm text-muted">
+                    <span
+                      aria-hidden
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{
+                        background:
+                          a.status === "past_due" ? "var(--primary)" : "var(--navy)",
+                      }}
+                    />
+                    {a.status === "trialing"
+                      ? "On trial"
+                      : a.status === "past_due"
+                        ? "Payment failed — update your card"
+                        : a.status === "active"
+                          ? "Active"
+                          : a.status}
                   </span>
                 </div>
-                <form action={openAppAction}>
-                  <input type="hidden" name="appId" value={a.id} />
-                  <button className="rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover">
+                <form action={openAppAction} className="sm:shrink-0">
+                  <button className="w-full rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover sm:w-auto">
                     Open the app &rarr;
                   </button>
+                  <input type="hidden" name="appId" value={a.id} />
                 </form>
               </div>
             ))}
