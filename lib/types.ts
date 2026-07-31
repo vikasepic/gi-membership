@@ -58,6 +58,12 @@ export type Offer = {
   acceptLabel: string;
   /** ActiveCampaign tag applied when granted, removed when cancelled. */
   activecampaignTagId: string | null;
+  /** Which layout renders this offer's upsell page. */
+  otoTemplate: string;
+  /** Long-form copy for the `long` template. */
+  otoBody: string | null;
+  /** Embed URL for the hero; falls back to imageUrl. */
+  otoVideoUrl: string | null;
   declineLabel: string;
   active: boolean;
   stripeProductIdTest: string | null;

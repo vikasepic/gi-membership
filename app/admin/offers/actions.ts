@@ -40,6 +40,9 @@ const schema = z
       .regex(/^\d*$/, "Tag ID must be the numeric id from ActiveCampaign")
       .optional()
       .default(""),
+    otoTemplate: z.enum(["short", "visual", "long", "custom"]).default("visual"),
+    otoBody: z.string().optional().default(""),
+    otoVideoUrl: z.string().optional().default(""),
     declineLabel: z.string().trim().min(1).default("No thanks"),
     active: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
   })
@@ -88,6 +91,9 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     imageUrl: v.imageUrl,
     acceptLabel: v.acceptLabel,
     activecampaignTagId: v.activecampaignTagId?.trim() || null,
+    otoTemplate: v.otoTemplate,
+    otoBody: v.otoBody,
+    otoVideoUrl: v.otoVideoUrl,
     declineLabel: v.declineLabel,
     active: v.active,
   };

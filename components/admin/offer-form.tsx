@@ -127,6 +127,30 @@ export function OfferForm({
           <input name="imageUrl" defaultValue={offer?.imageUrl ?? ""} className={input} />
         </Field>
         <Field
+          label="Upsell page layout"
+          hint="Only used when this offer is set as a product's upsell. Custom renders a coded page registered for this offer's key — it falls back to Visual if none exists yet."
+        >
+          <select
+            name="otoTemplate"
+            defaultValue={offer?.otoTemplate ?? "visual"}
+            className={input}
+          >
+            <option value="short">Short — headline, bullets, button</option>
+            <option value="visual">Visual — image or video led (default)</option>
+            <option value="long">Long-form — story, then the offer</option>
+            <option value="custom">Custom — coded page for this offer</option>
+          </select>
+        </Field>
+        <Field
+          label="Upsell video URL"
+          hint="Embed URL (YouTube/Vimeo embed form). Used by the Visual and Long-form layouts; falls back to the image above."
+        >
+          <input name="otoVideoUrl" defaultValue={offer?.otoVideoUrl ?? ""} className={input} />
+        </Field>
+        <Field label="Upsell body copy" hint="Used by the Long-form layout. Blank line between paragraphs.">
+          <textarea name="otoBody" defaultValue={offer?.otoBody ?? ""} rows={5} className={input} />
+        </Field>
+        <Field
           label="ActiveCampaign tag ID"
           hint="Numeric id, not the tag name. Applied when this offer is granted and removed if it is cancelled or refunded. Leave empty for no tag."
         >
