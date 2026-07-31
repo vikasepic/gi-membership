@@ -1,0 +1,32 @@
+import { NextResponse } from "next/server";
+import { runDueJobs } from "@/lib/retry";
+
+export const dynamic = "force-dynamic";
+
+// Retry sweep. Called by cron; not something a visitor should be able to
+// trigger, so it needs the shared secret.
+//
+// Bearer rather than a query string: a secret in a URL ends up in access logs,
+// proxy logs and browser history, which is the whole reason not to put one there.
+export async function POST(request: Request) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return NextResponse.json({ error: "cron not configured" }, { status: 503 });
+  }
+  const auth = request.headers.get("authorization") ?? "";
+  if (auth !== `Bearer ${secret}`) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const result = await runDueJobs();
+    return NextResponse.json({ ok: true, ...result });
+  } catch (e) {
+    // The sweep itself failing must be visible to whatever called it, but it
+    // must not take the route down — cron will come back in five minutes.
+    return NextResponse.json(
+      { ok: false, error: e instanceof Error ? e.message : "sweep failed" },
+      { status: 500 },
+    );
+  }
+}

@@ -2,6 +2,40 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { tagContact, activeCampaignEnabled } from "@/lib/activecampaign";
+import { recordError, messageOf } from "@/lib/errors";
+
+/**
+ * Every tag change goes through here so a failure is queued rather than lost.
+ * The payload is exactly the argument object, which is what makes the retry a
+ * literal replay rather than a reconstruction that can drift from the original.
+ */
+async function tagOrQueue(args: {
+  email: string;
+  fullName?: string | null;
+  tagIds?: string[];
+  removeTagIds?: string[];
+}): Promise<void> {
+  try {
+    const { ok } = await tagContact(args);
+    if (!ok) {
+      await recordError({
+        source: "activecampaign",
+        message: "ActiveCampaign rejected or could not be reached",
+        context: { email: args.email, tagIds: args.tagIds, removeTagIds: args.removeTagIds },
+        jobKind: "ac_tag",
+        jobPayload: args as unknown as Record<string, unknown>,
+      });
+    }
+  } catch (e) {
+    await recordError({
+      source: "activecampaign",
+      message: messageOf(e),
+      context: { email: args.email },
+      jobKind: "ac_tag",
+      jobPayload: args as unknown as Record<string, unknown>,
+    });
+  }
+}
 
 // Which ActiveCampaign tags a given event implies, and who to apply them to.
 //
@@ -70,7 +104,7 @@ export async function tagCartStarted(userId: string): Promise<void> {
   if (!tagId) return;
   const contact = await contactFor(userId);
   if (!contact) return;
-  await tagContact({ ...contact, tagIds: [tagId] });
+  await tagOrQueue({ ...contact, tagIds: [tagId] });
 }
 
 /**
@@ -91,7 +125,7 @@ export async function tagPurchase(args: {
     offerTagIds(args.offerIds),
     abandonedTagId(),
   ]);
-  await tagContact({
+  await tagOrQueue({
     ...contact,
     tagIds: [...products, ...offers],
     removeTagIds: abandoned ? [abandoned] : [],
@@ -117,5 +151,5 @@ export async function untagRevoked(args: {
   ]);
   const removeTagIds = [...products, ...offers];
   if (removeTagIds.length === 0) return;
-  await tagContact({ ...contact, removeTagIds });
+  await tagOrQueue({ ...contact, removeTagIds });
 }

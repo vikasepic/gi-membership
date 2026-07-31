@@ -97,13 +97,15 @@ describe("activeCampaign", () => {
   it("never throws when the API is down", async () => {
     enable();
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("ECONNRESET"); }));
-    await expect(tagContact({ email: "a@b.com", tagIds: ["1"] })).resolves.toBeUndefined();
+    // Reports the failure instead of throwing — that flag is what makes the
+    // caller queue a retry rather than silently drop the tag.
+    await expect(tagContact({ email: "a@b.com", tagIds: ["1"] })).resolves.toEqual({ ok: false });
   });
 
   it("never throws on a rejected sync", async () => {
     enable();
     stubFetch(() => new Response("nope", { status: 403 }));
-    await expect(tagContact({ email: "a@b.com", tagIds: ["1"] })).resolves.toBeUndefined();
+    await expect(tagContact({ email: "a@b.com", tagIds: ["1"] })).resolves.toEqual({ ok: false });
   });
 
   // A repeat buyer already carries the tag; AC answers 422 and that is fine.
@@ -112,7 +114,7 @@ describe("activeCampaign", () => {
     const spy = stubFetch((url) =>
       url.endsWith("/contact/sync") ? okSync() : new Response("duplicate", { status: 422 }),
     );
-    await expect(tagContact({ email: "a@b.com", tagIds: ["1"] })).resolves.toBeUndefined();
+    await expect(tagContact({ email: "a@b.com", tagIds: ["1"] })).resolves.toEqual({ ok: true });
     expect(spy).toHaveBeenCalledTimes(2);
   });
 });

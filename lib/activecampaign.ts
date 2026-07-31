@@ -164,8 +164,8 @@ export async function tagContact(args: {
   fullName?: string | null;
   tagIds?: string[];
   removeTagIds?: string[];
-}): Promise<void> {
-  if (!activeCampaignEnabled()) return;
+}): Promise<{ ok: boolean }> {
+  if (!activeCampaignEnabled()) return { ok: true }; // disabled is not failed
   const clean = (ids?: string[]) =>
     [...new Set((ids ?? []).filter((t) => t && t.trim()))].map((t) => t.trim());
   const add = clean(args.tagIds);
@@ -174,8 +174,14 @@ export async function tagContact(args: {
   // Sync even with no tags: the buyer should exist in the CRM either way, and
   // this is what keeps a name up to date when they buy again.
   const contactId = await syncContact({ email: args.email, fullName: args.fullName });
-  if (!contactId) return;
+  if (!contactId) return { ok: false };
 
-  for (const tagId of add) await addTag(contactId, tagId);
-  for (const tagId of drop) await removeTag(contactId, tagId);
+  // Reported rather than thrown, and the result is what decides whether the
+  // caller queues a retry. Returning void here meant every failure looked
+  // identical to success from the outside, which is precisely how the silence
+  // this queue exists to fix got in.
+  let ok = true;
+  for (const tagId of add) ok = (await addTag(contactId, tagId)) && ok;
+  for (const tagId of drop) ok = (await removeTag(contactId, tagId)) && ok;
+  return { ok };
 }
