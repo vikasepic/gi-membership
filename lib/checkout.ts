@@ -420,12 +420,29 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
     .eq("stripe_payment_intent_id", paymentIntentId)
     .maybeSingle();
   if (!order || !order.user_id) return;
-  if (order.status === "paid") return; // already finalized — idempotent
+  if (order.status !== "pending") return; // already finalized, or refunded
 
   const pi = await stripe().paymentIntents.retrieve(paymentIntentId);
   if (pi.status !== "succeeded") return;
 
-  await db.from("orders").update({ status: "paid" }).eq("id", order.id);
+  // CLAIM the order, and only continue if this call is the one that won.
+  //
+  // The read above is not enough. The thank-you page and the Stripe webhook
+  // both call this within milliseconds of each other, so both could read
+  // 'pending' before either wrote 'paid' — and both would then go on to fulfil
+  // the bump. Stripe's idempotency key meant only one subscription was ever
+  // created, but each pass inserted its own order_items row, so the buyer saw
+  // the add-on listed twice in admin and on their receipt.
+  //
+  // Scoped to 'pending' rather than "not paid": a refunded order must never be
+  // re-finalised back into existence.
+  const { data: claimed } = await db
+    .from("orders")
+    .update({ status: "paid" })
+    .eq("id", order.id)
+    .eq("status", "pending")
+    .select("id");
+  if (!claimed || claimed.length === 0) return; // someone else got there first
 
   // Grant ownership of the base product. Plain insert — the order-paid guard
   // above makes finalize idempotent; a unique-violation (already owned) is fine.

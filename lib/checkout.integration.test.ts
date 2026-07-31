@@ -59,6 +59,38 @@ describe.skipIf(!canRun)("checkout money path (integration)", () => {
     expect(own).toHaveLength(2); // no duplicate grants from the double finalize
   });
 
+  // The real duplicate came from CONCURRENT finalizes, not sequential ones:
+  // the thank-you page and the Stripe webhook fire within milliseconds, both
+  // read status 'pending', and both fulfil the bump. The existing test called
+  // finalizeOrder twice in a row, which the old guard survived — so it passed
+  // while production produced two bump lines on one order.
+  it("fulfils the bump once when the page and the webhook finalize at the same instant", async () => {
+    const { email, piId } = await buy(true);
+    await Promise.all([finalizeOrder(piId), finalizeOrder(piId), finalizeOrder(piId)]);
+
+    const db = createServiceClient();
+    const { data: user } = await db.from("users").select("id").eq("email", email).single();
+    const { data: order } = await db
+      .from("orders")
+      .select("id")
+      .eq("stripe_payment_intent_id", piId)
+      .single();
+    const { data: items } = await db
+      .from("order_items")
+      .select("kind, stripe_subscription_id")
+      .eq("order_id", order!.id);
+
+    // Exactly one product line and one bump line — not two of either.
+    expect(items!.filter((i) => i.kind === "product")).toHaveLength(1);
+    expect(items!.filter((i) => i.kind === "bump")).toHaveLength(1);
+
+    // And one subscription, one ownership row.
+    const subs = new Set(items!.map((i) => i.stripe_subscription_id).filter(Boolean));
+    expect(subs.size).toBe(1);
+    const { data: own } = await db.from("ownership").select("id").eq("user_id", user!.id);
+    expect(own).toHaveLength(2); // the product and the app
+  });
+
   // The Stripe account is shared with the connected apps, so every object we
   // create must be identifiable as ours from Stripe alone — that is all Zapier,
   // the dashboard filters and the CSV exports can see. Asserted against the real
