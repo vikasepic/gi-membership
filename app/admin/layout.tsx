@@ -15,6 +15,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="flex items-center gap-3">
             <Logo className="h-6 w-auto text-fg" />
             <span className="kicker rounded-full bg-surface-2 px-2.5 py-1 text-muted">Admin</span>
+            {/* Which Stripe mode this store is actually running. Quiet in test
+                mode as a reminder that none of this is real money; loud in live
+                mode because all of it is. At go-live the dangerous state is not
+                knowing which set of orders you are looking at. */}
+            {stripeMode() === "live" ? (
+              <span className="kicker rounded-full bg-primary px-2.5 py-1 text-primary-fg">
+                Live payments
+              </span>
+            ) : (
+              <span className="kicker rounded-full border border-border px-2.5 py-1 text-muted">
+                Stripe test mode
+              </span>
+            )}
           </div>
           <nav className="flex items-center gap-4 text-sm">
             <Link href="/admin" className="text-muted hover:text-fg">Products</Link>
