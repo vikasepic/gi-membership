@@ -5,6 +5,7 @@ import { getStoreId } from "@/lib/store";
 import { savedPaymentMethodFor, ownershipFor } from "@/lib/checkout";
 import { createClient } from "@/lib/supabase/server";
 import { coursesForProduct } from "@/lib/courses";
+import type { Ownership } from "@/lib/offers";
 import type { Product, Offer } from "@/lib/types";
 
 const OFFER_COLUMNS =
@@ -189,13 +190,22 @@ export async function hasSavedCard(userId: string): Promise<boolean> {
 // Lets the catalog and product pages offer "Access now" instead of asking
 // someone to buy what they already have.
 export async function ownedProductIdsForViewer(): Promise<Set<string>> {
+  return (await viewerOwnership()).productIds;
+}
+
+/**
+ * Everything the current viewer owns — products AND apps. Needed wherever an
+ * offer is displayed, since an app subscription is not a product and would
+ * otherwise be offered to someone who already subscribes.
+ * An anonymous viewer owns nothing, so this is empty and costs no query.
+ */
+export async function viewerOwnership(): Promise<Ownership> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return new Set();
-  const { productIds } = await ownershipFor(user.id);
-  return productIds;
+  if (!user) return { productIds: new Set(), appIds: new Set() };
+  return ownershipFor(user.id);
 }
 
 // Where "Access now" should land for an owned product: straight into the

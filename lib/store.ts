@@ -57,3 +57,21 @@ export async function getOffer(id: string): Promise<Offer | null> {
   if (error) throw new Error(`getOffer: ${error.message}`);
   return data ? camelize<Offer>(data) : null;
 }
+
+/**
+ * Active recurring offers, for the storefront to present in their own right
+ * rather than only as a checkout bump. A subscription is the most valuable
+ * thing this store sells and was previously invisible until someone was already
+ * buying something else.
+ */
+export async function listSubscriptionOffers(): Promise<Offer[]> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("offers")
+    .select(OFFER_COLUMNS)
+    .eq("active", true)
+    .eq("billing_type", "recurring")
+    .order("price_cents", { ascending: true });
+  if (error) throw new Error(`listSubscriptionOffers: ${error.message}`);
+  return (data ?? []).map((r) => camelize<Offer>(r));
+}
