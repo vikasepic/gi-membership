@@ -28,10 +28,19 @@ describe("sendCrmEvent", () => {
       email: "buyer@example.com",
       occurredAt: 1700000000,
       orderId: "order-1",
+      productId: "prod-uuid-1",
       productSlug: "field-guide",
       totalCents: 2700,
       currency: "usd",
-      items: [{ kind: "product", description: "The Field Guide", amountCents: 2700 }],
+      items: [
+        {
+          kind: "product",
+          description: "The Field Guide",
+          amountCents: 2700,
+          productId: "prod-uuid-1",
+          productSlug: "field-guide",
+        },
+      ],
     });
 
     expect(spy).toHaveBeenCalledOnce();
@@ -43,8 +52,10 @@ describe("sendCrmEvent", () => {
     const body = JSON.parse(init.body as string);
     expect(body.type).toBe("purchase");
     expect(body.productSlug).toBe("field-guide");
+    expect(body.productId).toBe("prod-uuid-1"); // the stable key automation tags on
     expect(body.email).toBe("buyer@example.com");
     expect(body.items[0].kind).toBe("product");
+    expect(body.items[0].productId).toBe("prod-uuid-1");
   });
 
   it("does nothing when no hook is configured", async () => {

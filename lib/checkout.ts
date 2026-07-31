@@ -494,7 +494,7 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
   try {
     const { data: crmItems } = await db
       .from("order_items")
-      .select("kind, description, amount_cents, stripe_subscription_id")
+      .select("kind, description, amount_cents, stripe_subscription_id, product_id, offer_id")
       .eq("order_id", order.id);
     const rows = crmItems ?? [];
     // Always `purchase` — money moved. A trial bump rides along as a flag
@@ -508,6 +508,7 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
       email: order.email as string,
       occurredAt: Math.floor(Date.now() / 1000),
       orderId: order.id as string,
+      productId: (pi.metadata.productId as string) || null,
       productSlug: pi.metadata.productSlug ?? null,
       totalCents: pi.amount,
       currency: pi.currency,
@@ -515,7 +516,12 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
         kind: (i.kind as CrmItem["kind"]) ?? "product",
         description: i.description as string,
         amountCents: (i.amount_cents as number) ?? 0,
+        // product_id/offer_id come off the row itself rather than the
+        // PaymentIntent, so an order carrying more than one item still
+        // identifies each of them correctly.
+        productId: (i.product_id as string) ?? null,
         productSlug: i.kind === "product" ? (pi.metadata.productSlug ?? null) : null,
+        offerId: (i.offer_id as string) ?? null,
       })),
     });
   } catch (e) {

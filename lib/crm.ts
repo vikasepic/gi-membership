@@ -30,7 +30,15 @@ export type CrmItem = {
   kind: "product" | "bump" | "oto";
   description: string;
   amountCents: number;
+  /**
+   * Both identifiers, on purpose. productId is the primary key and never
+   * changes; productSlug is readable but editable in admin, so a rename would
+   * orphan every tag keyed on it. Key automation on the id, label with the slug.
+   */
+  productId?: string | null;
   productSlug?: string | null;
+  /** Set instead of productId on bump/oto rows — those grant an offer. */
+  offerId?: string | null;
 };
 
 export type CrmEvent = {
@@ -41,6 +49,7 @@ export type CrmEvent = {
   items?: CrmItem[];
   totalCents?: number;
   currency?: string;
+  productId?: string | null;
   productSlug?: string | null;
   offerName?: string | null;
   stripeSubscriptionId?: string | null;

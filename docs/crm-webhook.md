@@ -59,13 +59,16 @@ Real captured event — a $27 product with the Content Engine trial bump:
   "trialStarted": true,
   "email": "buyer@example.com",
   "occurredAt": 1785475169,
-  "orderId": "fbea82f2-a3b0-4b7a-b8e3-ee139e5b14db",
+  "orderId": "8e1a9886-bb62-4d7b-9ee2-5dc815c8ea6e",
+  "productId": "00000000-0000-0000-0000-0000000000b1",
   "productSlug": "placeholder-offer",
   "totalCents": 2700,
   "currency": "usd",
   "items": [
-    { "kind": "product", "description": "Placeholder Product ($27)", "amountCents": 2700, "productSlug": "placeholder-offer" },
-    { "kind": "bump",    "description": "Content Engine — Monthly (7-day trial)", "amountCents": 0, "productSlug": null }
+    { "kind": "product", "description": "Placeholder Product ($27)", "amountCents": 2700,
+      "productId": "00000000-0000-0000-0000-0000000000b1", "productSlug": "placeholder-offer", "offerId": null },
+    { "kind": "bump", "description": "Content Engine — Monthly (7-day trial)", "amountCents": 0,
+      "productId": null, "productSlug": null, "offerId": "00000000-0000-0000-0000-0000000000c1" }
   ]
 }
 ```
@@ -76,15 +79,22 @@ Subscription and refund events are thinner — `type`, `email`, `occurredAt`, an
 | Field | Notes |
 |---|---|
 | `email` | The join key for ActiveCampaign |
-| `productSlug` | **Tag on this.** Stable; survives a product rename |
-| `items[].description` | Display copy. Changes when a product is renamed — don't key logic on it |
+| `productId` | **Key automation on this.** The primary key — never changes |
+| `productSlug` | Readable, and fine as a tag *name* — but editable in admin |
+| `items[].offerId` | Set on `bump`/`oto` rows instead of `productId` |
+| `items[].description` | Display copy. Changes on rename — don't key logic on it |
 | `items[].kind` | `product` \| `bump` \| `oto` — mirrors the `order_items` constraint |
 | `amountCents` / `totalCents` | Integer cents, never a float |
 | `occurredAt` | Unix seconds |
 
-`productSlug` is set on the base item and on the event itself. Bump and OTO
-items carry `null` — they grant an *offer*, which may be app access rather than
-a catalogue product; use `description` for those.
+**Two identifiers, deliberately.** `productId` is the primary key and is stable
+forever. `productSlug` is what a human reads, but it is editable in Admin →
+Products — renaming one would orphan every tag keyed on the old value while
+looking like nothing happened. Use the id for anything conditional, the slug for
+anything a person reads.
+
+Bump and OTO items carry `productId: null` and a `offerId` instead: they grant an
+*offer*, which may be app access rather than a catalogue product.
 
 ## Building the Zap
 
