@@ -8,7 +8,7 @@ import { stripePublishableKey } from "@/lib/env";
 import { CheckoutForm, type BumpSummary } from "@/components/checkout/checkout-form";
 import { publicCoverUrl } from "@/lib/media";
 import { productDisplay } from "@/lib/courses";
-import { tagAbandonedForEmail } from "@/lib/ac-tags";
+import { rememberLead } from "@/lib/leads";
 
 import { money } from "@/lib/money";
 
@@ -70,9 +70,9 @@ export default async function CheckoutPage({
   // marketing timer must not be able to stop a checkout rendering.
   if (user?.email) {
     try {
-      await tagAbandonedForEmail({ email: user.email, productId: product.id });
+      await rememberLead({ visitorKey: user.id, productId: product.id, email: user.email });
     } catch {
-      // recordError already ran inside; nothing useful to do here.
+      // Buffering a lead must never stop a checkout rendering.
     }
   }
 

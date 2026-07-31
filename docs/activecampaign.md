@@ -97,19 +97,44 @@ Set **Admin → Products → ActiveCampaign → Abandoned-cart tag ID**, per pro
 
 **When the timer starts**
 
-| Buyer | Trigger |
+| Buyer | Captured when |
 |---|---|
-| Not signed in | The **email field loses focus** with a valid address in it |
-| Signed in | **Opening the checkout page** — they never type an email, so arriving is the equivalent moment |
-| Either | Pressing Pay, as a backstop, if neither of the above fired |
+| Not signed in | The **email field loses focus** with a plausible address in it |
+| Signed in | **Opening the checkout page** — they never type an email |
 
-Deliberately not on every keystroke: mid-typing, `jane@gm` is a different and
-invalid address, and tagging it would put junk contacts in ActiveCampaign.
+Nothing is sent to ActiveCampaign at that moment. The address is buffered in
+`checkout_leads` and forwarded by the cron sweep only if it is still
+unconverted **15 minutes later** (`LEAD_DELAY_MINUTES`).
 
-No account is created to do this. Tagging by email rather than by user id
-matters — creating an account for someone who merely typed an address would let
-anyone squat on another person's email and claim any entitlement parked against
-it.
+That delay does three jobs at once:
+
+- **A corrected typo never leaves the building.** Type `jane@gmial.com`, fix it
+  ten seconds later, and only the corrected address is ever forwarded — the row
+  is overwritten, one per visitor per product.
+- **Fast buyers never reach the CRM at all.** Someone who checks out in two
+  minutes is marked converted before the sweep runs, so no tag is applied and
+  none has to be removed.
+- **Abuse fills a table we own.** The capture endpoint accepts any address, so
+  without the buffer anyone could post junk straight into the marketing list.
+
+Conversion is matched on **email**, not visitor key: someone can start on a
+phone and finish on a laptop, and an abandoned-cart email to an actual customer
+is the most annoying thing this system could do.
+
+No account is created to capture a lead. Tagging by email rather than by user
+id matters — creating an account for someone who merely typed an address would
+let anyone squat on another person's email and claim any entitlement parked
+against it.
+
+## Email typos
+
+The checkout suggests a correction when an address is one keystroke from a
+domain people actually use — `gmial.com`, `hotmial.com`, `gmail.co`. It uses
+Damerau-Levenshtein so a **transposition counts as one slip**; plain edit
+distance scores `gmial` as two and would miss the commonest typo there is.
+
+Always a suggestion, never a block. Real addresses live on domains no list will
+contain, and refusing an unfamiliar one turns a guess into a lost sale.
 - Removed the moment that product is paid for, in the same pass that applies
   the purchase tag — so there is no window where someone is both a customer and
   an abandoner.

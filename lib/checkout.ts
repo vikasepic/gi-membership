@@ -20,7 +20,8 @@ import { ensureUserProfile } from "@/lib/users";
 import { applyPendingEntitlements } from "@/lib/app-sync";
 import { sendCrmEvent, type CrmItem } from "@/lib/crm";
 import { resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
-import { tagPurchase, tagCartStarted } from "@/lib/ac-tags";
+import { tagPurchase } from "@/lib/ac-tags";
+import { markLeadConverted } from "@/lib/leads";
 import { LEGAL } from "@/lib/legal";
 import type { Offer } from "@/lib/types";
 
@@ -329,15 +330,6 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
     amount_cents: payableCents,
   });
 
-  // They are at the payment step with nothing paid. Tagged now and untagged by
-  // finalizeOrder, so the ActiveCampaign automation can wait and re-check
-  // rather than the store needing a scheduled job to find stale carts.
-  try {
-    await tagCartStarted(userId, product.id);
-  } catch (e) {
-    console.error("[createCheckoutIntent] abandoned-cart tag failed:", e);
-  }
-
   if (!pi.client_secret) return { ok: false, error: "No client secret" };
   return { ok: true, clientSecret: pi.client_secret };
 }
@@ -575,6 +567,9 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
       .from("order_items")
       .select("product_id, offer_id")
       .eq("order_id", order.id);
+    // Before tagging: a buffered lead for this buyer must not be forwarded
+    // fifteen minutes after they have already paid.
+    await markLeadConverted(order.email as string);
     await tagPurchase({
       userId: order.user_id as string,
       productIds: (bought ?? []).map((i) => i.product_id).filter(Boolean) as string[],

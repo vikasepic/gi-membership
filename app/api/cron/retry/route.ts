@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runDueJobs } from "@/lib/retry";
+import { flushDueLeads } from "@/lib/leads";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +20,12 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await runDueJobs();
-    return NextResponse.json({ ok: true, ...result });
+    // Leads first: a lead that fails to forward becomes a retry job, and
+    // running the retries afterwards gives it its first attempt immediately
+    // rather than five minutes later.
+    const leads = await flushDueLeads();
+    const jobs = await runDueJobs();
+    return NextResponse.json({ ok: true, leads, jobs });
   } catch (e) {
     // The sweep itself failing must be visible to whatever called it, but it
     // must not take the route down — cron will come back in five minutes.

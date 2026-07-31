@@ -7,7 +7,8 @@ import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
 import { createClient } from "@/lib/supabase/server";
 import { getProductBySlug } from "@/lib/store";
 import { resolveCoupon } from "@/lib/coupons";
-import { tagAbandonedForEmail } from "@/lib/ac-tags";
+import { rememberLead } from "@/lib/leads";
+import { looksLikeEmail } from "@/lib/email-hint";
 
 // Details are only required from a visitor who isn't signed in; a member
 // already has an account, so those fields are optional here and validated
@@ -106,11 +107,27 @@ export async function captureAbandonedCart(
   const product = await getProductBySlug(parsed.data.productSlug);
   if (!product || product.status !== "published") return;
 
-  // A signed-in member is tagged from the checkout page itself, so this path
-  // only ever handles someone typing an address into the form.
-  await tagAbandonedForEmail({
+  if (!looksLikeEmail(parsed.data.email)) return;
+
+  // Buffered, not sent. The sweep forwards it in LEAD_DELAY_MINUTES if they
+  // still have not bought — so a typo corrected ten seconds from now simply
+  // overwrites this row, and someone who checks out in two minutes never
+  // reaches ActiveCampaign at all.
+  //
+  // The visitor key is the attribution cookie, read server-side. A caller
+  // cannot choose it, so nobody can overwrite another visitor's row.
+  const jar = await cookies();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const visitorKey = user?.id ?? jar.get("gi_anon")?.value ?? null;
+  if (!visitorKey) return;
+
+  await rememberLead({
+    visitorKey,
+    productId: product.id,
     email: parsed.data.email,
     fullName: parsed.data.fullName ?? null,
-    productId: product.id,
   });
 }

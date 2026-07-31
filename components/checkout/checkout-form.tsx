@@ -30,6 +30,7 @@ export type CheckoutProduct = {
 };
 
 import { money } from "@/lib/money";
+import { suggestEmail } from "@/lib/email-hint";
 
 // Buyer country drives the VAT rate. Common markets first, then the rest of the
 // EU/UK where digital-services VAT applies at the buyer's rate.
@@ -108,13 +109,15 @@ function Inner({
   // Which address we have already reported, so re-focusing the field or
   // tabbing back through the form does not fire again for the same person.
   const capturedEmail = useRef<string | null>(null);
+  const [emailHint, setEmailHint] = useState<string | null>(null);
 
   function captureEmail() {
     const value = email.trim().toLowerCase();
+    setEmailHint(suggestEmail(value));
     if (!value || !value.includes("@") || capturedEmail.current === value) return;
     capturedEmail.current = value;
-    // Deliberately not awaited: this starts a marketing timer, and the buyer
-    // should never wait on it or see it fail.
+    // Not awaited: this only buffers the address for an abandoned-cart email.
+    // The buyer must never wait on it or see it fail.
     void captureAbandonedCart(product.slug, value, fullName.trim() || undefined);
   }
 
