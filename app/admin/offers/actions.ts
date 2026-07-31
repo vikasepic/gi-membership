@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { parseOtoSections } from "@/lib/oto-sections";
+import { OTO_TEMPLATES } from "@/lib/oto-template";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createOffer, updateOffer, deleteOffer, type OfferInput } from "@/lib/admin";
@@ -41,7 +42,13 @@ const schema = z
       .regex(/^\d*$/, "Tag ID must be the numeric id from ActiveCampaign")
       .optional()
       .default(""),
-    otoTemplate: z.enum(["short", "visual", "long", "custom"]).default("visual"),
+    // Derived from OTO_TEMPLATES rather than repeated. Listing the layouts
+    // here by hand is what broke saving: `sales` was added to the database
+    // constraint, the registry and the dropdown, and this copy was missed, so
+    // choosing it failed validation with Zod's bare "Invalid input".
+    otoTemplate: z
+      .enum([...OTO_TEMPLATES, "custom"] as [string, ...string[]])
+      .default("visual"),
     otoBody: z.string().optional().default(""),
     otoVideoUrl: z.string().optional().default(""),
     otoProblem: z.string().optional().default(""),
@@ -72,7 +79,13 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
   await requireAdmin();
   const parsed = schema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
-    return { error: parsed.error.issues.map((i) => i.message).join(", ") };
+    // Prefix each problem with the field it came from. A bare "Invalid input"
+    // on a form this long tells the admin nothing about where to look.
+    return {
+      error: parsed.error.issues
+        .map((i) => (i.path.length ? `${i.path.join(".")}: ${i.message}` : i.message))
+        .join(", "),
+    };
   }
   const v = parsed.data;
   const input: OfferInput = {
