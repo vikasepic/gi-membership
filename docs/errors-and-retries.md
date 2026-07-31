@@ -42,14 +42,30 @@ CRON_SECRET=<your value>
 
 **2. Add a scheduled task** — Coolify → gi-membership → Scheduled Tasks:
 
+| Field | Value |
+|---|---|
+| Name | `retry-failed-jobs` |
+| Frequency | `*/5 * * * *` |
+| Timeout | `300` |
+| Container name | leave empty (defaults to the app container) |
+
+Command, one line:
+
 ```
-Frequency: */5 * * * *
-Command:   curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" \
-             https://grow.greaterinside.com/api/cron/retry
+node -e "fetch('http://127.0.0.1:3000/api/cron/retry',{method:'POST',headers:{authorization:'Bearer '+process.env.CRON_SECRET}}).then(async r=>console.log(r.status, await r.text()))"
 ```
 
-Bearer header rather than a query string: a secret in a URL ends up in access
-logs, proxy logs and browser history.
+**Not curl — the container does not have it.** `node` is present and has fetch
+built in. A curl command here fails silently every five minutes and the only
+symptom is a queue that never drains.
+
+It calls 127.0.0.1:3000 rather than the public domain: the task runs inside the
+app container, so this skips DNS and the proxy and never leaves the box.
+
+The secret is read from the container's own environment, so it lives on the
+app's Environment Variables page — the same one as the Stripe keys — and never
+appears in the task definition. Bearer header rather than a query string: a
+secret in a URL ends up in access logs, proxy logs and browser history.
 
 Without the cron, nothing retries automatically — but everything is still
 recorded, and **Try again now** on each row works by hand. That button runs the
