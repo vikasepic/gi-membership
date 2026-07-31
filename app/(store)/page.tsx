@@ -89,11 +89,14 @@ export default async function Home() {
             you&rsquo;re ready to keep the momentum.
           </p>
           <div className="flex items-center gap-5 pt-1">
+            {/* The catalog section is not rendered for a single product, so
+                #catalog would be a button that silently does nothing. Send it
+                to the product itself instead. */}
             <a
-              href="#catalog"
+              href={products.length === 1 && featured ? `/p/${featured.slug}` : "#catalog"}
               className="rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover"
             >
-              Browse the store
+              {products.length === 1 ? "See what's inside" : "Browse the store"}
             </a>
             {products.length > 0 && (
               <span className="text-sm text-muted">
