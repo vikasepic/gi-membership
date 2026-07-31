@@ -15,72 +15,143 @@ export type OtoView = {
   offer: Offer;
   token: string;
   chargeNowCents: number;
-  /** e.g. "then $47/month after a 7-day trial" — null for one-off offers. */
+  /** e.g. "then $47/month after your 7-day trial" — null for one-off offers. */
   recurringNote: string | null;
 };
 
-/** The price, said plainly. A trial that bills silently later is the complaint. */
-export function OtoPrice({ view, className = "" }: { view: OtoView; className?: string }) {
-  const { offer, chargeNowCents, recurringNote } = view;
+// Drawn icons in one stroke weight. Unicode ticks and emoji are not an icon
+// system: they change shape per platform and cannot hold a consistent weight
+// next to the type.
+export function Check({ className = "" }: { className?: string }) {
   return (
-    <div className={`flex flex-col gap-1 ${className}`}>
-      <div className="flex flex-wrap items-baseline gap-2">
-        <span className="font-display text-3xl">
-          {money(chargeNowCents, offer.currency)}
-        </span>
-        <span className="text-muted">today</span>
-      </div>
-      {recurringNote && <span className="text-sm text-muted">{recurringNote}. Cancel any time.</span>}
-    </div>
+    <svg viewBox="0 0 20 20" aria-hidden className={`size-5 shrink-0 ${className}`} fill="none">
+      <circle cx="10" cy="10" r="9" className="fill-current opacity-10" />
+      <path
+        d="M6 10.4l2.6 2.6L14.2 7.4"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function ArrowRight({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden className={`size-4 shrink-0 fill-current ${className}`}>
+      <path d="M11 4l6 6-6 6-1.4-1.4 3.6-3.6H3v-2h10.2L9.6 5.4 11 4z" />
+    </svg>
+  );
+}
+
+export function LockIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden className={`size-4 shrink-0 fill-current ${className}`}>
+      <path d="M14 8V6a4 4 0 1 0-8 0v2H4.5v10h11V8H14ZM8 6a2 2 0 1 1 4 0v2H8V6Z" />
+    </svg>
   );
 }
 
 /**
- * Accept and decline. The only way to take an upsell.
+ * The buy block: price, one-click accept, decline, and the reassurance that
+ * belongs beside a button rather than in a separate trust section.
  *
- * One click and no card entry: the card was saved at checkout, so this charges
- * off-session. The token is single-use, which is what stops the price being
- * replayed from a shared or bookmarked URL.
+ * `tone="band"` renders it for a coloured section; the mechanics are identical.
  */
-export function OtoActions({ view, className = "" }: { view: OtoView; className?: string }) {
+export function OtoActions({
+  view,
+  tone = "plain",
+  className = "",
+}: {
+  view: OtoView;
+  tone?: "plain" | "band";
+  className?: string;
+}) {
+  const onBand = tone === "band";
   return (
-    <div className={`flex flex-col gap-3 ${className}`}>
+    <div className={`flex flex-col gap-4 ${className}`}>
       <form action={acceptOtoAction}>
         <input type="hidden" name="token" value={view.token} />
         <button
           type="submit"
-          className="group flex w-full items-center justify-center gap-2 rounded-full bg-primary px-6 py-4 font-medium text-primary-fg transition-[transform,background-color] duration-200 hover:bg-primary-hover active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100"
+          // White on brand terracotta (#c8653d) is 3.90:1 — under AA for a
+          // 17px label. #b0532f is 5.09:1 and still unmistakably the brand
+          // colour. Written as a literal rather than var(--primary-hover)
+          // because that token flips LIGHTER in dark mode, which would make
+          // the contrast worse exactly where it is already failing.
+          className="group flex w-full items-center justify-center gap-2.5 rounded-xl bg-[#b0532f] px-6 py-4 text-[1.05rem] font-medium text-white shadow-[0_12px_28px_-12px_rgba(176,83,47,0.55)] transition-[transform,background-color,box-shadow] duration-200 [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] hover:bg-[#9c4728] hover:shadow-[0_18px_38px_-14px_rgba(176,83,47,0.6)] active:scale-[0.995] motion-reduce:transition-none motion-reduce:active:scale-100"
         >
           {view.offer.acceptLabel}
-          <svg viewBox="0 0 24 24" aria-hidden className="size-4 shrink-0 fill-current transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0">
-            <path d="M13 5l7 7-7 7-1.4-1.4 4.6-4.6H4v-2h12.2l-4.6-4.6L13 5Z" />
-          </svg>
+          <ArrowRight className="transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0" />
         </button>
       </form>
-      {/* Declining must be as easy to find as accepting. A hidden decline turns
-          a good offer into a dark pattern, and the refund arrives anyway. */}
+
+      <p
+        className={`flex items-center justify-center gap-1.5 text-xs ${onBand ? "text-white/70" : "text-muted"}`}
+      >
+        <LockIcon className="opacity-70" />
+        One click — your card is already saved. Nothing else to fill in.
+      </p>
+
+      {/* Declining is as findable as accepting. A buried decline converts once
+          and refunds twice. */}
       <Link
         href="/checkout/thank-you?oto=declined"
-        className="text-center text-sm text-muted underline-offset-4 hover:text-fg hover:underline"
+        className={`text-center text-sm underline underline-offset-4 transition-colors ${
+          onBand ? "text-white/60 hover:text-white" : "text-muted hover:text-fg"
+        }`}
       >
         {view.offer.declineLabel}
       </Link>
-      <p className="text-center text-xs text-muted">
-        One click — your card is already saved. Nothing else to fill in.
-      </p>
     </div>
   );
 }
 
-/** Bullets, shared so every template lists proof the same way. */
-export function OtoBullets({ bullets, className = "" }: { bullets: string[]; className?: string }) {
+/** Price, stated with what happens when the trial ends. */
+export function OtoPrice({
+  view,
+  size = "lg",
+  tone = "plain",
+}: {
+  view: OtoView;
+  size?: "lg" | "xl";
+  tone?: "plain" | "band";
+}) {
+  const onBand = tone === "band";
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-baseline gap-x-2.5">
+        <span
+          className={`font-display leading-none tracking-[-0.03em] ${size === "xl" ? "text-[3.25rem]" : "text-[2.5rem]"}`}
+        >
+          {money(view.chargeNowCents, view.offer.currency)}
+        </span>
+        <span className={onBand ? "text-white/70" : "text-muted"}>today</span>
+      </div>
+      {view.recurringNote && (
+        <p className={`text-sm ${onBand ? "text-white/70" : "text-muted"}`}>
+          {view.recurringNote}. Cancel any time.
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function OtoBullets({
+  bullets,
+  className = "",
+}: {
+  bullets: string[];
+  className?: string;
+}) {
   if (bullets.length === 0) return null;
   return (
-    <ul className={`flex flex-col gap-2.5 ${className}`}>
+    <ul className={`flex flex-col gap-3 ${className}`}>
       {bullets.map((b) => (
-        <li key={b} className="flex items-start gap-3 text-sm">
-          <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-          <span>{b}</span>
+        <li key={b} className="flex items-start gap-3">
+          <Check className="mt-0.5 text-navy" />
+          <span className="text-[0.975rem] leading-relaxed">{b}</span>
         </li>
       ))}
     </ul>
@@ -91,7 +162,9 @@ export function OtoBullets({ bullets, className = "" }: { bullets: string[]; cla
 export function OtoMedia({ offer, className = "" }: { offer: Offer; className?: string }) {
   if (offer.otoVideoUrl) {
     return (
-      <div className={`aspect-video w-full overflow-hidden rounded-2xl border border-border bg-surface-2 ${className}`}>
+      <div
+        className={`aspect-video w-full overflow-hidden rounded-2xl border border-border bg-surface-2 ${className}`}
+      >
         <iframe
           src={offer.otoVideoUrl}
           title={offer.headline}
@@ -113,4 +186,19 @@ export function OtoMedia({ offer, className = "" }: { offer: Offer; className?: 
     );
   }
   return null;
+}
+
+/** `*word*` renders italic — headline emphasis without HTML in the database. */
+export function Emphasised({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\*[^*]+\*)/g).map((p, i) =>
+        p.startsWith("*") && p.endsWith("*") && p.length > 2 ? (
+          <em key={i} className="italic text-primary">{p.slice(1, -1)}</em>
+        ) : (
+          <span key={i}>{p}</span>
+        ),
+      )}
+    </>
+  );
 }

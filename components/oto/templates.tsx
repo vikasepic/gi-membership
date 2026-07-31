@@ -1,29 +1,44 @@
-import { OtoActions, OtoBullets, OtoMedia, OtoPrice, type OtoView } from "@/components/oto/shell";
+import {
+  Emphasised,
+  OtoActions,
+  OtoBullets,
+  OtoMedia,
+  OtoPrice,
+  type OtoView,
+} from "@/components/oto/shell";
 
-// Three layouts for the same offer. They differ in what they lead with, which
-// is the only difference that matters on an upsell:
+// Three shorter upsell layouts, built in the same committed world as the
+// long-form sales page: the category standard at full fidelity, no irony.
+//
+// They differ in what they lead with, which is the only difference that matters
+// on an upsell:
 //
 //   short   the offer itself, for something obvious and cheap
 //   visual  the thing, for anything better shown than described
 //   long    the argument, for something that needs justifying after a purchase
 //
-// None of them owns the accept button, the price maths, or the token. Those
-// live in shell.tsx precisely so a new template cannot get money wrong.
+// None owns the accept button, the price maths, or the token. Those live in
+// shell.tsx precisely so a new layout cannot get money wrong.
 
 /** Minimal and centred. Reads in five seconds. */
 export function ShortOto({ view }: { view: OtoView }) {
   const { offer } = view;
   return (
-    <div className="mx-auto flex max-w-lg flex-col gap-7 py-10">
-      <div className="flex flex-col gap-3 text-center">
-        <span className="kicker text-primary">One-time offer</span>
-        <h1 className="text-3xl leading-tight text-balance">{offer.headline}</h1>
-        {offer.description && <p className="text-muted text-pretty">{offer.description}</p>}
+    <div className="mx-auto flex w-full max-w-lg flex-col gap-8 py-10">
+      <div className="rise flex flex-col gap-4 text-center">
+        <h1 className="font-display text-[clamp(1.9rem,5vw,2.75rem)] leading-[1.05] tracking-[-0.03em] text-balance">
+          <Emphasised text={offer.headline} />
+        </h1>
+        {offer.description && (
+          <p className="text-lg leading-relaxed text-fg/75 text-pretty">{offer.description}</p>
+        )}
       </div>
 
-      <div className="flex flex-col gap-6 rounded-3xl border border-border bg-surface p-7">
+      <div className="flex flex-col gap-6 rounded-2xl border border-border bg-surface p-7 shadow-[0_20px_50px_-32px_rgba(11,11,13,0.45)]">
         <OtoBullets bullets={offer.bullets} />
-        <OtoPrice view={view} className="border-t border-border pt-5" />
+        <div className="border-t border-border pt-5">
+          <OtoPrice view={view} />
+        </div>
         <OtoActions view={view} />
       </div>
     </div>
@@ -34,23 +49,25 @@ export function ShortOto({ view }: { view: OtoView }) {
 export function VisualOto({ view }: { view: OtoView }) {
   const { offer } = view;
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 py-8 md:py-12">
-      <div className="flex flex-col gap-3 text-center">
-        <span className="kicker text-primary">One-time offer</span>
-        <h1 className="text-3xl leading-tight text-balance md:text-4xl">{offer.headline}</h1>
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 py-8 md:py-12">
+      <div className="rise mx-auto flex max-w-3xl flex-col gap-4 text-center">
+        <h1 className="font-display text-[clamp(2rem,5.5vw,3.25rem)] leading-[1.03] tracking-[-0.035em] text-balance">
+          <Emphasised text={offer.headline} />
+        </h1>
+        {offer.description && (
+          <p className="text-lg leading-relaxed text-fg/75 text-pretty">{offer.description}</p>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-12 md:gap-10">
+      <div className="grid grid-cols-1 items-start gap-8 md:grid-cols-12 md:gap-10">
         <div className="md:col-span-7">
-          <OtoMedia offer={offer} />
-          {offer.description && (
-            <p className="pt-5 text-muted text-pretty">{offer.description}</p>
-          )}
+          <OtoMedia offer={offer} className="shadow-[0_30px_70px_-45px_rgba(11,11,13,0.5)]" />
         </div>
-
-        <div className="flex flex-col gap-6 rounded-3xl border border-border bg-surface p-6 md:col-span-5 md:p-7">
+        <div className="flex flex-col gap-6 rounded-2xl border border-border bg-surface p-6 shadow-[0_20px_50px_-32px_rgba(11,11,13,0.45)] md:col-span-5 md:p-7">
           <OtoBullets bullets={offer.bullets} />
-          <OtoPrice view={view} className="border-t border-border pt-5" />
+          <div className="border-t border-border pt-5">
+            <OtoPrice view={view} />
+          </div>
           <OtoActions view={view} />
         </div>
       </div>
@@ -60,41 +77,51 @@ export function VisualOto({ view }: { view: OtoView }) {
 
 /**
  * Long-form. Body copy carries the argument, and the offer is repeated at the
- * bottom so nobody has to scroll back up to accept — the single most common
- * reason a long page underperforms.
+ * bottom so nobody scrolls back up to accept — the most common reason a long
+ * page underperforms.
  */
 export function LongOto({ view }: { view: OtoView }) {
   const { offer } = view;
   const paragraphs = (offer.otoBody ?? "").split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-10 py-10">
-      <div className="flex flex-col gap-4">
-        <span className="kicker text-primary">One-time offer</span>
-        <h1 className="text-3xl leading-tight text-balance md:text-[2.6rem] md:leading-[1.1]">
-          {offer.headline}
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-12 py-10">
+      <div className="rise flex flex-col gap-5">
+        <h1 className="font-display text-[clamp(2.1rem,5.5vw,3.25rem)] leading-[1.03] tracking-[-0.035em] text-balance">
+          <Emphasised text={offer.headline} />
         </h1>
-        {offer.description && <p className="text-lg text-muted text-pretty">{offer.description}</p>}
+        {offer.description && (
+          <p className="text-xl leading-relaxed text-fg/75 text-pretty">{offer.description}</p>
+        )}
       </div>
 
-      <OtoMedia offer={offer} />
+      <OtoMedia offer={offer} className="shadow-[0_30px_70px_-45px_rgba(11,11,13,0.5)]" />
 
       {paragraphs.length > 0 && (
-        <div className="flex flex-col gap-4 text-pretty leading-relaxed">
+        <div className="flex flex-col gap-5">
           {paragraphs.map((p, i) => (
-            <p key={i}>{p}</p>
+            <p
+              key={i}
+              className={
+                i === 0
+                  ? "text-[1.3rem] leading-[1.5] text-pretty"
+                  : "text-lg leading-relaxed text-fg/75 text-pretty"
+              }
+            >
+              {p}
+            </p>
           ))}
         </div>
       )}
 
       {offer.bullets.length > 0 && (
-        <div className="flex flex-col gap-4 rounded-3xl border border-border bg-surface-2 p-7">
-          <span className="kicker text-muted">What you get</span>
+        <div className="flex flex-col gap-5 rounded-2xl bg-surface-2 p-7">
+          <h2 className="font-display text-2xl leading-tight tracking-[-0.02em]">What you get</h2>
           <OtoBullets bullets={offer.bullets} />
         </div>
       )}
 
-      <div className="flex flex-col gap-6 rounded-3xl border border-border bg-surface p-7">
+      <div className="flex flex-col gap-6 rounded-2xl border border-border bg-surface p-7 shadow-[0_20px_50px_-32px_rgba(11,11,13,0.45)]">
         <OtoPrice view={view} />
         <OtoActions view={view} />
       </div>
