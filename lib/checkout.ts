@@ -19,6 +19,7 @@ import { otoSigningSecret } from "@/lib/env";
 import { ensureUserProfile } from "@/lib/users";
 import { applyPendingEntitlements } from "@/lib/app-sync";
 import { sendCrmEvent, type CrmItem } from "@/lib/crm";
+import { resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
 import { LEGAL } from "@/lib/legal";
 import type { Offer } from "@/lib/types";
 
@@ -52,6 +53,8 @@ export type CheckoutInput = {
   // is already signed in sends none of these.
   email?: string;
   fullName?: string;
+  /** Stripe promotion code. Validated server-side; the amount is never trusted. */
+  couponCode?: string | null;
   // Set from the session by the action layer — NEVER from the client payload,
   // or a caller could buy in someone else's name.
   existingUserId?: string | null;
@@ -226,8 +229,20 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   if (needsTaxLocation(TAX_ENABLED, country)) {
     return { ok: false, error: "Please select your country so we can calculate tax." };
   }
+  // Coupon is re-resolved here from the code alone, never taken as an amount
+  // from the browser. The client's preview is for display; this is the number
+  // that gets charged, and the two are computed by the same function so they
+  // cannot disagree.
+  let coupon: AppliedCoupon | null = null;
+  if (input.couponCode?.trim()) {
+    const res = await resolveCoupon(input.couponCode, product.priceCents, product.currency);
+    if (!res.ok) return { ok: false, error: res.error };
+    coupon = res.coupon;
+  }
+  const payableCents = product.priceCents - (coupon?.discountCents ?? 0);
+
   const tax = await calculateTax({
-    priceCents: product.priceCents,
+    priceCents: payableCents,
     currency: product.currency,
     country,
     reference: `${product.slug}-${userId}`,
@@ -259,6 +274,8 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       productId: product.id,
       productSlug: product.slug,
       productTitle: product.title,
+      couponCode: coupon?.code ?? "",
+      discountCents: String(coupon?.discountCents ?? 0),
       bumpOfferId: bumpOffer?.id ?? "",
       taxCalculationId: tax.calculationId ?? "",
     },
@@ -286,6 +303,8 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       currency: product.currency,
       subtotal_cents: product.priceCents,
       total_cents: tax.totalCents,
+      coupon_code: coupon?.code ?? null,
+      discount_cents: coupon?.discountCents ?? 0,
       tax_cents: tax.taxCents,
       buyer_country: country,
       stripe_tax_calculation_id: tax.calculationId,
@@ -304,7 +323,9 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
     kind: "product",
     product_id: product.id,
     description: product.title,
-    amount_cents: product.priceCents,
+    // What this line actually cost after the discount, not the list price —
+    // the receipt and the CRM both read from here.
+    amount_cents: payableCents,
   });
 
   if (!pi.client_secret) return { ok: false, error: "No client secret" };

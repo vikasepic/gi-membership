@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
-import { startCheckout } from "@/app/(store)/checkout/actions";
+import { startCheckout, previewCoupon } from "@/app/(store)/checkout/actions";
+
+type AppliedDiscount = { label: string; discountCents: number; clamped: boolean };
+
+// Mirrors MIN_CHARGE_CENTS in lib/coupons.ts, which is server-only and cannot
+// be imported here. Display only — the server enforces the real floor.
+const MIN_CHARGE_CENTS_CLIENT = 50;
 
 export type BumpSummary = {
   headline: string;
@@ -99,8 +105,29 @@ function Inner({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [couponInput, setCouponInput] = useState("");
+  const [coupon, setCoupon] = useState<AppliedDiscount | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponBusy, setCouponBusy] = useState(false);
+
   const bumpNow = bumpTaken && bump ? bump.chargeNowCents : 0;
-  const totalNow = product.priceCents + bumpNow;
+  const discount = coupon?.discountCents ?? 0;
+  const totalNow = product.priceCents - discount + bumpNow;
+
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponBusy(true);
+    setCouponError(null);
+    const res = await previewCoupon(product.slug, code);
+    if (!res.ok) {
+      setCoupon(null);
+      setCouponError(res.error);
+    } else {
+      setCoupon({ label: res.label, discountCents: res.discountCents, clamped: res.clamped });
+    }
+    setCouponBusy(false);
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -120,6 +147,8 @@ function Inner({
     const res = await startCheckout({
       productSlug: product.slug,
       ...(signedInEmail ? {} : { email, fullName }),
+      // The code, never the amount: the server prices it again.
+      couponCode: coupon ? couponInput.trim() : null,
       bumpTaken,
       country,
     });
@@ -235,12 +264,66 @@ function Inner({
             <span className="shrink-0">{money(product.priceCents, product.currency)}</span>
           </div>
 
+          {coupon && (
+            <div className="flex items-center justify-between gap-4 text-sm">
+              <span className="text-navy">{coupon.label}</span>
+              <span className="shrink-0 text-navy">
+                −{money(coupon.discountCents, product.currency)}
+              </span>
+            </div>
+          )}
+
           {bumpTaken && bump && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted">{bump.headline}</span>
               <span>{money(bump.chargeNowCents, product.currency)}</span>
             </div>
           )}
+
+          {/* Discount code. A plain input rather than a "have a code?" toggle:
+              hiding it makes people leave to hunt for one, and this store's
+              codes are handed out deliberately rather than scattered around. */}
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={couponInput}
+                onChange={(e) => {
+                  setCouponInput(e.target.value);
+                  setCouponError(null);
+                }}
+                // Enter inside the discount field must not submit the payment
+                // form — pressing it to "apply a code" and being charged
+                // instead is the sort of surprise that ends in a chargeback.
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void applyCoupon();
+                  }
+                }}
+                placeholder="Discount code"
+                aria-label="Discount code"
+                autoCapitalize="characters"
+                spellCheck={false}
+                className={`${input} uppercase placeholder:normal-case`}
+              />
+              <button
+                type="button"
+                onClick={() => void applyCoupon()}
+                disabled={couponBusy || !couponInput.trim()}
+                className="shrink-0 rounded-xl border border-border px-4 text-sm font-medium transition-colors hover:border-primary disabled:opacity-50"
+              >
+                {couponBusy ? "…" : coupon ? "Change" : "Apply"}
+              </button>
+            </div>
+            {couponError && <p className="text-xs text-primary">{couponError}</p>}
+            {coupon?.clamped && (
+              <p className="text-xs text-muted">
+                Discount capped — {money(MIN_CHARGE_CENTS_CLIENT, product.currency)} is the smallest
+                charge a card can take.
+              </p>
+            )}
+          </div>
 
           <div className="flex items-baseline justify-between border-t border-border pt-4">
             <span className="text-muted">Total now</span>
