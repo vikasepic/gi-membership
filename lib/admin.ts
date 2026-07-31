@@ -17,7 +17,7 @@ const PRODUCT_COLUMNS =
   "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order";
 
 const OFFER_COLUMNS =
-  "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, oto_template, oto_body, oto_video_url, stripe_product_id_test, stripe_product_id_live";
+  "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, oto_template, oto_body, oto_video_url, oto_sections, stripe_product_id_test, stripe_product_id_live";
 
 export type OfferOption = {
   id: string;
@@ -166,6 +166,7 @@ export type OfferInput = {
   otoTemplate?: string;
   otoBody?: string | null;
   otoVideoUrl?: string | null;
+  otoSections?: unknown;
   declineLabel: string;
   active: boolean;
 };
@@ -238,6 +239,7 @@ function toOfferRow(input: OfferInput, storeId: string) {
     oto_template: input.otoTemplate || "visual",
     oto_body: input.otoBody?.trim() || null,
     oto_video_url: input.otoVideoUrl?.trim() || null,
+    oto_sections: input.otoSections ?? {},
     decline_label: input.declineLabel,
     active: input.active,
   };

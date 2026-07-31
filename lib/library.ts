@@ -9,7 +9,7 @@ import type { Ownership } from "@/lib/offers";
 import type { Product, Offer } from "@/lib/types";
 
 const OFFER_COLUMNS =
-  "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, oto_template, oto_body, oto_video_url, stripe_product_id_test, stripe_product_id_live";
+  "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, oto_template, oto_body, oto_video_url, oto_sections, stripe_product_id_test, stripe_product_id_live";
 
 // Ownership-gated library reads + signed-URL delivery. Paid assets live in the
 // PRIVATE bucket and are only ever reached through an ownership check here.

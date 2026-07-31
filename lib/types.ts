@@ -64,6 +64,8 @@ export type Offer = {
   otoBody: string | null;
   /** Embed URL for the hero; falls back to imageUrl. */
   otoVideoUrl: string | null;
+  /** Long-form sales page sections. Empty sections are skipped. */
+  otoSections: unknown;
   declineLabel: string;
   active: boolean;
   stripeProductIdTest: string | null;

@@ -5,6 +5,7 @@ import { saveOffer, removeOffer, type SaveState } from "@/app/admin/offers/actio
 import { inputClass as input, Field, Section } from "@/components/admin/form-controls";
 import type { Offer } from "@/lib/types";
 import type { ProductOption, AppOption } from "@/lib/admin";
+import { sectionsToForm } from "@/lib/oto-sections";
 
 export function OfferForm({
   offer,
@@ -16,6 +17,7 @@ export function OfferForm({
   apps: AppOption[];
 }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveOffer, {});
+  const sections = sectionsToForm(offer?.otoSections as never);
 
   return (
     <form action={action} className="flex flex-col gap-6">
@@ -138,8 +140,19 @@ export function OfferForm({
             <option value="short">Short — headline, bullets, button</option>
             <option value="visual">Visual — image or video led (default)</option>
             <option value="long">Long-form — story, then the offer</option>
+            <option value="sales">Sales page — stats, proof, comparison, FAQ</option>
             <option value="custom">Custom — coded page for this offer</option>
           </select>
+          {offer && (
+            <a
+              href={`/admin/offers/${offer.id}/preview`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-block text-sm text-primary hover:underline"
+            >
+              Preview every layout with this offer&rsquo;s content &rarr;
+            </a>
+          )}
         </Field>
         <Field
           label="Upsell video URL"
@@ -147,8 +160,30 @@ export function OfferForm({
         >
           <input name="otoVideoUrl" defaultValue={offer?.otoVideoUrl ?? ""} className={input} />
         </Field>
-        <Field label="Upsell body copy" hint="Used by the Long-form layout. Blank line between paragraphs.">
+        <Field label="Upsell body copy" hint="Used by the Long-form and Sales layouts. Blank line between paragraphs.">
           <textarea name="otoBody" defaultValue={offer?.otoBody ?? ""} rows={5} className={input} />
+        </Field>
+
+        {/* Sales-page sections. One item per line, fields separated by | .
+            A textarea rather than a block editor: this is what someone can
+            actually fill in at speed while writing a launch. */}
+        <Field label="Stats" hint="Sales layout. One per line:  value | label   e.g.  ~2 hrs | Time required">
+          <textarea name="otoStats" defaultValue={sections.stats} rows={4} className={input} />
+        </Field>
+        <Field label="Problem" hint="Sales layout. First paragraph is the heading; blank line between paragraphs.">
+          <textarea name="otoProblem" defaultValue={sections.problem} rows={4} className={input} />
+        </Field>
+        <Field label="Benefits" hint="Sales layout. One per line:  title | body">
+          <textarea name="otoBenefits" defaultValue={sections.benefits} rows={5} className={input} />
+        </Field>
+        <Field label="Testimonials" hint="Sales layout. One per line:  name | result | quote">
+          <textarea name="otoTestimonials" defaultValue={sections.testimonials} rows={4} className={input} />
+        </Field>
+        <Field label="Comparison" hint="Sales layout. One per line:  option | cost | time">
+          <textarea name="otoComparison" defaultValue={sections.comparison} rows={4} className={input} />
+        </Field>
+        <Field label="FAQ" hint="Sales layout. One per line:  question | answer">
+          <textarea name="otoFaq" defaultValue={sections.faq} rows={5} className={input} />
         </Field>
         <Field
           label="ActiveCampaign tag ID"

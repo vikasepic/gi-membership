@@ -4,7 +4,7 @@
 // can be tested without a JSX transform. components/oto/registry.tsx turns the
 // name this returns into a component and nothing else.
 
-export const OTO_TEMPLATES = ["short", "visual", "long"] as const;
+export const OTO_TEMPLATES = ["short", "visual", "long", "sales"] as const;
 export type OtoTemplateName = (typeof OTO_TEMPLATES)[number];
 
 /** What renders when a choice is missing, unknown, or not yet built. */

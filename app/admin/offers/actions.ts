@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { parseOtoSections } from "@/lib/oto-sections";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createOffer, updateOffer, deleteOffer, type OfferInput } from "@/lib/admin";
@@ -43,6 +44,12 @@ const schema = z
     otoTemplate: z.enum(["short", "visual", "long", "custom"]).default("visual"),
     otoBody: z.string().optional().default(""),
     otoVideoUrl: z.string().optional().default(""),
+    otoProblem: z.string().optional().default(""),
+    otoStats: z.string().optional().default(""),
+    otoBenefits: z.string().optional().default(""),
+    otoTestimonials: z.string().optional().default(""),
+    otoComparison: z.string().optional().default(""),
+    otoFaq: z.string().optional().default(""),
     declineLabel: z.string().trim().min(1).default("No thanks"),
     active: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
   })
@@ -94,6 +101,14 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     otoTemplate: v.otoTemplate,
     otoBody: v.otoBody,
     otoVideoUrl: v.otoVideoUrl,
+    otoSections: parseOtoSections({
+      problem: v.otoProblem,
+      stats: v.otoStats,
+      benefits: v.otoBenefits,
+      testimonials: v.otoTestimonials,
+      comparison: v.otoComparison,
+      faq: v.otoFaq,
+    }),
     declineLabel: v.declineLabel,
     active: v.active,
   };

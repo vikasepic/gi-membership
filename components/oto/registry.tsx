@@ -1,4 +1,5 @@
 import { ShortOto, VisualOto, LongOto } from "@/components/oto/templates";
+import { SalesOto } from "@/components/oto/sales-template";
 import { resolveOtoTemplate } from "@/lib/oto-template";
 import type { OtoView } from "@/components/oto/shell";
 
@@ -24,6 +25,7 @@ const TEMPLATES: Record<string, OtoComponent> = {
   short: ShortOto,
   visual: VisualOto,
   long: LongOto,
+  sales: SalesOto,
 };
 
 /**
