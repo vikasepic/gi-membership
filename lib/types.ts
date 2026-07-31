@@ -54,6 +54,8 @@ export type Offer = {
   bullets: string[];
   imageUrl: string | null;
   acceptLabel: string;
+  /** ActiveCampaign tag applied when granted, removed when cancelled. */
+  activecampaignTagId: string | null;
   declineLabel: string;
   active: boolean;
   stripeProductIdTest: string | null;

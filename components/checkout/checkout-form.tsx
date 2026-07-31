@@ -171,7 +171,7 @@ function Inner({
   return (
     <form onSubmit={onSubmit} className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-12">
       {/* Left: what we need from them. */}
-      <div className="flex flex-col gap-7 lg:col-span-7">
+      <div className="flex flex-col gap-6 lg:col-span-7">
         {signedInEmail ? (
           <div className="flex flex-col gap-2">
             <span className="kicker text-muted">Your account</span>
@@ -181,51 +181,63 @@ function Inner({
             </div>
           </div>
         ) : (
-          <fieldset className="flex flex-col gap-4">
-            <legend className="kicker mb-2 text-muted">Your details</legend>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm text-muted">Full name</span>
+          /* Name, email and country are one block, two across from `sm` up.
+             Three stacked full-width fields each with its own heading pushed
+             the card entry below the fold on a laptop, and the further the
+             payment form sits from the top the more people leave before they
+             reach it. */
+          <fieldset className="flex flex-col gap-3">
+            <legend className="kicker mb-1 text-muted">Your details</legend>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <input
-                type="text" required placeholder="Jane Cooper" value={fullName}
-                autoComplete="name"
+                type="text" required placeholder="Full name" value={fullName}
+                autoComplete="name" aria-label="Full name"
                 onChange={(e) => setFullName(e.target.value)} className={input}
               />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-sm text-muted">Email</span>
               <input
-                type="email" required placeholder="you@example.com" value={email}
-                autoComplete="email"
+                type="email" required placeholder="Email" value={email}
+                autoComplete="email" aria-label="Email"
                 onChange={(e) => setEmail(e.target.value)} className={input}
               />
-              {/* Say where the thing they are buying will arrive, next to the
-                  field that decides it — a typo here is the most expensive
-                  mistake available on this page. */}
-              <span className="text-xs text-muted">
-                Your receipt and access link go here. No password to create.
-              </span>
-            </label>
+            </div>
+            {/* Country determines the VAT rate on digital sales — Stripe cannot
+                calculate tax without it. */}
+            <select
+              required
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              className={input}
+              aria-label="Billing country"
+              autoComplete="country"
+            >
+              <option value="">Billing country…</option>
+              {COUNTRIES.map((c) => (
+                <option key={c.code} value={c.code}>{c.name}</option>
+              ))}
+            </select>
+            {/* Kept: a typo in the email is the most expensive mistake
+                available on this page. */}
+            <span className="text-xs text-muted">
+              Your receipt and access link go to this email. No password to create.
+            </span>
           </fieldset>
         )}
 
-        {/* Country determines the VAT rate on digital sales — Stripe cannot
-            calculate tax without it. */}
-        <div className="flex flex-col gap-2">
-          <span className="kicker text-muted">Billing country</span>
+        {signedInEmail && (
           <select
             required
             value={country}
             onChange={(e) => setCountry(e.target.value)}
             className={input}
-            aria-label="Country"
+            aria-label="Billing country"
             autoComplete="country"
           >
-            <option value="">Country…</option>
+            <option value="">Billing country…</option>
             {COUNTRIES.map((c) => (
               <option key={c.code} value={c.code}>{c.name}</option>
             ))}
           </select>
-        </div>
+        )}
 
         <fieldset className="flex flex-col gap-3">
           <legend className="kicker mb-2 text-muted">Payment</legend>

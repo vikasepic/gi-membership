@@ -32,6 +32,14 @@ const schema = z
     bullets: z.string().default(""),
     imageUrl: z.preprocess(emptyToNull, z.string().url("Must be a URL").nullable()),
     acceptLabel: z.string().trim().min(1).default("Yes, add this"),
+    // Digits only, so a pasted tag NAME fails here rather than silently never
+    // matching at purchase time.
+    activecampaignTagId: z
+      .string()
+      .trim()
+      .regex(/^\d*$/, "Tag ID must be the numeric id from ActiveCampaign")
+      .optional()
+      .default(""),
     declineLabel: z.string().trim().min(1).default("No thanks"),
     active: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
   })
@@ -79,6 +87,7 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
       .filter(Boolean),
     imageUrl: v.imageUrl,
     acceptLabel: v.acceptLabel,
+    activecampaignTagId: v.activecampaignTagId?.trim() || null,
     declineLabel: v.declineLabel,
     active: v.active,
   };

@@ -126,6 +126,18 @@ export function OfferForm({
         <Field label="Image URL" hint="optional">
           <input name="imageUrl" defaultValue={offer?.imageUrl ?? ""} className={input} />
         </Field>
+        <Field
+          label="ActiveCampaign tag ID"
+          hint="Numeric id, not the tag name. Applied when this offer is granted and removed if it is cancelled or refunded. Leave empty for no tag."
+        >
+          <input
+            name="activecampaignTagId"
+            defaultValue={offer?.activecampaignTagId ?? ""}
+            inputMode="numeric"
+            placeholder="e.g. 43"
+            className={input}
+          />
+        </Field>
       </Section>
 
       <label className="flex items-center gap-2.5 text-sm">

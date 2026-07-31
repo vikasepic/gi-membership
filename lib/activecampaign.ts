@@ -35,18 +35,22 @@ export function activeCampaignEnabled(): boolean {
   return config() !== null;
 }
 
-async function acFetch(path: string, body: unknown): Promise<Response | null> {
+async function acFetch(
+  path: string,
+  body?: unknown,
+  method: "POST" | "GET" | "DELETE" = "POST",
+): Promise<Response | null> {
   const cfg = config();
   if (!cfg) return null;
   try {
     return await fetch(`${cfg.baseUrl}/api/3${path}`, {
-      method: "POST",
+      method,
       headers: {
         "Api-Token": cfg.token,
         "content-type": "application/json",
         accept: "application/json",
       },
-      body: JSON.stringify(body),
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (e) {
@@ -110,24 +114,68 @@ export async function addTag(contactId: string, tagId: string): Promise<boolean>
 }
 
 /**
- * The whole job for one buyer: upsert them, then apply every tag their purchase
- * earned. Tags are applied in sequence rather than in parallel — AC rate-limits
- * per account, and an order has at most a handful of items.
+ * Remove a tag from a contact.
+ *
+ * Deleting needs the *association* id — the row linking this contact to this
+ * tag — not the tag id, so the contact's tags are listed first to find it.
+ * Deleting by tag id would be a different (and much worse) operation.
+ *
+ * A tag that isn't there is success: refunding an order whose tag was already
+ * removed, or which never carried one, is a normal thing to do twice.
+ */
+export async function removeTag(contactId: string, tagId: string): Promise<boolean> {
+  const res = await acFetch(`/contacts/${contactId}/contactTags`, undefined, "GET");
+  if (!res) return false;
+  if (!res.ok) {
+    console.error(`[activecampaign] list contactTags ${res.status}`);
+    return false;
+  }
+  let assocId: string | null = null;
+  try {
+    const json = (await res.json()) as {
+      contactTags?: { id?: string | number; tag?: string | number }[];
+    };
+    const hit = (json.contactTags ?? []).find((t) => String(t.tag) === String(tagId));
+    assocId = hit?.id == null ? null : String(hit.id);
+  } catch {
+    return false;
+  }
+  if (!assocId) return true; // not applied — nothing to do
+
+  const del = await acFetch(`/contactTags/${assocId}`, undefined, "DELETE");
+  if (!del) return false;
+  if (del.ok || del.status === 404) return true;
+  console.error(`[activecampaign] delete contactTag ${del.status}`);
+  return false;
+}
+
+/**
+ * The whole job for one buyer: upsert them, then apply and/or remove tags.
+ * Sequential rather than parallel — AC rate-limits per account, and an order
+ * has at most a handful of items.
+ *
+ * `remove` exists so a refund or a cancellation can take back the tag that the
+ * purchase applied. Without it someone who refunded on day one keeps receiving
+ * the onboarding sequence for something they no longer own, which reads as the
+ * store not noticing it gave their money back.
  */
 export async function tagContact(args: {
   email: string;
   fullName?: string | null;
-  tagIds: string[];
+  tagIds?: string[];
+  removeTagIds?: string[];
 }): Promise<void> {
   if (!activeCampaignEnabled()) return;
-  const tagIds = [...new Set(args.tagIds.filter((t) => t && t.trim()))].map((t) => t.trim());
+  const clean = (ids?: string[]) =>
+    [...new Set((ids ?? []).filter((t) => t && t.trim()))].map((t) => t.trim());
+  const add = clean(args.tagIds);
+  const drop = clean(args.removeTagIds);
 
   // Sync even with no tags: the buyer should exist in the CRM either way, and
   // this is what keeps a name up to date when they buy again.
   const contactId = await syncContact({ email: args.email, fullName: args.fullName });
   if (!contactId) return;
 
-  for (const tagId of tagIds) {
-    await addTag(contactId, tagId);
-  }
+  for (const tagId of add) await addTag(contactId, tagId);
+  for (const tagId of drop) await removeTag(contactId, tagId);
 }

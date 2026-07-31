@@ -2,6 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { pushOwnershipStateToApps } from "@/lib/app-sync";
 import { sendCrmEvent } from "@/lib/crm";
+import { untagRevoked } from "@/lib/ac-tags";
 
 // Subscription lifecycle -> ownership state. This is what keeps a cancelled or
 // refunded customer from retaining app access, and what stops a single failed
@@ -69,6 +70,26 @@ export async function syncSubscriptionOwnership(
   await pushOwnershipStateToApps((data ?? []).map((r) => r.id as string));
 
   if (changed.length === 0) return;
+
+  // A cancellation must take the offer's tag back, or someone who cancelled
+  // keeps getting the sequence for a subscription they ended. past_due is NOT
+  // untagged: Stripe is still retrying the card and they still have access.
+  if (status === "canceled") {
+    try {
+      const { data: rows } = await db
+        .from("ownership")
+        .select("offer_id")
+        .eq("stripe_subscription_id", stripeSubscriptionId)
+        .not("offer_id", "is", null);
+      const offerIds = (rows ?? []).map((r) => r.offer_id as string);
+      for (const row of changed) {
+        await untagRevoked({ userId: row.user_id as string, offerIds });
+      }
+    } catch (e) {
+      console.error("[syncSubscriptionOwnership] untag failed:", e);
+    }
+  }
+
   const crmType =
     status === "canceled"
       ? "subscription_canceled"
@@ -176,6 +197,13 @@ export async function revokeOwnershipForOrder(
         occurredAt: Math.floor(Date.now() / 1000),
         orderId: order.id as string,
       });
+    }
+    // Take back exactly the tags this order applied. Guarded: the refund itself
+    // has already gone through, and a CRM outage must not make it look failed.
+    try {
+      await untagRevoked({ userId: order.user_id as string, productIds, offerIds });
+    } catch (e) {
+      console.error("[revokeOwnershipForOrder] untag failed (refund still stands):", e);
     }
   }
   return { revoked };

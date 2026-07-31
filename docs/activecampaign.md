@@ -72,14 +72,49 @@ nothing replays.
 A tag the contact already has comes back `422`, which is treated as success: a
 repeat buyer is normal, and the contact ends up tagged either way.
 
+## Tags are removed too
+
+| Event | Effect |
+|---|---|
+| Refund (Admin → Orders, or a Stripe refund) | Removes the product and offer tags that order applied |
+| Subscription cancelled | Removes that offer's tag |
+| Subscription `past_due` | **Nothing removed** — Stripe is still retrying and they still have access |
+
+Removal needs the *association* id (the row linking one contact to one tag),
+not the tag id, so the contact's tags are listed first to find it:
+
+```
+GET    /api/3/contacts/{contactId}/contactTags
+DELETE /api/3/contactTags/{associationId}
+```
+
+A tag that isn't applied is treated as success — refunding twice, or refunding
+a product that carried no tag, is a normal thing to do.
+
+## Abandoned cart
+
+Set **Admin → Settings → Abandoned-cart tag ID**. One tag for the whole
+catalogue.
+
+- Applied when someone reaches the payment step (a PaymentIntent exists,
+  nothing is paid).
+- Removed the moment payment succeeds, in the same pass that applies the
+  purchase tags — so there is no window where someone is both a customer and an
+  abandoner.
+
+**Build the ActiveCampaign automation as: tag added → wait 1 hour → if the
+contact still has the tag, send.** The tag is the timer. That is why there is no
+scheduled job here hunting for stale carts — nothing to run, monitor, or notice
+has silently stopped.
+
+Someone who completes checkout in two minutes is tagged and untagged within
+those two minutes and never enters the sequence.
+
 ## Not covered
 
-- **Offers have no tag field.** The Content Engine trial is an offer, not a
-  product, so a trial start currently applies no tag. Products only, as
-  specified.
-- **Refunds do not untag.** Nothing removes a tag when access is revoked.
 - **The buyer's name comes from checkout.** A member who bought before the name
   field existed syncs with an email only.
+- **Nothing retries.** A failed call is logged and forgotten.
 
 ## Migrating off the Zapier feed
 

@@ -20,7 +20,7 @@ import { ensureUserProfile } from "@/lib/users";
 import { applyPendingEntitlements } from "@/lib/app-sync";
 import { sendCrmEvent, type CrmItem } from "@/lib/crm";
 import { resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
-import { tagContact } from "@/lib/activecampaign";
+import { tagPurchase, tagCartStarted } from "@/lib/ac-tags";
 import { LEGAL } from "@/lib/legal";
 import type { Offer } from "@/lib/types";
 
@@ -329,6 +329,15 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
     amount_cents: payableCents,
   });
 
+  // They are at the payment step with nothing paid. Tagged now and untagged by
+  // finalizeOrder, so the ActiveCampaign automation can wait and re-check
+  // rather than the store needing a scheduled job to find stale carts.
+  try {
+    await tagCartStarted(userId);
+  } catch (e) {
+    console.error("[createCheckoutIntent] abandoned-cart tag failed:", e);
+  }
+
   if (!pi.client_secret) return { ok: false, error: "No client secret" };
   return { ok: true, clientSecret: pi.client_secret };
 }
@@ -564,28 +573,12 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
   try {
     const { data: bought } = await db
       .from("order_items")
-      .select("product_id")
-      .eq("order_id", order.id)
-      .not("product_id", "is", null);
-    const productIds = (bought ?? []).map((i) => i.product_id as string);
-    let tagIds: string[] = [];
-    if (productIds.length > 0) {
-      const { data: tagged } = await db
-        .from("products")
-        .select("activecampaign_tag_id")
-        .in("id", productIds)
-        .not("activecampaign_tag_id", "is", null);
-      tagIds = (tagged ?? []).map((p) => p.activecampaign_tag_id as string);
-    }
-    const { data: profile } = await db
-      .from("users")
-      .select("username")
-      .eq("id", order.user_id as string)
-      .maybeSingle();
-    await tagContact({
-      email: order.email as string,
-      fullName: (profile?.username as string) ?? null,
-      tagIds,
+      .select("product_id, offer_id")
+      .eq("order_id", order.id);
+    await tagPurchase({
+      userId: order.user_id as string,
+      productIds: (bought ?? []).map((i) => i.product_id).filter(Boolean) as string[],
+      offerIds: (bought ?? []).map((i) => i.offer_id).filter(Boolean) as string[],
     });
   } catch (e) {
     console.error("[finalizeOrder] activecampaign failed (order is still complete):", e);
