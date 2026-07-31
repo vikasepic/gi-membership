@@ -248,19 +248,38 @@ export function ProductForm({
         title="ActiveCampaign"
         hint="Buyers of this product are added to ActiveCampaign (or updated if they're already there) and given this tag."
       >
-        <Field
-          label="Tag ID"
-          hint="The numeric id, not the tag name — Contacts → Manage Tags, then read the id from the URL when you edit a tag. Leave empty for no tag."
-          error={err("activecampaignTagId")}
-        >
-          <input
-            name="activecampaignTagId"
-            defaultValue={product?.activecampaignTagId ?? ""}
-            inputMode="numeric"
-            placeholder="e.g. 42"
-            className={inputClass}
-          />
-        </Field>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <Field
+            label="Purchase tag ID"
+            hint="Applied when someone buys this product. Removed if they are refunded."
+            error={err("activecampaignTagId")}
+          >
+            <input
+              name="activecampaignTagId"
+              defaultValue={product?.activecampaignTagId ?? ""}
+              inputMode="numeric"
+              placeholder="e.g. 110"
+              className={inputClass}
+            />
+          </Field>
+          <Field
+            label="Abandoned-cart tag ID"
+            hint="Applied when checkout for this product starts, removed the moment it is paid. In ActiveCampaign: wait an hour, then check the tag is still there before sending."
+            error={err("activecampaignAbandonedTagId")}
+          >
+            <input
+              name="activecampaignAbandonedTagId"
+              defaultValue={product?.activecampaignAbandonedTagId ?? ""}
+              inputMode="numeric"
+              placeholder="e.g. 111"
+              className={inputClass}
+            />
+          </Field>
+        </div>
+        <p className="text-xs text-muted">
+          Both take the <strong>numeric id</strong>, not the tag name — Contacts &rarr; Manage Tags,
+          then read the id from the URL when editing a tag. Leave either empty for no tag.
+        </p>
       </Section>
 
       {state.errors?._form && (

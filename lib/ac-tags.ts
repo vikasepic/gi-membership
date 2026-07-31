@@ -43,14 +43,16 @@ async function tagOrQueue(args: {
 // API) and from the money path (which should not be full of tag lookups). Every
 // function here is safe to call when ActiveCampaign is not configured.
 
-export async function abandonedTagId(): Promise<string | null> {
+/** The abandoned-cart tags for these products, if they have any. */
+export async function abandonedTagIds(productIds: string[]): Promise<string[]> {
+  if (productIds.length === 0) return [];
   const db = createServiceClient();
   const { data } = await db
-    .from("stores")
+    .from("products")
     .select("activecampaign_abandoned_tag_id")
-    .eq("id", await getStoreId())
-    .maybeSingle();
-  return (data?.activecampaign_abandoned_tag_id as string) ?? null;
+    .in("id", productIds)
+    .not("activecampaign_abandoned_tag_id", "is", null);
+  return (data ?? []).map((p) => p.activecampaign_abandoned_tag_id as string);
 }
 
 export async function productTagIds(productIds: string[]): Promise<string[]> {
@@ -98,13 +100,13 @@ export async function contactFor(
  * succeeds — so a buyer who completes in two minutes never gets the email, and
  * there is no cron to run, monitor, or notice has stopped.
  */
-export async function tagCartStarted(userId: string): Promise<void> {
+export async function tagCartStarted(userId: string, productId: string): Promise<void> {
   if (!activeCampaignEnabled()) return;
-  const tagId = await abandonedTagId();
-  if (!tagId) return;
+  const tagIds = await abandonedTagIds([productId]);
+  if (tagIds.length === 0) return;
   const contact = await contactFor(userId);
   if (!contact) return;
-  await tagOrQueue({ ...contact, tagIds: [tagId] });
+  await tagOrQueue({ ...contact, tagIds });
 }
 
 /**
@@ -120,15 +122,19 @@ export async function tagPurchase(args: {
   if (!activeCampaignEnabled()) return;
   const contact = await contactFor(args.userId);
   if (!contact) return;
+  // The abandoned tags removed are those of the products actually bought, so a
+  // buyer who abandons product A and later buys product B keeps A's abandoned
+  // tag — and A's sequence still reaches them, which is the point of tagging
+  // per product rather than per store.
   const [products, offers, abandoned] = await Promise.all([
     productTagIds(args.productIds),
     offerTagIds(args.offerIds),
-    abandonedTagId(),
+    abandonedTagIds(args.productIds),
   ]);
   await tagOrQueue({
     ...contact,
     tagIds: [...products, ...offers],
-    removeTagIds: abandoned ? [abandoned] : [],
+    removeTagIds: abandoned,
   });
 }
 

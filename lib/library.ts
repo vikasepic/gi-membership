@@ -15,7 +15,7 @@ const OFFER_COLUMNS =
 // PRIVATE bucket and are only ever reached through an ownership check here.
 
 const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order, chapter_label, lesson_label";
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order, chapter_label, lesson_label";
 
 export async function listOwnedProducts(userId: string): Promise<Product[]> {
   const db = createServiceClient();

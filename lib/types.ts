@@ -23,6 +23,8 @@ export type Product = {
   coverPath: string | null;
   /** ActiveCampaign tag applied to the buyer on purchase. Null = no tag. */
   activecampaignTagId: string | null;
+  /** Applied when checkout for this product starts; removed when it is paid. */
+  activecampaignAbandonedTagId: string | null;
   status: ProductStatus;
   bumpOfferId: string | null;
   upsellOfferId: string | null;

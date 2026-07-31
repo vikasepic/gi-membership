@@ -22,18 +22,6 @@ export function SettingsForm({ settings }: { settings: StoreSettings }) {
         </Field>
       </div>
 
-      <Field
-        label="Abandoned-cart tag ID"
-        hint="ActiveCampaign tag id, applied when someone reaches the payment step and removed the moment they pay. In ActiveCampaign, wait an hour after this tag is added and check it's still there before sending — that's what makes it 'abandoned'. Leave empty to disable."
-      >
-        <input
-          name="abandonedTagId"
-          defaultValue={settings.abandonedTagId ?? ""}
-          inputMode="numeric"
-          placeholder="e.g. 51"
-          className={input}
-        />
-      </Field>
 
       {state.error && (
         <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">

@@ -93,14 +93,13 @@ a product that carried no tag, is a normal thing to do.
 
 ## Abandoned cart
 
-Set **Admin → Settings → Abandoned-cart tag ID**. One tag for the whole
-catalogue.
+Set **Admin → Products → ActiveCampaign → Abandoned-cart tag ID**, per product.
 
-- Applied when someone reaches the payment step (a PaymentIntent exists,
-  nothing is paid).
-- Removed the moment payment succeeds, in the same pass that applies the
-  purchase tags — so there is no window where someone is both a customer and an
-  abandoner.
+- Applied when someone reaches the payment step for that product (a
+  PaymentIntent exists, nothing is paid).
+- Removed the moment that product is paid for, in the same pass that applies
+  the purchase tag — so there is no window where someone is both a customer and
+  an abandoner.
 
 **Build the ActiveCampaign automation as: tag added → wait 1 hour → if the
 contact still has the tag, send.** The tag is the timer. That is why there is no
@@ -109,6 +108,12 @@ has silently stopped.
 
 Someone who completes checkout in two minutes is tagged and untagged within
 those two minutes and never enters the sequence.
+
+Per product rather than one store-wide tag, so the email can name what was
+abandoned. It also means the tags are independent: abandoning product A and
+later buying product B leaves A's abandoned tag in place, and A's sequence still
+reaches them — which is usually what you want, and is the whole reason for
+tagging per product.
 
 ## Not covered
 

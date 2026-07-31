@@ -48,6 +48,14 @@ export const productSchema = z.object({
   // identifier handed straight back to AC, never arithmetic. Digits only, so a
   // pasted tag NAME is rejected here rather than silently failing at purchase
   // time when nobody is watching.
+  activecampaignAbandonedTagId: z.preprocess(
+    emptyToNull,
+    z
+      .string()
+      .regex(/^\d+$/, "Abandoned-cart tag ID must be the numeric id from ActiveCampaign")
+      .nullable()
+      .default(null),
+  ),
   activecampaignTagId: z.preprocess(
     emptyToNull,
     z
@@ -70,6 +78,7 @@ export type ParsedProduct = {
   bumpOfferId: string | null;
   upsellOfferId: string | null;
   activecampaignTagId: string | null;
+  activecampaignAbandonedTagId: string | null;
 };
 
 export type ParseResult =
@@ -104,6 +113,7 @@ export function parseProductForm(raw: Record<string, unknown>): ParseResult {
       bumpOfferId: v.bumpOfferId,
       upsellOfferId: v.upsellOfferId,
       activecampaignTagId: v.activecampaignTagId,
+      activecampaignAbandonedTagId: v.activecampaignAbandonedTagId,
     },
   };
 }

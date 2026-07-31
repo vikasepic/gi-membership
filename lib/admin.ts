@@ -14,7 +14,7 @@ import type {
 // Admin-side reads/writes. Service-role; callers are admin server actions/pages.
 
 const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order";
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order";
 
 const OFFER_COLUMNS =
   "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, stripe_product_id_test, stripe_product_id_live";
@@ -42,6 +42,7 @@ export type ProductInput = {
   bumpOfferId: string | null;
   upsellOfferId: string | null;
   activecampaignTagId: string | null;
+  activecampaignAbandonedTagId: string | null;
 };
 
 export async function listAllProducts(): Promise<Product[]> {
@@ -92,6 +93,7 @@ function toRow(input: ProductInput, storeId: string) {
     // test for absence rather than for an empty string it would then have to
     // remember to trim.
     activecampaign_tag_id: input.activecampaignTagId?.trim() || null,
+    activecampaign_abandoned_tag_id: input.activecampaignAbandonedTagId?.trim() || null,
   };
 }
 
@@ -267,15 +269,13 @@ export type StoreSettings = {
   name: string;
   supportEmail: string | null;
   currency: string;
-  /** Applied at checkout start, removed on payment. Drives the AC automation. */
-  abandonedTagId: string | null;
 };
 
 export async function getStoreSettings(): Promise<StoreSettings> {
   const db = createServiceClient();
   const { data, error } = await db
     .from("stores")
-    .select("name, settings, activecampaign_abandoned_tag_id")
+    .select("name, settings")
     .eq("id", await getStoreId())
     .single();
   if (error || !data) throw new Error(`getStoreSettings: ${error?.message}`);
@@ -284,10 +284,6 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     name: data.name as string,
     supportEmail: settings.support_email ?? null,
     currency: settings.currency ?? "usd",
-    // A real column rather than a key in the settings json, because the
-    // purchase path reads it on every checkout and a column can be indexed and
-    // typed; the json blob is for things only the admin screen ever reads.
-    abandonedTagId: (data.activecampaign_abandoned_tag_id as string) ?? null,
   };
 }
 
@@ -298,7 +294,6 @@ export async function updateStoreSettings(input: StoreSettings): Promise<void> {
     .update({
       name: input.name,
       settings: { support_email: input.supportEmail, currency: input.currency },
-      activecampaign_abandoned_tag_id: input.abandonedTagId?.trim() || null,
     })
     .eq("id", await getStoreId());
   if (error) throw new Error(`updateStoreSettings: ${error.message}`);

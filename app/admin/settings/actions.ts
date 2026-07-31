@@ -11,12 +11,6 @@ const schema = z.object({
   name: z.string().trim().min(1, "Store name required"),
   supportEmail: z.preprocess(emptyToNull, z.string().email("Must be an email").nullable()),
   currency: z.string().trim().min(1).default("usd"),
-  abandonedTagId: z
-    .string()
-    .trim()
-    .regex(/^\d*$/, "Abandoned-cart tag ID must be the numeric id from ActiveCampaign")
-    .optional()
-    .default(""),
 });
 
 export type SaveState = { error?: string; saved?: boolean };

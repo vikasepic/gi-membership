@@ -333,7 +333,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   // finalizeOrder, so the ActiveCampaign automation can wait and re-check
   // rather than the store needing a scheduled job to find stale carts.
   try {
-    await tagCartStarted(userId);
+    await tagCartStarted(userId, product.id);
   } catch (e) {
     console.error("[createCheckoutIntent] abandoned-cart tag failed:", e);
   }
