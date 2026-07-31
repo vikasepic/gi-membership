@@ -22,7 +22,16 @@ export async function GET(request: Request) {
     return go(`/checkout/thank-you${redirectStatus ? `?redirect_status=${redirectStatus}` : ""}`);
   }
 
-  await finalizeOrder(paymentIntent);
+  // Everything from here is best-effort. The card has already been charged, so
+  // an exception on this route turns a completed purchase into an error page —
+  // by far the worst outcome available. finalizeOrder is idempotent and the
+  // Stripe webhook calls it too, so a failure here is recoverable; an error
+  // page shown to someone who just paid is not.
+  try {
+    await finalizeOrder(paymentIntent);
+  } catch (e) {
+    console.error("[complete] finalizeOrder failed (webhook will retry):", e);
+  }
 
   // Sign them in before branching, so the OTO page and the library both know
   // who they are. A buyer who signed up at checkout has no password and would
@@ -31,22 +40,32 @@ export async function GET(request: Request) {
   // Skipped when a session already exists: a signed-in member buying a second
   // product must not be logged out and back in, and must never be swapped onto
   // a different account by a URL.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    const tokenHash = await mintPostPurchaseLogin(paymentIntent, clientSecret);
-    if (tokenHash) {
-      // A failure here is not fatal: the purchase is already complete, and the
-      // thank-you page still works signed out. They just get the login they
-      // would have had before.
-      await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      const tokenHash = await mintPostPurchaseLogin(paymentIntent, clientSecret);
+      if (tokenHash) {
+        await supabase.auth.verifyOtp({ type: "magiclink", token_hash: tokenHash });
+      }
     }
+  } catch (e) {
+    // Not fatal: the thank-you page works signed out, and they can still log in
+    // with a link the ordinary way.
+    console.error("[complete] auto sign-in failed:", e);
   }
 
-  const token = await resolveOtoForOrder(paymentIntent);
-  if (token) return go(`/checkout/oto?token=${encodeURIComponent(token)}`);
+  // resolveOtoForOrder retrieves the PaymentIntent, which throws on an id Stripe
+  // doesn't know. Missing the upsell is a lost opportunity; failing the whole
+  // route is a lost customer.
+  try {
+    const token = await resolveOtoForOrder(paymentIntent);
+    if (token) return go(`/checkout/oto?token=${encodeURIComponent(token)}`);
+  } catch (e) {
+    console.error("[complete] OTO lookup failed, sending to thank-you:", e);
+  }
   return go(`/checkout/thank-you?payment_intent=${paymentIntent}&redirect_status=succeeded`);
 }
 
