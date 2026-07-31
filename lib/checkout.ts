@@ -18,6 +18,7 @@ import { stripe, stripeMode } from "@/lib/stripe";
 import { otoSigningSecret } from "@/lib/env";
 import { ensureUserProfile } from "@/lib/users";
 import { applyPendingEntitlements } from "@/lib/app-sync";
+import { sendCrmEvent, type CrmItem } from "@/lib/crm";
 import { LEGAL } from "@/lib/legal";
 import type { Offer } from "@/lib/types";
 
@@ -484,6 +485,41 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
     );
   } catch (e) {
     console.error("[finalizeOrder] email failed (order is still complete):", e);
+  }
+
+  // CRM feed: ONE event carrying the whole purchase — base and bump together,
+  // with the slug and the trial flag. Deliberately above the consent gate: this
+  // is customer servicing, the same category as the receipt just sent, not ad
+  // measurement. See lib/crm.ts.
+  try {
+    const { data: crmItems } = await db
+      .from("order_items")
+      .select("kind, description, amount_cents, stripe_subscription_id")
+      .eq("order_id", order.id);
+    const rows = crmItems ?? [];
+    // Always `purchase` — money moved. A trial bump rides along as a flag
+    // rather than replacing the type, because the buyer both bought the product
+    // AND started a trial, and typing it as only the latter drops the customer
+    // tag entirely.
+    const trial = rows.some((i) => i.stripe_subscription_id && (i.amount_cents as number) === 0);
+    await sendCrmEvent({
+      type: "purchase",
+      trialStarted: trial,
+      email: order.email as string,
+      occurredAt: Math.floor(Date.now() / 1000),
+      orderId: order.id as string,
+      productSlug: pi.metadata.productSlug ?? null,
+      totalCents: pi.amount,
+      currency: pi.currency,
+      items: rows.map((i) => ({
+        kind: (i.kind as CrmItem["kind"]) ?? "product",
+        description: i.description as string,
+        amountCents: (i.amount_cents as number) ?? 0,
+        productSlug: i.kind === "product" ? (pi.metadata.productSlug ?? null) : null,
+      })),
+    });
+  } catch (e) {
+    console.error("[finalizeOrder] crm failed (order is still complete):", e);
   }
 
   // Report the conversion server-side — ONLY with the buyer's explicit consent,

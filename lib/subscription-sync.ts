@@ -1,6 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { pushOwnershipStateToApps } from "@/lib/app-sync";
+import { sendCrmEvent } from "@/lib/crm";
 
 // Subscription lifecycle -> ownership state. This is what keeps a cancelled or
 // refunded customer from retaining app access, and what stops a single failed
@@ -44,6 +45,18 @@ export async function syncSubscriptionOwnership(
 ): Promise<void> {
   const db = createServiceClient();
   const status = mapSubscriptionStatus(stripeStatus);
+
+  // Read the current state before writing, so the CRM can be told about real
+  // transitions only. Stripe sends customer.subscription.updated for far more
+  // than status changes — a renewal, a card update, a metadata edit — and
+  // tagging on every one of those would fire the same "went active" event at
+  // the CRM every month for the life of the subscription.
+  const { data: before } = await db
+    .from("ownership")
+    .select("id, user_id, status")
+    .eq("stripe_subscription_id", stripeSubscriptionId);
+  const changed = (before ?? []).filter((r) => r.status !== status);
+
   const { data, error } = await db
     .from("ownership")
     .update({ status })
@@ -51,7 +64,33 @@ export async function syncSubscriptionOwnership(
     .select("id");
   if (error) throw new Error(`syncSubscriptionOwnership: ${error.message}`);
 
+  // Unchanged from before: apps are told on every sync, not only on change, so
+  // an app that missed an earlier push still converges.
   await pushOwnershipStateToApps((data ?? []).map((r) => r.id as string));
+
+  if (changed.length === 0) return;
+  const crmType =
+    status === "canceled"
+      ? "subscription_canceled"
+      : status === "past_due"
+        ? "subscription_past_due"
+        : status === "trialing"
+          ? "trial_started"
+          : "subscription_active";
+  for (const row of changed) {
+    const { data: user } = await db
+      .from("users")
+      .select("email")
+      .eq("id", row.user_id as string)
+      .maybeSingle();
+    if (!user?.email) continue;
+    await sendCrmEvent({
+      type: crmType,
+      email: user.email as string,
+      occurredAt: Math.floor(Date.now() / 1000),
+      stripeSubscriptionId,
+    });
+  }
 }
 
 // A refunded order loses what it bought. Scoped to the refunded PaymentIntent's
@@ -119,6 +158,25 @@ export async function revokeOwnershipForOrder(
     // A refund must reach the app too, or the customer keeps the access they
     // were just refunded for.
     await pushOwnershipStateToApps((data ?? []).map((r) => r.id as string));
+  }
+
+  // Tell the CRM too, so a refunded buyer can be untagged. Without this they
+  // stay tagged as a customer forever and keep receiving the onboarding
+  // sequence for something they no longer own.
+  if (revoked > 0) {
+    const { data: user } = await db
+      .from("users")
+      .select("email")
+      .eq("id", order.user_id as string)
+      .maybeSingle();
+    if (user?.email) {
+      await sendCrmEvent({
+        type: "refunded",
+        email: user.email as string,
+        occurredAt: Math.floor(Date.now() / 1000),
+        orderId: order.id as string,
+      });
+    }
   }
   return { revoked };
 }
