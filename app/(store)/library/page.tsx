@@ -89,10 +89,11 @@ export default async function LibraryPage({
               <span className="kicker text-muted">{courses.length} in your library</span>
             )}
           </div>
-          {/* auto-fit rather than fixed breakpoints: one course fills a
-              comfortable single column instead of a lonely third, and the grid
-              still reflows to three across on a wide screen. */}
-          <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(min(100%,17rem),1fr))]">
+          {/* auto-FILL, not auto-fit. auto-fit collapses the empty tracks, so a
+              single course stretched to the full width and its 16:10 cover
+              became a wall of image. auto-fill keeps the empty tracks, so one
+              card is card-sized and the grid still reflows on any width. */}
+          <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr))]">
             {courses.map((c, i) => (
               <LibraryCourseCard
                 key={c.id}
