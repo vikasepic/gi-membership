@@ -35,7 +35,7 @@ function effective(all: Rule[], path: string, key: string): string | undefined {
 describe("frame protection", () => {
   it("lets the preview frame be embedded by this site only", async () => {
     const all = await rules();
-    const p = "/admin/offers/abc/preview/frame";
+    const p = "/oto-preview/abc";
     expect(effective(all, p, "X-Frame-Options")).toBe("SAMEORIGIN");
     expect(effective(all, p, "Content-Security-Policy")).toBe("frame-ancestors 'self'");
   });
@@ -57,7 +57,7 @@ describe("frame protection", () => {
 
   it("keeps the other security headers on both", async () => {
     const all = await rules();
-    for (const p of ["/", "/admin/offers/abc/preview/frame"]) {
+    for (const p of ["/", "/oto-preview/abc"]) {
       expect(effective(all, p, "X-Content-Type-Options"), p).toBe("nosniff");
       expect(effective(all, p, "Strict-Transport-Security"), p).toContain("max-age=");
     }

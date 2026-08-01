@@ -101,7 +101,7 @@ export default async function OtoPreviewPage({
           // Remount on change so the frame re-lays out rather than keeping the
           // previous width's render.
           key={`${chosen}-${deviceKey}`}
-          src={`/admin/offers/${offer.id}/preview/frame?template=${chosen}`}
+          src={`/oto-preview/${offer.id}?template=${chosen}`}
           title={`${offer.name} — ${chosen} on ${d.label}`}
           className={`border-0 bg-bg ${
             deviceKey === "desktop"

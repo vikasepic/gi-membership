@@ -8,8 +8,16 @@ import { money } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
-// The upsell page on its own, with no admin chrome, so the preview can load it
-// in an iframe at a chosen width and show a truthful mobile rendering.
+// The upsell page on its own, for the admin preview iframe.
+//
+// It lives OUTSIDE /admin deliberately. Everything under app/admin/ is wrapped
+// by app/admin/layout.tsx, so a frame route in there rendered the admin nav and
+// the LIVE PAYMENTS badge inside the iframe — a route group cannot escape a
+// parent layout, only a different path can. Out here it gets the root layout
+// alone: html, body, fonts, theme.
+//
+// Still admin-only: requireAdmin() runs before anything renders, and the route
+// being outside /admin changes the layout, never the authorisation.
 //
 // A CSS-scaled desktop render is not a mobile preview: media queries still
 // resolve against the real viewport, so every breakpoint lies. An iframe has

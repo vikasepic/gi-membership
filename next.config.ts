@@ -48,7 +48,7 @@ const nextConfig: NextConfig = {
       // rule in order and the last one wins, so a specific rule placed first is
       // silently overwritten by the general one.
       {
-        source: "/admin/offers/:id/preview/frame",
+        source: "/oto-preview/:id",
         headers: [
           ...base,
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
