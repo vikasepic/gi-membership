@@ -17,15 +17,42 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "100mb" },
   },
   async headers() {
+    const base = [
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+      { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+    ];
     return [
+      // Everything else stays un-frameable. Clickjacking a checkout is the
+      // attack this header exists to stop.
       {
         source: "/:path*",
         headers: [
-          { key: "X-Content-Type-Options", value: "nosniff" },
+          ...base,
           { key: "X-Frame-Options", value: "DENY" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-          { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+        ],
+      },
+      // The admin upsell preview renders the page in an iframe so a phone
+      // preview gets its own viewport and media queries tell the truth. DENY
+      // blocks that even same-origin, so this one admin-only route allows
+      // framing by this site and nothing else.
+      //
+      // frame-ancestors rather than X-Frame-Options: SAMEORIGIN because CSP is
+      // the header browsers actually honour for this, and it takes an explicit
+      // origin list. Both are sent — the older header for anything that only
+      // understands that, the CSP for everything current.
+      //
+      // Defined AFTER the catch-all on purpose: Next applies every matching
+      // rule in order and the last one wins, so a specific rule placed first is
+      // silently overwritten by the general one.
+      {
+        source: "/admin/offers/:id/preview/frame",
+        headers: [
+          ...base,
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
         ],
       },
     ];
