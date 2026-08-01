@@ -1,5 +1,6 @@
 import { ShortOto, VisualOto, LongOto } from "@/components/oto/templates";
 import { SalesOto } from "@/components/oto/sales-template";
+import { ContentEngineOto } from "@/components/oto/custom/content-engine";
 import { resolveOtoTemplate } from "@/lib/oto-template";
 import type { OtoView } from "@/components/oto/shell";
 
@@ -41,7 +42,7 @@ const TEMPLATES: Record<string, OtoComponent> = {
  * implementations is easier to delete than to unpick later.
  */
 const CUSTOM: Record<string, OtoComponent> = {
-  // "content-engine-monthly": ContentEngineOto,
+  "content-engine-monthly": ContentEngineOto,
 };
 
 export function otoComponentFor(args: { template: string; offerKey: string }): OtoComponent {
