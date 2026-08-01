@@ -14,6 +14,7 @@ export async function middleware(req: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   let userEmail: string | null = null;
+  let userId: string | null = null;
   if (url && key) {
     const supabase = createServerClient(url, key, {
       cookies: {
@@ -25,15 +26,48 @@ export async function middleware(req: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
     userEmail = user?.email ?? null;
+    userId = user?.id ?? null;
   }
 
-  // Admin gate — only ADMIN_EMAILS accounts reach /admin.
+  // Admin gate. Two lists, checked in this order:
+  //
+  //   ADMIN_EMAILS   break-glass, set in the environment, cannot be edited from
+  //                  inside the app, so the owner can never be locked out.
+  //   users.is_admin flagged through Admin -> Members.
+  //
+  // The env list is checked first and costs nothing; the table is only queried
+  // for someone who is not on it, so the common case adds no round-trip.
+  //
+  // requireAdmin() in lib/admin-guard.ts repeats both checks on every mutating
+  // action. This gate is convenience; that one is the security boundary.
   if (pathname.startsWith("/admin")) {
     const admins = (process.env.ADMIN_EMAILS ?? "")
       .split(",")
       .map((e) => e.trim().toLowerCase())
       .filter(Boolean);
-    if (!userEmail || !admins.includes(userEmail.toLowerCase())) {
+    let allowed = Boolean(userEmail) && admins.includes((userEmail ?? "").toLowerCase());
+
+    if (!allowed && userId) {
+      try {
+        const service = createServerClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.SUPABASE_SERVICE_ROLE_KEY!,
+          { cookies: { getAll: () => [], setAll: () => {} } },
+        );
+        const { data } = await service
+          .from("users")
+          .select("is_admin")
+          .eq("id", userId)
+          .maybeSingle();
+        allowed = Boolean(data?.is_admin);
+      } catch {
+        // A lookup failure denies rather than allows. An admin gate that opens
+        // when the database is unreachable is not a gate.
+        allowed = false;
+      }
+    }
+
+    if (!allowed) {
       const to = req.nextUrl.clone();
       to.pathname = "/login";
       to.search = "";
