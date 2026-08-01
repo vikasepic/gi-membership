@@ -106,8 +106,36 @@ export function OfferForm({
       </div>
       </Section>
 
-      {/* Presentation — how the offer renders in bump/OTO slots. */}
-      <Section title="What the buyer sees" hint="The headline and bullets shown on the checkout bump and the upsell page.">
+      {/* Each block below is named for the SURFACE it appears on. The old
+          single "What the buyer sees" section edited five surfaces at once and
+          said so nowhere. */}
+      <Section
+        title="1 · On the checkout bump"
+        hint="The tick-box beside the payment form. Two lines only — the price line under them is generated from Price, Interval and Trial days, so it can never disagree with what is charged."
+      >
+        <Field label="Bump headline" hint="bold line. Leave empty to reuse the upsell headline below.">
+          <input
+            name="bumpHeadline"
+            defaultValue={offer?.bumpHeadline ?? ""}
+            placeholder={offer?.headline ?? "Add … free for 7 days"}
+            className={input}
+          />
+        </Field>
+        <Field label="Bump description" hint="grey line under it. Leave empty to reuse the upsell description.">
+          <textarea
+            name="bumpDescription"
+            defaultValue={offer?.bumpDescription ?? ""}
+            placeholder={offer?.description ?? ""}
+            rows={2}
+            className={input}
+          />
+        </Field>
+      </Section>
+
+      <Section
+        title="2 · On the upsell page, storefront and library"
+        hint="Used by the one-click upsell page after checkout, the storefront section, the library offer, and the standalone offer checkout. Changing these changes all four."
+      >
         <Field label="Headline" required>
           <input name="headline" defaultValue={offer?.headline ?? ""} required className={input} />
         </Field>

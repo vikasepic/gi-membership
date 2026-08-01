@@ -85,8 +85,10 @@ export default async function CheckoutPage({
           }`
         : null;
     bump = {
-      headline: bumpOffer.headline,
-      description: bumpOffer.description,
+      // Bump-specific copy when it exists, else the offer's main copy — so an
+      // offer that never set it looks exactly as it did before.
+      headline: bumpOffer.bumpHeadline || bumpOffer.headline,
+      description: bumpOffer.bumpDescription || bumpOffer.description,
       chargeNowCents: immediateChargeCents(bumpOffer),
       recurringNote,
     };

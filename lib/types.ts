@@ -58,6 +58,9 @@ export type Offer = {
   acceptLabel: string;
   /** ActiveCampaign tag applied when granted, removed when cancelled. */
   activecampaignTagId: string | null;
+  /** Checkout-bump copy. Null falls back to headline/description. */
+  bumpHeadline: string | null;
+  bumpDescription: string | null;
   /** Which layout renders this offer's upsell page. */
   otoTemplate: string;
   /** Long-form copy for the `long` template. */
