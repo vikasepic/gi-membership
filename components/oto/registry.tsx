@@ -45,6 +45,11 @@ const CUSTOM: Record<string, OtoComponent> = {
   "content-engine-monthly": ContentEngineOto,
 };
 
+/** Whether this offer has a coded page — i.e. whether the copy editor applies. */
+export function hasCustomOtoPage(offerKey: string): boolean {
+  return offerKey in CUSTOM;
+}
+
 export function otoComponentFor(args: { template: string; offerKey: string }): OtoComponent {
   const name = resolveOtoTemplate({
     template: args.template,

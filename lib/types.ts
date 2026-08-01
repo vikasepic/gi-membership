@@ -69,6 +69,8 @@ export type Offer = {
   otoVideoUrl: string | null;
   /** Long-form sales page sections. Empty sections are skipped. */
   otoSections: unknown;
+  /** Copy overrides for a bespoke upsell page. See lib/oto-content.ts. */
+  otoPage: unknown;
   declineLabel: string;
   active: boolean;
   stripeProductIdTest: string | null;

@@ -17,7 +17,7 @@ const PRODUCT_COLUMNS =
   "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order";
 
 const OFFER_COLUMNS =
-  "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, bump_headline, bump_description, oto_template, oto_body, oto_video_url, oto_sections, stripe_product_id_test, stripe_product_id_live";
+  "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, bump_headline, bump_description, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live";
 
 export type OfferOption = {
   id: string;
@@ -264,6 +264,20 @@ export async function updateOffer(id: string, input: OfferInput): Promise<void> 
   const db = createServiceClient();
   const { error } = await db.from("offers").update(toOfferRow(input, await getStoreId())).eq("id", id);
   if (error) throw new Error(`updateOffer: ${error.message}`);
+}
+
+/**
+ * Save copy overrides for the bespoke upsell page.
+ *
+ * Separate from updateOffer because it is a separate screen with a separate
+ * form. Routing it through toOfferRow would mean the copy editor had to post
+ * every pricing and grant field just to change a headline — and one missing
+ * hidden input would silently rewrite the offer's price.
+ */
+export async function updateOfferPage(id: string, page: Record<string, string>): Promise<void> {
+  const db = createServiceClient();
+  const { error } = await db.from("offers").update({ oto_page: page }).eq("id", id);
+  if (error) throw new Error(`updateOfferPage: ${error.message}`);
 }
 
 export async function deleteOffer(id: string): Promise<void> {

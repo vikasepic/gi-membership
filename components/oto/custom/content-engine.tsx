@@ -1,5 +1,7 @@
 import { OtoActions, type OtoView } from "@/components/oto/shell";
 import { OtoStickyBar } from "@/components/oto/sticky-bar";
+import { contentValue, paragraphs, rows, items } from "@/lib/oto-content";
+import { money } from "@/lib/money";
 
 // Content Engine — bespoke upsell page.
 //
@@ -112,6 +114,51 @@ function ImgBox({ label }: { label: string }) {
   );
 }
 
+/**
+ * `*starred*` runs render italic and underlined, matching the hero treatment.
+ *
+ * The headline needs two emphasised phrases and the client needs to be able to
+ * change them. A full rich-text editor for one effect on one field is a worse
+ * trade than one character of markup with a hint beside the box.
+ */
+function Emph({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\*[^*]+\*)/g).map((part, i) =>
+        part.startsWith("*") && part.endsWith("*") && part.length > 2 ? (
+          <span key={i} className="italic underline decoration-white/30 underline-offset-[5px]">
+            {part.slice(1, -1)}
+          </span>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
+/** A paragraph field split on blank lines; the last one carries `lastClass`. */
+function Paras({
+  text,
+  className = "",
+  lastClass = "!mb-0",
+}: {
+  text: string;
+  className?: string;
+  lastClass?: string;
+}) {
+  const ps = paragraphs(text);
+  return (
+    <>
+      {ps.map((t, i) => (
+        <Para key={i} className={`${className} ${i === ps.length - 1 ? lastClass : ""}`}>
+          {t}
+        </Para>
+      ))}
+    </>
+  );
+}
+
 function Cta({ view, block = false }: { view: OtoView; block?: boolean }) {
   return (
     <OtoActions
@@ -126,6 +173,18 @@ function Cta({ view, block = false }: { view: OtoView; block?: boolean }) {
 
 export function ContentEngineOto({ view }: { view: OtoView }) {
   const { offer } = view;
+  // Every string below comes from the offer, falling back to the copy this page
+  // shipped with. An offer nobody has edited renders exactly as before.
+  const c = (key: string) => contentValue(offer.otoPage, key);
+
+  // Derived from the offer, not editable. A price typed into a copy field can
+  // disagree with the price actually charged; this one cannot.
+  const priceLine = [
+    money(offer.priceCents, offer.currency) + (offer.interval ? `/${offer.interval}` : ""),
+    offer.trialDays ? `${offer.trialDays} days free` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     // Bottom padding clears the sticky bar so the footer is never hidden by it.
@@ -152,30 +211,19 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
                   in the library, so "last chance to get it" would be false. */}
               <span className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/25 px-3.5 py-1.5 text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-white">
                 <span className="inline-block size-1.5 rounded-full" style={{ background: TERRA }} />
-                One-time offer · this page is not shown again
+                {c("hero.badge")}
               </span>
               <p className="mb-4 max-w-[520px] text-sm italic text-[#a9bad4]">
-                For the coach, consultant, or creator who has been meaning to post consistently for
-                longer than they would like to admit.
+                {c("hero.eyebrow")}
               </p>
               <h1 className="mb-5 max-w-[640px] font-display text-[clamp(1.9rem,4.4vw,3.125rem)] font-semibold leading-[1.15] tracking-[-0.01em] text-white">
-                Go From{" "}
-                <span className="italic underline decoration-white/30 underline-offset-[5px]">
-                  &ldquo;I&rsquo;ll Be Consistent Someday&rdquo;
-                </span>{" "}
-                to{" "}
-                <span className="italic underline decoration-white/30 underline-offset-[5px]">
-                  &ldquo;Here&rsquo;s This Week&rsquo;s Content&rdquo;
-                </span>{" "}
-                — Without the Blank Page.
+                <Emph text={c("hero.headline")} />
               </h1>
               <p className="mb-3.5 max-w-[560px] text-[1.125rem] leading-relaxed text-[#d7e0ee]">
-                A guided system that studies what is already working in your niche, pulls out the
-                hooks behind it, and drafts your carousels, reels, and posts in your own voice.
+                {c("hero.sub")}
               </p>
               <p className="mb-7 max-w-[540px] text-[0.94rem] text-[#a9bad4]">
-                Built for people who have plenty to say and never enough time to sit down and write
-                it.
+                {c("hero.support")}
               </p>
               <Cta view={view} />
             </div>
@@ -184,12 +232,7 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
               className="rounded-2xl border px-5"
               style={{ background: NAVY_2, borderColor: "rgba(255,255,255,0.10)" }}
             >
-              {[
-                ["What you get", "Carousels, reels + posts", "Drafted in your voice for Instagram and LinkedIn. Ready to edit and publish."],
-                ["Time to start", "One afternoon", "Add a few competitors and your first drafts are waiting."],
-                ["Investment", "$47 / month", "Seven days free. Cancel any time. No contract."],
-                ["What you own", "100% yours", "Every draft is yours to edit, post, and keep."],
-              ].map(([k, v, d], i, arr) => (
+              {rows(c("hero.card"), 3).map(([k, v, d], i, arr) => (
                 <div
                   key={k}
                   className="py-5"
@@ -208,12 +251,7 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
       {/* 2 · STAT BAR */}
       <div className="px-6 py-7" style={{ background: CREAM, borderBottom: `1px solid ${LINE}` }}>
         <div className="mx-auto flex w-full max-w-[1080px] flex-wrap justify-between gap-5 text-center">
-          {[
-            ["2", "Platforms — IG + LinkedIn"],
-            ["3", "Formats — carousels, reels, posts"],
-            ["7 days", "Free trial"],
-            ["$47/mo", "Cancel any time"],
-          ].map(([fig, lab]) => (
+          {rows(c("statbar.items"), 2).map(([fig, lab]) => (
             <div key={lab} className="min-w-[130px] flex-1">
               <div className="font-display text-[1.625rem] font-bold" style={{ color: NAVY }}>
                 {fig}
@@ -228,16 +266,12 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
 
       {/* 3 · Problem */}
       <Section>
-        <HSec className="mb-7">You Already Know You Should Be Posting More Consistently.</HSec>
+        <HSec className="mb-7">{c("problem.heading")}</HSec>
         <p className="mx-auto mb-6 max-w-[680px] text-center" style={{ color: MUTED }}>
-          Here is what I hear from coaches, consultants, and creators every week.
+          {c("problem.lead")}
         </p>
         <div className="mx-auto mb-7 max-w-[620px]">
-          {[
-            "I know I should post, I just never know what to say.",
-            "I open the app, stare at it, and close it again.",
-            "I’ve been meaning to be consistent for months.",
-          ].map((q) => (
+          {items(c("problem.chips")).map((q) => (
             <span
               key={q}
               className="mx-auto my-2.5 block max-w-[560px] rounded-[30px] border px-5 py-2.5 text-center text-[0.94rem]"
@@ -248,61 +282,29 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
           ))}
         </div>
         <Narrow center>
-          <Para className="font-semibold">Sound familiar?</Para>
-          <Para>
-            You are not lazy. You are not out of ideas. You are stuck because nobody gave you a
-            repeatable way to turn what is already in your head — and what is already working in
-            your niche — into posts.
-          </Para>
-          <Para>
-            Content is not something you invent from nothing every day. It is something you assemble
-            from proven angles and your own thinking.
-          </Para>
-          <Para className="!mb-0">That is exactly what Content Engine was built to do.</Para>
+          <Paras text={c("problem.body")} />
         </Narrow>
       </Section>
 
       {/* 4 */}
       <Section bg={GREY}>
-        <HSec className="mb-7">
-          This Is Specifically For People Who Have Plenty to Say But Cannot Sit Down and Write It.
-        </HSec>
+        <HSec className="mb-7">{c("audience.heading")}</HSec>
         <Narrow>
-          <Para>
-            You speak with clarity the moment someone asks about your work. You can explain your
-            point of view in a two-minute voice note.
-          </Para>
-          <Para>But the moment you open the app to post, the words do not come.</Para>
-          <Para>That is not a discipline problem. It is a blank-page problem.</Para>
-          <Para>
-            Content Engine works the way you already work. You start from posts that are already
-            performing, not from nothing. You edit and approve, rather than write from scratch.
-          </Para>
-          <Para className="!mb-0">You do not need to become a writer to publish consistently.</Para>
+          <Paras text={c("audience.body")} />
         </Narrow>
       </Section>
 
       {/* 5 */}
       <Section>
-        <HSec className="mb-7">
-          Your Content Does Not Have to Take Hours Every Day. Or a Whole Weekend.
-        </HSec>
+        <HSec className="mb-7">{c("mechanism.heading")}</HSec>
         <Narrow center>
-          <Para>
-            Most creators believe staying consistent requires either a full day of batching or an
-            agency on retainer. It does not.
-          </Para>
-          <Para>That belief is the reason your best thinking stays in your notes app.</Para>
+          <Paras text={c("mechanism.body")} />
         </Narrow>
         <div
           className="mx-auto my-7 max-w-[760px] rounded-xl border px-7 py-7"
           style={{ background: ROSE, borderColor: ROSE_LINE, color: "#3a2c34" }}
         >
-          <p className="leading-[1.6]">
-            Content Engine studies the reels and carousels already performing in your niche, pulls
-            out the hooks behind them, and drafts new posts in your voice. You set up your niche
-            once. After that, you always start from a draft, not a blank page.
-          </p>
+          <p className="leading-[1.6]">{c("mechanism.callout")}</p>
         </div>
         {/* The approved artifact uses a 4px terracotta left rule here. Kept
             because the brief specifies it, not reached for by habit. */}
@@ -311,30 +313,22 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
           style={{ background: ROSE_2, borderLeft: `4px solid ${TERRA}` }}
         >
           <p>
-            <b style={{ color: NAVY }}>The result:</b> A week of carousels, reels, and posts in your
-            own voice, ready to edit and publish. In an afternoon, not a weekend.
+            <b style={{ color: NAVY }}>The result:</b> {c("mechanism.result")}
           </p>
         </div>
       </Section>
 
       {/* 6 */}
       <Section bg={CREAM}>
-        <HSec className="mb-7">
-          This Week&rsquo;s Content Could Be Drafted Before You Finish Your Coffee.
-        </HSec>
+        <HSec className="mb-7">{c("speed.heading")}</HSec>
         <Narrow center>
-          <Para>Not next month. Not after you &ldquo;find the time.&rdquo; Today.</Para>
-          <Para>
-            Content Engine does not ask you to be a writer. It asks you to add the accounts you
-            already admire and answer a few questions about your own voice. From there, it does the
-            research and the first draft.
-          </Para>
+          <Paras text={c("speed.body")} />
         </Narrow>
         <p
           className="mx-auto mt-6 max-w-[640px] text-center font-display text-xl font-semibold italic"
           style={{ color: TERRA }}
         >
-          By the time you finish your second cup of coffee, this week&rsquo;s posts are drafted.
+          {c("speed.accent")}
         </p>
       </Section>
 
@@ -343,18 +337,10 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
         <div className="mx-auto grid max-w-[960px] grid-cols-1 items-center gap-11 md:grid-cols-2">
           <div>
             <HSec left className="mb-5">
-              This Was Built By People Who Study What Actually Performs.
+              {c("credibility.heading")}
             </HSec>
             <div style={{ color: "#3a3a48" }}>
-              <Para>
-                Content Engine was built by the team at Greater Inside. We spend our days on one
-                question: why does one post travel and a nearly identical one does not.
-              </Para>
-              <Para>
-                So the tool does what a good researcher does. It reads the top posts in your niche,
-                transcribes the reels, breaks down the hook behind each one, and turns that into a
-                starting point you can make your own.
-              </Para>
+              <Paras text={c("credibility.body")} />
             </div>
             <Placeholder view={view}>
               One or two sentences of real, verifiable credibility — volume of content analysed, who
@@ -364,23 +350,15 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
           <ImgBox label="[ Image / product screenshot ]" />
         </div>
         <div className="mx-auto mt-8 max-w-[760px] rounded-xl px-7 py-7 text-white" style={{ background: PLUM }}>
-          <p className="leading-[1.6]">
-            This is not a generic AI caption tool. It is a research-and-drafting system built on how
-            content actually gets made — the hooks, the structures, and the angles that already work
-            in your niche.
-          </p>
+          <p className="leading-[1.6]">{c("credibility.callout")}</p>
         </div>
       </Section>
 
       {/* 8 */}
       <Section bg={GREY}>
-        <HSec className="mb-9">Here Is What Changes When You Post Consistently.</HSec>
+        <HSec className="mb-9">{c("benefits.heading")}</HSec>
         <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-          {[
-            ["You become the name people think of in your space.", "When you show up every week with something worth reading, you stop being one option among many and become the obvious one."],
-            ["You stop starting from zero every time.", "Your best hooks, angles, and posts are organised in one place — ready to reuse, repurpose, and build on."],
-            ["Your ideas turn into a body of work.", "The thinking currently living in your head becomes a searchable library of content that is documented, structured, and yours."],
-          ].map(([h, b]) => (
+          {rows(c("benefits.cards"), 2).map(([h, b]) => (
             <div
               key={h}
               className="rounded-xl border p-6"
@@ -408,34 +386,22 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
 
       {/* 9 */}
       <Section>
-        <HSec className="mb-7">
-          In a Feed Where Attention Is Scarce, Consistency Is Your Best Calling Card.
-        </HSec>
+        <HSec className="mb-7">{c("authority.heading")}</HSec>
         <Narrow center>
-          <Para>
-            Think about the last time someone reached out ready to work with you. They had usually
-            read something of yours first. They already knew how you think before the first message.
-          </Para>
-          <Para>
-            That does not happen from posting once a month. It happens from showing up with a clear
-            point of view, week after week, in a way people can follow.
-          </Para>
-          <Para>
-            When your content does that job, the conversations change. Fewer cold pitches. More
-            people who arrive already convinced.
-          </Para>
+          <Paras text={c("authority.body")} />
         </Narrow>
         <div
           className="mx-auto mt-7 max-w-[760px] rounded-xl px-7 py-7 text-center text-white"
           style={{ background: NAVY }}
         >
-          <p className="mb-4 leading-[1.6]">
-            More reach. Warmer leads. A pipeline of people who knew your thinking before they ever
-            reached out.
-          </p>
-          <p className="font-semibold leading-[1.6]">
-            Content is not a vanity metric. It is a business development asset.
-          </p>
+          {paragraphs(c("authority.callout")).map((t, i, a) => (
+            <p
+              key={i}
+              className={`leading-[1.6] ${i === a.length - 1 ? "font-semibold" : "mb-4"}`}
+            >
+              {t}
+            </p>
+          ))}
         </div>
       </Section>
 
@@ -458,17 +424,12 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
 
       {/* 11 · Strategy + roster */}
       <Section bg={CREAM}>
-        <HSec className="mb-6">This Strategy Is as Old as the Feed Itself.</HSec>
+        <HSec className="mb-6">{c("strategy.heading")}</HSec>
         <p className="mx-auto mb-6 max-w-[680px] text-center" style={{ color: MUTED }}>
-          The creators who own their categories all did the same thing first: they published
-          consistently, in their own voice, before anyone was watching.
+          {c("strategy.lead")}
         </p>
         <Narrow center>
-          <Para className="!mb-0">
-            Using content to build an audience and a business is not new. It is a strategy that has
-            produced results for as long as there have been platforms to publish on. The tools
-            changed. The principle did not.
-          </Para>
+          <Paras text={c("strategy.body")} />
         </Narrow>
         <Placeholder view={view}>
           A roster of well-known creators, each with a key format or channel and one factual
@@ -479,26 +440,23 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
 
       {/* 12 */}
       <Section bg={ROSE}>
-        <HSec className="mb-8">Here Is What Consistent Content Actually Builds.</HSec>
+        <HSec className="mb-8">{c("means.heading")}</HSec>
         <div className="mx-auto grid max-w-[960px] grid-cols-1 items-start gap-11 md:grid-cols-2">
           <Placeholder view={view}>
             A real, specific story — yours or a named creator&rsquo;s, with permission — of how
             consistent content built an audience or a business, with numbers you can stand behind.
           </Placeholder>
           <div className="rounded-xl px-7 py-7 text-white" style={{ background: NAVY }}>
-            <p className="mb-4 leading-[1.6] text-[#dfe7f4]">
-              You do not need an agency on retainer or a full day every week to get there. You need
-              $47 a month and an afternoon to start.
-            </p>
-            <p className="mb-2 leading-[1.6] text-[#dfe7f4]">
-              The research, the hooks, the drafting in your voice — that is the part Content Engine
-              handles. It is available to you now.
-            </p>
+            {paragraphs(c("means.box")).map((t, i, a) => (
+              <p
+                key={i}
+                className={`leading-[1.6] text-[#dfe7f4] ${i === a.length - 1 ? "mb-2" : "mb-4"}`}
+              >
+                {t}
+              </p>
+            ))}
             <div className="mt-2 pt-3.5" style={{ borderTop: "1px solid rgba(255,255,255,.12)" }}>
-              {[
-                ["Time to start", "An afternoon"],
-                ["Investment", "$47 / month · 7 days free"],
-              ].map(([k, v]) => (
+              {rows(c("means.rows"), 2).map(([k, v]) => (
                 <div key={k} className="flex justify-between py-1.5 text-sm text-[#c8d3e6]">
                   <span>{k}</span>
                   <b className="text-white">{v}</b>
@@ -519,45 +477,30 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
             className="mb-5 inline-flex items-center gap-2 rounded-[30px] px-4.5 py-2.5 font-display text-[0.84rem] text-white"
             style={{ background: NAVY }}
           >
-            The system that turns what&rsquo;s working in your niche into content in your voice.
+            {c("what.pill")}
           </div>
-          <HSec className="mb-7">CONTENT ENGINE — by Greater Inside</HSec>
+          <HSec className="mb-7">{c("what.heading")}</HSec>
         </div>
         <Narrow>
-          <Para>
-            Content Engine is a research-and-drafting system built for coaches, consultants, and
-            creators. It studies the top posts in your niche, extracts the hooks behind them, and
-            drafts carousels, reels, and posts in your voice — then gives you one place to plan and
-            publish them.
-          </Para>
-          <Para>
-            This is not for everyone. It is built for people with real expertise who want to publish
-            consistently and sound like themselves. If you want a tool that auto-posts generic
-            captions with no editing and no point of view, this is not it.
-          </Para>
-          <Para className="!mb-0">
-            If you have plenty to say, a niche you know well, and no reliable way to turn that into
-            weekly content — you are in exactly the right place.
-          </Para>
+          <Paras text={c("what.body")} />
         </Narrow>
       </Section>
 
       {/* 14 · Comparison */}
       <Section bg={GREY}>
-        <HSec className="mb-9">Let&rsquo;s Talk About What Staying Consistent Actually Costs.</HSec>
+        <HSec className="mb-9">{c("compare.heading")}</HSec>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[
-            { tag: "Content agency", price: "$2,000–$5,000", time: "per month · ongoing", p: "Someone else's read on your voice. A retainer that does not stop." },
-            { tag: "In-house hire", price: "A salary", time: "full-time", p: "Months to ramp, a salary to carry, still your voice to teach." },
-            { tag: "Content Engine", price: "$47", time: "per month · an afternoon to start", p: "Research + drafts in your voice. Seven days free. Cancel any time.", best: true },
-            { tag: "Doing it yourself", price: "Your time", time: "hours each week", p: "The blank page, every week, with no research to start from." },
-          ].map((c) => (
+          {/* Last row is the highlighted card — the editor says so, so "which one
+              is ours" is a property of the copy rather than a hidden flag. */}
+          {rows(c("compare.rows"), 4)
+            .map(([tag, price, time, p], i, a) => ({ tag, price, time, p, best: i === a.length - 1 }))
+            .map((card) => (
             <div
-              key={c.tag}
+              key={card.tag}
               className="relative rounded-xl border px-5 py-6"
-              style={c.best ? { background: PLUM, borderColor: PLUM } : { background: "#fff", borderColor: LINE }}
+              style={card.best ? { background: PLUM, borderColor: PLUM } : { background: "#fff", borderColor: LINE }}
             >
-              {c.best && (
+              {card.best && (
                 <span
                   className="absolute -top-[11px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-[20px] px-3 py-1 font-display text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-white"
                   style={{ background: TERRA }}
@@ -567,21 +510,21 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
               )}
               <div
                 className="mb-3 text-[0.69rem] uppercase tracking-[0.1em]"
-                style={{ color: c.best ? "#e7c9dc" : MUTED }}
+                style={{ color: card.best ? "#e7c9dc" : MUTED }}
               >
-                {c.tag}
+                {card.tag}
               </div>
               <div
                 className="mb-0.5 font-display text-2xl font-bold"
-                style={{ color: c.best ? "#fff" : NAVY }}
+                style={{ color: card.best ? "#fff" : NAVY }}
               >
-                {c.price}
+                {card.price}
               </div>
-              <div className="mb-3.5 text-[0.81rem]" style={{ color: c.best ? "#e7c9dc" : MUTED }}>
-                {c.time}
+              <div className="mb-3.5 text-[0.81rem]" style={{ color: card.best ? "#e7c9dc" : MUTED }}>
+                {card.time}
               </div>
-              <p className="text-[0.84rem]" style={{ color: c.best ? "#fff" : "#4a4a58" }}>
-                {c.p}
+              <p className="text-[0.84rem]" style={{ color: card.best ? "#fff" : "#4a4a58" }}>
+                {card.p}
               </p>
             </div>
           ))}
@@ -622,19 +565,9 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
 
       {/* 17 · Pricing */}
       <Section bg={CREAM}>
-        <HSec className="mb-7">
-          Every Week You Wait Is a Week Someone Else Builds the Audience You Should Have.
-        </HSec>
+        <HSec className="mb-7">{c("price.heading")}</HSec>
         <Narrow center>
-          <Para>
-            The creator with the audience is not always the most talented in the room. They are the
-            one who kept showing up.
-          </Para>
-          <Para>
-            You have the expertise. You have the ideas. The only thing missing has been a way to
-            turn them into posts without losing an afternoon to the blank page.
-          </Para>
-          <Para className="font-semibold">Your next week of content is an afternoon away.</Para>
+          <Paras text={c("price.body")} lastClass="font-semibold" />
         </Narrow>
         <div
           className="mx-auto mt-7 max-w-[360px] rounded-2xl border p-7 text-center"
@@ -650,7 +583,7 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
             </span>
           </div>
           <div className="mb-5 text-[0.875rem]" style={{ color: MUTED }}>
-            7 days free · cancel any time
+            {c("price.card_terms")}
           </div>
           <Cta view={view} block />
         </div>
@@ -658,22 +591,9 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
 
       {/* 18 */}
       <Section>
-        <HSec className="mb-7">
-          What Happens If You Close This Page and Come Back to It &ldquo;Later&rdquo;?
-        </HSec>
+        <HSec className="mb-7">{c("regret.heading")}</HSec>
         <Narrow center>
-          <Para>You already know the answer.</Para>
-          <Para>
-            Later becomes next week. Next week becomes next month. And a year from now, you are
-            still meaning to be consistent, while someone with the same expertise — and less of it —
-            has become the name your audience follows.
-          </Para>
-          <Para>Not because they were better. Because they kept publishing and you did not.</Para>
-          <Para className="!mb-0">
-            The gap between the creators people follow and the ones they do not is rarely talent. It
-            is almost always the decision to start, and to keep going. This is the simplest way to
-            make that decision easy.
-          </Para>
+          <Paras text={c("regret.body")} />
         </Narrow>
       </Section>
 
@@ -682,22 +602,10 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
         <div className="mx-auto grid max-w-[960px] grid-cols-1 items-center gap-11 md:grid-cols-2">
           <div>
             <HSec left className="mb-5">
-              Here Is Everything, One More Time.
+              {c("recap.heading")}
             </HSec>
             <div style={{ color: "#3a3a48" }}>
-              <Para>
-                For $47 a month, with the first seven days free, you get a system that studies what
-                is working in your niche, drafts carousels, reels, and posts in your own voice, and
-                gives you one place to plan and publish them.
-              </Para>
-              <Para>
-                Set up your niche once. After that, you start every week from a draft, not a blank
-                page.
-              </Para>
-              <Para>No agency. No blank page. No guessing what to post.</Para>
-              <Para className="font-semibold" >
-                <span style={{ color: NAVY }}>Just your content. Ready.</span>
-              </Para>
+              <Paras text={c("recap.body")} lastClass="font-semibold" />
             </div>
             <Cta view={view} />
           </div>
@@ -707,18 +615,9 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
 
       {/* 20 · FAQ */}
       <Section>
-        <HSec className="mb-9">Everything You Want to Know Before You Start.</HSec>
+        <HSec className="mb-9">{c("faq.heading")}</HSec>
         <div className="mx-auto grid max-w-[900px] grid-cols-1 gap-x-11 gap-y-6 md:grid-cols-2">
-          {[
-            ["Will I be charged today?", "No. The first seven days are free. The first $47 is taken only if you keep it past then."],
-            ["How do I cancel?", "From your account settings, at any time. Cancel before day seven and you are not charged."],
-            ["Who owns what I create?", "You do. Every draft is yours to edit, post, and keep."],
-            ["Do I have to connect my Instagram?", "No. You can add competitor accounts and start from there. Connecting your own is optional and lets it learn your voice and track your results."],
-            ["Does it post for me?", "No. It researches, drafts, and helps you plan. You review and post yourself, so nothing goes out that is not yours."],
-            ["Will it sound like me?", "It can learn your style from your own posts and draft in it. You always edit before anything is published."],
-            ["How long until I get my first drafts?", "An afternoon. Add a few accounts in your niche and your first hooks and drafts are ready to work from."],
-            ["What platforms and formats does it cover?", "Instagram and LinkedIn — carousels, reels, and posts."],
-          ].map(([q, a]) => (
+          {rows(c("faq.items"), 2).map(([q, a]) => (
             <div key={q}>
               <div className="mb-1.5 font-display text-[1.03rem] font-semibold" style={{ color: NAVY }}>
                 {q}
@@ -736,24 +635,17 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
         <div className="mx-auto grid w-full max-w-[1080px] grid-cols-1 items-center gap-11 md:grid-cols-2">
           <div>
             <h2 className="mb-4 font-display text-[clamp(1.6rem,3.4vw,2.25rem)] font-semibold leading-[1.15]">
-              One Login. One Afternoon. A Week of Content.
+              {c("final.heading")}
             </h2>
-            <p className="mb-4 text-[#c8d3e6]">
-              You have been meaning to be consistent for a while. Maybe a long while.
-            </p>
-            <p className="mb-4 text-[#c8d3e6]">
-              The ideas are there. The expertise is there. The audience is there.
-            </p>
-            <p className="font-semibold">The only thing missing has been the system.</p>
+            {paragraphs(c("final.body")).map((t, i, a) => (
+              <p key={i} className={i === a.length - 1 ? "font-semibold" : "mb-4 text-[#c8d3e6]"}>
+                {t}
+              </p>
+            ))}
           </div>
           <div>
             <ul className="mb-6 list-none p-0">
-              {[
-                "The research done for you — the top posts in your niche, and the hooks behind them",
-                "Carousels, reels, and posts drafted in your own voice",
-                "One place to plan the week and move each piece from draft to posted",
-                "Seven days free, then $47 a month, cancel any time",
-              ].map((li) => (
+              {items(c("final.checklist")).map((li) => (
                 <li
                   key={li}
                   className="relative py-2.5 pl-7 text-[0.94rem] text-[#e4ebf6]"
@@ -807,7 +699,7 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
         token={view.token}
         acceptLabel={offer.acceptLabel}
         declineLabel={offer.declineLabel}
-        priceLine="$47/mo · 7 days free"
+        priceLine={priceLine}
         subLine={view.recurringNote ? `${view.recurringNote}. Cancel any time.` : null}
         expiresAt={view.expiresAt}
       />

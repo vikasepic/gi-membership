@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { authErrorMessage, isPasswordError } from "@/lib/auth-errors";
 import { Logo } from "@/components/logo";
 
 // Errors the callback route bounces back here, in the reader's words.
@@ -27,6 +28,10 @@ export default function LoginPage() {
     callbackError ? (CALLBACK_ERRORS[callbackError] ?? callbackError) : null,
   );
   const [busy, setBusy] = useState<"link" | "password" | null>(null);
+  // Hidden by default. Almost everyone here has no password — they buy, then
+  // sign in with a link — so a password box on arrival asks the majority for
+  // something they do not have and never set.
+  const [showPassword, setShowPassword] = useState(false);
 
   async function sendLink() {
     if (!email.trim()) {
@@ -48,7 +53,7 @@ export default function LoginPage() {
         shouldCreateUser: false,
       },
     });
-    if (error) setError(error.message);
+    if (error) setError(authErrorMessage(error.message, email));
     else setSent(true);
     setBusy(null);
   }
@@ -58,7 +63,10 @@ export default function LoginPage() {
     setError(null);
     const { error } = await createClient().auth.signInWithPassword({ email, password });
     if (error) {
-      setError(error.message);
+      setError(authErrorMessage(error.message, email));
+      // Keep the field open on a password failure — collapsing it under the
+      // error that is about it would hide the thing they need to retype.
+      if (isPasswordError(error.message)) setShowPassword(true);
       setBusy(null);
       return;
     }
@@ -66,11 +74,8 @@ export default function LoginPage() {
     router.refresh();
   }
 
-  // One submit path, chosen by what they actually filled in. The page used to
-  // carry a mode toggle, so anyone with a password had to click "use a password
-  // instead" before the field even appeared — a step that existed only because
-  // the form could not decide for itself. Both are on screen now, and Enter
-  // does the right thing either way.
+  // One submit path, chosen by what they actually filled in, so Enter does the
+  // right thing whether or not the password field is open.
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (password.trim()) void signInWithPassword();
@@ -116,7 +121,7 @@ export default function LoginPage() {
         <div className="flex flex-col gap-2">
           <h1 className="text-3xl leading-tight">Welcome back</h1>
           <p className="text-muted">
-            Your courses and apps are waiting. Log in with a link, or your password if you set one.
+            Your courses and apps are waiting. We&rsquo;ll email you a link — no password needed.
           </p>
         </div>
 
@@ -135,20 +140,40 @@ export default function LoginPage() {
             />
           </label>
 
-          <label className="flex flex-col gap-1.5">
-            <span className="kicker flex items-center justify-between text-muted">
-              Password
-              <span className="normal-case tracking-normal">optional</span>
-            </span>
-            <input
-              type="password"
-              autoComplete="current-password"
-              placeholder="Leave empty to get a login link"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={input}
-            />
-          </label>
+          {showPassword ? (
+            <label className="flex flex-col gap-1.5">
+              <span className="kicker flex items-center justify-between text-muted">
+                Password
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPassword(false);
+                    setPassword("");
+                  }}
+                  className="normal-case tracking-normal text-primary hover:underline"
+                >
+                  Use a link instead
+                </button>
+              </span>
+              <input
+                type="password"
+                autoFocus
+                autoComplete="current-password"
+                placeholder="Your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={input}
+              />
+            </label>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowPassword(true)}
+              className="w-fit text-sm text-muted underline-offset-4 hover:text-fg hover:underline"
+            >
+              I have a password
+            </button>
+          )}
         </div>
 
         {error && (
@@ -177,9 +202,13 @@ export default function LoginPage() {
         </button>
 
         <div className="flex items-center justify-between border-t border-border pt-4 text-sm text-muted">
-          <Link href="/reset" className="hover:text-fg">
-            Forgot your password?
-          </Link>
+          {showPassword ? (
+            <Link href="/reset" className="hover:text-fg">
+              Forgot your password?
+            </Link>
+          ) : (
+            <span />
+          )}
           <Link href="/" className="hover:text-fg">
             Browse the store
           </Link>
