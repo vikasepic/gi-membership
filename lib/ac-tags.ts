@@ -1,6 +1,5 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getStoreId } from "@/lib/store";
 import { tagContact, activeCampaignEnabled } from "@/lib/activecampaign";
 import { recordError, messageOf } from "@/lib/errors";
 

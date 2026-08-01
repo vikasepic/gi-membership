@@ -89,7 +89,6 @@ export default async function CheckoutPage({
       description: bumpOffer.description,
       chargeNowCents: immediateChargeCents(bumpOffer),
       recurringNote,
-      acceptLabel: bumpOffer.acceptLabel,
     };
   }
 

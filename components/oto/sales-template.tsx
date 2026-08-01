@@ -13,7 +13,6 @@ import {
   P,
   PLUM,
   PricingCard,
-  ROSE,
   StatBar,
 } from "@/components/oto/kit";
 import { AccentLine, ResultCard } from "@/components/oto/templates";

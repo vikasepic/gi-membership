@@ -16,7 +16,6 @@ export type BumpSummary = {
   description: string | null;
   chargeNowCents: number;
   recurringNote: string | null; // e.g. "then $47/mo after a 7-day trial"
-  acceptLabel: string;
 };
 
 export type CheckoutProduct = {
@@ -221,6 +220,29 @@ function Inner({
                 className={input}
               />
             </div>
+
+            {/* The typo suggestion. This was computed and then thrown away when
+                the layout was tightened — the state was set on blur and never
+                rendered, so a mistyped address reached checkout silently. A
+                wrong email is the most expensive mistake on this page: the
+                receipt and the access link both follow it. */}
+            {emailHint && (
+              <p className="-mt-1 text-sm">
+                <span className="text-muted">Did you mean </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail(emailHint);
+                    setEmailHint(null);
+                    capturedEmail.current = null;
+                  }}
+                  className="font-medium text-primary underline underline-offset-2"
+                >
+                  {emailHint}
+                </button>
+                <span className="text-muted">?</span>
+              </p>
+            )}
             {/* Country determines the VAT rate on digital sales — Stripe cannot
                 calculate tax without it. */}
             <select
