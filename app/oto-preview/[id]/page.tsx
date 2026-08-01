@@ -39,6 +39,10 @@ export default async function OtoPreviewFrame({
   const view: OtoView = {
     offer,
     token: "preview",
+    preview: true,
+    // A representative 15 minutes so the countdown is visible in preview. The
+    // live page uses the token's real expiry.
+    expiresAt: Date.now() + 15 * 60 * 1000,
     chargeNowCents: immediateChargeCents(offer),
     recurringNote:
       offer.billingType === "recurring"

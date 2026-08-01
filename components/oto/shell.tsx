@@ -17,6 +17,24 @@ export type OtoView = {
   chargeNowCents: number;
   /** e.g. "then $47/month after your 7-day trial" — null for one-off offers. */
   recurringNote: string | null;
+  /**
+   * When this token stops working, in unix ms. Real: the token is signed with
+   * a 15-minute TTL and verifyOtoToken refuses it afterwards, so a countdown
+   * built on this is describing the actual state of the offer rather than
+   * manufacturing pressure.
+   */
+  expiresAt?: number;
+  /**
+   * True in the admin preview only.
+   *
+   * The approved design carries marked placeholder blocks for the sections
+   * whose copy does not exist yet — testimonials, the creator roster, the
+   * founder story, the bonuses. Those show the client the whole structure,
+   * which is the point of a preview. They must never reach a buyer: a page
+   * that says "[Placeholder]" to someone who has just paid is worse than one
+   * section short. So they render here and are omitted on the live page.
+   */
+  preview?: boolean;
 };
 
 // Drawn icons in one stroke weight. Unicode ticks and emoji are not an icon

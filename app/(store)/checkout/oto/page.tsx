@@ -31,6 +31,8 @@ export default async function OtoPage({
   const view: OtoView = {
     offer,
     token,
+    // Straight from the signed payload — the same value the server enforces.
+    expiresAt: verified.payload.exp * 1000,
     chargeNowCents: immediateChargeCents(offer),
     recurringNote:
       offer.billingType === "recurring"
