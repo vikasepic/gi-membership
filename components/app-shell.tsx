@@ -17,6 +17,12 @@ const NAV: Item[] = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+
+  // The upsell is a dedicated conversion page: it carries its own logo and
+  // footer, and it needs the full viewport for its full-bleed bands. Rendering
+  // it inside the store shell capped it at max-w-5xl and wrapped it in the
+  // nav — which also hands a buyer mid-decision four ways to leave.
+  if (pathname === "/checkout/oto") return <>{children}</>;
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 

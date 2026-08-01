@@ -129,7 +129,7 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
 
   return (
     // Bottom padding clears the sticky bar so the footer is never hidden by it.
-    <div className="-mx-5 pb-28 md:-mx-6" style={{ color: INK }}>
+    <div className="pb-28" style={{ color: INK }}>
       {/* 1 · HERO */}
       <header className="px-6 pb-16 pt-7" style={{ background: NAVY }}>
         <div className="mx-auto w-full max-w-[1080px]">

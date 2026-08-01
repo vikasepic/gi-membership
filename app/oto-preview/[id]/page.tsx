@@ -54,10 +54,10 @@ export default async function OtoPreviewFrame({
 
   const Template = otoComponentFor({ template: template || offer.otoTemplate, offerKey: offer.key });
 
-  // px-5 mirrors the store shell, because the layouts cancel it with a
-  // negative margin to run their bands edge to edge.
+  // No padding: the live page renders bare too (AppShell steps aside for
+  // /checkout/oto), so the preview and the real thing get the same box.
   return (
-    <div className="min-h-dvh w-full px-5 md:px-6">
+    <div className="min-h-dvh w-full">
       <Template view={view} />
     </div>
   );

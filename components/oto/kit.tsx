@@ -32,8 +32,12 @@ export const CTA_PILL =
 
 export const CTA_PILL_FULL = `${CTA_PILL} w-full justify-center`;
 
-/** Breaks out of the store shell's padding so bands run edge to edge. */
-export const BLEED = "-mx-5 md:-mx-6";
+/**
+ * Kept as an empty string on purpose. The upsell renders bare in both the live
+ * page and the preview, so there is no container padding to cancel — the old
+ * negative margins pulled content off-screen the moment that changed.
+ */
+export const BLEED = "";
 
 export function Band({
   children,
