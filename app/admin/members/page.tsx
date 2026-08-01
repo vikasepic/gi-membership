@@ -1,14 +1,15 @@
 import { listMembers, accessForMember } from "@/lib/members";
 import { listProductOptions, listOfferOptions } from "@/lib/admin";
-import { adminEmails, isAdminEmail } from "@/lib/admin-guard";
+import { adminEmails, isAdminEmail, requireAdmin } from "@/lib/admin-guard";
 import { AddMember } from "@/components/admin/add-member";
+import { DeleteMember } from "@/components/admin/delete-member";
 import { cancelSubscriptionAction, revokeAccessAction, toggleAdminAction } from "./actions";
 
 import { money } from "@/lib/money";
 const date = (s: string) => new Date(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 export default async function AdminMembersPage() {
-  const members = await listMembers();
+  const [me, members] = await Promise.all([requireAdmin(), listMembers()]);
 
   // Everything that can be granted by hand, in one list the form can post back
   // as "kind:id" — products are owned outright, offers can carry app access.
@@ -56,6 +57,7 @@ export default async function AdminMembersPage() {
               <th className="px-4 py-3 font-medium">Subscriptions</th>
               <th className="px-4 py-3 font-medium">Access</th>
               <th className="px-4 py-3 font-medium">Admin</th>
+              <th className="px-4 py-3 font-medium">Delete</th>
             </tr>
           </thead>
           <tbody>
@@ -146,10 +148,23 @@ export default async function AdminMembersPage() {
                     </form>
                   )}
                 </td>
+
+                {/* Deleting is for cleaning up mistakes — a typo'd address, a
+                    test account, someone added twice. The cell says why it is
+                    unavailable rather than offering a button that fails. */}
+                <td className="px-4 py-3">
+                  <DeleteMember
+                    userId={m.id}
+                    email={m.email}
+                    orders={m.orders}
+                    isOwner={isAdminEmail(m.email)}
+                    isSelf={(me.email ?? "").toLowerCase() === m.email.toLowerCase()}
+                  />
+                </td>
               </tr>
             ))}
             {members.length === 0 && (
-              <tr><td colSpan={7} className="px-4 py-10 text-center text-muted">No members yet.</td></tr>
+              <tr><td colSpan={8} className="px-4 py-10 text-center text-muted">No members yet.</td></tr>
             )}
           </tbody>
         </table>
@@ -160,6 +175,13 @@ export default async function AdminMembersPage() {
         {envAdmins.length > 0 && <> ({envAdmins.join(", ")})</>} and can only be changed in the
         environment. That list is deliberately outside this page, so nothing done here can lock
         everyone out of the admin.
+      </p>
+
+      <p className="text-xs text-muted">
+        <strong className="text-fg">Deleting</strong> removes the account, its access and its
+        progress for good. Anyone who has ordered cannot be deleted: their payments would be left
+        with no customer attached, and that link is what a refund or a chargeback needs. Revoke
+        their access instead.
       </p>
     </div>
   );

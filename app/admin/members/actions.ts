@@ -5,6 +5,7 @@ import { requireAdmin, isAdminEmail } from "@/lib/admin-guard";
 import {
   cancelSubscription,
   createMember,
+  deleteMember,
   grantProduct,
   grantOfferAccess,
   revokeOwnership,
@@ -102,4 +103,31 @@ export async function toggleAdminAction(formData: FormData) {
   }
   if (userId) await setMemberAdmin(userId, makeAdmin);
   revalidatePath("/admin/members");
+}
+
+export async function deleteMemberAction(
+  _prev: MemberActionState,
+  formData: FormData,
+): Promise<MemberActionState> {
+  const admin = await requireAdmin();
+  const userId = String(formData.get("userId") ?? "");
+  const email = String(formData.get("email") ?? "");
+  if (!userId) return { error: "Missing member." };
+
+  // Two accounts must survive any mistake made on this page. A break-glass
+  // owner is not stored in this table, so deleting the row would leave the
+  // env-list admin still able to sign in while their profile vanished. And
+  // deleting yourself mid-session is the one action nobody can undo for you.
+  if (isAdminEmail(email)) {
+    return { error: "This is an owner account from ADMIN_EMAILS. Remove it there, not here." };
+  }
+  if (admin.email && email.toLowerCase() === admin.email.toLowerCase()) {
+    return { error: "You cannot delete the account you are signed in with." };
+  }
+
+  const out = await deleteMember(userId);
+  if (!out.ok) return { error: out.error };
+
+  revalidatePath("/admin/members");
+  return { message: `Deleted ${email}.` };
 }

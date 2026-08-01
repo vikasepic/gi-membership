@@ -8,6 +8,7 @@ import {
   setMemberAdmin,
   accessForMember,
   listMembers,
+  deleteMember,
 } from "@/lib/members";
 
 // Manual grants create REAL entitlement — a granted product appears in the
@@ -96,6 +97,55 @@ describe.skipIf(!canRun)("admin member management (integration)", () => {
     expect((await listMembers()).find((x) => x.id === m.userId)?.isAdmin).toBe(true);
     await setMemberAdmin(m.userId, false);
     expect((await listMembers()).find((x) => x.id === m.userId)?.isAdmin).toBe(false);
+  });
+
+  it("deletes a member, and takes their granted access with them", async () => {
+    const e = email();
+    const m = await createMember({ email: e });
+    if (!m.ok) throw new Error(m.error);
+    await grantProduct({ userId: m.userId, productId: PRODUCT, grantedBy: "admin@test" });
+
+    expect(await deleteMember(m.userId)).toEqual({ ok: true });
+
+    // Both halves gone: a profile row with no auth account is a leftover, but
+    // an auth account with no profile can still request a login link.
+    const { data: profile } = await db().from("users").select("id").eq("id", m.userId).maybeSingle();
+    expect(profile).toBeNull();
+    const { data: authUser } = await db().auth.admin.getUserById(m.userId);
+    expect(authUser.user).toBeNull();
+
+    const { data: owned } = await db().from("ownership").select("id").eq("user_id", m.userId);
+    expect(owned ?? []).toEqual([]);
+  });
+
+  it("refuses to delete anyone who has ordered", async () => {
+    // orders.user_id is ON DELETE SET NULL, so this would leave the payment on
+    // the books with no customer attached — and that link is what a refund or
+    // a chargeback needs.
+    const e = email();
+    const m = await createMember({ email: e });
+    if (!m.ok) throw new Error(m.error);
+    const { error } = await db().from("orders").insert({
+      store_id: (await db().from("users").select("store_id").eq("id", m.userId).single()).data!
+        .store_id,
+      user_id: m.userId,
+      email: e,
+      status: "paid",
+      subtotal_cents: 2700,
+      total_cents: 2700,
+      currency: "usd",
+    });
+    if (error) throw new Error(error.message);
+
+    const out = await deleteMember(m.userId);
+    expect(out.ok).toBe(false);
+    expect(out.error).toMatch(/orders/i);
+
+    // Still there, and still signable-in — the refusal must not half-delete.
+    const { data: profile } = await db().from("users").select("id").eq("id", m.userId).maybeSingle();
+    expect(profile?.id).toBe(m.userId);
+
+    await db().from("orders").delete().eq("user_id", m.userId);
   });
 
   it("refuses something that is not an email", async () => {

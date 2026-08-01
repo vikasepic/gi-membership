@@ -311,3 +311,47 @@ export async function accessForMember(
     granted: r.source === "grant",
   }));
 }
+
+/**
+ * Delete a member outright — auth account and profile.
+ *
+ * Refused for anyone who has ever ordered. `orders.user_id` is ON DELETE SET
+ * NULL, so deleting a buyer leaves the payment on the books with nobody
+ * attached: the money is still recorded, but which human paid it is gone, and
+ * that link is the thing a refund request or a chargeback needs. Revoking
+ * their access does the intended job and keeps the trail.
+ *
+ * Everything else about a member does cascade — ownership, progress, upsell
+ * tokens — which is why this is worth guarding rather than leaving to a
+ * confirm dialog. The purpose here is cleaning up mistakes: a typo'd address,
+ * a test account, someone added twice.
+ */
+export async function deleteMember(userId: string): Promise<{ ok: boolean; error?: string }> {
+  const db = createServiceClient();
+
+  const { count, error: countErr } = await db
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+  // A failed count is not permission to delete. If we cannot tell whether this
+  // person has bought anything, the safe answer is no.
+  if (countErr) return { ok: false, error: `Could not check their orders: ${countErr.message}` };
+  if ((count ?? 0) > 0) {
+    return {
+      ok: false,
+      error:
+        "This member has orders, so deleting them would leave those payments with no customer attached. Revoke their access instead.",
+    };
+  }
+
+  // Auth first: a profile row with no way to sign in is a harmless leftover,
+  // whereas an auth account with no profile can still request a login link.
+  const { error: authErr } = await db.auth.admin.deleteUser(userId);
+  if (authErr && !/not found/i.test(authErr.message)) {
+    return { ok: false, error: authErr.message };
+  }
+
+  const { error } = await db.from("users").delete().eq("id", userId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
