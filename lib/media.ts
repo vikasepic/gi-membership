@@ -95,6 +95,28 @@ export async function uploadProductCover(productId: string, file: File): Promise
   return path;
 }
 
+/**
+ * An image for a sales-page section.
+ *
+ * Public bucket, like every other cover: this is marketing artwork shown to
+ * anyone who loads the page. Paid assets stay in the private bucket and are
+ * only ever served through an ownership-checked signed URL.
+ */
+export async function uploadPageImage(
+  owner: "product" | "offer",
+  ownerId: string,
+  file: File,
+): Promise<string> {
+  const db = createServiceClient();
+  const path = `pages/${owner}/${ownerId}/${Date.now()}-${safeName(file.name)}`;
+  const { error } = await db.storage.from("public-media").upload(path, file, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (error) throw new Error(`uploadPageImage: ${error.message}`);
+  return path;
+}
+
 export async function uploadCourseAttachment(courseId: string, file: File): Promise<Attachment> {
   const db = createServiceClient();
   const path = `courses/${courseId}/${Date.now()}-${safeName(file.name)}`;

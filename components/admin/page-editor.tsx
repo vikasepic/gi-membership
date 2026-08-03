@@ -1,11 +1,16 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
-import { saveSectionAction, type SectionSaveState } from "@/app/admin/pages/actions";
+import {
+  saveSectionAction,
+  uploadSectionImageAction,
+  type SectionSaveState,
+} from "@/app/admin/pages/actions";
 import { SectionBand, type PageMoney } from "@/components/page/sales-page";
 import {
   BAND_STYLES,
   BAND_STYLE_KEYS,
+  imageSrc,
   sectionDef,
   type FieldDef,
   type SectionRow,
@@ -247,7 +252,14 @@ function SectionPanel({
         </p>
 
         {def.fields.map((f) => (
-          <Field key={f.key} def={f} value={content[f.key]} onChange={(v) => setField(f.key, v)} />
+          <Field
+            key={f.key}
+            def={f}
+            value={content[f.key]}
+            onChange={(v) => setField(f.key, v)}
+            ownerType={ownerType}
+            ownerId={ownerId}
+          />
         ))}
 
         {def.variants && (
@@ -388,15 +400,110 @@ function Label({ text, hint }: { text: string; hint?: string }) {
   );
 }
 
+function ImageField({
+  def,
+  value,
+  onChange,
+  ownerType,
+  ownerId,
+}: {
+  def: Extract<FieldDef, { kind: "image" }>;
+  value: unknown;
+  onChange: (v: unknown) => void;
+  ownerType: OwnerType;
+  ownerId: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const text = typeof value === "string" ? value : "";
+  const src = imageSrc(text);
+
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setBusy(true);
+    setError(null);
+    const fd = new FormData();
+    fd.append("ownerType", ownerType);
+    fd.append("ownerId", ownerId);
+    fd.append("file", file);
+    const res = await uploadSectionImageAction(fd);
+    setBusy(false);
+    if (res.error || !res.path) {
+      setError(res.error ?? "Upload failed.");
+      return;
+    }
+    // Into the draft, not straight to the row: the section's own Save owns
+    // persistence, and an image that appeared before Save would be the one
+    // thing on this screen that behaved differently from everything else.
+    onChange(res.path);
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Label text={def.label} hint={def.hint} />
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt=""
+          className="aspect-[4/3] w-full max-w-48 rounded-xl border border-border object-cover"
+        />
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="cursor-pointer rounded-full border border-border px-3.5 py-1.5 text-xs transition-colors hover:border-fg">
+          {busy ? "Uploading…" : src ? "Replace" : "Upload an image"}
+          <input
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            disabled={busy}
+            onChange={(e) => {
+              void pick(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        {src && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="text-xs text-muted underline-offset-4 hover:text-fg hover:underline"
+          >
+            Remove
+          </button>
+        )}
+        <span className="text-xs text-muted">PNG or JPG, up to 5MB</span>
+      </div>
+      <input
+        value={text}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="…or paste a URL"
+        className={`${inputClass} font-mono text-xs`}
+      />
+      {error && <span className="text-xs text-primary">{error}</span>}
+    </div>
+  );
+}
+
 function Field({
   def,
   value,
   onChange,
+  ownerType,
+  ownerId,
 }: {
   def: FieldDef;
   value: unknown;
   onChange: (v: unknown) => void;
+  ownerType: OwnerType;
+  ownerId: string;
 }) {
+  if (def.kind === "image") {
+    return (
+      <ImageField def={def} value={value} onChange={onChange} ownerType={ownerType} ownerId={ownerId} />
+    );
+  }
+
   if (def.kind === "list") {
     const rows = listRows(value);
     return (

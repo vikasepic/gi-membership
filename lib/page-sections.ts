@@ -71,6 +71,7 @@ export type SubField = { key: string; label: string; kind: "text" | "textarea" }
 
 export type FieldDef =
   | { kind: "text"; key: string; label: string; hint?: string }
+  | { kind: "image"; key: string; label: string; hint?: string }
   | { kind: "textarea"; key: string; label: string; hint?: string; rows?: number }
   | { kind: "list"; key: string; label: string; hint?: string; item: SubField[]; addLabel: string };
 
@@ -256,7 +257,7 @@ export const SECTIONS: SectionDef[] = [
     fields: [
       { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
       { kind: "textarea", key: "body", label: "Body", rows: 5 },
-      { kind: "text", key: "imageUrl", label: "Image URL", hint: "Leave empty for a placeholder panel." },
+      { kind: "image", key: "imageUrl", label: "Image", hint: "Upload a file, or paste a URL if it is hosted elsewhere." },
       { kind: "list", key: "figures", label: "Figures", hint: "Only what you can stand behind.", item: [row("value", "Figure"), row("label", "Label")], addLabel: "Add a figure" },
     ],
     defaults: {
@@ -406,6 +407,19 @@ export type SectionView = {
   /** Field values, defaults filled in. */
   c: Record<string, unknown>;
 };
+
+/**
+ * Turn a stored image value into something an `<img>` can use.
+ *
+ * Uploads store a bucket path; a pasted address stays a full URL. Accepting
+ * both means switching to uploads did not invalidate anything already set.
+ */
+export function imageSrc(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const v = value.trim();
+  if (/^https?:\/\//i.test(v)) return v;
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}/storage/v1/object/public/public-media/${v}`;
+}
 
 /** One list field, normalised to rows of plain strings. */
 export function listOf(value: unknown, keys: string[]): Record<string, string>[] {

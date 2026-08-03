@@ -1,4 +1,4 @@
-import { listOf, textOf, type SectionView, type BandTheme } from "@/lib/page-sections";
+import { listOf, textOf, imageSrc, type SectionView, type BandTheme } from "@/lib/page-sections";
 import { tint } from "@/lib/color";
 
 // The nine bands.
@@ -382,7 +382,7 @@ export function OfferSection({ view, priceLabel }: P & { priceLabel?: string | n
 export function AuthoritySection({ view }: P) {
   const { c, theme: t } = view;
   const figures = listOf(c.figures, ["value", "label"]);
-  const img = textOf(c, "imageUrl");
+  const img = imageSrc(c.imageUrl);
   return (
     <div className="grid grid-cols-1 items-center gap-8 @3xl:grid-cols-[0.72fr_1.28fr]">
       <div

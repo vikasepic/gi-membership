@@ -11,6 +11,7 @@ import {
   listOf,
   sectionDef,
   textOf,
+  imageSrc,
 } from "@/lib/page-sections";
 
 describe("the ten sections", () => {
@@ -200,5 +201,23 @@ describe("listOf", () => {
     expect(listOf([{ title: { a: 1 }, body: "ok" }], ["title", "body"])).toEqual([
       { title: "", body: "ok" },
     ]);
+  });
+});
+
+describe("imageSrc", () => {
+  it("passes a full URL through", () => {
+    expect(imageSrc("https://example.com/a.png")).toBe("https://example.com/a.png");
+  });
+
+  it("builds a public URL from an uploaded path", () => {
+    // Switching the field to uploads must not invalidate addresses already
+    // pasted in, so both shapes have to resolve.
+    expect(imageSrc("pages/offer/abc/1-x.png")).toContain(
+      "/storage/v1/object/public/public-media/pages/offer/abc/1-x.png",
+    );
+  });
+
+  it("returns nothing for an empty or non-string value", () => {
+    for (const v of ["", "   ", null, undefined, 42, {}]) expect(imageSrc(v)).toBeNull();
   });
 });
