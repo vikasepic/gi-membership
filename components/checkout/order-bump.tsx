@@ -103,19 +103,24 @@ export function OrderBump({
         />
 
         <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <div className="flex flex-col gap-1 @xs:flex-row @xs:items-start @xs:justify-between @xs:gap-4">
+          {/* Side-by-side only at @md (448px). Measured: the live order summary
+              renders this card at 329px, where a row leaves the headline ~180px
+              and wraps it to six lines. */}
+          <div className="flex flex-col gap-1 @md:flex-row @md:items-start @md:justify-between @md:gap-4">
             <label
               htmlFor={id}
               className={`min-w-0 cursor-pointer text-balance font-display font-semibold leading-snug ${
-                compact ? "text-[0.98rem]" : "text-[1.05rem] @xs:text-[1.15rem]"
+                compact ? "text-[0.98rem]" : "text-[1.05rem] @md:text-[1.15rem]"
               }`}
             >
               {view.headline}
             </label>
 
             {/* Narrow: was and now sit on one line under the headline. Wide:
-                they stack in a right-aligned column beside it. */}
-            <span className="flex flex-wrap items-baseline gap-x-2 tabular-nums @xs:shrink-0 @xs:flex-col @xs:items-end @xs:gap-x-0 @xs:text-right">
+                they stack in a right-aligned column beside it. Capped rather
+                than shrink-0 — an uncapped column pushed the terms line out
+                over the headline. */}
+            <span className="flex flex-wrap items-baseline gap-x-2 tabular-nums @md:max-w-[46%] @md:flex-col @md:items-end @md:gap-x-0 @md:text-right">
               {view.wasLabel && (
                 <span
                   className={`text-muted line-through ${compact ? "text-[0.75rem]" : "text-sm"}`}
@@ -125,14 +130,14 @@ export function OrderBump({
               )}
               <span
                 className={`font-display font-semibold leading-none ${
-                  compact ? "text-[1.15rem]" : "text-[1.4rem] @xs:text-[1.55rem]"
+                  compact ? "text-[1.15rem]" : "text-[1.4rem] @md:text-[1.55rem]"
                 }`}
                 style={{ color: accent }}
               >
                 {view.nowLabel}
               </span>
               {view.termsLabel && (
-                <span className="w-full text-[0.75rem] text-muted @xs:mt-0.5 @xs:w-auto">
+                <span className="w-full text-[0.75rem] leading-snug text-muted @md:mt-0.5 @md:w-auto">
                   {view.termsLabel}
                 </span>
               )}
@@ -147,7 +152,7 @@ export function OrderBump({
 
           {view.bullets.length > 0 && (
             <ul
-              className={`grid list-none grid-cols-1 gap-x-4 gap-y-1 p-0 @md:grid-cols-2 ${
+              className={`grid list-none grid-cols-1 gap-x-4 gap-y-1 p-0 @lg:grid-cols-2 ${
                 compact ? "text-[0.78rem]" : "text-[0.89rem]"
               }`}
             >
