@@ -310,7 +310,7 @@ export const SECTIONS: SectionDef[] = [
     n: "9",
     title: "Value, price, guarantee",
     purpose: "What the result is worth, then what it costs, then the risk removed.",
-    shape: "Comparison columns, a price card, and a guarantee.",
+    shape: "Comparison columns, a price card, a guarantee, and the questions worth answering.",
     defaultStyle: "plum",
     fields: [
       { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
@@ -325,6 +325,14 @@ export const SECTIONS: SectionDef[] = [
       { kind: "text", key: "priceNote", label: "Line under the price" },
       { kind: "text", key: "guaranteeTitle", label: "Guarantee title" },
       { kind: "textarea", key: "guaranteeBody", label: "Guarantee", rows: 3 },
+      {
+        kind: "list",
+        key: "faqs",
+        label: "Questions",
+        hint: "The objections worth answering before the price lands. Leave empty to hide.",
+        item: [row("q", "Question"), row("a", "Answer", "textarea")],
+        addLabel: "Add a question",
+      },
     ],
     defaults: {
       heading: "What staying consistent actually costs",
@@ -337,6 +345,11 @@ export const SECTIONS: SectionDef[] = [
       priceNote: "Seven days free. Cancel from your account in one click.",
       guaranteeTitle: "Nothing today",
       guaranteeBody: "Your card is not charged until day eight. Cancel before then and you pay nothing at all.",
+      // Empty by default. Every other default here is Content Engine's copy,
+      // which is harmless to inherit and obvious to replace — but an FAQ makes
+      // factual claims about charging and cancelling, and those are not true of
+      // every product that starts from these defaults.
+      faqs: [],
     },
   },
   {

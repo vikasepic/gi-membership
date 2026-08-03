@@ -475,6 +475,7 @@ export function ProofSection({ view }: P) {
 export function ValueSection({ view, priceLabel, termsLabel }: P & { priceLabel?: string | null; termsLabel?: string | null }) {
   const { c, theme: t } = view;
   const options = listOf(c.options, ["label", "amount", "note"]);
+  const faqs = listOf(c.faqs, ["q", "a"]);
   return (
     <div>
       <H t={t}>{textOf(c, "heading")}</H>
@@ -536,6 +537,24 @@ export function ValueSection({ view, priceLabel, termsLabel }: P & { priceLabel?
           </div>
         )}
       </div>
+
+      {/* Objections belong here rather than in their own band: this section
+          exists to remove the last of the risk, and an unanswered question is
+          risk. It also keeps Ajit's structure at ten parts. */}
+      {faqs.length > 0 && (
+        <div className="mt-8 grid grid-cols-1 gap-x-10 gap-y-5 @2xl:grid-cols-2">
+          {faqs.map((f, i) => (
+            <div key={i}>
+              <div className="mb-1 font-display text-[0.98rem] font-semibold" style={{ color: t.fg }}>
+                {f.q}
+              </div>
+              <div className="pb-4 text-[0.88rem]" style={{ color: t.muted, borderBottom: `1px solid ${t.rule}` }}>
+                {f.a}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
