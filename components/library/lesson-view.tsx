@@ -71,11 +71,15 @@ export function LessonView({
         </div>
       )}
 
+      {/* A pasted link wins over an upload: it is the more deliberate act, and
+          having both should not silently play the older one. */}
       {item.itemType === "audio" &&
-        (audio ? (
+        (item.audioUrl ? (
+          <AudioPlayer src={item.audioUrl} title={item.title} />
+        ) : audio ? (
           <AudioPlayer src={assetUrl(item.attachments.indexOf(audio))} title={audio.name} />
         ) : (
-          <Notice text="The audio for this lesson hasn't been uploaded yet." />
+          <Notice text="The audio for this lesson hasn't been added yet." />
         ))}
 
       {item.itemType === "pdf" &&

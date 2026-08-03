@@ -4,7 +4,8 @@ import type { CurriculumNode, CourseItem } from "@/lib/curriculum";
 
 const base = (id: string, parentId: string | null = null): CourseItem => ({
   id, courseId: "c", parentId, itemType: "text" as const, title: id, subtitle: null, bodyHtml: null,
-  videoEmbedUrl: null, coverPath: null, attachments: [], isPublished: true, sortOrder: 0,
+  videoEmbedUrl: null,
+  audioUrl: null, coverPath: null, attachments: [], isPublished: true, sortOrder: 0,
 });
 const node = (id: string, children: CourseItem[] = []): CurriculumNode => ({ ...base(id), children });
 

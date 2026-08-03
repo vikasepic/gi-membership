@@ -97,3 +97,40 @@ describe("the preview renders the same components as the live pages", () => {
     }
   });
 });
+
+describe("the lesson editor's type field", () => {
+  it("drives the panels from state, not from the saved value", () => {
+    // The field is labelled "decides the fields below". Branching on the saved
+    // type meant it decided nothing until you saved and the page came back —
+    // pick Audio, still see a Video URL box.
+    const s = read("components/admin/lesson-type-fields.tsx");
+    expect(s).toContain('"use client"');
+    expect(s).toMatch(/useState<ItemType>\(item\.itemType\)/);
+    expect(s).toMatch(/type === "video"/);
+    expect(s, "still branching on the saved value").not.toMatch(/item\.itemType === /);
+  });
+
+  it("keeps a URL that the type was switched away from", () => {
+    // An unrendered input posts nothing, so without these the act of changing
+    // type would silently wipe an address that was already typed.
+    const s = read("components/admin/lesson-type-fields.tsx");
+    expect(s).toContain('type !== "video" && <input type="hidden" name="videoEmbedUrl"');
+    expect(s).toContain('type !== "audio" && <input type="hidden" name="audioUrl"');
+  });
+});
+
+describe("audio from a link", () => {
+  it("prefers the link over an upload, and says nothing when there is neither", () => {
+    const s = read("components/library/lesson-view.tsx");
+    expect(s).toMatch(/item\.audioUrl \?[\s\S]{0,120}AudioPlayer src=\{item\.audioUrl\}/);
+    expect(s).toContain("hasn't been added yet");
+  });
+
+  it("warns that a pasted link is not ownership-checked", () => {
+    // An upload is served through a signed, ownership-checked URL; a link is
+    // playable by anyone who has it. The difference is invisible once saved,
+    // so the editor has to say it at the point of choosing.
+    const s = read("components/admin/lesson-type-fields.tsx");
+    expect(s).toMatch(/Anyone with the address can play it/);
+  });
+});

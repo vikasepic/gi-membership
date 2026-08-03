@@ -24,6 +24,8 @@ export type CourseItem = {
   subtitle: string | null;
   bodyHtml: string | null;
   videoEmbedUrl: string | null;
+  /** Externally hosted audio. Public — an upload is the protected option. */
+  audioUrl: string | null;
   coverPath: string | null;
   attachments: Attachment[];
   isPublished: boolean;
@@ -33,7 +35,7 @@ export type CourseItem = {
 export type CurriculumNode = CourseItem & { children: CourseItem[] };
 
 export const ITEM_COLUMNS =
-  "id, course_id, parent_id, item_type, title, subtitle, body_html, video_embed_url, cover_path, attachments, is_published, sort_order";
+  "id, course_id, parent_id, item_type, title, subtitle, body_html, video_embed_url, audio_url, cover_path, attachments, is_published, sort_order";
 
 const bySort = (a: CourseItem, b: CourseItem) => a.sortOrder - b.sortOrder;
 

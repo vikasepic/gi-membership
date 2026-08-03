@@ -33,6 +33,7 @@ export async function addChapterAction(formData: FormData) {
     subtitle: null,
     bodyHtml: null,
     videoEmbedUrl: null,
+    audioUrl: null,
     isPublished: false,
   });
   revalidatePath(`/admin/courses/${courseId}`);
@@ -49,6 +50,7 @@ export async function addLessonAction(formData: FormData) {
     subtitle: null,
     bodyHtml: null,
     videoEmbedUrl: null,
+    audioUrl: null,
     isPublished: false,
   });
   revalidatePath(`/admin/courses/${courseId}`);
@@ -80,6 +82,7 @@ export async function saveItemAction(formData: FormData) {
     subtitle: raw(formData, "subtitle"),
     bodyHtml: raw(formData, "bodyHtml"),
     videoEmbedUrl: raw(formData, "videoEmbedUrl"),
+    audioUrl: raw(formData, "audioUrl"),
     isPublished: formData.get("isPublished") === "on",
   });
   revalidatePath(`/admin/courses/${courseId}/items/${itemId}`);

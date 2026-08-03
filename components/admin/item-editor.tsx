@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { RichText } from "@/components/editor/rich-text";
 import { DeleteItemButton } from "@/components/admin/delete-item-button";
-import { inputClass as input, Field, Section } from "@/components/admin/form-controls";
+import { LessonTypeFields } from "@/components/admin/lesson-type-fields";
+import { Section } from "@/components/admin/form-controls";
 import { publicCoverUrl } from "@/lib/media";
 import type { CourseItem } from "@/lib/curriculum";
 import {
@@ -10,23 +10,6 @@ import {
   uploadAttachmentAction,
   removeAttachmentAction,
 } from "@/app/admin/courses/[id]/items/actions";
-
-// YouTube and Vimeo expose playback position cross-origin; other providers do
-// not, so their lessons complete on the dwell timer instead. Say which applies
-// rather than letting it look broken.
-function trackingNote(url: string | null): string {
-  if (!url) return "";
-  return /youtube\.com|youtu\.be|vimeo\.com/i.test(url)
-    ? "Auto-completes at 50% watched."
-    : "This provider can't report progress — completes on time-on-page instead.";
-}
-
-const TYPE_LABEL: Record<string, string> = {
-  video: "Video",
-  audio: "Audio",
-  pdf: "PDF",
-  text: "Text",
-};
 
 export function ItemEditor({
   item,
@@ -56,72 +39,7 @@ export function ItemEditor({
         <input type="hidden" name="courseId" value={courseId} />
         <input type="hidden" name="itemId" value={item.id} />
 
-        <Section title={`${kindLabel} details`}>
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <div className="sm:col-span-2">
-              <Field label="Title" required>
-                <input name="title" defaultValue={item.title} required className={input} />
-              </Field>
-            </div>
-            <Field label="Type" hint="decides the fields below">
-              <select name="itemType" defaultValue={item.itemType} className={input}>
-                {Object.entries(TYPE_LABEL).map(([v, l]) => (
-                  <option key={v} value={v}>{l}</option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <Field label="Subtitle" hint="optional">
-            <input name="subtitle" defaultValue={item.subtitle ?? ""} className={input} />
-          </Field>
-        </Section>
-
-        {/* Only the fields this type actually needs. A PDF lesson has no video
-            URL to fill in; a video lesson doesn't pretend to be a worksheet. */}
-        {item.itemType === "video" && (
-          <Section title="Video" hint="Vimeo, YouTube or Loom — paste the embed URL.">
-            <Field label="Video URL">
-              <input name="videoEmbedUrl" defaultValue={item.videoEmbedUrl ?? ""} className={input} />
-            </Field>
-            {item.videoEmbedUrl && (
-              <p className="-mt-2 text-xs text-muted">{trackingNote(item.videoEmbedUrl)}</p>
-            )}
-          </Section>
-        )}
-
-        {item.itemType === "audio" && (
-          <Section
-            title="Audio"
-            hint="Upload the audio file below under Files — it plays in the waveform player."
-          >
-            <p className="text-sm text-muted">
-              {item.attachments.some((a) => a.mime.startsWith("audio/"))
-                ? "Audio file attached."
-                : "No audio file yet — add one under Files."}
-            </p>
-          </Section>
-        )}
-
-        {item.itemType === "pdf" && (
-          <Section title="PDF" hint="Upload the PDF below under Files — students read it inline.">
-            <p className="text-sm text-muted">
-              {item.attachments.some((a) => a.mime === "application/pdf")
-                ? "PDF attached."
-                : "No PDF yet — add one under Files."}
-            </p>
-          </Section>
-        )}
-
-        <Section
-          title="Body"
-          hint={
-            item.itemType === "text"
-              ? "The written lesson."
-              : "Notes shown under the media — optional."
-          }
-        >
-          <RichText name="bodyHtml" value={item.bodyHtml ?? ""} />
-        </Section>
+        <LessonTypeFields item={item} kindLabel={kindLabel} />
 
         <label className="flex items-center gap-2.5 text-sm">
           <input

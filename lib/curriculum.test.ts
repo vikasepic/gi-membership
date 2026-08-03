@@ -9,6 +9,7 @@ const item = (over: Partial<CourseItem> & { id: string }): CourseItem => ({
   subtitle: null,
   bodyHtml: null,
   videoEmbedUrl: null,
+  audioUrl: null,
   coverPath: null,
   attachments: [],
   isPublished: true,
