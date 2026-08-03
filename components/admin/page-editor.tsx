@@ -28,6 +28,17 @@ function listRows(value: unknown): Record<string, string>[] {
   return Array.isArray(value) ? (value as Record<string, string>[]) : [];
 }
 
+/**
+ * Preview widths.
+ *
+ * "Desktop" fills whatever the pane gives it rather than scaling a fixed
+ * canvas down: the sections use container queries, so a real width renders the
+ * real composition, while a scaled canvas would show desktop styling at a size
+ * nobody views it at. Mobile is a true 390px for the same reason.
+ */
+const DEVICES = { desktop: null, mobile: 390 } as const;
+type Device = keyof typeof DEVICES;
+
 export function PageEditor({
   ownerType,
   ownerId,
@@ -45,6 +56,7 @@ export function PageEditor({
   const [openKey, setOpenKey] = useState<string | null>(initial[0]?.sectionKey ?? null);
   const [dirty, setDirty] = useState<Record<string, boolean>>({});
   const [state, action, pending] = useActionState<SectionSaveState, FormData>(saveSectionAction, {});
+  const [device, setDevice] = useState<Device>("desktop");
 
   const patch = (key: string, next: Partial<SectionRow>) => {
     setRows((rs) => rs.map((r) => (r.sectionKey === key ? { ...r, ...next } : r)));
@@ -52,16 +64,31 @@ export function PageEditor({
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mx-[calc(50%-50vw)] flex w-screen flex-col gap-4 px-5 md:px-6 2xl:mx-auto 2xl:w-full 2xl:max-w-[1760px] 2xl:px-0">
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3">
         <span className="text-sm text-muted">
           Ten sections. Open one to edit it — each saves on its own.
         </span>
+        <div className="ml-auto flex items-center gap-1 rounded-full border border-border p-1">
+          {(Object.keys(DEVICES) as Device[]).map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setDevice(d)}
+              aria-pressed={device === d}
+              className={`rounded-full px-3 py-1 text-xs capitalize transition-colors ${
+                device === d ? "bg-navy text-white" : "text-muted hover:text-fg"
+              }`}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
         <a
           href={liveHref}
           target="_blank"
           rel="noreferrer"
-          className="ml-auto rounded-full border border-border px-4 py-1.5 text-sm transition-colors hover:border-fg"
+          className="rounded-full border border-border px-4 py-1.5 text-sm transition-colors hover:border-fg"
         >
           Preview whole page ↗
         </a>
@@ -118,6 +145,7 @@ export function PageEditor({
                   action={action}
                   onChange={(next) => patch(row.sectionKey, next)}
                   onSaved={() => setDirty((d) => ({ ...d, [row.sectionKey]: false }))}
+                  device={device}
                 />
               )}
             </div>
@@ -138,6 +166,7 @@ function SectionPanel({
   action,
   onChange,
   onSaved,
+  device,
 }: {
   ownerType: OwnerType;
   ownerId: string;
@@ -148,6 +177,7 @@ function SectionPanel({
   action: (fd: FormData) => void;
   onChange: (next: Partial<SectionRow>) => void;
   onSaved: () => void;
+  device: Device;
 }) {
   const def = sectionDef(row.sectionKey)!;
   const content = useMemo<Draft>(
@@ -164,7 +194,7 @@ function SectionPanel({
         onSaved();
         action(fd);
       }}
-      className="grid grid-cols-1 gap-0 border-t border-border lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]"
+      className="grid grid-cols-1 gap-0 border-t border-border lg:grid-cols-[minmax(360px,420px)_minmax(0,1fr)]"
     >
       <input type="hidden" name="ownerType" value={ownerType} />
       <input type="hidden" name="ownerId" value={ownerId} />
@@ -274,15 +304,26 @@ function SectionPanel({
       </div>
 
       {/* ---- preview ---- */}
-      <div className="flex flex-col gap-2 border-t border-border bg-bg p-5 lg:border-l lg:border-t-0">
-        <span className="kicker text-muted">Preview — this section only</span>
-        <div className="overflow-hidden rounded-xl border border-border">
-          <SectionBand row={{ ...row, content }} money={money} />
+      {/* Sticky: the fields column is long, and a preview that scrolls away is
+          a preview you stop looking at. */}
+      <div className="border-t border-border bg-bg p-5 lg:border-l lg:border-t-0">
+        <div className="sticky top-4 flex flex-col gap-2">
+          <span className="kicker text-muted">
+            Preview — this section only{device === "mobile" ? " · 390px" : ""}
+          </span>
+          <div className="overflow-hidden rounded-xl border border-border">
+            <div
+              className="mx-auto transition-[max-width] duration-200"
+              style={{ maxWidth: DEVICES[device] ?? undefined }}
+            >
+              <SectionBand row={{ ...row, content }} money={money} />
+            </div>
+          </div>
+          <p className="text-xs text-muted">
+            The component the live page renders, not a mock-up — so it cannot drift from what buyers
+            see.
+          </p>
         </div>
-        <p className="text-xs text-muted">
-          The component the live page renders, not a mock-up — so it cannot drift from what buyers
-          see.
-        </p>
       </div>
     </form>
   );
