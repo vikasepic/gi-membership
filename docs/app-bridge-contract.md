@@ -15,6 +15,9 @@
 > |---|---|
 > | Content Engine | [`content-engine-brief.md`](./content-engine-brief.md) — its Stripe and billing-code conflicts |
 > | Funnel App | [`funnel-app-brief.md`](./funnel-app-brief.md) — Vercel + Supabase Cloud specifics |
+>
+> **Wiring up a new app?** [`connecting-a-new-app.md`](./connecting-a-new-app.md)
+> is the runbook — the order matters, and the offer is created last.
 
 The **store** (gi-membership) is the front door and system of record for
 accounts. A connected app (Content Engine first) is a row in the `apps` table:
