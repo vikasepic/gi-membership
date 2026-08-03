@@ -1,0 +1,10 @@
+{
+  "secret": "test-secret-do-not-use-in-production",
+  "payload": {
+    "email": "test@example.com",
+    "userId": "00000000-0000-0000-0000-000000000001",
+    "appId": "8ee0321c-c78b-4638-a4a6-81a70d1e37bb",
+    "exp": 4102444800
+  },
+  "token": "eyJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJ1c2VySWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJhcHBJZCI6IjhlZTAzMjFjLWM3OGItNDYzOC1hNGE2LTgxYTcwZDFlMzdiYiIsImV4cCI6NDEwMjQ0NDgwMH0.6SnmBVq-CGHPvaJT15MMJzABCiHTbLtK-LI1CVKWAWk"
+}
