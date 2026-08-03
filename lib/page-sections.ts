@@ -232,13 +232,18 @@ export const SECTIONS: SectionDef[] = [
         { title: "Drafting in your voice", body: "Carousels, reels and posts, ready to edit." },
         { title: "The weekly planner", body: "One place to move each piece from draft to posted." },
       ],
+      // Amounts ship EMPTY on purpose. A value stack is a claim about what
+      // something is worth, and a default figure is a claim nobody made — it
+      // would go live the first time someone saved the page without reading
+      // it. The lines describe real parts of the product; the numbers have to
+      // be typed by someone willing to stand behind them.
       stack: [
-        { label: "Niche research, done continuously", amount: "$400/mo" },
-        { label: "Drafts in your voice, every week", amount: "$800/mo" },
-        { label: "Planning and publishing in one place", amount: "$200/mo" },
+        { label: "Niche research, done continuously", amount: "" },
+        { label: "Drafts in your voice, every week", amount: "" },
+        { label: "Planning and publishing in one place", amount: "" },
       ],
       totalLabel: "Total value",
-      totalAmount: "$1,400/mo",
+      totalAmount: "",
     },
   },
   {
