@@ -33,7 +33,7 @@ export async function addChapterAction(formData: FormData) {
     subtitle: null,
     bodyHtml: null,
     videoEmbedUrl: null,
-    audioUrl: null,
+    audioUrls: [],
     isPublished: false,
   });
   revalidatePath(`/admin/courses/${courseId}`);
@@ -50,7 +50,7 @@ export async function addLessonAction(formData: FormData) {
     subtitle: null,
     bodyHtml: null,
     videoEmbedUrl: null,
-    audioUrl: null,
+    audioUrls: [],
     isPublished: false,
   });
   revalidatePath(`/admin/courses/${courseId}`);
@@ -82,7 +82,11 @@ export async function saveItemAction(formData: FormData) {
     subtitle: raw(formData, "subtitle"),
     bodyHtml: raw(formData, "bodyHtml"),
     videoEmbedUrl: raw(formData, "videoEmbedUrl"),
-    audioUrl: raw(formData, "audioUrl"),
+    // getAll: the editor renders one input per link, all named the same.
+    audioUrls: formData
+      .getAll("audioUrls")
+      .map((v) => String(v).trim())
+      .filter(Boolean),
     isPublished: formData.get("isPublished") === "on",
   });
   revalidatePath(`/admin/courses/${courseId}/items/${itemId}`);
@@ -126,4 +130,35 @@ export async function removeAttachmentAction(formData: FormData) {
   const itemId = String(formData.get("itemId"));
   await removeAttachment(itemId, String(formData.get("path")));
   revalidatePath(`/admin/courses/${courseId}/items/${itemId}`);
+}
+
+export type ItemUploadState = { ok?: boolean; error?: string };
+
+/**
+ * Upload one file for a lesson and report back, rather than redirecting.
+ *
+ * uploadAttachmentAction redirects, which is right for its own form but wrong
+ * here: this one is called straight from a change handler so the control can
+ * sit inside the media panel it belongs to. The save form already wraps that
+ * panel, and a form cannot contain another form.
+ */
+export async function uploadItemFileAction(formData: FormData): Promise<ItemUploadState> {
+  await requireAdmin();
+  const itemId = String(formData.get("itemId") ?? "");
+  const courseId = String(formData.get("courseId") ?? "");
+  if (!itemId || !courseId) return { error: "Missing lesson." };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a file." };
+
+  const check = validateUpload({ type: file.type, size: file.size }, "attachment");
+  if (!check.ok) return { error: check.error };
+
+  try {
+    await addAttachment(itemId, await uploadAttachment(itemId, file));
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Upload failed." };
+  }
+  revalidatePath(`/admin/courses/${courseId}/items/${itemId}`);
+  return { ok: true };
 }

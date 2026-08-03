@@ -39,8 +39,18 @@ export function LessonView({
   backHref: { href: string; label: string } | null;
   interactive?: boolean;
 }) {
-  const audio = item.attachments.find((a) => a.mime.startsWith("audio/"));
-  const pdf = item.attachments.find((a) => a.mime === "application/pdf");
+  // Every source, not just the first. A lesson can be a part one and a part
+  // two, or a worksheet and a summary — showing only one silently hides work
+  // that was uploaded on purpose.
+  const audioSources = [
+    ...item.audioUrls.map((src) => ({ src, title: item.title })),
+    ...item.attachments
+      .filter((a) => a.mime.startsWith("audio/"))
+      .map((a) => ({ src: assetUrl(item.attachments.indexOf(a)), title: a.name })),
+  ];
+  const pdfs = item.attachments
+    .map((a, i) => ({ a, i }))
+    .filter(({ a }) => a.mime === "application/pdf");
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 py-4">
@@ -71,21 +81,28 @@ export function LessonView({
         </div>
       )}
 
-      {/* A pasted link wins over an upload: it is the more deliberate act, and
-          having both should not silently play the older one. */}
       {item.itemType === "audio" &&
-        (item.audioUrl ? (
-          <AudioPlayer src={item.audioUrl} title={item.title} />
-        ) : audio ? (
-          <AudioPlayer src={assetUrl(item.attachments.indexOf(audio))} title={audio.name} />
+        (audioSources.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {audioSources.map((s) => (
+              <AudioPlayer key={s.src} src={s.src} title={s.title} />
+            ))}
+          </div>
         ) : (
           <Notice text="The audio for this lesson hasn't been added yet." />
         ))}
 
       {item.itemType === "pdf" &&
-        (pdf ? (
-          <div className="aspect-[4/5] w-full overflow-hidden rounded-2xl border border-border">
-            <iframe src={assetUrl(item.attachments.indexOf(pdf))} className="h-full w-full" />
+        (pdfs.length > 0 ? (
+          <div className="flex flex-col gap-4">
+            {pdfs.map(({ a, i }) => (
+              <div key={a.path} className="flex flex-col gap-1.5">
+                {pdfs.length > 1 && <span className="text-sm text-muted">{a.name}</span>}
+                <div className="aspect-[4/5] w-full overflow-hidden rounded-2xl border border-border">
+                  <iframe src={assetUrl(i)} className="h-full w-full" title={a.name} />
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <Notice text="The PDF for this lesson hasn't been uploaded yet." />

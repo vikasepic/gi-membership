@@ -11,7 +11,7 @@ export type ItemInput = {
   subtitle: string | null;
   bodyHtml: string | null;
   videoEmbedUrl: string | null;
-  audioUrl: string | null;
+  audioUrls: string[];
   isPublished: boolean;
 };
 
@@ -63,7 +63,7 @@ export async function createItem(
       subtitle: input.subtitle,
       body_html: sanitizeBodyHtml(input.bodyHtml ?? ""),
       video_embed_url: input.videoEmbedUrl,
-      audio_url: input.audioUrl,
+      audio_urls: input.audioUrls,
       is_published: input.isPublished,
       sort_order: sort,
     })
@@ -83,7 +83,7 @@ export async function updateItem(itemId: string, input: ItemInput): Promise<void
       subtitle: input.subtitle,
       body_html: sanitizeBodyHtml(input.bodyHtml ?? ""),
       video_embed_url: input.videoEmbedUrl,
-      audio_url: input.audioUrl,
+      audio_urls: input.audioUrls,
       is_published: input.isPublished,
     })
     .eq("id", itemId);

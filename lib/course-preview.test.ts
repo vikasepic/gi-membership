@@ -115,14 +115,19 @@ describe("the lesson editor's type field", () => {
     // type would silently wipe an address that was already typed.
     const s = read("components/admin/lesson-type-fields.tsx");
     expect(s).toContain('type !== "video" && <input type="hidden" name="videoEmbedUrl"');
-    expect(s).toContain('type !== "audio" && <input type="hidden" name="audioUrl"');
+    // Audio is a list now, so its keeper is a map rather than one input.
+    expect(s).toMatch(/type !== "audio" &&[\s\S]{0,200}name="audioUrls"/);
   });
 });
 
-describe("audio from a link", () => {
-  it("prefers the link over an upload, and says nothing when there is neither", () => {
+describe("audio and PDF from links or files", () => {
+  it("plays every source, not just the first", () => {
+    // A lesson can be a part one and a part two, or a worksheet and a summary.
+    // Rendering only the first silently hides work that was uploaded on purpose.
     const s = read("components/library/lesson-view.tsx");
-    expect(s).toMatch(/item\.audioUrl \?[\s\S]{0,120}AudioPlayer src=\{item\.audioUrl\}/);
+    expect(s).toContain("audioSources.map");
+    expect(s).toContain("pdfs.map");
+    expect(s, "still picking a single audio").not.toMatch(/attachments\.find\(\(a\) => a\.mime\.startsWith\("audio/);
     expect(s).toContain("hasn't been added yet");
   });
 
@@ -131,6 +136,21 @@ describe("audio from a link", () => {
     // playable by anyone who has it. The difference is invisible once saved,
     // so the editor has to say it at the point of choosing.
     const s = read("components/admin/lesson-type-fields.tsx");
-    expect(s).toMatch(/Anyone with the address can play it/);
+    expect(s).toMatch(/Anyone with a link can play it/);
+  });
+
+  it("puts the uploader in the panel it belongs to, and allows more than one", () => {
+    const s = read("components/admin/lesson-type-fields.tsx");
+    expect(s).toContain("MediaFiles");
+    expect(s).toContain("+ Add another link");
+    // Upload and remove are called imperatively — the save form wraps this and
+    // a form cannot contain another form.
+    expect(s).toContain("uploadItemFileAction");
+    expect(s).toContain("removeAttachmentAction");
+  });
+
+  it("keeps every link when the type is switched away", () => {
+    const s = read("components/admin/lesson-type-fields.tsx");
+    expect(s).toMatch(/type !== "audio" &&[\s\S]{0,200}name="audioUrls"/);
   });
 });
