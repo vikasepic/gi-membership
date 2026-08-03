@@ -34,6 +34,20 @@ async function isAdminInDb(userId: string | undefined): Promise<boolean> {
   return Boolean(data?.is_admin);
 }
 
+/**
+ * Is this signed-in user an admin?
+ *
+ * Exported so the media routes can let an admin preview a course without
+ * owning it. That is one extra branch on the existing ownership check rather
+ * than a second, unchecked route — a parallel "preview" path starts admin-only
+ * and is one refactor away from being reachable by anyone.
+ */
+export async function userIsAdmin(user: { id: string; email?: string | null } | null): Promise<boolean> {
+  if (!user) return false;
+  if (isAdminEmail(user.email)) return true;
+  return isAdminInDb(user.id);
+}
+
 export async function getAdminUser() {
   const supabase = await createClient();
   const {

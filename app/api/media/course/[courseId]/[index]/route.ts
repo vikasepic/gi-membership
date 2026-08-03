@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCourse, userOwnsCourse } from "@/lib/courses";
 import { signedItemAsset } from "@/lib/media";
+import { userIsAdmin } from "@/lib/admin-guard";
 
 // A course's direct attachment is paid content, exactly like a lesson's. Every
 // request re-checks the signed-in user owns the course, then 302s to a fresh
@@ -18,7 +19,10 @@ export async function GET(
   } = await supabase.auth.getUser();
   if (!user) return new NextResponse("Unauthorized", { status: 401 });
 
-  if (!(await userOwnsCourse(user.id, courseId))) {
+  // An admin passes ownership so a course can be previewed before it sells.
+  // A branch here, not a second route that skips the check — see the lesson
+  // media route for why.
+  if (!(await userIsAdmin(user)) && !(await userOwnsCourse(user.id, courseId))) {
     return new NextResponse("Forbidden", { status: 403 });
   }
 

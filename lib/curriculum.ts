@@ -2,6 +2,10 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
 
+// Pure and student-side, so it lives in curriculum-student.ts where a
+// component can import it without pulling "server-only" in with it.
+export { rollupProgress } from "@/lib/curriculum-student";
+
 // Chapters and lessons are one self-referencing tree: parent_id null = chapter,
 // set = lesson. A chapter with no children is itself a content node.
 
@@ -45,20 +49,6 @@ export function buildTree(items: CourseItem[]): CurriculumNode[] {
     }));
 }
 
-// A chapter WITH children is a container, not a completable unit. Countable
-// items are every lesson plus every childless chapter.
-export function rollupProgress(
-  items: CourseItem[],
-  completedIds: Set<string>,
-): { done: number; total: number } {
-  const published = items.filter((i) => i.isPublished);
-  const parentIds = new Set(published.map((i) => i.parentId).filter(Boolean) as string[]);
-  const countable = published.filter((i) => i.parentId !== null || !parentIds.has(i.id));
-  return {
-    done: countable.filter((i) => completedIds.has(i.id)).length,
-    total: countable.length,
-  };
-}
 
 // Default: published items only (fail safe). Admin callers must opt in with
 // includeDrafts: true to see unpublished items. This prevents draft lessons

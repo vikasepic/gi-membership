@@ -55,6 +55,17 @@ const nextConfig: NextConfig = {
           { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
         ],
       },
+      // Same reasoning for the course preview: a phone view is only truthful
+      // when the frame has its own viewport. Admin-only, and framed by this
+      // site alone.
+      {
+        source: "/course-preview/:path*",
+        headers: [
+          ...base,
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        ],
+      },
     ];
   },
 };

@@ -20,6 +20,12 @@ export default async function EditCoursePage({ params }: { params: Promise<{ id:
       <div className="flex flex-col gap-2">
         <Link href="/admin/courses" className="kicker w-fit text-muted hover:text-fg">&larr; Courses</Link>
         <h1 className="text-2xl">{course.title}</h1>
+        <Link
+          href={`/admin/courses/${id}/preview`}
+          className="mt-1 w-fit rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-fg"
+        >
+          Preview as a buyer →
+        </Link>
       </div>
 
       <CourseContent
