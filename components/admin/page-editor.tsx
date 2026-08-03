@@ -207,7 +207,9 @@ function SectionPanel({
 
       {/* ---- fields ---- */}
       <div className="flex flex-col gap-4 p-5">
-        <p className="text-sm text-muted">{def.purpose}</p>
+        <p className="rounded-xl bg-surface-2 px-3 py-2 text-xs leading-relaxed text-muted">
+          {def.purpose}
+        </p>
 
         {def.fields.map((f) => (
           <Field key={f.key} def={f} value={content[f.key]} onChange={(v) => setField(f.key, v)} />
@@ -329,6 +331,28 @@ function SectionPanel({
   );
 }
 
+/**
+ * Grow a textarea to fit what is in it.
+ *
+ * A fixed row count clipped the pre-head — three lines of copy in a two-row
+ * box, with the first line scrolled out of sight behind the label. Copy fields
+ * hold whatever the writer needs them to; the box should follow.
+ */
+function rowsFor(value: string, min: number) {
+  const lines = value.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 46)), 0);
+  return Math.min(Math.max(lines, min), 14);
+}
+
+/** Label above, hint beneath it — not run together in one wrapping sentence. */
+function Label({ text, hint }: { text: string; hint?: string }) {
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className="text-sm font-medium">{text}</span>
+      {hint && <span className="text-xs leading-snug text-muted">{hint}</span>}
+    </span>
+  );
+}
+
 function Field({
   def,
   value,
@@ -342,51 +366,49 @@ function Field({
     const rows = listRows(value);
     return (
       <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium">
-          {def.label}
-          {def.hint && <span className="ml-2 font-normal text-muted">{def.hint}</span>}
-        </span>
+        <Label text={def.label} hint={def.hint} />
         {rows.map((r, i) => (
-          <div key={i} className="flex gap-2 rounded-xl border border-border p-2.5">
-            <span className="pt-2 font-mono text-xs text-muted">{i + 1}</span>
-            <div className="flex flex-1 flex-col gap-1.5">
-              {def.item.map((sub) =>
-                sub.kind === "textarea" ? (
-                  <textarea
-                    key={sub.key}
-                    rows={2}
-                    value={r[sub.key] ?? ""}
-                    placeholder={sub.label}
-                    aria-label={`${def.label} ${i + 1} — ${sub.label}`}
-                    onChange={(e) => {
-                      const next = rows.map((x, j) => (j === i ? { ...x, [sub.key]: e.target.value } : x));
-                      onChange(next);
-                    }}
-                    className={inputClass}
-                  />
-                ) : (
-                  <input
-                    key={sub.key}
-                    value={r[sub.key] ?? ""}
-                    placeholder={sub.label}
-                    aria-label={`${def.label} ${i + 1} — ${sub.label}`}
-                    onChange={(e) => {
-                      const next = rows.map((x, j) => (j === i ? { ...x, [sub.key]: e.target.value } : x));
-                      onChange(next);
-                    }}
-                    className={inputClass}
-                  />
-                ),
-              )}
+          <div key={i} className="rounded-xl border border-border bg-surface-2/40 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="font-mono text-[0.7rem] text-muted">
+                {def.label} {i + 1}
+              </span>
+              <button
+                type="button"
+                aria-label={`Remove ${def.label} ${i + 1}`}
+                onClick={() => onChange(rows.filter((_, j) => j !== i))}
+                className="rounded px-1.5 text-sm text-muted hover:text-primary"
+              >
+                ✕
+              </button>
             </div>
-            <button
-              type="button"
-              aria-label={`Remove ${def.label} ${i + 1}`}
-              onClick={() => onChange(rows.filter((_, j) => j !== i))}
-              className="h-fit rounded-lg px-2 py-1 text-sm text-muted hover:text-primary"
-            >
-              ✕
-            </button>
+            <div className="flex flex-col gap-2">
+              {def.item.map((sub) => {
+                const v = r[sub.key] ?? "";
+                const set = (nv: string) =>
+                  onChange(rows.map((x, j) => (j === i ? { ...x, [sub.key]: nv } : x)));
+                return (
+                  <label key={sub.key} className="flex flex-col gap-1">
+                    {/* Named, not just placeheld: a placeholder disappears the
+                        moment there is content, and then nothing says which of
+                        three stacked boxes is which. */}
+                    <span className="text-[0.7rem] font-medium uppercase tracking-wide text-muted">
+                      {sub.label}
+                    </span>
+                    {sub.kind === "textarea" ? (
+                      <textarea
+                        rows={rowsFor(v, 2)}
+                        value={v}
+                        onChange={(e) => set(e.target.value)}
+                        className={inputClass}
+                      />
+                    ) : (
+                      <input value={v} onChange={(e) => set(e.target.value)} className={inputClass} />
+                    )}
+                  </label>
+                );
+              })}
+            </div>
           </div>
         ))}
         <button
@@ -403,13 +425,10 @@ function Field({
   const text = typeof value === "string" ? value : "";
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium">
-        {def.label}
-        {def.hint && <span className="ml-2 font-normal text-muted">{def.hint}</span>}
-      </span>
+      <Label text={def.label} hint={def.hint} />
       {def.kind === "textarea" ? (
         <textarea
-          rows={def.rows ?? 3}
+          rows={rowsFor(text, def.rows ?? 3)}
           value={text}
           onChange={(e) => onChange(e.target.value)}
           className={inputClass}
