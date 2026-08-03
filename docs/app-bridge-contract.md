@@ -5,9 +5,16 @@
 > self-contained, vendor-neutral, and assumes no knowledge of this codebase —
 > including the login model, verified reference implementations in Node and
 > Python, a test matrix, and the lifecycle gaps. This file is the terse internal
-> version and is specific to Content Engine. The values and code conflicts CE
-> needs are in [`content-engine-brief.md`](./content-engine-brief.md) — send
-> that alongside the guide.
+> version and is specific to Content Engine.
+>
+> **Then send the brief for the app in question**, which carries what the
+> vendor-neutral guide cannot: registered values, and the platform or codebase
+> specifics that actually cost time.
+>
+> | App | Brief |
+> |---|---|
+> | Content Engine | [`content-engine-brief.md`](./content-engine-brief.md) — its Stripe and billing-code conflicts |
+> | Funnel App | [`funnel-app-brief.md`](./funnel-app-brief.md) — Vercel + Supabase Cloud specifics |
 
 The **store** (gi-membership) is the front door and system of record for
 accounts. A connected app (Content Engine first) is a row in the `apps` table:
