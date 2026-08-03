@@ -44,7 +44,12 @@ export default async function ProductPage({
     return (
       // Full-bleed: the bands run edge to edge, which the padded store shell
       // would otherwise inset. -mx cancels the shell's own gutter.
-      <div className="-mx-4 md:-mx-6">
+      // Full-bleed. The store shell caps main at max-w-5xl, and a negative
+      // margin only cancels its padding — so the coloured bands stopped at
+      // 1024px and the page read as a card floating on the shell's background
+      // rather than as a page. overflow-x-clip guards the scrollbar gap that
+      // 100vw leaves behind.
+      <div className="mx-[calc(50%-50vw)] w-screen overflow-x-clip">
         <SalesPage
           rows={rows}
           money={{ priceLabel: money(product.priceCents, product.currency), termsLabel: null }}

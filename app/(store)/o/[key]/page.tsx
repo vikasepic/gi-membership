@@ -35,7 +35,12 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
   const alreadyHas = owned ? !isOfferEligible(offer, owned) : false;
 
   return (
-    <div className="-mx-4 md:-mx-6">
+    // Full-bleed. The store shell caps main at max-w-5xl, and a negative
+    // margin only cancels its padding — so the coloured bands stopped at
+    // 1024px and the page read as a card floating on the shell's background
+    // rather than as a page. overflow-x-clip guards the scrollbar gap that
+    // 100vw leaves behind.
+    <div className="mx-[calc(50%-50vw)] w-screen overflow-x-clip">
       <SalesPage
         rows={rows}
         money={{ priceLabel: view.nowLabel, termsLabel: view.termsLabel }}
