@@ -5,6 +5,8 @@ import { getProductById } from "@/lib/admin";
 import { getPageSections } from "@/lib/pages";
 import { PageEditor } from "@/components/admin/page-editor";
 import { money } from "@/lib/money";
+import { siteUrl } from "@/lib/env";
+import { CopyLink } from "@/components/admin/copy-link";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +30,12 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
           the store.
         </p>
       </div>
+
+      <CopyLink
+        url={`${siteUrl()}/p/${product.slug}`}
+        label="Public link"
+        note="Live as soon as you save any section. Before that this address shows the short product page."
+      />
 
       <PageEditor
         ownerType="product"

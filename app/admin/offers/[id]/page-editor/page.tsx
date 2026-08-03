@@ -5,6 +5,8 @@ import { getOfferById } from "@/lib/admin";
 import { getPageSections } from "@/lib/pages";
 import { PageEditor } from "@/components/admin/page-editor";
 import { buildBumpView } from "@/lib/bump";
+import { siteUrl } from "@/lib/env";
+import { CopyLink } from "@/components/admin/copy-link";
 
 export const dynamic = "force-dynamic";
 
@@ -27,10 +29,17 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
         </Link>
         <h1 className="text-2xl">Sales page</h1>
         <p className="max-w-[70ch] text-muted">
-          The ten sections, in order. This is what someone sees on the upsell page when they decline
-          the order bump.
+          The ten sections, in order. Used in two places: the upsell page after someone declines the
+          order bump — set this offer&rsquo;s layout to <strong>Ten sections</strong> to switch that
+          on — and the public page below.
         </p>
       </div>
+
+      <CopyLink
+        url={`${siteUrl()}/o/${offer.key}`}
+        label="Public link"
+        note="The same nine sections at an address you can paste into an ad or an email. Live once you save a section; buying goes through the normal checkout."
+      />
 
       <PageEditor
         ownerType="offer"

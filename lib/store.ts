@@ -58,6 +58,19 @@ export async function getOffer(id: string): Promise<Offer | null> {
   return data ? camelize<Offer>(data) : null;
 }
 
+/** By its slug, for the offer's own public sales page at /o/[key]. */
+export async function getOfferByKey(key: string): Promise<Offer | null> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("offers")
+    .select(OFFER_COLUMNS)
+    .eq("store_id", await getStoreId())
+    .eq("key", key)
+    .maybeSingle();
+  if (error) throw new Error(`getOfferByKey: ${error.message}`);
+  return data ? camelize<Offer>(data) : null;
+}
+
 /**
  * Active recurring offers, for the storefront to present in their own right
  * rather than only as a checkout bump. A subscription is the most valuable

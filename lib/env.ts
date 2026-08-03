@@ -60,3 +60,14 @@ export function stripePublishableKey(): string {
 export function otoSigningSecret(): string {
   return z.string().min(16, "OTO_SIGNING_SECRET must be ≥16 chars").parse(process.env.OTO_SIGNING_SECRET);
 }
+
+/**
+ * The store's public origin, for links meant to be pasted elsewhere.
+ *
+ * A relative path is useless in an ad or an email, and reading the request host
+ * would hand out whatever host the request arrived on — including a container's
+ * internal one, which is exactly how the magic-link callback broke once.
+ */
+export function siteUrl(): string {
+  return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://grow.greaterinside.com").replace(/\/$/, "");
+}
