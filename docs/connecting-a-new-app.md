@@ -89,10 +89,18 @@ integration.
 ## 5. They build and self-test
 
 They need nothing from us here. The guide's §8 matrix plus the vector covers
-their whole side. The one call they can make live immediately is
-`POST /api/apps/entitlement`, which answers `{"ok":true,"linked":false}` for an
-unknown email — a working check that their secret is right before they build
-anything.
+their whole side, and the vector is what lets them verify signature handling
+offline.
+
+**They cannot test their secret against the store yet, and the brief must say
+so.** `appForSecret` filters on `active = true`, so an inactive app is refused
+inbound as well as outbound — `POST /api/apps/entitlement` answers `401` until
+step 6. That 401 is indistinguishable from a wrong secret, so a brief that
+invites the call without the caveat sends the team hunting a secret that was
+correct all along.
+
+Verify the secret against the `apps` row yourself and tell them it is correct.
+That removes their need for the check.
 
 ## 6. Point the row at them, and activate
 

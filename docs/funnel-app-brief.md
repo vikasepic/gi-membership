@@ -305,7 +305,10 @@ curl -i -X POST https://your-app.vercel.app/api/store/provision \
   -d '{"email":"test@example.com","entitlementKey":"funnel","status":"trialing","hasAccess":true,"stripeCustomerId":null,"stripeSubscriptionId":null,"occurredAt":1785300000}'
 ```
 
-**Report a sale to the store** — this works today, the store side is live:
+**Report a sale to the store.** This is the call you will make in production —
+but note that **it returns `401` until we set your app active** (§1). The store
+refuses inbound calls from an inactive app, by design: deactivating an app has
+to stop it granting access, or the flag is not a kill switch.
 
 ```bash
 curl -i -X POST https://grow.greaterinside.com/api/apps/entitlement \
@@ -314,9 +317,11 @@ curl -i -X POST https://grow.greaterinside.com/api/apps/entitlement \
   -d '{"email":"test@example.com","entitlementKey":"funnel","status":"active","stripeSubscriptionId":null}'
 ```
 
-Expect `{"ok":true,"linked":false}` for an email with no store account. That is
-the correct answer, and it is worth running now as a live check that your secret
-is right — it is the one call you can make before building anything.
+**Do not read a `401` here as a wrong secret.** While your app is inactive the
+two are indistinguishable, and that is a genuinely expensive hour. Your secret
+has already been checked against the store's record — it is correct as given.
+Once we activate you, expect `{"ok":true,"linked":false}` for an email with no
+store account. `linked:false` is success, not an error.
 
 **The cases people skip and regret:**
 
