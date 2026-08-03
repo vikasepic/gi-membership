@@ -384,19 +384,30 @@ export function AuthoritySection({ view }: P) {
   const figures = listOf(c.figures, ["value", "label"]);
   const img = imageSrc(c.imageUrl);
   return (
-    <div className="grid grid-cols-1 items-center gap-8 @3xl:grid-cols-[0.72fr_1.28fr]">
-      <div
-        className="grid aspect-[1/1.08] place-content-center overflow-hidden rounded-2xl p-4 text-center text-[0.8rem]"
-        style={{ background: t.panel, color: t.muted }}
-      >
+    <div className="grid grid-cols-1 items-center gap-8 @3xl:grid-cols-[0.8fr_1.2fr]">
+      {/* min-w-0 on both columns: without it a wide image sets the track width
+          and pushes the copy out past the band's edge. The frame follows the
+          image's own shape rather than forcing a portrait crop on artwork that
+          is usually square or landscape. */}
+      <div className="min-w-0">
         {img ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={img} alt="" className="size-full object-cover" />
+          <img
+            src={img}
+            alt=""
+            className="h-auto w-full rounded-2xl object-contain"
+            style={{ background: t.panel }}
+          />
         ) : (
-          <span>Image</span>
+          <div
+            className="grid aspect-[4/3] place-content-center rounded-2xl text-[0.8rem]"
+            style={{ background: t.panel, color: t.muted }}
+          >
+            Image
+          </div>
         )}
       </div>
-      <div>
+      <div className="min-w-0">
         <H t={t}>{textOf(c, "heading")}</H>
         <p className="mt-4 text-[0.95rem] leading-relaxed" style={{ color: t.muted }}>
           {textOf(c, "body")}
@@ -421,7 +432,7 @@ export function AuthoritySection({ view }: P) {
 }
 
 // --- 8 --------------------------------------------------------------------
-export function ProofSection({ view }: P) {
+export function ProofSection({ view, preview }: P & { preview?: boolean }) {
   const { c, theme: t, variant } = view;
   const quotes = listOf(c.quotes, ["quote", "name", "role"]);
   const reasons = listOf(c.reasons, ["title", "body"]);
@@ -430,12 +441,25 @@ export function ProofSection({ view }: P) {
   // nothing honest to show, so it falls through to the mechanism — which is
   // true today — rather than rendering empty cards or placeholder names.
   const useQuotes = variant === "quotes" && quotes.length > 0;
+  // Which made switching the layout look broken: both settings rendered the
+  // same thing and nothing said why. In the editor it now says so; a buyer
+  // still never sees this.
+  const emptyQuotes = preview && variant === "quotes" && quotes.length === 0;
 
   return (
     <div>
       <H t={t}>{textOf(c, "heading")}</H>
 
-      {useQuotes ? (
+      {emptyQuotes ? (
+        <p
+          className="mt-5 rounded-2xl border-[1.5px] border-dashed px-5 py-4 text-[0.9rem] italic"
+          style={{ borderColor: tint(t.fg, 0.25), color: t.muted }}
+        >
+          Editor only — a buyer never sees this. The testimonial layout needs at least one
+          quote; add one above and it will appear here. Until then the page falls back to the
+          mechanism, which is true today.
+        </p>
+      ) : useQuotes ? (
         <div className="mt-6 grid grid-cols-1 gap-4 @2xl:grid-cols-[1.35fr_1fr]">
           <div className="rounded-2xl p-5" style={{ background: t.panel }}>
             <p className="font-display text-[1.1rem] font-semibold leading-snug" style={{ color: t.fg }}>
@@ -505,21 +529,29 @@ export function ProofSection({ view }: P) {
 
 // --- 9 --------------------------------------------------------------------
 export function ValueSection({ view, priceLabel, termsLabel }: P & { priceLabel?: string | null; termsLabel?: string | null }) {
-  const { c, theme: t } = view;
+  const { c, theme: t, variant } = view;
   const options = listOf(c.options, ["label", "amount", "note"]);
   const faqs = listOf(c.faqs, ["q", "a"]);
   return (
     <div>
       <H t={t}>{textOf(c, "heading")}</H>
 
-      {options.length > 0 && (
-        <div className="my-7 grid grid-cols-2 gap-3 @3xl:grid-cols-4">
+      {/* "card" drops the comparison entirely — for an offer with no honest
+          alternative to line up against, three columns of invented rivals is
+          worse than none. "tiers" gives every option equal weight instead of
+          treating the last as the winner. */}
+      {options.length > 0 && variant !== "card" && (
+        <div
+          className={`my-7 grid gap-3 ${
+            variant === "tiers" ? "grid-cols-1 @2xl:grid-cols-3" : "grid-cols-2 @3xl:grid-cols-4"
+          }`}
+        >
           {options.map((o, i) => {
-            const ours = i === options.length - 1;
+            const ours = variant !== "tiers" && i === options.length - 1;
             return (
               <div
                 key={i}
-                className="relative rounded-xl px-4 py-4"
+                className={`relative rounded-xl ${variant === "tiers" ? "px-5 py-6" : "px-4 py-4"}`}
                 style={ours ? { background: t.accent, color: t.onAccent } : { background: t.panel, color: t.fg }}
               >
                 {ours && (
@@ -531,7 +563,13 @@ export function ValueSection({ view, priceLabel, termsLabel }: P & { priceLabel?
                   </span>
                 )}
                 <div className="text-[0.68rem] uppercase tracking-[0.09em] opacity-75">{o.label}</div>
-                <div className="mt-1 font-display text-[1.2rem] font-bold">{o.amount}</div>
+                <div
+                  className={`mt-1 font-display font-bold ${
+                    variant === "tiers" ? "text-[1.6rem]" : "text-[1.2rem]"
+                  }`}
+                >
+                  {o.amount}
+                </div>
                 <div className="text-[0.75rem] opacity-75">{o.note}</div>
               </div>
             );

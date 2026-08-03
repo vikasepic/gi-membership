@@ -35,7 +35,11 @@ export default async function ProductPage({
   // A configured sales page replaces the short card layout. Falling back rather
   // than switching on a flag means turning it on is one action in admin, and a
   // product nobody has written a page for keeps working exactly as before.
-  if (!owned && (await hasPageSections("product", product.id))) {
+  //
+  // Shown to owners too. Gating it on "not owned" meant the person most likely
+  // to be looking — whoever just wrote the page and owns a copy — was the one
+  // who never saw it. Owning it changes the button, not the page.
+  if (await hasPageSections("product", product.id)) {
     const rows = await getPageSections("product", product.id);
     return (
       // Full-bleed: the bands run edge to edge, which the padded store shell
@@ -46,10 +50,10 @@ export default async function ProductPage({
           money={{ priceLabel: money(product.priceCents, product.currency), termsLabel: null }}
           cta={(label) => (
             <Link
-              href={`/checkout?product=${product.slug}`}
+              href={owned ? accessHref : `/checkout?product=${product.slug}`}
               className="inline-block w-fit rounded-full bg-primary px-7 py-3 font-display text-[0.95rem] font-semibold text-primary-fg transition-colors hover:bg-primary-hover"
             >
-              {label}
+              {owned ? "Open in your library" : label}
             </Link>
           )}
         />

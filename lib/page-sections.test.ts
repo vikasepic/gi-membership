@@ -221,3 +221,19 @@ describe("imageSrc", () => {
     for (const v of ["", "   ", null, undefined, 42, {}]) expect(imageSrc(v)).toBeNull();
   });
 });
+
+describe("layout variants that actually differ", () => {
+  it("gives the pricing section real options", () => {
+    const v = sectionDef("value")!.variants!;
+    expect(v.map((x) => x.key)).toEqual(["compare", "card", "tiers"]);
+  });
+
+  it("keeps a default variant for every section that declares them", () => {
+    // defaultRows picks variants[0]; a section with an empty list would start
+    // on no variant and render its fallback branch forever.
+    for (const def of SECTIONS) {
+      if (!def.variants) continue;
+      expect(def.variants.length, `${def.key} declares an empty variant list`).toBeGreaterThan(1);
+    }
+  });
+});

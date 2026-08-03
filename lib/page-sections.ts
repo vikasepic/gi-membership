@@ -313,6 +313,11 @@ export const SECTIONS: SectionDef[] = [
     purpose: "What the result is worth, then what it costs, then the risk removed.",
     shape: "Comparison columns, a price card, a guarantee, and the questions worth answering.",
     defaultStyle: "plum",
+    variants: [
+      { key: "compare", label: "Compare the alternatives" },
+      { key: "card", label: "Price card only" },
+      { key: "tiers", label: "Options side by side" },
+    ],
     fields: [
       { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
       {

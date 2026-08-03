@@ -1,11 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useRef, useState } from "react";
-import {
-  saveSectionAction,
-  uploadSectionImageAction,
-  type SectionSaveState,
-} from "@/app/admin/pages/actions";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { saveSectionAction, uploadSectionImageAction } from "@/app/admin/pages/actions";
 import { SectionBand, type PageMoney } from "@/components/page/sales-page";
 import {
   BAND_STYLES,
@@ -21,7 +17,9 @@ import type { OwnerType } from "@/lib/pages";
 
 // The page editor.
 //
-// Ten rows; open one to edit it, watch it beside the fields, and save only it.
+// Ten rows; open one to edit it and watch it beside the fields. One Save at the
+// top writes every section that changed — still one row per section underneath,
+// which is what stops saving one of them discarding another.
 // The preview renders SectionBand — the same component the live page renders —
 // so it cannot show something a buyer would not see. A preview built from a
 // separate mock-up goes stale the first time one side changes, and nobody
@@ -60,8 +58,48 @@ export function PageEditor({
   const [rows, setRows] = useState<SectionRow[]>(initial);
   const [openKey, setOpenKey] = useState<string | null>(initial[0]?.sectionKey ?? null);
   const [dirty, setDirty] = useState<Record<string, boolean>>({});
-  const [state, action, pending] = useActionState<SectionSaveState, FormData>(saveSectionAction, {});
   const [device, setDevice] = useState<Device>("desktop");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  const dirtyKeys = Object.keys(dirty).filter((k) => dirty[k]);
+
+  /**
+   * One save for the whole page.
+   *
+   * Still one write per section underneath — that is what stops a save of one
+   * section discarding another — but the writer should not have to think about
+   * which rows are dirty. Only changed sections are sent.
+   */
+  async function saveAll() {
+    if (dirtyKeys.length === 0 || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    for (const key of dirtyKeys) {
+      const row = rows.find((r) => r.sectionKey === key);
+      if (!row) continue;
+      const def = sectionDef(row.sectionKey);
+      const fd = new FormData();
+      fd.append("ownerType", ownerType);
+      fd.append("ownerId", ownerId);
+      fd.append("sectionKey", row.sectionKey);
+      fd.append("enabled", String(row.enabled));
+      fd.append("style", row.style);
+      fd.append("accent", row.accent ?? "");
+      fd.append("variant", row.variant ?? "");
+      fd.append("content", JSON.stringify({ ...def?.defaults, ...(row.content as Draft) }));
+      const res = await saveSectionAction({}, fd);
+      if (res.error) {
+        setSaveError(`${def?.title ?? row.sectionKey}: ${res.error}`);
+        setSaving(false);
+        return;
+      }
+      setDirty((d) => ({ ...d, [key]: false }));
+    }
+    setSaving(false);
+    setSavedAt(Date.now());
+  }
 
   // Bring an opened section's header to the top.
   //
@@ -92,9 +130,23 @@ export function PageEditor({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3">
-        <span className="text-sm text-muted">
-          Ten sections. Open one to edit it — each saves on its own.
+      <div className="sticky top-2 z-30 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface/95 px-4 py-3 backdrop-blur">
+        <button
+          type="button"
+          onClick={saveAll}
+          disabled={saving || dirtyKeys.length === 0}
+          className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
+        >
+          {saving ? "Saving…" : dirtyKeys.length ? `Save ${dirtyKeys.length} change${dirtyKeys.length > 1 ? "s" : ""}` : "Saved"}
+        </button>
+        <span className="text-sm text-muted" aria-live="polite">
+          {saveError
+            ? saveError
+            : dirtyKeys.length
+              ? "Unsaved changes"
+              : savedAt
+                ? "All changes saved."
+                : "Ten sections. Open one to edit it."}
         </span>
         <div className="ml-auto flex items-center gap-1 rounded-full border border-border p-1">
           {(Object.keys(DEVICES) as Device[]).map((d) => (
@@ -130,7 +182,7 @@ export function PageEditor({
           if (!def) return null;
           const open = openKey === row.sectionKey;
           const isDirty = dirty[row.sectionKey];
-          const justSaved = state.savedKey === row.sectionKey && !isDirty;
+          const justSaved = savedAt !== null && !isDirty;
 
           return (
             <div
@@ -178,11 +230,7 @@ export function PageEditor({
                   ownerId={ownerId}
                   row={row}
                   money={money}
-                  pending={pending}
-                  error={state.savedKey === row.sectionKey ? undefined : state.error}
-                  action={action}
                   onChange={(next) => patch(row.sectionKey, next)}
-                  onSaved={() => setDirty((d) => ({ ...d, [row.sectionKey]: false }))}
                   device={device}
                 />
               )}
@@ -199,22 +247,14 @@ function SectionPanel({
   ownerId,
   row,
   money,
-  pending,
-  error,
-  action,
   onChange,
-  onSaved,
   device,
 }: {
   ownerType: OwnerType;
   ownerId: string;
   row: SectionRow;
   money: PageMoney;
-  pending: boolean;
-  error?: string;
-  action: (fd: FormData) => void;
   onChange: (next: Partial<SectionRow>) => void;
-  onSaved: () => void;
   device: Device;
 }) {
   const def = sectionDef(row.sectionKey)!;
@@ -227,21 +267,9 @@ function SectionPanel({
     onChange({ content: { ...(row.content as Draft), [key]: value } });
 
   return (
-    <form
-      action={(fd) => {
-        onSaved();
-        action(fd);
-      }}
-      className="grid grid-cols-1 gap-0 border-t border-border lg:grid-cols-[minmax(360px,420px)_minmax(0,1fr)]"
-    >
-      <input type="hidden" name="ownerType" value={ownerType} />
-      <input type="hidden" name="ownerId" value={ownerId} />
-      <input type="hidden" name="sectionKey" value={row.sectionKey} />
-      <input type="hidden" name="enabled" value={String(row.enabled)} />
-      <input type="hidden" name="style" value={row.style} />
-      <input type="hidden" name="accent" value={row.accent ?? ""} />
-      <input type="hidden" name="variant" value={row.variant ?? ""} />
-      <input type="hidden" name="content" value={JSON.stringify(content)} />
+    // Not a form any more: one save at the top collects every dirty section, so
+    // there is nothing here to submit.
+    <div className="grid grid-cols-1 gap-0 border-t border-border lg:grid-cols-[minmax(360px,420px)_minmax(0,1fr)]">
 
       {/* Each pane pins and scrolls independently at lg and up, so the short
           one stays in view while the long one moves — whichever way round they
@@ -339,17 +367,10 @@ function SectionPanel({
           <span className="text-muted">— switching it off keeps the copy</span>
         </label>
 
-        <div className="flex items-center gap-3 pt-1">
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-60"
-          >
-            {pending ? "Saving…" : "Save this section"}
-          </button>
-          <span className="text-xs text-muted">Writes {def.title} only</span>
-          {error && <span className="text-sm text-primary">{error}</span>}
-        </div>
+        <p className="pt-1 text-xs text-muted">
+          Changes are kept as you type — use <strong className="text-fg">Save</strong> at the top of
+          the page.
+        </p>
       </div>
 
       {/* ---- preview ---- */}
@@ -365,7 +386,7 @@ function SectionPanel({
               className="mx-auto transition-[max-width] duration-200"
               style={{ maxWidth: DEVICES[device] ?? undefined }}
             >
-              <SectionBand row={{ ...row, content }} money={money} />
+              <SectionBand row={{ ...row, content }} money={money} preview />
             </div>
           </div>
           <p className="text-xs text-muted">
@@ -374,7 +395,7 @@ function SectionPanel({
           </p>
         </div>
       </div>
-    </form>
+    </div>
   );
 }
 

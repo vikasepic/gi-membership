@@ -38,7 +38,7 @@ function Band({ view, children }: { view: SectionView; children: React.ReactNode
   );
 }
 
-function renderOne(view: SectionView, money: PageMoney, cta?: CtaRender) {
+function renderOne(view: SectionView, money: PageMoney, cta?: CtaRender, preview?: boolean) {
   switch (view.def.key) {
     case "hero":
       return <HeroSection view={view} cta={cta} />;
@@ -53,7 +53,7 @@ function renderOne(view: SectionView, money: PageMoney, cta?: CtaRender) {
     case "authority":
       return <AuthoritySection view={view} />;
     case "proof":
-      return <ProofSection view={view} />;
+      return <ProofSection view={view} preview={preview} />;
     case "value":
       return <ValueSection view={view} priceLabel={money.priceLabel} termsLabel={money.termsLabel} />;
     case "cta":
@@ -66,16 +66,19 @@ export function SectionBand({
   row,
   money,
   cta,
+  /** Editor only. Lets a section explain a state a buyer never sees. */
+  preview,
 }: {
   row: SectionRow;
   money: PageMoney;
   cta?: CtaRender;
+  preview?: boolean;
 }) {
   const view = buildSectionView(row);
   if (!view) return null;
   return (
     <>
-      <Band view={view}>{renderOne(view, money, cta)}</Band>
+      <Band view={view}>{renderOne(view, money, cta, preview)}</Band>
       {view.def.key === "hero" && <HeroStats view={view} />}
     </>
   );
