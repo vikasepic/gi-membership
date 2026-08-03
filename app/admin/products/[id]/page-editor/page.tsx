@@ -31,6 +31,12 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
         </p>
       </div>
 
+      {/* Full-bleed out of the admin's 1024px column. The preview needs real
+          width: the hero goes side-by-side at 768px, and the pane was narrower
+          than that, so every section previewed as its narrow layout.
+          overflow-x-clip guards the scrollbar gap 100vw leaves behind. */}
+      <div className="mx-[calc(50%-50vw)] w-screen overflow-x-clip px-5 md:px-8">
+        <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-4">
       <CopyLink
         url={`${siteUrl()}/p/${product.slug}`}
         label="Public link"
@@ -44,6 +50,8 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
         money={{ priceLabel: money(product.priceCents, product.currency), termsLabel: null }}
         liveHref={`/p/${product.slug}`}
       />
+        </div>
+      </div>
     </div>
   );
 }

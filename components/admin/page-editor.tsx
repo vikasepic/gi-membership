@@ -64,7 +64,7 @@ export function PageEditor({
   };
 
   return (
-    <div className="mx-[calc(50%-50vw)] flex w-screen flex-col gap-4 px-5 md:px-6 2xl:mx-auto 2xl:w-full 2xl:max-w-[1760px] 2xl:px-0">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface px-4 py-3">
         <span className="text-sm text-muted">
           Ten sections. Open one to edit it — each saves on its own.
