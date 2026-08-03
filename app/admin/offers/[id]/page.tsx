@@ -17,38 +17,101 @@ export default async function EditOfferPage({
   ]);
   if (!offer) notFound();
 
+  // Two editors can write an upsell page and only one of them is live at a
+  // time. Without saying which, it is possible to spend an afternoon editing a
+  // page nobody will see — so the layout is named here rather than left to be
+  // inferred from a dropdown further down the form.
+  const hasCoded = hasCustomOtoPage(offer.key);
+  const liveLayout =
+    offer.otoTemplate === "custom" && hasCoded
+      ? "coded"
+      : offer.otoTemplate === "sections"
+        ? "sections"
+        : "template";
+
+  const LIVE_LABEL: Record<string, string> = {
+    coded: "the coded page written for this offer",
+    sections: "the ten-section sales page",
+    template: `the “${offer.otoTemplate}” template`,
+  };
+
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
         <Link href="/admin/offers" className="kicker w-fit text-muted hover:text-fg">&larr; Offers</Link>
         <h1 className="text-2xl">{offer.name}</h1>
-        {/* Presentation lives on its own screens. Both are far too long to
-            sit inside this form, and they are edited on a different rhythm:
-            pricing and grants change rarely, copy and design change constantly. */}
+
+        <p className="text-sm text-muted">
+          The upsell page currently uses <strong className="text-fg">{LIVE_LABEL[liveLayout]}</strong>.
+          Change it with <em>Upsell page layout</em> in the form below.
+        </p>
+
+        {/* Presentation lives on its own screens. Each is too long to sit inside
+            this form, and they are edited on a different rhythm: pricing and
+            grants change rarely, copy and design change constantly. */}
         <div className="flex flex-wrap gap-2">
-          <Link
+          <EditorLink
             href={`/admin/offers/${id}/page-editor`}
-            className="rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-fg"
-          >
-            Edit sales page →
-          </Link>
-          <Link
-            href={`/admin/offers/${id}/bump`}
-            className="rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-fg"
-          >
-            Edit order bump →
-          </Link>
-          {hasCustomOtoPage(offer.key) && (
-            <Link
+            title="Sales page — ten sections"
+            live={liveLayout === "sections"}
+            hint={
+              liveLayout === "sections"
+                ? "Live on the upsell page"
+                : "Not in use — set the layout to “Ten sections” to switch to it"
+            }
+          />
+          {hasCoded && (
+            <EditorLink
               href={`/admin/offers/${id}/content`}
-              className="rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-fg"
-            >
-              Edit upsell page copy →
-            </Link>
+              title="Coded page — wording only"
+              live={liveLayout === "coded"}
+              hint={
+                liveLayout === "coded"
+                  ? "Live on the upsell page"
+                  : "Not in use — the layout is set to something else"
+              }
+            />
           )}
+          <EditorLink
+            href={`/admin/offers/${id}/bump`}
+            title="Order bump"
+            live
+            hint="How this offer looks on a checkout"
+          />
         </div>
       </div>
       <OfferForm offer={offer} products={products} apps={apps} />
     </div>
+  );
+}
+
+function EditorLink({
+  href,
+  title,
+  hint,
+  live,
+}: {
+  href: string;
+  title: string;
+  hint: string;
+  live: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`flex flex-col gap-0.5 rounded-2xl border px-4 py-3 transition-colors hover:border-fg ${
+        live ? "border-navy/40 bg-navy/5" : "border-border"
+      }`}
+    >
+      <span className="flex items-center gap-2 text-sm font-medium">
+        {title}
+        {live && (
+          <span className="rounded-full bg-navy/10 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-navy">
+            Live
+          </span>
+        )}
+      </span>
+      <span className="text-xs text-muted">{hint}</span>
+    </Link>
   );
 }

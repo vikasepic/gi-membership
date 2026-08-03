@@ -42,11 +42,22 @@ export default async function OfferContentPage({
         >
           &larr; {offer.name}
         </Link>
-        <h1 className="text-2xl">Upsell page copy</h1>
+        <h1 className="text-2xl">Coded page — wording</h1>
         <p className="max-w-[70ch] text-muted">
-          Every line of the {offer.name} upsell page, in the order it appears. Changes go live as
-          soon as you save.
+          Every line of the coded page written for {offer.name}, in the order it appears. Changes go
+          live as soon as you save.
         </p>
+        {offer.otoTemplate !== "custom" && (
+          <p className="max-w-[70ch] rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm">
+            This offer&rsquo;s upsell layout is set to{" "}
+            <strong>{offer.otoTemplate}</strong>, so nothing you change here is currently shown to a
+            buyer. Editing the live page means the{" "}
+            <Link href={`/admin/offers/${id}/page-editor`} className="underline">
+              ten-section sales page
+            </Link>
+            .
+          </p>
+        )}
       </div>
 
       {!custom ? (
