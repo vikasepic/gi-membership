@@ -7,6 +7,9 @@ import type { Offer } from "@/lib/types";
 import type { ProductOption, AppOption } from "@/lib/admin";
 import { sectionsToForm } from "@/lib/oto-sections";
 
+/** Layouts that still read the fields below. Ten sections and Custom do not. */
+const LEGACY_LAYOUTS = new Set(["short", "visual", "long", "sales"]);
+
 export function OfferForm({
   offer,
   products,
@@ -110,31 +113,8 @@ export function OfferForm({
           single "What the buyer sees" section edited five surfaces at once and
           said so nowhere. */}
       <Section
-        title="1 · On the checkout bump"
-        hint="The tick-box beside the payment form. Two lines only — the price line under them is generated from Price, Interval and Trial days, so it can never disagree with what is charged."
-      >
-        <Field label="Bump headline" hint="bold line. Leave empty to reuse the upsell headline below.">
-          <input
-            name="bumpHeadline"
-            defaultValue={offer?.bumpHeadline ?? ""}
-            placeholder={offer?.headline ?? "Add … free for 7 days"}
-            className={input}
-          />
-        </Field>
-        <Field label="Bump description" hint="grey line under it. Leave empty to reuse the upsell description.">
-          <textarea
-            name="bumpDescription"
-            defaultValue={offer?.bumpDescription ?? ""}
-            placeholder={offer?.description ?? ""}
-            rows={2}
-            className={input}
-          />
-        </Field>
-      </Section>
-
-      <Section
-        title="2 · On the upsell page, storefront and library"
-        hint="Used by the one-click upsell page after checkout, the storefront section, the library offer, and the standalone offer checkout. Changing these changes all four."
+        title="How this offer reads"
+        hint="Used by the storefront section, the library offer, and the standalone offer checkout. The sales page and the checkout bump have their own editors — the links are at the top of this page."
       >
         <Field label="Headline" required>
           <input name="headline" defaultValue={offer?.headline ?? ""} required className={input} />
@@ -183,6 +163,18 @@ export function OfferForm({
             </a>
           )}
         </Field>
+        {/* Only the older layouts read these. They stay in the DOM inside a
+            closed <details> rather than being removed, because form controls in
+            a collapsed details element still submit — dropping them from the
+            markup would blank the columns on the next save. */}
+        <details className="rounded-xl border border-border" open={LEGACY_LAYOUTS.has(offer?.otoTemplate ?? "")}>
+          <summary className="cursor-pointer px-4 py-3 text-sm">
+            Fields for the older layouts
+            <span className="ml-2 text-muted">
+              Unused by Ten sections — kept so switching back loses nothing
+            </span>
+          </summary>
+          <div className="flex flex-col gap-5 border-t border-border p-4">
         <Field
           label="Upsell video URL"
           hint="Embed URL (YouTube/Vimeo embed form). Used by the Visual and Long-form layouts; falls back to the image above."
@@ -214,6 +206,9 @@ export function OfferForm({
         <Field label="FAQ" hint="Sales layout. One per line:  question | answer">
           <textarea name="otoFaq" defaultValue={sections.faq} rows={5} className={input} />
         </Field>
+          </div>
+        </details>
+
         <Field
           label="ActiveCampaign tag ID"
           hint="Numeric id, not the tag name. Applied when this offer is granted and removed if it is cancelled or refunded. Leave empty for no tag."

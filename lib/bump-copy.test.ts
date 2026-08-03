@@ -8,6 +8,7 @@ import { buildBumpView } from "@/lib/bump";
 // falling back to the shared copy when unset.
 
 const form = readFileSync("components/admin/offer-form.tsx", "utf8");
+const bumpEditor = readFileSync("components/admin/bump-editor.tsx", "utf8");
 
 const offer = {
   billingType: "one_time" as const,
@@ -41,19 +42,31 @@ describe("checkout bump copy", () => {
     expect(own.description).toBe("Terser");
   });
 
-  it("gives the bump its own labelled section in admin", () => {
-    expect(form).toContain('name="bumpHeadline"');
-    expect(form).toContain('name="bumpDescription"');
-    expect(form).toMatch(/On the checkout bump/);
+  it("edits the bump's copy on the bump screen, not the offer form", () => {
+    // Both used to be editable from the offer form while the bump also had its
+    // own screen. Two places for one field is how a change gets made in the
+    // one that is not live.
+    expect(bumpEditor).toContain('name="bumpHeadline"');
+    expect(bumpEditor).toContain('name="bumpDescription"');
+    expect(form, "the offer form still edits bump copy").not.toContain('name="bumpHeadline"');
+  });
+
+  it("cannot blank the bump copy when the offer form is saved", () => {
+    // toOfferRow must not write these columns, or saving the offer wipes what
+    // the bump editor set — the failure this split exists to prevent.
+    const admin = readFileSync("lib/admin.ts", "utf8");
+    const toRow = admin.slice(admin.indexOf("function toOfferRow"), admin.indexOf("export async function createOffer"));
+    expect(toRow).not.toContain("bump_headline");
+    expect(toRow).not.toContain("bump_description");
   });
 
   it("says which surfaces the shared copy affects", () => {
     // The old form said nothing; that was the actual complaint.
-    expect(form).toMatch(/storefront and library|changes all four/i);
+    expect(form).toMatch(/storefront|library|standalone offer checkout/i);
   });
 
   it("shows the inherited value as the placeholder", () => {
     // So an empty field reads as "inherits this", not "blank".
-    expect(form).toMatch(/name="bumpHeadline"[\s\S]{0,200}placeholder=\{offer\?\.headline/);
+    expect(bumpEditor).toMatch(/placeholder=\{offer\.headline\}/);
   });
 });

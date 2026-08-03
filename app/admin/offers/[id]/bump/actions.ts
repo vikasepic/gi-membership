@@ -22,6 +22,8 @@ export async function saveBumpAction(
       // Empty string is meaningful here and must survive: it is how the editor
       // turns the banner off, as distinct from null meaning "never configured,
       // show the default". Trimming to null would make the banner reappear.
+      bumpHeadline: text("bumpHeadline").trim() || null,
+      bumpDescription: text("bumpDescription").trim() || null,
       bumpBanner: text("bumpBanner").trim(),
       bumpBullets: text("bumpBullets")
         .split("\n")

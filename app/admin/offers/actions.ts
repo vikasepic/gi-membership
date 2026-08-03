@@ -49,8 +49,6 @@ const schema = z
     otoTemplate: z
       .enum([...OTO_TEMPLATES, "custom"] as [string, ...string[]])
       .default("visual"),
-    bumpHeadline: z.string().optional().default(""),
-    bumpDescription: z.string().optional().default(""),
     otoBody: z.string().optional().default(""),
     otoVideoUrl: z.string().optional().default(""),
     otoProblem: z.string().optional().default(""),
@@ -113,8 +111,6 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     imageUrl: v.imageUrl,
     acceptLabel: v.acceptLabel,
     activecampaignTagId: v.activecampaignTagId?.trim() || null,
-    bumpHeadline: v.bumpHeadline,
-    bumpDescription: v.bumpDescription,
     otoTemplate: v.otoTemplate,
     otoBody: v.otoBody,
     otoVideoUrl: v.otoVideoUrl,

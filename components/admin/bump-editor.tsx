@@ -28,6 +28,8 @@ export function BumpEditor({ offer }: { offer: Offer }) {
   // Pre-filled with what is live. The banner shows its effective value, so
   // saving without touching it keeps what buyers already see, and clearing the
   // box is how you turn it off.
+  const [headline, setHeadline] = useState(offer.bumpHeadline ?? "");
+  const [description, setDescription] = useState(offer.bumpDescription ?? "");
   const [banner, setBanner] = useState(offer.bumpBanner ?? defaultBanner(offer));
   const [bullets, setBullets] = useState((offer.bumpBullets ?? []).join("\n"));
   const [note, setNote] = useState(offer.bumpNote ?? "");
@@ -38,17 +40,21 @@ export function BumpEditor({ offer }: { offer: Offer }) {
     () =>
       buildBumpView({
         ...offer,
+        bumpHeadline: headline,
+        bumpDescription: description,
         bumpBanner: banner,
         bumpBullets: bullets.split("\n").map((b) => b.trim()).filter(Boolean),
         bumpNote: note,
         bumpAccent: accent,
       }),
-    [offer, banner, bullets, note, accent],
+    [offer, headline, description, banner, bullets, note, accent],
   );
 
   return (
     <form action={action} className="flex flex-col gap-5">
       <input type="hidden" name="offerId" value={offer.id} />
+      <input type="hidden" name="bumpHeadline" value={headline} />
+      <input type="hidden" name="bumpDescription" value={description} />
       <input type="hidden" name="bumpBanner" value={banner} />
       <input type="hidden" name="bumpBullets" value={bullets} />
       <input type="hidden" name="bumpNote" value={note} />
@@ -58,6 +64,33 @@ export function BumpEditor({ offer }: { offer: Offer }) {
         {/* ---- fields ---- */}
         <div className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5">
           <span className="kicker text-muted">Content</span>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium">
+              Headline
+              <span className="ml-2 font-normal text-muted">Empty falls back to the offer&rsquo;s own</span>
+            </span>
+            <input
+              value={headline}
+              onChange={(e) => setHeadline(e.target.value)}
+              placeholder={offer.headline}
+              className={inputClass}
+            />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium">
+              Description
+              <span className="ml-2 font-normal text-muted">Empty falls back to the offer&rsquo;s own</span>
+            </span>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              placeholder={offer.description ?? ""}
+              className={inputClass}
+            />
+          </label>
 
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium">

@@ -163,8 +163,6 @@ export type OfferInput = {
   imageUrl: string | null;
   acceptLabel: string;
   activecampaignTagId?: string | null;
-  bumpHeadline?: string | null;
-  bumpDescription?: string | null;
   otoTemplate?: string;
   otoBody?: string | null;
   otoVideoUrl?: string | null;
@@ -238,8 +236,6 @@ function toOfferRow(input: OfferInput, storeId: string) {
     image_url: input.imageUrl,
     accept_label: input.acceptLabel,
     activecampaign_tag_id: input.activecampaignTagId ?? null,
-    bump_headline: input.bumpHeadline?.trim() || null,
-    bump_description: input.bumpDescription?.trim() || null,
     oto_template: input.otoTemplate || "visual",
     oto_body: input.otoBody?.trim() || null,
     oto_video_url: input.otoVideoUrl?.trim() || null,
@@ -291,6 +287,8 @@ export async function updateOfferPage(id: string, page: Record<string, string>):
 export async function updateOfferBump(
   id: string,
   input: {
+    bumpHeadline: string | null;
+    bumpDescription: string | null;
     bumpBanner: string;
     bumpBullets: string[];
     bumpNote: string | null;
@@ -301,6 +299,8 @@ export async function updateOfferBump(
   const { error } = await db
     .from("offers")
     .update({
+      bump_headline: input.bumpHeadline,
+      bump_description: input.bumpDescription,
       bump_banner: input.bumpBanner,
       bump_bullets: input.bumpBullets,
       bump_note: input.bumpNote,
