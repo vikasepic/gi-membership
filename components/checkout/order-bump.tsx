@@ -51,7 +51,10 @@ export function OrderBump({
 
   return (
     <div
-      className="overflow-hidden rounded-2xl border-2 bg-surface transition-shadow duration-200"
+      // @container, not viewport breakpoints: this sits in a ~270px order
+      // summary on a wide screen and a full-width column on a phone, so `sm:`
+      // would widen the layout exactly where there is least room.
+      className="@container overflow-hidden rounded-2xl border-2 bg-surface transition-shadow duration-200"
       style={{
         borderColor: accent,
         boxShadow: checked ? `0 0 0 4px ${tint(accent, 0.18)}` : undefined,
@@ -100,34 +103,38 @@ export function OrderBump({
         />
 
         <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col gap-1 @xs:flex-row @xs:items-start @xs:justify-between @xs:gap-4">
             <label
               htmlFor={id}
-              className={`cursor-pointer font-display font-semibold leading-snug ${
-                compact ? "text-[0.98rem]" : "text-[1.15rem]"
+              className={`min-w-0 cursor-pointer text-balance font-display font-semibold leading-snug ${
+                compact ? "text-[0.98rem]" : "text-[1.05rem] @xs:text-[1.15rem]"
               }`}
             >
               {view.headline}
             </label>
 
-            <span className="shrink-0 text-right tabular-nums">
+            {/* Narrow: was and now sit on one line under the headline. Wide:
+                they stack in a right-aligned column beside it. */}
+            <span className="flex flex-wrap items-baseline gap-x-2 tabular-nums @xs:shrink-0 @xs:flex-col @xs:items-end @xs:gap-x-0 @xs:text-right">
               {view.wasLabel && (
                 <span
-                  className={`block text-muted line-through ${compact ? "text-[0.75rem]" : "text-sm"}`}
+                  className={`text-muted line-through ${compact ? "text-[0.75rem]" : "text-sm"}`}
                 >
                   {view.wasLabel}
                 </span>
               )}
               <span
-                className={`block font-display font-semibold leading-none ${
-                  compact ? "text-[1.15rem]" : "text-[1.55rem]"
+                className={`font-display font-semibold leading-none ${
+                  compact ? "text-[1.15rem]" : "text-[1.4rem] @xs:text-[1.55rem]"
                 }`}
                 style={{ color: accent }}
               >
                 {view.nowLabel}
               </span>
               {view.termsLabel && (
-                <span className="mt-0.5 block text-[0.75rem] text-muted">{view.termsLabel}</span>
+                <span className="w-full text-[0.75rem] text-muted @xs:mt-0.5 @xs:w-auto">
+                  {view.termsLabel}
+                </span>
               )}
             </span>
           </div>
@@ -140,7 +147,7 @@ export function OrderBump({
 
           {view.bullets.length > 0 && (
             <ul
-              className={`grid list-none grid-cols-1 gap-x-4 gap-y-1 p-0 sm:grid-cols-2 ${
+              className={`grid list-none grid-cols-1 gap-x-4 gap-y-1 p-0 @md:grid-cols-2 ${
                 compact ? "text-[0.78rem]" : "text-[0.89rem]"
               }`}
             >
