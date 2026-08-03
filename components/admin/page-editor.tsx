@@ -94,7 +94,10 @@ export function PageEditor({
         </a>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+      {/* No overflow-hidden here: it disables position:sticky in every
+          descendant, which is why the preview scrolled away. The corners are
+          rounded on the first and last rows instead. */}
+      <div className="rounded-2xl border border-border bg-surface">
         {rows.map((row) => {
           const def = sectionDef(row.sectionKey);
           if (!def) return null;
@@ -103,11 +106,14 @@ export function PageEditor({
           const justSaved = state.savedKey === row.sectionKey && !isDirty;
 
           return (
-            <div key={row.sectionKey} className="border-b border-border last:border-b-0">
+            <div
+              key={row.sectionKey}
+              className="border-b border-border first:rounded-t-2xl last:border-b-0 last:rounded-b-2xl"
+            >
               <button
                 type="button"
                 onClick={() => setOpenKey(open ? null : row.sectionKey)}
-                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2 ${
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2 group-first:rounded-t-2xl ${
                   open ? "bg-surface-2" : ""
                 }`}
               >
@@ -205,8 +211,10 @@ function SectionPanel({
       <input type="hidden" name="variant" value={row.variant ?? ""} />
       <input type="hidden" name="content" value={JSON.stringify(content)} />
 
-      {/* ---- fields ---- */}
-      <div className="flex flex-col gap-4 p-5">
+      {/* Each pane pins and scrolls independently at lg and up, so the short
+          one stays in view while the long one moves — whichever way round they
+          happen to be. Below lg they stack and the page scrolls normally. */}
+      <div className="flex flex-col gap-4 p-5 lg:sticky lg:top-4 lg:max-h-[calc(100vh-5rem)] lg:self-start lg:overflow-y-auto">
         <p className="rounded-xl bg-surface-2 px-3 py-2 text-xs leading-relaxed text-muted">
           {def.purpose}
         </p>
@@ -308,8 +316,8 @@ function SectionPanel({
       {/* ---- preview ---- */}
       {/* Sticky: the fields column is long, and a preview that scrolls away is
           a preview you stop looking at. */}
-      <div className="border-t border-border bg-bg p-5 lg:border-l lg:border-t-0">
-        <div className="sticky top-4 flex flex-col gap-2">
+      <div className="border-t border-border bg-bg p-5 lg:sticky lg:top-4 lg:max-h-[calc(100vh-5rem)] lg:self-start lg:overflow-y-auto lg:border-l lg:border-t-0">
+        <div className="flex flex-col gap-2">
           <span className="kicker text-muted">
             Preview — this section only{device === "mobile" ? " · 390px" : ""}
           </span>

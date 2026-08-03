@@ -1,4 +1,5 @@
 import { listOf, textOf, type SectionView, type BandTheme } from "@/lib/page-sections";
+import { tint } from "@/lib/color";
 
 // The nine bands.
 //
@@ -139,24 +140,31 @@ export function HeroStats({ view }: { view: SectionView }) {
 export function ProblemSection({ view }: P) {
   const { c, theme: t } = view;
   const chips = listOf(c.chips, ["text"]);
+  const feels = textOf(c, "feels");
+  const truth = textOf(c, "truth");
   return (
     <div>
-      <H t={t}>{textOf(c, "heading")}</H>
+      {/* Measure, not container width: the band is wide and a heading running
+          the whole of it is a line nobody finishes. */}
+      <div className="max-w-[24ch] @xl:max-w-[34ch]">
+        <H t={t}>{textOf(c, "heading")}</H>
+      </div>
       {textOf(c, "lead") && (
-        <p className="mt-3 text-[0.95rem]" style={{ color: t.muted }}>
+        <p className="mt-3 max-w-[60ch] text-[0.95rem]" style={{ color: t.muted }}>
           {textOf(c, "lead")}
         </p>
       )}
 
+      {/* Their own words, as a group of voices. The previous version alternated
+          them left and right like a chat thread, which at full width scattered
+          three short lines across a lot of nothing. */}
       {chips.length > 0 && (
-        <div className="my-6 flex flex-col gap-2.5">
+        <div className="mt-6 flex flex-wrap gap-2.5">
           {chips.map((q, i) => (
             <span
               key={i}
-              className={`w-fit max-w-[92%] px-4 py-2.5 text-[0.93rem] ${
-                i % 2 ? "ml-auto rounded-[16px_16px_4px_16px]" : "rounded-[16px_16px_16px_4px]"
-              }`}
-              style={{ background: t.panel, color: t.fg }}
+              className="rounded-full px-4 py-2 text-[0.92rem]"
+              style={{ background: t.panel, color: t.fg, border: `1px solid ${t.rule}` }}
             >
               &ldquo;{q.text}&rdquo;
             </span>
@@ -164,20 +172,44 @@ export function ProblemSection({ view }: P) {
         </div>
       )}
 
-      {(textOf(c, "feels") || textOf(c, "truth")) && (
-        <div className="mt-6 grid grid-cols-1 items-center gap-4 @2xl:grid-cols-[1fr_auto_1fr]">
-          <div className="rounded-xl p-4 text-[0.9rem]" style={{ background: t.panel }}>
-            <b className="mb-1 block font-display" style={{ color: t.fg }}>
+      {(feels || truth) && (
+        <div className="mt-8 grid grid-cols-1 items-stretch gap-3 @2xl:grid-cols-[1fr_auto_1.15fr]">
+          <div className="rounded-2xl px-5 py-4" style={{ background: t.panel }}>
+            <span
+              className="mb-1.5 block text-[0.68rem] font-semibold uppercase tracking-[0.09em]"
+              style={{ color: t.muted }}
+            >
               What it feels like
-            </b>
-            <span style={{ color: t.muted }}>{textOf(c, "feels")}</span>
+            </span>
+            <p className="text-[0.95rem]" style={{ color: t.muted }}>
+              {feels}
+            </p>
           </div>
-          <span className="hidden text-xl @2xl:block" style={{ color: t.muted }} aria-hidden>
-            →
+
+          <span
+            className="hidden self-center text-lg @2xl:block"
+            style={{ color: t.accent }}
+            aria-hidden
+          >
+            &rarr;
           </span>
-          <div className="rounded-xl p-4 text-[0.9rem]" style={{ background: t.panel, color: t.fg }}>
-            <b className="mb-1 block font-display">What is actually true</b>
-            <span style={{ color: t.muted }}>{textOf(c, "truth")}</span>
+
+          {/* The reframe is the point of the section, so it carries the accent
+              and the weight. Tinted rather than filled: this holds a sentence
+              of body copy, and full accent behind body copy is unreadable. */}
+          <div
+            className="rounded-2xl px-5 py-4"
+            style={{ background: tint(t.accent, 0.1), border: `1px solid ${tint(t.accent, 0.3)}` }}
+          >
+            <span
+              className="mb-1.5 block text-[0.68rem] font-semibold uppercase tracking-[0.09em]"
+              style={{ color: t.accent }}
+            >
+              What is actually true
+            </span>
+            <p className="text-[0.98rem] font-medium" style={{ color: t.fg }}>
+              {truth}
+            </p>
           </div>
         </div>
       )}
