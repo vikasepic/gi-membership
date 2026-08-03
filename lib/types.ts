@@ -61,6 +61,11 @@ export type Offer = {
   /** Checkout-bump copy. Null falls back to headline/description. */
   bumpHeadline: string | null;
   bumpDescription: string | null;
+  /** Bump presentation. See lib/bump.ts — null banner means "show the default". */
+  bumpBanner: string | null;
+  bumpBullets: string[] | null;
+  bumpNote: string | null;
+  bumpAccent: string | null;
   /** Which layout renders this offer's upsell page. */
   otoTemplate: string;
   /** Long-form copy for the `long` template. */

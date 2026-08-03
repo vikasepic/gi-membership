@@ -4,6 +4,8 @@ import { useMemo, useRef, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { startCheckout, previewCoupon, captureAbandonedCart } from "@/app/(store)/checkout/actions";
+import { OrderBump } from "@/components/checkout/order-bump";
+import type { BumpView } from "@/lib/bump";
 
 type AppliedDiscount = { label: string; discountCents: number; clamped: boolean };
 
@@ -11,12 +13,10 @@ type AppliedDiscount = { label: string; discountCents: number; clamped: boolean 
 // be imported here. Display only — the server enforces the real floor.
 const MIN_CHARGE_CENTS_CLIENT = 50;
 
-export type BumpSummary = {
-  headline: string;
-  description: string | null;
-  chargeNowCents: number;
-  recurringNote: string | null; // e.g. "then $47/mo after a 7-day trial"
-};
+// The bump's shape is now BumpView, built by lib/bump.ts so the checkout and
+// the admin preview cannot diverge. Kept as an alias because several call
+// sites and tests refer to it by the old name.
+export type BumpSummary = BumpView;
 
 export type CheckoutProduct = {
   slug: string;
@@ -384,32 +384,16 @@ function Inner({
             <span className="text-muted">Total now</span>
             <span className="font-display text-2xl">{money(totalNow, product.currency)}</span>
           </div>
-          {bumpTaken && bump?.recurringNote && (
-            <p className="-mt-2 text-sm text-muted">{bump.recurringNote}.</p>
+          {bumpTaken && bump?.termsLabel && (
+            <p className="-mt-2 text-sm text-muted">
+              {bump.headline}: {bump.termsLabel}.
+            </p>
           )}
           <p className="-mt-2 text-xs text-muted">
             Tax is calculated at your country&rsquo;s rate and shown on your receipt.
           </p>
 
-          {bump && (
-            <label className="flex cursor-pointer gap-3 rounded-2xl border border-border bg-surface-2 p-4">
-              <input
-                type="checkbox" checked={bumpTaken}
-                onChange={(e) => setBumpTaken(e.target.checked)}
-                className="mt-1 size-4 shrink-0 accent-[var(--primary)]"
-              />
-              <span className="flex flex-col gap-1">
-                <span className="font-medium">{bump.headline}</span>
-                {bump.description && <span className="text-sm text-muted">{bump.description}</span>}
-                <span className="text-sm text-primary">
-                  {bump.chargeNowCents === 0
-                    ? `${money(0, product.currency)} now`
-                    : `+${money(bump.chargeNowCents, product.currency)} now`}
-                  {bump.recurringNote ? ` — ${bump.recurringNote}` : ""}
-                </span>
-              </span>
-            </label>
-          )}
+          {bump && <OrderBump view={bump} checked={bumpTaken} onChange={setBumpTaken} />}
 
           {error && (
             <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">

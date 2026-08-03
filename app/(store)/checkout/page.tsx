@@ -2,15 +2,15 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getProductBySlug, getOffer } from "@/lib/store";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { immediateChargeCents, shouldShowOffer } from "@/lib/offers";
+import { shouldShowOffer } from "@/lib/offers";
 import { ownershipFor } from "@/lib/checkout";
 import { stripePublishableKey } from "@/lib/env";
 import { CheckoutForm, type BumpSummary } from "@/components/checkout/checkout-form";
+import { buildBumpView } from "@/lib/bump";
 import { publicCoverUrl } from "@/lib/media";
 import { productDisplay } from "@/lib/courses";
 import { rememberLead } from "@/lib/leads";
 
-import { money } from "@/lib/money";
 
 // Their last billing country, so a repeat buyer doesn't re-pick it.
 async function lastBillingCountry(userId: string): Promise<string | null> {
@@ -76,23 +76,10 @@ export default async function CheckoutPage({
     }
   }
 
-  let bump: BumpSummary | null = null;
-  if (bumpOffer && shouldShowOffer(bumpOffer, owned)) {
-    const recurringNote =
-      bumpOffer.billingType === "recurring"
-        ? `then ${money(bumpOffer.priceCents, bumpOffer.currency)}/${bumpOffer.interval}${
-            bumpOffer.trialDays ? ` after a ${bumpOffer.trialDays}-day trial` : ""
-          }`
-        : null;
-    bump = {
-      // Bump-specific copy when it exists, else the offer's main copy — so an
-      // offer that never set it looks exactly as it did before.
-      headline: bumpOffer.bumpHeadline || bumpOffer.headline,
-      description: bumpOffer.bumpDescription || bumpOffer.description,
-      chargeNowCents: immediateChargeCents(bumpOffer),
-      recurringNote,
-    };
-  }
+  // Built by lib/bump.ts, which the admin preview also uses — so what an admin
+  // approves in the editor is literally what renders here.
+  const bump: BumpSummary | null =
+    bumpOffer && shouldShowOffer(bumpOffer, owned) ? buildBumpView(bumpOffer) : null;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 py-4">

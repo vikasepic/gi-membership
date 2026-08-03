@@ -17,7 +17,7 @@ const PRODUCT_COLUMNS =
   "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order";
 
 const OFFER_COLUMNS =
-  "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, bump_headline, bump_description, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live";
+  "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, bump_headline, bump_description, bump_banner, bump_bullets, bump_note, bump_accent, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live";
 
 export type OfferOption = {
   id: string;
@@ -278,6 +278,36 @@ export async function updateOfferPage(id: string, page: Record<string, string>):
   const db = createServiceClient();
   const { error } = await db.from("offers").update({ oto_page: page }).eq("id", id);
   if (error) throw new Error(`updateOfferPage: ${error.message}`);
+}
+
+/**
+ * Save the order bump's presentation.
+ *
+ * Separate from updateOffer for the same reason updateOfferPage is: this is its
+ * own screen with its own form, and routing it through toOfferRow would make
+ * the bump editor post every pricing and grant field just to change a bullet —
+ * where one missing hidden input silently rewrites the offer's price.
+ */
+export async function updateOfferBump(
+  id: string,
+  input: {
+    bumpBanner: string;
+    bumpBullets: string[];
+    bumpNote: string | null;
+    bumpAccent: string;
+  },
+): Promise<void> {
+  const db = createServiceClient();
+  const { error } = await db
+    .from("offers")
+    .update({
+      bump_banner: input.bumpBanner,
+      bump_bullets: input.bumpBullets,
+      bump_note: input.bumpNote,
+      bump_accent: input.bumpAccent,
+    })
+    .eq("id", id);
+  if (error) throw new Error(`updateOfferBump: ${error.message}`);
 }
 
 export async function deleteOffer(id: string): Promise<void> {
