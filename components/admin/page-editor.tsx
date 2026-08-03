@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { saveSectionAction, type SectionSaveState } from "@/app/admin/pages/actions";
 import { SectionBand, type PageMoney } from "@/components/page/sales-page";
 import {
@@ -58,6 +58,28 @@ export function PageEditor({
   const [state, action, pending] = useActionState<SectionSaveState, FormData>(saveSectionAction, {});
   const [device, setDevice] = useState<Device>("desktop");
 
+  // Bring an opened section's header to the top.
+  //
+  // Opening one closes another, so a section below the one that just collapsed
+  // jumps upward and you land somewhere in the middle of it. The scroll runs in
+  // an effect rather than in the click handler because the collapse has to be
+  // laid out first, otherwise it scrolls to where the row used to be.
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const mounted = useRef(false);
+  useEffect(() => {
+    // Skip the first pass: the hero opens by default, and scrolling to it on
+    // arrival would move a page the reader has not asked to move.
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    if (!openKey) return;
+    const el = rowRefs.current[openKey];
+    if (!el) return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "start", behavior: still ? "auto" : "smooth" });
+  }, [openKey]);
+
   const patch = (key: string, next: Partial<SectionRow>) => {
     setRows((rs) => rs.map((r) => (r.sectionKey === key ? { ...r, ...next } : r)));
     setDirty((d) => ({ ...d, [key]: true }));
@@ -108,7 +130,12 @@ export function PageEditor({
           return (
             <div
               key={row.sectionKey}
-              className="border-b border-border first:rounded-t-2xl last:border-b-0 last:rounded-b-2xl"
+              ref={(el) => {
+                rowRefs.current[row.sectionKey] = el;
+              }}
+              // Clears the admin's sticky top bar, which would otherwise sit
+              // over the header we just scrolled to.
+              className="scroll-mt-20 border-b border-border first:rounded-t-2xl last:border-b-0 last:rounded-b-2xl"
             >
               <button
                 type="button"
