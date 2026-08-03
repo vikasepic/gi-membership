@@ -169,6 +169,7 @@ export function OfferForm({
             <option value="visual">Visual — image or video led (default)</option>
             <option value="long">Long-form — story, then the offer</option>
             <option value="sales">Sales page — stats, proof, comparison, FAQ</option>
+            <option value="sections">Ten sections — the standard sales page</option>
             <option value="custom">Custom — coded page for this offer</option>
           </select>
           {offer && (

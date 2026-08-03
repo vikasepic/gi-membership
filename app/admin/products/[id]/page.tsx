@@ -27,6 +27,12 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
           <Link href="/admin/courses" className="underline">courses</Link> — assign one or more below,
           or attach a single file for a simple one-file sale.
         </p>
+        <Link
+          href={`/admin/products/${id}/page-editor`}
+          className="mt-1 w-fit rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-fg"
+        >
+          Edit sales page →
+        </Link>
       </div>
 
       <ProductCover

@@ -4,6 +4,8 @@ import { otoSigningSecret } from "@/lib/env";
 import { getOffer } from "@/lib/store";
 import { immediateChargeCents } from "@/lib/offers";
 import { otoComponentFor } from "@/components/oto/registry";
+import { SectionsOto } from "@/components/oto/sections-template";
+import { getPageSections } from "@/lib/pages";
 import type { OtoView } from "@/components/oto/shell";
 import { money } from "@/lib/money";
 
@@ -41,6 +43,13 @@ export default async function OtoPage({
           }`
         : null,
   };
+
+  // The sections layout reads its content from the database, which a
+  // component map cannot supply — so it is resolved here rather than
+  // pretending every template has the same shape.
+  if ((offer.otoTemplate) === "sections") {
+    return <SectionsOto view={view} rows={await getPageSections("offer", offer.id)} />;
+  }
 
   const Template = otoComponentFor({ template: offer.otoTemplate, offerKey: offer.key });
   return <Template view={view} />;

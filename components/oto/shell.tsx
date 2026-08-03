@@ -84,6 +84,7 @@ export function OtoActions({
   buttonClassName,
   showNote = true,
   align = "stretch",
+  acceptLabel,
 }: {
   view: OtoView;
   tone?: "plain" | "band";
@@ -97,6 +98,12 @@ export function OtoActions({
   /** Some pages carry the reassurance line once rather than at every CTA. */
   showNote?: boolean;
   align?: "stretch" | "start";
+  /**
+   * Override the button text. For layouts whose own copy is editable — the
+   * label is presentation, so it may vary; the form, the token and the action
+   * beneath it may not.
+   */
+  acceptLabel?: string;
 }) {
   const onBand = tone === "band";
   return (
@@ -112,7 +119,7 @@ export function OtoActions({
           // the contrast worse exactly where it is already failing.
           className={buttonClassName ?? "group flex w-full items-center justify-center gap-2.5 rounded-xl bg-[#b0532f] px-6 py-4 text-[1.05rem] font-medium text-white shadow-[0_12px_28px_-12px_rgba(176,83,47,0.55)] transition-[transform,background-color,box-shadow] duration-200 [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] hover:bg-[#9c4728] hover:shadow-[0_18px_38px_-14px_rgba(176,83,47,0.6)] active:scale-[0.995] motion-reduce:transition-none motion-reduce:active:scale-100"}
         >
-          {view.offer.acceptLabel}
+          {acceptLabel || view.offer.acceptLabel}
           <ArrowRight className="transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0" />
         </button>
       </form>

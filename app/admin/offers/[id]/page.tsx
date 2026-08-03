@@ -27,6 +27,12 @@ export default async function EditOfferPage({
             pricing and grants change rarely, copy and design change constantly. */}
         <div className="flex flex-wrap gap-2">
           <Link
+            href={`/admin/offers/${id}/page-editor`}
+            className="rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-fg"
+          >
+            Edit sales page →
+          </Link>
+          <Link
             href={`/admin/offers/${id}/bump`}
             className="rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-fg"
           >

@@ -1,0 +1,62 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/admin-guard";
+import { saveSection, seedPage, type OwnerType } from "@/lib/pages";
+import { sectionDef } from "@/lib/page-sections";
+
+export type SectionSaveState = { error?: string; savedKey?: string };
+
+/**
+ * Save one section of one page.
+ *
+ * The whole form posts, but only the named section is written — which is the
+ * point. Two people editing different sections cannot overwrite each other.
+ */
+export async function saveSectionAction(
+  _prev: SectionSaveState,
+  formData: FormData,
+): Promise<SectionSaveState> {
+  await requireAdmin();
+
+  const owner = String(formData.get("ownerType") ?? "") as OwnerType;
+  const ownerId = String(formData.get("ownerId") ?? "");
+  const sectionKey = String(formData.get("sectionKey") ?? "");
+  if (owner !== "product" && owner !== "offer") return { error: "Bad owner." };
+  if (!ownerId || !sectionDef(sectionKey)) return { error: "Unknown section." };
+
+  let content: Record<string, unknown> = {};
+  try {
+    const raw = String(formData.get("content") ?? "{}");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) content = parsed;
+  } catch {
+    return { error: "Could not read the section's content." };
+  }
+
+  try {
+    await saveSection(owner, ownerId, sectionKey, {
+      enabled: String(formData.get("enabled") ?? "true") === "true",
+      style: String(formData.get("style") ?? ""),
+      accent: String(formData.get("accent") ?? "").trim() || null,
+      variant: String(formData.get("variant") ?? "").trim() || null,
+      content,
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not save." };
+  }
+
+  revalidatePath(`/admin/${owner === "offer" ? "offers" : "products"}/${ownerId}/page`);
+  revalidatePath("/p", "layout");
+  revalidatePath("/checkout/oto");
+  return { savedKey: sectionKey };
+}
+
+export async function enablePageAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const owner = String(formData.get("ownerType") ?? "") as OwnerType;
+  const ownerId = String(formData.get("ownerId") ?? "");
+  if ((owner !== "product" && owner !== "offer") || !ownerId) return;
+  await seedPage(owner, ownerId);
+  revalidatePath(`/admin/${owner === "offer" ? "offers" : "products"}/${ownerId}/page`);
+}

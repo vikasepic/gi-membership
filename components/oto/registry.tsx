@@ -1,7 +1,7 @@
 import { ShortOto, VisualOto, LongOto } from "@/components/oto/templates";
 import { SalesOto } from "@/components/oto/sales-template";
 import { ContentEngineOto } from "@/components/oto/custom/content-engine";
-import { resolveOtoTemplate } from "@/lib/oto-template";
+import { resolveOtoTemplate, DEFAULT_OTO_TEMPLATE } from "@/lib/oto-template";
 import type { OtoView } from "@/components/oto/shell";
 
 // Names to components. The decision about WHICH name to use lives in
@@ -50,6 +50,14 @@ export function hasCustomOtoPage(offerKey: string): boolean {
   return offerKey in CUSTOM;
 }
 
+/**
+ * `sections` reads its content from the database, which a component map cannot
+ * supply, so the OTO page and the preview route resolve it before reaching
+ * here. It is listed so this file still names every template — and so the
+ * wiring test can see it — but it is deliberately not a plain component.
+ */
+export const RESOLVED_ELSEWHERE = { sections: "SectionsOto" } as const;
+
 export function otoComponentFor(args: { template: string; offerKey: string }): OtoComponent {
   const name = resolveOtoTemplate({
     template: args.template,
@@ -57,5 +65,8 @@ export function otoComponentFor(args: { template: string; offerKey: string }): O
     customKeys: Object.keys(CUSTOM),
   });
   if (name === "custom") return CUSTOM[args.offerKey];
-  return TEMPLATES[name];
+  // Never hand back undefined. This page is reached only after someone has
+  // paid: a wrong layout is a bad upsell, a crash is a support ticket about a
+  // payment that actually succeeded.
+  return TEMPLATES[name] ?? TEMPLATES[DEFAULT_OTO_TEMPLATE];
 }
