@@ -43,10 +43,30 @@ const HEADING_SIZE: Record<HeadingTag, string> = {
  */
 export type BlockMoney = { priceLabel?: string | null; termsLabel?: string | null };
 
-export function Blocks({ blocks, theme, money }: { blocks: Block[]; theme: BandTheme; money?: BlockMoney }) {
+/**
+ * The page's own buy control.
+ *
+ * A renderer, not a node, so a button's label stays editable while the page
+ * supplies the link or the one-click form. Without it a "buy" button renders
+ * as plain text — which is what a sales page that cannot be bought from looks
+ * like, and is exactly what happened here.
+ */
+export type CtaRender = (label: string) => React.ReactNode;
+
+export function Blocks({
+  blocks,
+  theme,
+  money,
+  cta,
+}: {
+  blocks: Block[];
+  theme: BandTheme;
+  money?: BlockMoney;
+  cta?: CtaRender;
+}) {
   const showing = blocks.filter((b) => !blockRendersNothing(b));
   if (showing.length === 0) return null;
-  return <div className="mt-7 flex flex-col">{flow(showing, theme, money)}</div>;
+  return <div className="mt-7 flex flex-col">{flow(showing, theme, money, cta)}</div>;
 }
 
 /**
@@ -57,7 +77,7 @@ export function Blocks({ blocks, theme, money }: { blocks: Block[]; theme: BandT
  * each is still selected, dragged and styled on its own; only the rendering
  * puts a run of them on one row.
  */
-function flow(blocks: Block[], theme: BandTheme, money?: BlockMoney): React.ReactNode[] {
+function flow(blocks: Block[], theme: BandTheme, money?: BlockMoney, cta?: CtaRender): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   for (let i = 0; i < blocks.length; ) {
     if (blocks[i].type === "button" && blocks[i + 1]?.type === "button") {
@@ -66,20 +86,20 @@ function flow(blocks: Block[], theme: BandTheme, money?: BlockMoney): React.Reac
       out.push(
         <div key={blocks[i].id} className="flex flex-wrap items-center gap-3">
           {blocks.slice(i, j).map((b) => (
-            <BlockNode key={b.id} block={b} theme={theme} money={money} />
+            <BlockNode key={b.id} block={b} theme={theme} money={money} cta={cta} />
           ))}
         </div>,
       );
       i = j;
     } else {
-      out.push(<BlockNode key={blocks[i].id} block={blocks[i]} theme={theme} money={money} />);
+      out.push(<BlockNode key={blocks[i].id} block={blocks[i]} theme={theme} money={money} cta={cta} />);
       i++;
     }
   }
   return out;
 }
 
-function BlockNode({ block, theme, money }: { block: Block; theme: BandTheme; money?: BlockMoney }) {
+function BlockNode({ block, theme, money, cta }: { block: Block; theme: BandTheme; money?: BlockMoney; cta?: CtaRender }) {
   // An unfilled block would otherwise emit a wrapper carrying its padding and
   // margin — a gap on the page that nobody placed.
   if (blockRendersNothing(block)) return null;
@@ -92,7 +112,7 @@ function BlockNode({ block, theme, money }: { block: Block; theme: BandTheme; mo
       className={[hidden, s.cssClass].filter(Boolean).join(" ") || undefined}
       style={wrapper}
     >
-      <Inner block={block} theme={theme} money={money} />
+      <Inner block={block} theme={theme} money={money} cta={cta} />
     </div>
   );
 }
@@ -109,7 +129,7 @@ export function BlockBody({ block, theme }: { block: Block; theme: BandTheme }) 
   return <Inner block={block} theme={theme} />;
 }
 
-function Inner({ block, theme, money }: { block: Block; theme: BandTheme; money?: BlockMoney }) {
+function Inner({ block, theme, money, cta }: { block: Block; theme: BandTheme; money?: BlockMoney; cta?: CtaRender }) {
   const s = block.style;
   const p = block.props;
   const c = blockColors(block, theme);
@@ -239,6 +259,9 @@ function Inner({ block, theme, money }: { block: Block; theme: BandTheme; money?
         textAlign: "center",
         ...type,
       };
+      // A buy button with no control to render is plain text — a sales page
+      // nobody can buy from. Rendered through the page's own control instead.
+      if (str(p.action, "link") === "buy" && cta) return <>{cta(label)}</>;
       const link = str(p.link);
       return link ? (
         <a href={link} className="w-fit px-7 py-3 font-display text-[0.95rem] font-semibold" style={style}>
@@ -524,6 +547,12 @@ function Inner({ block, theme, money }: { block: Block; theme: BandTheme; money?
     case "pricing": {
       const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
       const highlight = p.highlightLast !== false;
+      // The highlighted row is ours. Left blank it shows the offer's real
+      // price, for the same reason the price card does: a comparison whose
+      // last line is a typed number is a comparison that can quietly disagree
+      // with what the card charges.
+      const ourAmount = (i: number, typed: string) =>
+        highlight && i === items.length - 1 && !typed ? str(money?.priceLabel) : typed;
       return (
         <div className="flex flex-col">
           {items.map((it, i) => {
@@ -542,7 +571,7 @@ function Inner({ block, theme, money }: { block: Block; theme: BandTheme; money?
               >
                 <span className={ours ? "font-semibold" : undefined}>{str(it.label)}</span>
                 {str(it.note) && <span className="text-[0.8rem]" style={{ color: theme.muted }}>{str(it.note)}</span>}
-                <span className="ml-auto font-display font-bold">{str(it.amount)}</span>
+                <span className="ml-auto font-display font-bold">{ourAmount(i, str(it.amount))}</span>
               </div>
             );
           })}
@@ -649,12 +678,15 @@ function Inner({ block, theme, money }: { block: Block; theme: BandTheme; money?
               {str(p.badge)}
             </span>
           )}
-          {str(p.ctaLabel) && (
-            <span className="mt-4 block w-full px-6 py-3 font-display text-[0.95rem] font-semibold"
-              style={{ background: c.accent, color: readableOn(c.accent), borderRadius: 999 }}>
-              {str(p.ctaLabel)}
-            </span>
-          )}
+          {str(p.ctaLabel) &&
+            (cta ? (
+              <div className="mt-4">{cta(str(p.ctaLabel))}</div>
+            ) : (
+              <span className="mt-4 block w-full px-6 py-3 font-display text-[0.95rem] font-semibold"
+                style={{ background: c.accent, color: readableOn(c.accent), borderRadius: 999 }}>
+                {str(p.ctaLabel)}
+              </span>
+            ))}
           {str(p.note) && <p className="mt-3 text-[0.76rem] leading-snug" style={{ opacity: 0.75 }}>{str(p.note)}</p>}
           {str(p.secureNote) && <p className="mt-2 text-[0.68rem]" style={{ opacity: 0.6 }}>{str(p.secureNote)}</p>}
         </div>
@@ -679,7 +711,7 @@ function Inner({ block, theme, money }: { block: Block; theme: BandTheme; money?
         >
           {columns.map((col, i) => (
             <div key={i} className="flex min-w-0 flex-col">
-              {flow(col.filter((child) => !blockRendersNothing(child)), theme, money)}
+              {flow(col.filter((child) => !blockRendersNothing(child)), theme, money, cta)}
             </div>
           ))}
         </div>

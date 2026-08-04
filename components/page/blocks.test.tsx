@@ -316,3 +316,78 @@ describe("the FAQ", () => {
     expect(faq({ items: [] })).toBe("");
   });
 });
+
+describe("the price comparison cannot disagree with the price card", () => {
+  const rows = [
+    { label: "An agency", amount: "$2,000", note: "per month" },
+    { label: "This", amount: "", note: "per month" },
+  ];
+
+  it("fills the highlighted row from the real price when it is blank", () => {
+    const out = renderToStaticMarkup(
+      <Blocks blocks={[make("pricing", { items: rows })]} theme={paper} money={{ priceLabel: "$29" }} />,
+    );
+    expect(out).toContain("$29");
+    expect(out).toContain("$2,000");
+  });
+
+  it("does not touch a row someone typed an amount into", () => {
+    const typed = [{ label: "An agency", amount: "$2,000", note: "" }, { label: "This", amount: "$19", note: "" }];
+    const out = renderToStaticMarkup(
+      <Blocks blocks={[make("pricing", { items: typed })]} theme={paper} money={{ priceLabel: "$29" }} />,
+    );
+    expect(out).toContain("$19");
+    expect(out).not.toContain("$29");
+  });
+
+  it("leaves it blank rather than inventing one when there is no price", () => {
+    const out = renderToStaticMarkup(<Blocks blocks={[make("pricing", { items: rows })]} theme={paper} />);
+    expect(out).not.toContain("$29");
+    expect(out).toContain("$2,000");
+  });
+
+  it("never fills a row that is not the highlighted one", () => {
+    const out = renderToStaticMarkup(
+      <Blocks blocks={[make("pricing", { items: [{ label: "A", amount: "" }, { label: "B", amount: "$5" }] })]}
+        theme={paper} money={{ priceLabel: "$29" }} />,
+    );
+    expect(out.indexOf("$29")).toBe(-1);
+  });
+});
+
+describe("a page has to be buyable", () => {
+  // The regression this exists to prevent: switching the page to blocks
+  // dropped the buy-control wiring, so every CTA on a live sales page rendered
+  // as a <span>. It looked right and could not be clicked.
+  const buy = make("button", { text: "Start 7 days free", action: "buy" });
+  const cta = (label: string) => <a href="/checkout?x=1">{label}</a>;
+
+  it("renders a buy button through the page's own control", () => {
+    const out = renderToStaticMarkup(<Blocks blocks={[buy]} theme={paper} cta={cta} />);
+    expect(out).toContain('href="/checkout?x=1"');
+    expect(out).toContain("Start 7 days free");
+  });
+
+  it("never silently renders a buy button as plain text when a control exists", () => {
+    const out = renderToStaticMarkup(<Blocks blocks={[buy]} theme={paper} cta={cta} />);
+    expect(out).toContain("<a");
+  });
+
+  it("routes the price card's button through it too", () => {
+    const card = make("pricecard", { ctaLabel: "Start 7 days free", price: "$29" });
+    const out = renderToStaticMarkup(<Blocks blocks={[card]} theme={paper} cta={cta} />);
+    expect(out).toContain('href="/checkout?x=1"');
+  });
+
+  it("leaves a plain link button alone", () => {
+    const linked = make("button", { text: "See how", action: "link", link: "#how" });
+    const out = renderToStaticMarkup(<Blocks blocks={[linked]} theme={paper} cta={cta} />);
+    expect(out).toContain('href="#how"');
+    expect(out).not.toContain("/checkout");
+  });
+
+  it("still renders something in a preview with no control wired", () => {
+    const out = renderToStaticMarkup(<Blocks blocks={[buy]} theme={paper} />);
+    expect(out).toContain("Start 7 days free");
+  });
+});

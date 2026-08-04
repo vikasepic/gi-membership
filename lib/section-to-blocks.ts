@@ -143,8 +143,8 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
       if (t("headline")) left.push(wide(heading(t("headline"), "h1")));
       if (t("subhead")) left.push(paragraph(t("subhead")));
       const bullets = listOf(c.bullets, ["text"]);
-      if (t("ctaLabel")) left.push(block("button", { text: t("ctaLabel") }));
-      if (t("ctaSecondary")) left.push(block("button", { text: t("ctaSecondary"), variant: "outline" }));
+      if (t("ctaLabel")) left.push(block("button", { text: t("ctaLabel"), action: "buy" }));
+      if (t("ctaSecondary")) left.push(block("button", { text: t("ctaSecondary"), variant: "outline", action: "link", link: "#how" }));
       if (t("ctaNote")) left.push(paragraph(t("ctaNote")));
       // The figures sit under the buttons, not as a strip across the band — on
       // the model page they are a small row beneath the call to action.
@@ -192,7 +192,7 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
         );
       }
       // The button the stack has been building towards.
-      if (t("ctaLabel")) push(block("button", { text: t("ctaLabel") }));
+      if (t("ctaLabel")) push(block("button", { text: t("ctaLabel"), action: "buy" }));
       if (t("ctaNote")) push(paragraph(t("ctaNote")));
       break;
     }

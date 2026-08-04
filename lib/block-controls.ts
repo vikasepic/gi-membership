@@ -107,7 +107,14 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
   button: {
     content: [
       { kind: "text", key: "text", label: "Label" },
-      { kind: "text", key: "link", label: "Links to", placeholder: "https://…" },
+      {
+        kind: "select",
+        key: "action",
+        label: "What it does",
+        hint: "Buy uses this page's own checkout — a link on the sales page, one click after checkout. The label stays yours.",
+        options: [["buy", "Buy"], ["link", "Go to a link"]],
+      },
+      { kind: "text", key: "link", label: "Links to", placeholder: "https://…", when: (b) => b.props.action !== "buy" },
       {
         kind: "select",
         key: "variant",

@@ -1,4 +1,4 @@
-import { Blocks } from "@/components/page/blocks";
+import { Blocks, type CtaRender } from "@/components/page/blocks";
 import { blocksForSection } from "@/lib/section-to-blocks";
 import { buildSectionView, type SectionRow, type SectionView } from "@/lib/page-sections";
 
@@ -21,13 +21,7 @@ export type PageMoney = {
   termsLabel: string | null;
 };
 
-/**
- * The buy control.
- *
- * Still accepted so the pages that supply one keep compiling; the button now
- * lives in the block tree, where its label is editable like anything else.
- */
-export type CtaRender = (label: string) => React.ReactNode;
+export type { CtaRender } from "@/components/page/blocks";
 
 function Band({ view, children }: { view: SectionView; children: React.ReactNode }) {
   return (
@@ -44,11 +38,13 @@ function Band({ view, children }: { view: SectionView; children: React.ReactNode
 export function SectionBand({
   row,
   money,
+  cta,
   /** Editor only: show the band even when it has nothing in it yet. */
   preview,
 }: {
   row: SectionRow;
   money: PageMoney;
+  /** The real buy control. Layout is the section's; the money path is not. */
   cta?: CtaRender;
   preview?: boolean;
 }) {
@@ -60,7 +56,7 @@ export function SectionBand({
   if (blocks.length === 0 && !preview) return null;
   return (
     <Band view={view}>
-      <Blocks blocks={blocks} theme={view.theme} money={money} />
+      <Blocks blocks={blocks} theme={view.theme} money={money} cta={cta} />
     </Band>
   );
 }
@@ -68,6 +64,7 @@ export function SectionBand({
 export function SalesPage({
   rows,
   money,
+  cta,
 }: {
   rows: SectionRow[];
   money: PageMoney;
@@ -77,7 +74,7 @@ export function SalesPage({
   return (
     <div>
       {ordered.map((row) => (
-        <SectionBand key={row.sectionKey} row={row} money={money} />
+        <SectionBand key={row.sectionKey} row={row} money={money} cta={cta} />
       ))}
     </div>
   );

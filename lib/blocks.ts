@@ -158,7 +158,10 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   text: { html: "<p>Write something here.</p>" },
   image: { url: "", alt: "", caption: "", link: "", ratio: "16/9", maxWidth: 100 },
   video: { source: "youtube", url: "", poster: "", controls: true, mute: true, autoplay: false, loop: false, ratio: "16/9" },
-  button: { text: "Get instant access", link: "", fullWidth: false, variant: "solid" },
+  // `action: "buy"` hands the label to the page's own buy control — a link on
+  // the offer's sales page, a one-click accept after checkout. The label stays
+  // editable; the money path never is.
+  button: { text: "Get instant access", link: "", fullWidth: false, variant: "solid", action: "link" },
   iconlist: { items: [], layout: "stacked", iconSize: 16, gap: 8, iconColor: null },
   slides: { items: [], skin: "card", perView: 1, arrows: true, dots: true },
   spacer: { height: 40 },
@@ -179,6 +182,7 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     altPeriod: "",
     badge: "",
     ctaLabel: "",
+    action: "buy",
     note: "",
     secureNote: "",
   },
