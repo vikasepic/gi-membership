@@ -83,14 +83,12 @@ function CoverBlock({ courseId, coverUrl }: { courseId: string; coverUrl: string
           className="aspect-[16/10] w-full max-w-56 self-start rounded-lg border border-border object-cover"
         />
       )}
-      <input
-        type="file"
-        name="file"
+      <FilePick
         accept="image/*"
+        hint={`JPG or PNG, up to ${mb(COVER_MAX)}.`}
+        label={coverUrl ? "Choose a replacement" : "Choose an image"}
         onChange={check}
-        className="text-sm file:mr-3 file:rounded-full file:border-0 file:bg-surface file:px-4 file:py-2 file:text-sm file:text-fg"
       />
-      <span className="text-xs text-muted">JPG or PNG, up to {mb(COVER_MAX)}.</span>
       {tooBig && <p className="text-sm text-primary">{tooBig}</p>}
       {state.error && <p className="text-sm text-primary">{state.error}</p>}
       {state.ok && <p className="text-sm text-navy">Cover updated.</p>}
@@ -142,17 +140,15 @@ function FileBlock({
         className="flex flex-col gap-3"
       >
         <input type="hidden" name="courseId" value={courseId} />
-        <input
-          type="file"
-          name="file"
+        <FilePick
           accept="application/pdf,audio/*"
+          hint={`PDF or audio, up to ${mb(ATTACH_MAX)}.`}
+          label="Choose a file"
           onChange={(e) => {
             const f = e.target.files?.[0];
             setTooBig(f && f.size > ATTACH_MAX ? `That file is ${mb(f.size)}. The limit is ${mb(ATTACH_MAX)}.` : null);
           }}
-          className="text-sm file:mr-3 file:rounded-full file:border-0 file:bg-surface file:px-4 file:py-2 file:text-sm file:text-fg"
         />
-        <span className="text-xs text-muted">PDF or audio, up to {mb(ATTACH_MAX)}.</span>
         {tooBig && <p className="text-sm text-primary">{tooBig}</p>}
         {state.error && <p className="text-sm text-primary">{state.error}</p>}
         {state.ok && <p className="text-sm text-navy">Uploaded.</p>}
@@ -190,5 +186,48 @@ function VideoBlock({ courseId, current }: { courseId: string; current: string |
         {pending ? "Saving…" : "Save video"}
       </button>
     </form>
+  );
+}
+
+/**
+ * Pick a file without the browser's own control.
+ *
+ * A visible <input type="file"> renders the platform's button plus the words
+ * "No file chosen", which cannot be styled and reads as unfinished next to
+ * everything around it. The input still does the work; a label drives it and
+ * the chosen name is shown here instead.
+ */
+function FilePick({
+  accept,
+  hint,
+  label,
+  onChange,
+}: {
+  accept: string;
+  hint: string;
+  label: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  const [name, setName] = useState<string | null>(null);
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <label className="w-fit cursor-pointer rounded-full border border-border bg-surface px-4 py-2 text-sm transition-colors hover:border-fg">
+          {label}
+          <input
+            type="file"
+            name="file"
+            accept={accept}
+            className="sr-only"
+            onChange={(e) => {
+              setName(e.target.files?.[0]?.name ?? null);
+              onChange(e);
+            }}
+          />
+        </label>
+        <span className="min-w-0 truncate text-sm text-muted">{name ?? "Nothing chosen yet"}</span>
+      </div>
+      <span className="text-xs text-muted">{hint}</span>
+    </div>
   );
 }
