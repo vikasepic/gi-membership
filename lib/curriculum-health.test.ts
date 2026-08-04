@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { courseHealth, isUntitled, lessonIsEmpty } from "@/lib/curriculum";
+import { courseHealth, isUntitled, lessonIsEmpty } from "@/lib/curriculum-health";
 import type { CourseItem, CurriculumNode } from "@/lib/curriculum";
 
 const item = (over: Partial<CourseItem> = {}): CourseItem => ({

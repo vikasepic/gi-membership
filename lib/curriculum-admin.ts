@@ -198,3 +198,20 @@ export async function setChapterPublished(chapterId: string, isPublished: boolea
     .or(`id.eq.${chapterId},parent_id.eq.${chapterId}`);
   if (error) throw new Error(`setChapterPublished: ${error.message}`);
 }
+
+/**
+ * Rename one item.
+ *
+ * Title only, for the same reason publishing is: the curriculum screen renames
+ * from a row, and going through updateItem would post every other field of a
+ * lesson nobody opened. It matters here because every title in this store is
+ * still the one the editor generated, and the fix should not require opening
+ * each lesson in turn.
+ */
+export async function setItemTitle(itemId: string, title: string): Promise<void> {
+  const clean = title.trim();
+  if (!clean) throw new Error("setItemTitle: a title cannot be empty");
+  const db = createServiceClient();
+  const { error } = await db.from("course_items").update({ title: clean }).eq("id", itemId);
+  if (error) throw new Error(`setItemTitle: ${error.message}`);
+}

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CourseForm } from "@/components/admin/course-form";
 import { CourseContent } from "@/components/admin/course-content";
-import { CurriculumOutline } from "@/components/admin/curriculum-outline";
+import { Curriculum } from "@/components/admin/curriculum";
 import { getCourse } from "@/lib/courses";
 import { listCurriculum } from "@/lib/curriculum";
 import { publicCoverUrl } from "@/lib/media";
@@ -36,7 +36,7 @@ export default async function EditCoursePage({ params }: { params: Promise<{ id:
 
       {/* Chapters &amp; lessons — for a multi-part course. A simple course can
           ignore this entirely and just use the file above. */}
-      <CurriculumOutline
+      <Curriculum
         courseId={course.id}
         nodes={nodes}
         chapterLabel={course.chapterLabel}

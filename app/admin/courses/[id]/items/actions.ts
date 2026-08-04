@@ -13,6 +13,7 @@ import {
   setChapterPublished,
   setCover,
   setItemPublished,
+  setItemTitle,
   updateItem,
 } from "@/lib/curriculum-admin";
 import { validateUpload, uploadAttachment, uploadCover } from "@/lib/media";
@@ -193,5 +194,12 @@ export async function setPublishedAction(formData: FormData) {
   const itemId = String(formData.get("itemId"));
   if (scope === "chapter") await setChapterPublished(itemId, on);
   else await setItemPublished(itemId, on);
+  revalidatePath(`/admin/courses/${courseId}`);
+}
+
+export async function renameItemAction(formData: FormData) {
+  await requireAdmin();
+  const courseId = String(formData.get("courseId"));
+  await setItemTitle(String(formData.get("itemId")), String(formData.get("title") ?? ""));
   revalidatePath(`/admin/courses/${courseId}`);
 }
