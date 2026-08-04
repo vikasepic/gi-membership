@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { BlockBody } from "@/components/page/blocks";
 import { RichText } from "@/components/editor/rich-text";
 import {
@@ -108,14 +109,37 @@ export function BlockEditor({
 
   const tabs = selected ? controlsFor(selected) : null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-surface-2">
+  // Escape closes it. A full-screen editor with only one way out is a trap the
+  // first time a click misses.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    // The page behind must not scroll under the overlay.
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previous;
+    };
+  }, [onClose]);
+
+  const overlay = (
+    <div className="fixed inset-0 z-[100] flex flex-col bg-surface-2">
       <header className="flex items-center gap-3 border-b border-border bg-surface px-4 py-2.5">
         <strong className="font-display text-sm">Builder</strong>
         <span className="text-sm text-muted">{title}</span>
         <span className="ml-auto text-xs text-muted">
           {blocks.length === 0 ? "Empty" : `${blocks.length} block${blocks.length === 1 ? "" : "s"}`}
         </span>
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-full border border-border px-4 py-2 text-sm hover:border-fg"
+        >
+          &larr; Back to the page
+        </button>
         <button
           type="button"
           onClick={onClose}
@@ -247,6 +271,12 @@ export function BlockEditor({
       </div>
     </div>
   );
+
+  // Portalled to the body. The editor's own panes are position: sticky, which
+  // creates a stacking context — so a fixed overlay inside one is trapped in
+  // it and paints underneath the admin header. There is no z-index that fixes
+  // that; it has to leave the subtree.
+  return typeof document === "undefined" ? overlay : createPortal(overlay, document.body);
 }
 
 function IconBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {

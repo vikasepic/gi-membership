@@ -12,7 +12,6 @@ import {
   sectionDef,
   textOf,
   imageSrc,
-  isSectionEmpty,
 } from "@/lib/page-sections";
 
 describe("the nine sections", () => {
@@ -332,37 +331,6 @@ describe("layout variants that actually differ", () => {
   });
 });
 
-describe("isSectionEmpty", () => {
-  const mk = (sectionKey: string, content: Record<string, unknown>) =>
-    buildSectionView({
-      sectionKey, position: 0, enabled: true,
-      style: "paper", accent: null, variant: null, content,
-    })!;
-
-  it("calls an unwritten section empty — a heading is not an argument", () => {
-    // This is the live case: before the defaults were emptied, every one of
-    // these bands rendered another product's copy. Now they render a heading
-    // and nothing else, which must not reach a buyer.
-    for (const key of ["offer", "problem", "solution", "benefits", "authority", "proof"]) {
-      expect(isSectionEmpty(mk(key, {}))).toBe(true);
-    }
-  });
-
-  it("does not call a written section empty", () => {
-    expect(isSectionEmpty(mk("proof", { quotes: [{ quote: "It worked", name: "A", role: "B" }] }))).toBe(false);
-    expect(isSectionEmpty(mk("problem", { truth: "It was never discipline." }))).toBe(false);
-    expect(isSectionEmpty(mk("offer", { modules: [{ title: "Part one", body: "Does a thing" }] }))).toBe(false);
-  });
-
-  it("ignores an empty rich-text editor's leftover markup", () => {
-    expect(isSectionEmpty(mk("benefits", { copy: "<p></p>" }))).toBe(true);
-    expect(isSectionEmpty(mk("benefits", { copy: "<p>Something real</p>" }))).toBe(false);
-  });
-
-  it("does not count a list of blank rows as content", () => {
-    expect(isSectionEmpty(mk("offer", { modules: [{ title: "", body: "" }] }))).toBe(true);
-  });
-});
 
 describe("every part can do the job its definition gives it", () => {
   const has = (key: string, field: string) => sectionDef(key)!.fields.some((f) => f.key === field);

@@ -30,17 +30,6 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** A row of equal columns, each holding the blocks given. */
-function columns(cells: Block[][]): Block | null {
-  const filled = cells.filter((c) => c.length > 0);
-  if (filled.length < 2) return null;
-  const structure = (["1", "1-1", "1-1-1", "1-1-1-1"][Math.min(filled.length, 4) - 1] ?? "1-1") as RowStructure;
-  const want = ROW_STRUCTURES[structure].length;
-  const row = block("row", { structure }, { width: "full" });
-  row.columns = Array.from({ length: want }, (_, i) => filled[i] ?? []);
-  return row;
-}
-
 /** Centred, which is how most bands on a sales page set their heading. */
 function centred<T extends Block>(b: T): T {
   return { ...b, style: { ...b.style, align: "center" as const } };
@@ -144,10 +133,6 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
   const push = (b: Block | null | undefined) => {
     if (b) out.push(b);
   };
-  const pushText = (k: string) => {
-    if (t(k)) push(paragraph(t(k)));
-  };
-
   switch (def.key) {
     case "hero": {
       // Copy on the left, the facts card on the right — the shape the hero had

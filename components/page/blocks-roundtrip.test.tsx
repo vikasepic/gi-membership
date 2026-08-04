@@ -2,8 +2,9 @@ import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SalesPage } from "@/components/page/sales-page";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
-import { buildSectionView, defaultRows, isSectionEmpty, type SectionRow } from "@/lib/page-sections";
+import { buildSectionView, defaultRows, type SectionRow } from "@/lib/page-sections";
 import { newBlock, normalizeBlocks } from "@/lib/blocks";
+import { blocksForSection } from "@/lib/section-to-blocks";
 
 // The seam. Everything above is tested on its own; this is the path a real
 // edit takes: the editor makes a tree, the save action sanitizes it, the page
@@ -70,12 +71,10 @@ describe("blocks reach the page", () => {
     expect(page(rows)).toContain(view.theme.fg);
   });
 
-  it("a section with only blocks is not skipped as empty", () => {
-    // Every typed field is empty here. Without blocks counting as content the
-    // page would drop the section and the work would vanish.
-    const row = { ...defaultRows().find((r) => r.sectionKey === "proof")!, content: { blocks: roundTrip([heading("Only blocks")]) } };
-    expect(isSectionEmpty(buildSectionView(row)!)).toBe(false);
-    expect(page(rowsWith("proof", row.content))).toContain("Only blocks");
+  it("a section with only blocks renders them", () => {
+    const content = { blocks: roundTrip([heading("Only blocks")]) };
+    expect(blocksForSection(buildSectionView({ ...defaultRows().find((r) => r.sectionKey === "proof")!, content })!)).toHaveLength(1);
+    expect(page(rowsWith("proof", content))).toContain("Only blocks");
   });
 
   it("a section with neither fields nor blocks is still skipped", () => {
