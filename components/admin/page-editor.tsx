@@ -10,10 +10,13 @@ import {
   sectionDef,
   type FieldDef,
   type SectionRow,
+  bandTheme,
   type BandStyleKey,
 } from "@/lib/page-sections";
 import { inputClass } from "@/components/admin/form-controls";
 import { RichText } from "@/components/editor/rich-text";
+import { BlockEditor } from "@/components/admin/block-editor";
+import { normalizeBlocks } from "@/lib/blocks";
 import type { OwnerType } from "@/lib/pages";
 
 // The page editor.
@@ -291,6 +294,13 @@ function SectionPanel({
           />
         ))}
 
+        <BlockCanvasField
+          blocks={normalizeBlocks(content.blocks)}
+          theme={bandTheme(row.style, row.accent)}
+          title={`${def.n} · ${def.title}`}
+          onChange={(next) => setField("blocks", next)}
+        />
+
         {def.variants && (
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium">Layout</span>
@@ -503,6 +513,60 @@ function ImageField({
         className={`${inputClass} font-mono text-xs`}
       />
       {error && <span className="text-xs text-primary">{error}</span>}
+    </div>
+  );
+}
+
+/**
+ * The block canvas for one section.
+ *
+ * A launcher rather than an inline canvas: a palette, a canvas and an inspector
+ * do not fit in a 420px column beside the section list, and the builder needs
+ * the whole viewport to be a builder rather than another form.
+ *
+ * It edits in place and writes back through the same setField as every other
+ * field, so the one Save at the top of the page still covers it.
+ */
+function BlockCanvasField({
+  blocks,
+  theme,
+  title,
+  onChange,
+}: {
+  blocks: ReturnType<typeof normalizeBlocks>;
+  theme: ReturnType<typeof bandTheme>;
+  title: string;
+  onChange: (next: ReturnType<typeof normalizeBlocks>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-border pt-4">
+      <span className="flex items-baseline justify-between gap-2 text-sm font-medium">
+        Blocks
+        <span className="text-xs font-normal text-muted">
+          {blocks.length === 0 ? "None yet" : `${blocks.length} on the canvas`}
+        </span>
+      </span>
+      <p className="text-xs leading-relaxed text-muted">
+        Anything the fields above cannot say. Blocks render under them, on this
+        section&rsquo;s band — so they follow it if you change the style.
+      </p>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-fit rounded-full border border-border px-4 py-1.5 text-sm hover:border-fg"
+      >
+        {blocks.length === 0 ? "Open the builder" : "Edit blocks"}
+      </button>
+      {open && (
+        <BlockEditor
+          blocks={blocks}
+          theme={theme}
+          title={title}
+          onChange={onChange}
+          onClose={() => setOpen(false)}
+        />
+      )}
     </div>
   );
 }

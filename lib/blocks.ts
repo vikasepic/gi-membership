@@ -144,7 +144,7 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   image: { url: "", alt: "", caption: "", link: "", ratio: "16/9", maxWidth: 100 },
   video: { source: "youtube", url: "", poster: "", controls: true, mute: true, autoplay: false, loop: false, ratio: "16/9" },
   button: { text: "Get instant access", link: "", fullWidth: false },
-  iconlist: { items: [], layout: "stacked", iconSize: 16, gap: 8 },
+  iconlist: { items: [], layout: "stacked", iconSize: 16, gap: 8, iconColor: null },
   slides: { items: [], skin: "card", perView: 1, arrows: true, dots: true },
   spacer: { height: 40 },
   divider: { thickness: 1, width: 100 },
@@ -465,4 +465,35 @@ export function blockRendersNothing(block: Block): boolean {
     case "divider":
       return false;
   }
+}
+
+/**
+ * Which slot a pointer at `clientY` is aiming at.
+ *
+ * Above or below the block, decided by its midpoint. Elementor does the same,
+ * and the alternative — thin gaps between blocks as the only drop targets — is
+ * what makes a builder feel like it is refusing the drop.
+ */
+export function edgeIndex(clientY: number, top: number, height: number, index: number): number {
+  return clientY < top + height / 2 ? index : index + 1;
+}
+
+/**
+ * Where a click on the palette puts the new block.
+ *
+ * Directly after whatever is selected, including inside a column — someone
+ * looking at a block expects the next one to land under it, not at the far
+ * bottom of the page. With nothing selected it goes at the end.
+ *
+ * A row is the exception: it cannot nest inside a column, so it goes to the
+ * end of the canvas rather than silently not appearing.
+ */
+export function addTarget(blocks: Block[], selectedId: string | null, type: BlockType): DropTarget {
+  const found = selectedId ? findBlock(blocks, selectedId) : null;
+  if (!found) return { zone: "root", index: blocks.length };
+  if (found.parentId !== null) {
+    if (type === "row") return { zone: "root", index: blocks.length };
+    return { zone: "column", rowId: found.parentId, column: found.column ?? 0, index: found.index + 1 };
+  }
+  return { zone: "root", index: found.index + 1 };
 }

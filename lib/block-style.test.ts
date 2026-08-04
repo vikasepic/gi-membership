@@ -190,3 +190,26 @@ describe("hiddenClasses", () => {
     expect(hiddenClasses(s).split(" ").sort()).toEqual(["lg:hidden", "max-md:hidden"]);
   });
 });
+
+describe("colours that come from props are validated", () => {
+  const iconlist = (iconColor: unknown): Block => {
+    const b = newBlock("iconlist");
+    return { ...b, props: { ...b.props, iconColor } };
+  };
+
+  it("uses an icon colour someone chose", () => {
+    expect(blockColors(iconlist("#008060"), paper).accent).toBe("#008060");
+  });
+
+  it("falls back to the band accent when unset", () => {
+    expect(blockColors(iconlist(null), navy).accent).toBe(navy.accent);
+  });
+
+  it("refuses anything that is not a hex value", () => {
+    // props are not schema-checked the way style is, and this lands in a style
+    // attribute.
+    for (const junk of ["red;background:url(x)", "javascript:1", 42, {}, "expression(alert(1))"]) {
+      expect(blockColors(iconlist(junk), paper).accent).toBe(paper.accent);
+    }
+  });
+});

@@ -1,3 +1,5 @@
+import { Blocks } from "@/components/page/blocks";
+import { normalizeBlocks } from "@/lib/blocks";
 import {
   buildSectionView,
   isSectionEmpty,
@@ -34,7 +36,14 @@ export type PageMoney = {
 function Band({ view, children }: { view: SectionView; children: React.ReactNode }) {
   return (
     <section className="@container px-6 py-12 md:py-16" style={{ background: view.theme.bg, color: view.theme.fg }}>
-      <div className="mx-auto w-full max-w-[980px]">{children}</div>
+      <div className="mx-auto w-full max-w-[980px]">
+        {children}
+        {/* The block canvas, under the section's typed fields. One place rather
+            than nine, so a section cannot be given blocks and quietly not
+            render them. A section with only blocks is one whose typed fields
+            were left empty. */}
+        <Blocks blocks={normalizeBlocks((view.c as Record<string, unknown>).blocks)} theme={view.theme} />
+      </div>
     </section>
   );
 }

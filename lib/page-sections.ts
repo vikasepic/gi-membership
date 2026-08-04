@@ -553,6 +553,12 @@ export function buildSectionView(row: SectionRow): SectionView | null {
  * the section.
  */
 export function isSectionEmpty(view: SectionView): boolean {
+  // Blocks count as content. A section written entirely on the block canvas
+  // has every typed field empty, and skipping it would delete the page.
+  if (Array.isArray((view.c as Record<string, unknown>).blocks) &&
+      ((view.c as Record<string, unknown>).blocks as unknown[]).length > 0) {
+    return false;
+  }
   const notContent = new Set(["heading", "ctaLabel", "totalLabel"]);
   for (const f of view.def.fields) {
     if (notContent.has(f.key)) continue;

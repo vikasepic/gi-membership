@@ -62,6 +62,16 @@ export type BlockColors = {
   rule: string;
 };
 
+/**
+ * A colour from `props`, or null.
+ *
+ * Style values are validated by normalizeBlocks; props are not, because they
+ * differ per block type. Anything from props that reaches a style attribute
+ * therefore gets checked here instead.
+ */
+export const hexOrNull = (v: unknown): string | null =>
+  typeof v === "string" && /^#[0-9a-f]{3,8}$/i.test(v.trim()) ? v.trim() : null;
+
 export function blockColors(block: Block, theme: BandTheme): BlockColors {
   const s = block.style;
   switch (block.type) {
@@ -89,7 +99,13 @@ export function blockColors(block: Block, theme: BandTheme): BlockColors {
     case "divider":
       return { fg: s.color ?? theme.rule, fill: theme.panel, onFill: theme.fg, accent: theme.accent, rule: s.color ?? theme.rule };
     case "iconlist":
-      return { fg: s.color ?? theme.fg, fill: theme.panel, onFill: theme.fg, accent: theme.accent, rule: theme.rule };
+      return {
+        fg: s.color ?? theme.fg,
+        fill: theme.panel,
+        onFill: theme.fg,
+        accent: hexOrNull(block.props.iconColor) ?? theme.accent,
+        rule: theme.rule,
+      };
     default:
       return {
         fg: s.color ?? theme.fg,

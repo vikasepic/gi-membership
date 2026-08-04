@@ -64,6 +64,18 @@ function BlockNode({ block, theme }: { block: Block; theme: BandTheme }) {
   );
 }
 
+/**
+ * One block's content, with no wrapper.
+ *
+ * Exported so the editor canvas shows the real thing rather than a mock-up of
+ * it. The editor supplies its own wrapper because it has to add selection
+ * chrome and drop zones, but what is inside is this — one implementation, so a
+ * preview cannot drift from the page a buyer gets.
+ */
+export function BlockBody({ block, theme }: { block: Block; theme: BandTheme }) {
+  return <Inner block={block} theme={theme} />;
+}
+
 function Inner({ block, theme }: { block: Block; theme: BandTheme }) {
   const s = block.style;
   const p = block.props;
