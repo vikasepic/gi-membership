@@ -453,7 +453,7 @@ function CanvasBlock({
               Empty {BLOCK_LABEL[block.type].toLowerCase()} — it will not show on the page until you fill it in.
             </p>
           ) : (
-            <Editable block={block} theme={theme} onPatch={onPatch} />
+            <Editable block={block} theme={theme} selected={selected} onPatch={onPatch} />
           )}
         </div>
       </div>
@@ -466,35 +466,46 @@ function CanvasBlock({
 /**
  * Type straight into the canvas for the fields that are plain text.
  *
+ * Editable only once the block is SELECTED. The first click selects it, the
+ * next one puts the caret in — which is how Elementor behaves, and which fixes
+ * the thing that made this feel broken: the wrapper used to swallow every
+ * click to protect the caret, so clicking a heading did nothing at all. Its
+ * controls never opened, and it looked like the canvas was dead.
+ *
  * The value is written back on blur rather than on every keystroke: a state
- * change during typing re-renders the node and the caret jumps to the start,
- * which is exactly what made this feel broken in the prototype. Rich text stays
- * in the panel, where the editor owns its own selection model.
+ * change during typing re-renders the node and the caret jumps to the start.
+ * Rich text stays in the panel, where that editor owns its own selection.
  */
 function Editable({
   block,
   theme,
+  selected,
   onPatch,
 }: {
   block: Block;
   theme: BandTheme;
+  selected: boolean;
   onPatch: (id: string, next: Block) => void;
 }) {
-  const key = block.type === "heading" ? "text" : block.type === "button" ? "text" : null;
+  const key = block.type === "heading" || block.type === "button" ? "text" : null;
   if (!key) return <BlockBody block={block} theme={theme} />;
+  if (!selected) return <BlockBody block={block} theme={theme} />;
   return (
     <div
       contentEditable
       suppressContentEditableWarning
       data-edit={key}
+      title="Click to type"
       onBlur={(e) => {
         const next = e.currentTarget.textContent ?? "";
         if (next !== block.props[key]) {
           onPatch(block.id, { ...block, props: { ...block.props, [key]: next } });
         }
       }}
+      // Only now, once it is the selected block: re-selecting it would
+      // re-render the node and take the caret with it.
       onClick={(e) => e.stopPropagation()}
-      className="outline-none"
+      className="cursor-text outline-none"
     >
       <BlockBody block={block} theme={theme} />
     </div>

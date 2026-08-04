@@ -41,7 +41,13 @@ const HEADING_SIZE: Record<HeadingTag, string> = {
  * Passed down rather than typed into the block, so the only figure a buyer sees
  * is the one the offer actually charges.
  */
-export type BlockMoney = { priceLabel?: string | null; termsLabel?: string | null };
+export type BlockMoney = {
+  /** What it costs — the recurring charge for a subscription, not today's. */
+  priceLabel?: string | null;
+  termsLabel?: string | null;
+  /** What is taken today, where that differs. */
+  dueNowLabel?: string | null;
+};
 
 /**
  * The page's own buy control.
