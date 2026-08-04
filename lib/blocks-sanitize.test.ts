@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { sanitizeBlockHtml, sanitizeBlocks, sanitizeSectionContent } from "@/lib/sanitize-html";
+import { sanitizeBlockHtml, sanitizeBlocks, sanitizeIcon, sanitizeSectionContent } from "@/lib/sanitize-html";
 import { newBlock, normalizeBlocks, type Block } from "@/lib/blocks";
 
 const html = (code: string): Block => ({ ...newBlock("html"), props: { code } });
@@ -135,5 +135,46 @@ describe("sanitizeSectionContent", () => {
     // dropped, or dropped and then rendered.
     const out = sanitizeSectionContent({ blocks: [text("<p>a</p>"), newBlock("row")] });
     expect(normalizeBlocks(out.blocks)).toEqual(out.blocks);
+  });
+});
+
+describe("sanitizeIcon", () => {
+  it("keeps a plain inline SVG", () => {
+    const out = sanitizeIcon('<svg viewBox="0 0 24 24"><path d="M4 10l4 4 8-9" stroke="currentColor"/></svg>');
+    expect(out).toContain("<svg");
+    expect(out).toContain('d="M4 10l4 4 8-9"');
+    expect(out).toContain("viewBox");
+  });
+
+  it("strips anything that executes", () => {
+    for (const bad of [
+      '<svg onload="steal()"><path d="M1 1"/></svg>',
+      '<svg><script>steal()</script><path d="M1 1"/></svg>',
+      '<svg><foreignObject><iframe src="//evil"></iframe></foreignObject></svg>',
+      '<svg><a href="javascript:steal()"><path d="M1 1"/></a></svg>',
+    ]) {
+      const out = sanitizeIcon(bad);
+      expect(out).not.toMatch(/script|iframe|foreignObject|onload|javascript:/i);
+      expect(out).toContain("<svg");
+    }
+  });
+
+  it("takes a plain https URL", () => {
+    expect(sanitizeIcon("https://x.test/logo.svg")).toBe("https://x.test/logo.svg");
+  });
+
+  it("refuses a URL carrying quotes or angle brackets", () => {
+    expect(sanitizeIcon('https://x.test/a.svg" onerror="steal()')).toBe("");
+  });
+
+  it("cleans icons inside a cards block", () => {
+    const cards = { ...newBlock("cards"), props: { items: [{ title: "a", body: "", icon: '<svg onload="x"><path d="M1 1"/></svg>' }] } };
+    const out = sanitizeBlocks([cards]);
+    expect(JSON.stringify(out)).not.toContain("onload");
+  });
+
+  it("returns nothing for nothing", () => {
+    expect(sanitizeIcon("")).toBe("");
+    expect(sanitizeIcon("   ")).toBe("");
   });
 });

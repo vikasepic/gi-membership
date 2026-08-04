@@ -6,17 +6,14 @@ import { SectionBand, type PageMoney } from "@/components/page/sales-page";
 import {
   BAND_STYLES,
   BAND_STYLE_KEYS,
-  imageSrc,
   sectionDef,
-  type FieldDef,
   type SectionRow,
-  bandTheme,
+  buildSectionView,
   type BandStyleKey,
 } from "@/lib/page-sections";
-import { inputClass } from "@/components/admin/form-controls";
-import { RichText } from "@/components/editor/rich-text";
 import { BlockEditor } from "@/components/admin/block-editor";
-import { normalizeBlocks } from "@/lib/blocks";
+import { blocksForSection, isUnconverted } from "@/lib/section-to-blocks";
+import type { Block } from "@/lib/blocks";
 import type { OwnerType } from "@/lib/pages";
 
 // The page editor.
@@ -30,10 +27,6 @@ import type { OwnerType } from "@/lib/pages";
 // notices until it is already wrong in production.
 
 type Draft = Record<string, unknown>;
-
-function listRows(value: unknown): Record<string, string>[] {
-  return Array.isArray(value) ? (value as Record<string, string>[]) : [];
-}
 
 /**
  * Preview widths.
@@ -283,22 +276,16 @@ function SectionPanel({
           {def.purpose}
         </p>
 
-        {def.fields.map((f) => (
-          <Field
-            key={f.key}
-            def={f}
-            value={content[f.key]}
-            onChange={(v) => setField(f.key, v)}
-            ownerType={ownerType}
-            ownerId={ownerId}
-          />
-        ))}
-
+        {/* One editor. The typed fields were a form; this is the editor. A
+            section that has never been opened here converts its stored fields
+            into blocks on the way in, so nothing is retyped — see
+            sectionToBlocks. Nothing is written until Save. */}
         <BlockCanvasField
-          blocks={normalizeBlocks(content.blocks)}
-          theme={bandTheme(row.style, row.accent)}
+          row={row}
           title={`${def.n} · ${def.title}`}
           onChange={(next) => setField("blocks", next)}
+          ownerType={ownerType}
+          ownerId={ownerId}
         />
 
         {def.variants && (
@@ -411,113 +398,6 @@ function SectionPanel({
 }
 
 /**
- * Grow a textarea to fit what is in it.
- *
- * A fixed row count clipped the pre-head — three lines of copy in a two-row
- * box, with the first line scrolled out of sight behind the label. Copy fields
- * hold whatever the writer needs them to; the box should follow.
- */
-function rowsFor(value: string, min: number) {
-  const lines = value.split("\n").reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 46)), 0);
-  return Math.min(Math.max(lines, min), 14);
-}
-
-/** Label above, hint beneath it — not run together in one wrapping sentence. */
-function Label({ text, hint }: { text: string; hint?: string }) {
-  return (
-    <span className="flex flex-col gap-0.5">
-      <span className="text-sm font-medium">{text}</span>
-      {hint && <span className="text-xs leading-snug text-muted">{hint}</span>}
-    </span>
-  );
-}
-
-function ImageField({
-  def,
-  value,
-  onChange,
-  ownerType,
-  ownerId,
-}: {
-  def: Extract<FieldDef, { kind: "image" }>;
-  value: unknown;
-  onChange: (v: unknown) => void;
-  ownerType: OwnerType;
-  ownerId: string;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const text = typeof value === "string" ? value : "";
-  const src = imageSrc(text);
-
-  async function pick(file: File | undefined) {
-    if (!file) return;
-    setBusy(true);
-    setError(null);
-    const fd = new FormData();
-    fd.append("ownerType", ownerType);
-    fd.append("ownerId", ownerId);
-    fd.append("file", file);
-    const res = await uploadSectionImageAction(fd);
-    setBusy(false);
-    if (res.error || !res.path) {
-      setError(res.error ?? "Upload failed.");
-      return;
-    }
-    // Into the draft, not straight to the row: the section's own Save owns
-    // persistence, and an image that appeared before Save would be the one
-    // thing on this screen that behaved differently from everything else.
-    onChange(res.path);
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      <Label text={def.label} hint={def.hint} />
-      {src && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={src}
-          alt=""
-          className="aspect-[4/3] w-full max-w-48 rounded-xl border border-border object-cover"
-        />
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="cursor-pointer rounded-full border border-border px-3.5 py-1.5 text-xs transition-colors hover:border-fg">
-          {busy ? "Uploading…" : src ? "Replace" : "Upload an image"}
-          <input
-            type="file"
-            accept="image/*"
-            className="sr-only"
-            disabled={busy}
-            onChange={(e) => {
-              void pick(e.target.files?.[0]);
-              e.target.value = "";
-            }}
-          />
-        </label>
-        {src && (
-          <button
-            type="button"
-            onClick={() => onChange("")}
-            className="text-xs text-muted underline-offset-4 hover:text-fg hover:underline"
-          >
-            Remove
-          </button>
-        )}
-        <span className="text-xs text-muted">PNG or JPG, up to 5MB</span>
-      </div>
-      <input
-        value={text}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="…or paste a URL"
-        className={`${inputClass} font-mono text-xs`}
-      />
-      {error && <span className="text-xs text-primary">{error}</span>}
-    </div>
-  );
-}
-
-/**
  * The block canvas for one section.
  *
  * A launcher rather than an inline canvas: a palette, a canvas and an inspector
@@ -528,156 +408,61 @@ function ImageField({
  * field, so the one Save at the top of the page still covers it.
  */
 function BlockCanvasField({
-  blocks,
-  theme,
+  row,
   title,
-  onChange,
-}: {
-  blocks: ReturnType<typeof normalizeBlocks>;
-  theme: ReturnType<typeof bandTheme>;
-  title: string;
-  onChange: (next: ReturnType<typeof normalizeBlocks>) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="flex flex-col gap-1.5 border-t border-border pt-4">
-      <span className="flex items-baseline justify-between gap-2 text-sm font-medium">
-        Blocks
-        <span className="text-xs font-normal text-muted">
-          {blocks.length === 0 ? "None yet" : `${blocks.length} on the canvas`}
-        </span>
-      </span>
-      <p className="text-xs leading-relaxed text-muted">
-        Anything the fields above cannot say. Blocks render under them, on this
-        section&rsquo;s band — so they follow it if you change the style.
-      </p>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="w-fit rounded-full border border-border px-4 py-1.5 text-sm hover:border-fg"
-      >
-        {blocks.length === 0 ? "Open the builder" : "Edit blocks"}
-      </button>
-      {open && (
-        <BlockEditor
-          blocks={blocks}
-          theme={theme}
-          title={title}
-          onChange={onChange}
-          onClose={() => setOpen(false)}
-        />
-      )}
-    </div>
-  );
-}
-
-function Field({
-  def,
-  value,
   onChange,
   ownerType,
   ownerId,
 }: {
-  def: FieldDef;
-  value: unknown;
-  onChange: (v: unknown) => void;
+  row: SectionRow;
+  title: string;
+  onChange: (next: Block[]) => void;
   ownerType: OwnerType;
   ownerId: string;
 }) {
-  if (def.kind === "image") {
-    return (
-      <ImageField def={def} value={value} onChange={onChange} ownerType={ownerType} ownerId={ownerId} />
-    );
-  }
+  const [open, setOpen] = useState(false);
+  const view = useMemo(() => buildSectionView(row), [row]);
+  // Stored blocks if there are any; otherwise the section's typed content,
+  // converted. That conversion is what makes this one editor rather than two.
+  const blocks = useMemo(() => (view ? blocksForSection(view) : []), [view]);
+  const converted = view ? isUnconverted(view) : false;
 
-  if (def.kind === "richtext") {
-    return (
-      <div className="flex flex-col gap-1.5">
-        <Label text={def.label} hint={def.hint} />
-        {/* Keyed on nothing but the field: RichText holds its own editor state,
-            so remounting it on every keystroke would move the caret. */}
-        <RichText
-          value={typeof value === "string" ? value : ""}
-          onChange={(html) => onChange(html)}
-        />
-      </div>
-    );
-  }
-
-  if (def.kind === "list") {
-    const rows = listRows(value);
-    return (
-      <div className="flex flex-col gap-2">
-        <Label text={def.label} hint={def.hint} />
-        {rows.map((r, i) => (
-          <div key={i} className="rounded-xl border border-border bg-surface-2/40 p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="font-mono text-[0.7rem] text-muted">
-                {def.label} {i + 1}
-              </span>
-              <button
-                type="button"
-                aria-label={`Remove ${def.label} ${i + 1}`}
-                onClick={() => onChange(rows.filter((_, j) => j !== i))}
-                className="rounded px-1.5 text-sm text-muted hover:text-primary"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex flex-col gap-2">
-              {def.item.map((sub) => {
-                const v = r[sub.key] ?? "";
-                const set = (nv: string) =>
-                  onChange(rows.map((x, j) => (j === i ? { ...x, [sub.key]: nv } : x)));
-                return (
-                  <label key={sub.key} className="flex flex-col gap-1">
-                    {/* Named, not just placeheld: a placeholder disappears the
-                        moment there is content, and then nothing says which of
-                        three stacked boxes is which. */}
-                    <span className="text-[0.7rem] font-medium uppercase tracking-wide text-muted">
-                      {sub.label}
-                    </span>
-                    {sub.kind === "textarea" ? (
-                      <textarea
-                        rows={rowsFor(v, 2)}
-                        value={v}
-                        onChange={(e) => set(e.target.value)}
-                        className={inputClass}
-                      />
-                    ) : (
-                      <input value={v} onChange={(e) => set(e.target.value)} className={inputClass} />
-                    )}
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => onChange([...rows, Object.fromEntries(def.item.map((s) => [s.key, ""]))])}
-          className="w-fit rounded-full border border-dashed border-border px-3 py-1 text-xs text-muted transition-colors hover:border-fg hover:text-fg"
-        >
-          + {def.addLabel}
-        </button>
-      </div>
-    );
-  }
-
-  const text = typeof value === "string" ? value : "";
   return (
-    <label className="flex flex-col gap-1.5">
-      <Label text={def.label} hint={def.hint} />
-      {def.kind === "textarea" ? (
-        <textarea
-          rows={rowsFor(text, def.rows ?? 3)}
-          value={text}
-          onChange={(e) => onChange(e.target.value)}
-          className={inputClass}
+    <div className="flex flex-col gap-1.5">
+      <span className="flex items-baseline justify-between gap-2 text-sm font-medium">
+        Content
+        <span className="text-xs font-normal text-muted">
+          {blocks.length === 0 ? "Empty" : `${blocks.length} block${blocks.length === 1 ? "" : "s"}`}
+        </span>
+      </span>
+      <p className="text-xs leading-relaxed text-muted">
+        {converted && blocks.length > 0
+          ? "Built from what this section already had. Nothing is changed until you save."
+          : "Everything in this band, as blocks — drag, duplicate and restyle any of it."}
+      </p>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-fit rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg hover:bg-primary-hover"
+      >
+        {blocks.length === 0 ? "Start building" : "Edit this section"}
+      </button>
+      {open && view && (
+        <BlockEditor
+          blocks={blocks}
+          theme={view.theme}
+          title={title}
+          onChange={onChange}
+          onClose={() => setOpen(false)}
+          uploadImage={async (file) => {
+            const fd = new FormData();
+            fd.append("ownerType", ownerType);
+            fd.append("ownerId", ownerId);
+            fd.append("file", file);
+            return uploadSectionImageAction(fd);
+          }}
         />
-      ) : (
-        <input value={text} onChange={(e) => onChange(e.target.value)} className={inputClass} />
       )}
-    </label>
+    </div>
   );
 }

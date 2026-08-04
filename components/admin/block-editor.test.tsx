@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BlockEditor } from "@/components/admin/block-editor";
+import { BlockEditor, ImageControl } from "@/components/admin/block-editor";
 import { bandTheme } from "@/lib/page-sections";
 import { PALETTE, BLOCK_LABEL } from "@/lib/block-controls";
 import { addTarget, edgeIndex, insertBlock, moveBlock, newBlock, type Block } from "@/lib/blocks";
@@ -158,5 +158,33 @@ describe("dragging a block that is already on the canvas", () => {
     const out = moveBlock([row], kid.id, { zone: "root", index: 0 });
     expect(out[0].id).toBe(kid.id);
     expect(out[1].columns![0]).toEqual([]);
+  });
+});
+
+describe("the image control keeps upload alive", () => {
+  // Removing the typed form would otherwise have taken image upload with it —
+  // the only way to get a file onto a page.
+  const render1 = (props: Partial<React.ComponentProps<typeof ImageControl>> = {}) =>
+    renderToStaticMarkup(
+      <ImageControl label={<span>Image</span>} value="" onChange={() => {}} {...props} />,
+    );
+
+  it("offers an upload when an uploader is wired", () => {
+    const out = render1({ uploadImage: async () => ({ path: "x" }) });
+    expect(out).toContain('type="file"');
+    expect(out).toContain('accept="image/*"');
+  });
+
+  it("takes a pasted URL either way", () => {
+    expect(render1()).toContain("…or paste a URL");
+    expect(render1({ uploadImage: async () => ({ path: "x" }) })).toContain("…or paste a URL");
+  });
+
+  it("hides the upload button when there is nowhere to upload to", () => {
+    expect(render1()).not.toContain('type="file"');
+  });
+
+  it("previews what is already set", () => {
+    expect(render1({ value: "https://x.test/a.jpg" })).toContain('src="https://x.test/a.jpg"');
   });
 });

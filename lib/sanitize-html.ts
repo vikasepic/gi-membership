@@ -93,6 +93,13 @@ export function sanitizeBlocks(blocks: Block[]): Block[] {
     const props = { ...b.props };
     if (b.type === "text") props.html = sanitizeBodyHtml(String(props.html ?? ""));
     if (b.type === "html") props.code = sanitizeBlockHtml(String(props.code ?? ""));
+    // A card icon is pasted SVG, which is markup someone authored — the same
+    // risk as the HTML block, in a field that does not look like one.
+    if (b.type === "cards" && Array.isArray(props.items)) {
+      props.items = (props.items as Record<string, unknown>[]).map((it) =>
+        typeof it?.icon === "string" ? { ...it, icon: sanitizeIcon(it.icon) } : it,
+      );
+    }
     return {
       ...b,
       props,
@@ -114,4 +121,28 @@ export function sanitizeSectionContent(content: Record<string, unknown>): Record
   if (typeof out.copy === "string") out.copy = sanitizeBodyHtml(out.copy);
   if ("blocks" in out) out.blocks = sanitizeBlocks(normalizeBlocks(out.blocks));
   return out;
+}
+
+/**
+ * A pasted icon: an inline SVG, or a URL.
+ *
+ * Scripts, handlers and anything that can fetch come out. An SVG is markup, and
+ * a file someone uploads is a file someone authored.
+ */
+export function sanitizeIcon(dirty: string): string {
+  const v = (dirty ?? "").trim();
+  if (!v) return "";
+  if (/^https?:\/\//i.test(v)) return /["'<>\s]/.test(v) ? "" : v;
+  return sanitize(v, {
+    allowedTags: ["svg", "path", "g", "circle", "rect", "line", "polyline", "polygon", "ellipse", "defs", "title"],
+    allowedAttributes: {
+      "*": [
+        "viewBox", "viewbox", "fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin",
+        "d", "cx", "cy", "r", "x", "y", "x1", "y1", "x2", "y2", "rx", "ry", "width", "height",
+        "points", "transform", "opacity", "fill-rule", "clip-rule",
+      ],
+    },
+    allowedSchemes: [],
+    parser: { lowerCaseAttributeNames: false },
+  });
 }

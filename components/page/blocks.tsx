@@ -1,7 +1,8 @@
 import { ROW_STRUCTURES, blockRendersNothing, type Block, type RowStructure } from "@/lib/blocks";
-import { blockColors, blockWrapperCss, hiddenClasses, typographyCss } from "@/lib/block-style";
+import { blockColors, blockWrapperCss, hiddenClasses, softAccent, typographyCss } from "@/lib/block-style";
 import { imageSrc, type BandTheme } from "@/lib/page-sections";
 import { videoEmbed, type VideoSource } from "@/lib/video-embed";
+import { readableInk as readableOn } from "@/lib/color";
 
 // The block canvas, rendered for a buyer.
 //
@@ -26,27 +27,59 @@ const headingTag = (v: unknown): HeadingTag =>
 
 /** Sizes for a heading level, used only when the block sets none of its own. */
 const HEADING_SIZE: Record<HeadingTag, string> = {
-  h1: "clamp(1.8rem,4vw,2.9rem)",
-  h2: "clamp(1.3rem,2.4vw,1.8rem)",
-  h3: "1.15rem",
+  h1: "clamp(2.3rem,5.6vw,4.2rem)",
+  h2: "clamp(1.7rem,3.4vw,2.4rem)",
+  h3: "1.12rem",
   h4: "1.02rem",
   h5: "0.94rem",
   h6: "0.84rem",
 };
 
-export function Blocks({ blocks, theme }: { blocks: Block[]; theme: BandTheme }) {
+/**
+ * What a price card is allowed to say.
+ *
+ * Passed down rather than typed into the block, so the only figure a buyer sees
+ * is the one the offer actually charges.
+ */
+export type BlockMoney = { priceLabel?: string | null; termsLabel?: string | null };
+
+export function Blocks({ blocks, theme, money }: { blocks: Block[]; theme: BandTheme; money?: BlockMoney }) {
   const showing = blocks.filter((b) => !blockRendersNothing(b));
   if (showing.length === 0) return null;
-  return (
-    <div className="mt-7 flex flex-col">
-      {showing.map((b) => (
-        <BlockNode key={b.id} block={b} theme={theme} />
-      ))}
-    </div>
-  );
+  return <div className="mt-7 flex flex-col">{flow(showing, theme, money)}</div>;
 }
 
-function BlockNode({ block, theme }: { block: Block; theme: BandTheme }) {
+/**
+ * Buttons that sit next to each other, sit next to each other.
+ *
+ * A primary and a secondary call to action belong on one line — stacking them
+ * makes the second one look like a second offer. They stay separate blocks, so
+ * each is still selected, dragged and styled on its own; only the rendering
+ * puts a run of them on one row.
+ */
+function flow(blocks: Block[], theme: BandTheme, money?: BlockMoney): React.ReactNode[] {
+  const out: React.ReactNode[] = [];
+  for (let i = 0; i < blocks.length; ) {
+    if (blocks[i].type === "button" && blocks[i + 1]?.type === "button") {
+      let j = i;
+      while (j < blocks.length && blocks[j].type === "button") j++;
+      out.push(
+        <div key={blocks[i].id} className="flex flex-wrap items-center gap-3">
+          {blocks.slice(i, j).map((b) => (
+            <BlockNode key={b.id} block={b} theme={theme} money={money} />
+          ))}
+        </div>,
+      );
+      i = j;
+    } else {
+      out.push(<BlockNode key={blocks[i].id} block={blocks[i]} theme={theme} money={money} />);
+      i++;
+    }
+  }
+  return out;
+}
+
+function BlockNode({ block, theme, money }: { block: Block; theme: BandTheme; money?: BlockMoney }) {
   // An unfilled block would otherwise emit a wrapper carrying its padding and
   // margin — a gap on the page that nobody placed.
   if (blockRendersNothing(block)) return null;
@@ -59,7 +92,7 @@ function BlockNode({ block, theme }: { block: Block; theme: BandTheme }) {
       className={[hidden, s.cssClass].filter(Boolean).join(" ") || undefined}
       style={wrapper}
     >
-      <Inner block={block} theme={theme} />
+      <Inner block={block} theme={theme} money={money} />
     </div>
   );
 }
@@ -76,7 +109,7 @@ export function BlockBody({ block, theme }: { block: Block; theme: BandTheme }) 
   return <Inner block={block} theme={theme} />;
 }
 
-function Inner({ block, theme }: { block: Block; theme: BandTheme }) {
+function Inner({ block, theme, money }: { block: Block; theme: BandTheme; money?: BlockMoney }) {
   const s = block.style;
   const p = block.props;
   const c = blockColors(block, theme);
@@ -194,9 +227,13 @@ function Inner({ block, theme }: { block: Block; theme: BandTheme }) {
     case "button": {
       const label = str(p.text);
       if (!label) return null;
+      // An outline button carries the band's text colour on the band itself,
+      // so it reads as the quieter of the two without needing its own palette.
+      const outline = str(p.variant) === "outline";
       const style: React.CSSProperties = {
-        background: c.fill,
-        color: c.fg,
+        background: outline ? "transparent" : c.fill,
+        color: outline ? theme.fg : c.fg,
+        border: outline ? `1px solid ${theme.rule}` : undefined,
         borderRadius: `${s.radius || 999}px`,
         display: bool(p.fullWidth) ? "block" : "inline-block",
         textAlign: "center",
@@ -290,6 +327,340 @@ function Inner({ block, theme }: { block: Block; theme: BandTheme }) {
       return <div style={{ color: c.fg }} dangerouslySetInnerHTML={{ __html: code }} />;
     }
 
+    case "cards": {
+      const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
+      if (items.length === 0) return null;
+      const across = Math.min(Math.max(num(p.columns, 3), 1), 4);
+      const skin = str(p.skin, "boxed");
+
+      // One card holding compact rows, rather than a stack of separate boxes.
+      // Six boxes down the side of a hero is twice the height of the copy it
+      // is meant to sit beside.
+      // The package panel: a small title, then one rounded row per item, then
+      // an optional note in the same card. Modelled on the reference page —
+      // hairline-separated rows read as a table; these read as a package.
+      if (skin === "list") {
+        const rowStyle: React.CSSProperties = {
+          background: theme.panel,
+          borderRadius: 10,
+          padding: "0.72rem 0.95rem",
+        };
+        return (
+          <div style={{ border: `1px solid ${c.rule}`, borderRadius: 20, padding: "1.35rem" }}>
+            {str(p.title) && (
+              <div
+                className="mb-3 text-[0.68rem] uppercase tracking-[0.13em]"
+                style={{ color: theme.muted }}
+              >
+                {str(p.title)}
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              {items.map((it, i) => (
+                <div key={i} className="flex items-baseline gap-3" style={rowStyle}>
+                  {p.numbered === true && (
+                    <span className="text-[0.72rem] tabular-nums" style={{ color: theme.muted }}>
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                  )}
+                  <span className="min-w-0">
+                    <span style={{ color: c.fg, fontSize: "0.88rem", ...type }}>{str(it.title)}</span>
+                    {str(it.body) && (
+                      <span className="mt-0.5 block text-[0.78rem] leading-snug" style={{ color: theme.muted }}>
+                        {str(it.body)}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {str(p.note) && (
+              <p className="mt-3 text-[0.82rem] leading-relaxed" style={{ ...rowStyle, color: c.fg }}>
+                {str(p.note)}
+              </p>
+            )}
+          </div>
+        );
+      }
+      const numbered = p.numbered === true;
+      const circle = str(p.numberStyle, "eyebrow") === "circle";
+      const inline = str(p.numberStyle, "eyebrow") === "inline";
+      const cell: React.CSSProperties =
+        skin === "boxed"
+          ? { background: c.fill, border: `1px solid ${c.rule}`, borderRadius: 16, padding: "1.35rem 1.4rem" }
+          : skin === "tinted"
+            ? { background: softAccent(theme, 0.12), borderRadius: 3, padding: "1.6rem 1.7rem" }
+            : skin === "bordered"
+              ? { border: `1px solid ${c.rule}`, borderRadius: 16, padding: "1.35rem 1.4rem" }
+              : {};
+
+      // Number before the title, body hanging under the title rather than
+      // under the number. That indent is what makes the number read as a label
+      // on the card instead of part of the sentence.
+      if (inline) {
+        return (
+          <div
+            className="grid grid-cols-1 @xl:grid-cols-[var(--cards)]"
+            style={{ "--cards": `repeat(${across}, minmax(0,1fr))`, gap: "1.6rem" } as React.CSSProperties}
+          >
+            {items.map((it, i) => (
+              <div key={i} style={cell}>
+                <IconTile icon={str(it.icon)} colors={c} />
+                <div className="flex items-baseline gap-2">
+                  {numbered && (
+                    <span className="font-display font-bold tabular-nums" style={{ color: c.accent, fontSize: "1rem" }}>
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                  )}
+                  <h3 className="font-display font-semibold" style={{ color: c.fg, fontSize: "1.02rem", ...type }}>
+                    {str(it.title)}
+                  </h3>
+                </div>
+                <p
+                  className="mt-2 text-[0.9rem] leading-relaxed"
+                  style={{ color: theme.muted, paddingLeft: numbered ? "1.9rem" : 0 }}
+                >
+                  {str(it.body)}
+                </p>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      return (
+        <div
+          className="grid grid-cols-1 @xl:grid-cols-[var(--cards)]"
+          style={{ "--cards": `repeat(${across}, minmax(0,1fr))`, gap: "1rem" } as React.CSSProperties}
+        >
+          {items.map((it, i) => (
+            <div key={i} style={cell}>
+              <IconTile icon={str(it.icon)} colors={c} />
+              {numbered &&
+                (circle ? (
+                  // In the flow, not absolutely positioned. The absolute
+                  // version needed the padding above the title kept in sync
+                  // with the circle by hand, and it drifted — the number sat
+                  // on top of the heading.
+                  <span
+                    className="font-display font-bold"
+                    style={{
+                      width: 38,
+                      height: 38,
+                      marginBottom: ".8rem",
+                      borderRadius: 999,
+                      background: c.accent,
+                      color: readableOn(c.accent),
+                      display: "grid",
+                      placeContent: "center",
+                      fontSize: ".9rem",
+                    }}
+                  >
+                    {i + 1}
+                  </span>
+                ) : (
+                  <span className="font-display text-[0.72rem] font-bold tracking-[0.14em]" style={{ color: c.accent }}>
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                ))}
+              <h3
+                className="font-display font-semibold"
+                style={{
+                  color: c.fg,
+                  fontSize: "1.02rem",
+                  marginTop: numbered && !circle ? ".45rem" : 0,
+                  marginBottom: ".4rem",
+                  ...type,
+                }}
+              >
+                {str(it.title)}
+              </h3>
+              <p className="text-[0.88rem] leading-relaxed" style={{ color: theme.muted }}>
+                {str(it.body)}
+              </p>
+              {str(it.amount) && (
+                <p className="mt-3 font-display font-bold" style={{ color: c.fg, fontSize: "1.05rem" }}>
+                  {str(it.amount)}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    case "stats": {
+      const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
+      if (items.length === 0) return null;
+      const card = str(p.layout) === "card";
+      return card ? (
+        <div className="rounded-2xl px-5" style={{ background: c.fill }}>
+          {items.map((it, i) => (
+            <div key={i} className="py-4" style={i ? { borderTop: `1px solid ${c.rule}` } : undefined}>
+              <div className="text-[0.66rem] uppercase tracking-[0.13em]" style={{ color: theme.muted }}>{str(it.label)}</div>
+              <div className="mt-1 font-display text-[1.3rem] font-bold" style={{ color: c.fg, ...type }}>{str(it.value)}</div>
+              {str(it.detail) && <div className="mt-1 text-[0.8rem] leading-snug" style={{ color: theme.muted }}>{str(it.detail)}</div>}
+            </div>
+          ))}
+        </div>
+      ) : (
+        // Separated by hairlines and hugging the left, the way the model page
+        // sets them. Spread across the whole band they stop reading as a group.
+        <div className="flex flex-wrap items-stretch">
+          {items.map((it, i) => (
+            <div
+              key={i}
+              className="pr-6"
+              style={i ? { borderLeft: `1px solid ${c.rule}`, paddingLeft: "1.5rem" } : undefined}
+            >
+              <div className="font-display text-[1.15rem] font-bold" style={{ color: c.fg, ...type }}>{str(it.value)}</div>
+              <div className="mt-0.5 text-[0.78rem]" style={{ color: theme.muted }}>{str(it.label)}</div>
+              {str(it.detail) && <div className="mt-0.5 text-[0.74rem]" style={{ color: theme.muted }}>{str(it.detail)}</div>}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    case "pricing": {
+      const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
+      const highlight = p.highlightLast !== false;
+      return (
+        <div className="flex flex-col">
+          {items.map((it, i) => {
+            const ours = highlight && i === items.length - 1;
+            return (
+              <div
+                key={i}
+                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3"
+                style={{
+                  borderTop: i ? `1px solid ${c.rule}` : undefined,
+                  background: ours ? c.fill : undefined,
+                  borderRadius: ours ? 12 : undefined,
+                  color: c.fg,
+                  ...type,
+                }}
+              >
+                <span className={ours ? "font-semibold" : undefined}>{str(it.label)}</span>
+                {str(it.note) && <span className="text-[0.8rem]" style={{ color: theme.muted }}>{str(it.note)}</span>}
+                <span className="ml-auto font-display font-bold">{str(it.amount)}</span>
+              </div>
+            );
+          })}
+          {(str(p.totalLabel) || str(p.totalAmount)) && (
+            <div
+              className="flex items-baseline gap-3 px-4 py-3 font-display font-bold"
+              style={{ borderTop: `2px solid ${c.rule}`, color: c.fg }}
+            >
+              <span>{str(p.totalLabel)}</span>
+              <span className="ml-auto">{str(p.totalAmount)}</span>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    case "faq": {
+      const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
+      if (items.length === 0) return null;
+      if (str(p.layout, "accordion") === "open") {
+        return (
+          <div
+            className="grid grid-cols-1 @xl:grid-cols-[var(--faq)]"
+            style={{ "--faq": "repeat(2, minmax(0,1fr))", gap: "1.6rem 2.4rem" } as React.CSSProperties}
+          >
+            {items.map((it, i) => (
+              <div key={i}>
+                <h3 className="font-display font-semibold" style={{ color: c.fg, fontSize: "0.98rem", ...type }}>
+                  {str(it.q)}
+                </h3>
+                <p className="mt-1.5 text-[0.88rem] leading-relaxed" style={{ color: theme.muted }}>
+                  {str(it.a)}
+                </p>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      // <details> rather than a JavaScript accordion: it opens with no client
+      // bundle, it is operable from the keyboard, and it keeps working if the
+      // script never arrives. `name` makes them a group, so opening one closes
+      // the last — which is what stops a long FAQ turning into a wall.
+      return (
+        <div className="flex flex-col">
+          {items.map((it, i) => (
+            <details
+              key={i}
+              name="faq"
+              className="group py-3"
+              style={{ borderTop: i ? `1px solid ${c.rule}` : undefined }}
+            >
+              <summary
+                className="flex cursor-pointer items-start gap-3 font-display font-semibold"
+                style={{ color: c.fg, fontSize: "0.98rem", ...type }}
+              >
+                <span className="min-w-0 flex-1">{str(it.q)}</span>
+                <span
+                  aria-hidden
+                  className="shrink-0 transition-transform group-open:rotate-45"
+                  style={{ color: c.accent, fontSize: "1.15rem", lineHeight: 1.1 }}
+                >
+                  +
+                </span>
+              </summary>
+              <p className="mt-2 max-w-[68ch] text-[0.9rem] leading-relaxed" style={{ color: theme.muted }}>
+                {str(it.a)}
+              </p>
+            </details>
+          ))}
+        </div>
+      );
+    }
+
+    case "pricecard": {
+      // Blank price means the real one. The only money on this page a buyer can
+      // trust is the figure the offer actually charges.
+      const price = str(p.price) || str(money?.priceLabel) || "";
+      const period = str(p.period) || str(money?.termsLabel) || "";
+      if (!price) return null;
+      const ink = readableOn(c.fill);
+      return (
+        <div className="text-center" style={{ background: c.fill, color: ink, borderRadius: 20, padding: "1.9rem 1.6rem" }}>
+          {str(p.eyebrow) && (
+            <div className="text-[0.68rem] uppercase tracking-[0.13em]" style={{ opacity: 0.72 }}>{str(p.eyebrow)}</div>
+          )}
+          <div className="mt-2 font-display font-bold" style={{ fontSize: "2.4rem", lineHeight: 1.05, ...type }}>
+            {price}
+            {period && <span className="font-display font-semibold" style={{ fontSize: "1rem", opacity: 0.8 }}>{period}</span>}
+          </div>
+          {str(p.altPrice) && (
+            <>
+              <div className="mt-1 text-[0.82rem]" style={{ opacity: 0.7 }}>or</div>
+              <div className="font-display font-bold" style={{ fontSize: "1.7rem", lineHeight: 1.1 }}>
+                {str(p.altPrice)}
+                {str(p.altPeriod) && (
+                  <span className="font-display font-semibold" style={{ fontSize: "0.92rem", opacity: 0.8 }}>{str(p.altPeriod)}</span>
+                )}
+              </div>
+            </>
+          )}
+          {str(p.badge) && (
+            <span className="mt-2 inline-block text-[0.7rem] font-semibold"
+              style={{ background: c.accent, color: readableOn(c.accent), borderRadius: 999, padding: "0.16rem 0.6rem" }}>
+              {str(p.badge)}
+            </span>
+          )}
+          {str(p.ctaLabel) && (
+            <span className="mt-4 block w-full px-6 py-3 font-display text-[0.95rem] font-semibold"
+              style={{ background: c.accent, color: readableOn(c.accent), borderRadius: 999 }}>
+              {str(p.ctaLabel)}
+            </span>
+          )}
+          {str(p.note) && <p className="mt-3 text-[0.76rem] leading-snug" style={{ opacity: 0.75 }}>{str(p.note)}</p>}
+          {str(p.secureNote) && <p className="mt-2 text-[0.68rem]" style={{ opacity: 0.6 }}>{str(p.secureNote)}</p>}
+        </div>
+      );
+    }
+
     case "row": {
       const structure = (str(p.structure, "1-1") as RowStructure) in ROW_STRUCTURES
         ? (str(p.structure, "1-1") as RowStructure)
@@ -308,17 +679,39 @@ function Inner({ block, theme }: { block: Block; theme: BandTheme }) {
         >
           {columns.map((col, i) => (
             <div key={i} className="flex min-w-0 flex-col">
-              {col
-                .filter((child) => !blockRendersNothing(child))
-                .map((child) => (
-                  <BlockNode key={child.id} block={child} theme={theme} />
-                ))}
+              {flow(col.filter((child) => !blockRendersNothing(child)), theme, money)}
             </div>
           ))}
         </div>
       );
     }
   }
+}
+
+/**
+ * The filled tile an icon sits in.
+ *
+ * A bare glyph on a tinted card disappears; the reference page gives every one
+ * a solid rounded square, which is what makes a grid of cards scan.
+ */
+function IconTile({ icon, colors }: { icon: string; colors: ReturnType<typeof blockColors> }) {
+  if (!icon.trim()) return null;
+  const isImage = /^https?:\/\//i.test(icon.trim());
+  return (
+    <span
+      aria-hidden
+      className="mb-3 grid place-content-center"
+      style={{ width: 44, height: 44, borderRadius: 11, background: colors.accent, color: readableOn(colors.accent) }}
+    >
+      {isImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={icon.trim()} alt="" style={{ width: 22, height: 22, objectFit: "contain" }} />
+      ) : (
+        // Sanitized on save — see sanitizeBlocks.
+        <span style={{ display: "grid", width: 22, height: 22 }} dangerouslySetInnerHTML={{ __html: icon }} />
+      )}
+    </span>
+  );
 }
 
 function Tick({ color, size }: { color: string; size: number }) {

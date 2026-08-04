@@ -85,7 +85,10 @@ export type SectionKey =
   | "authority"
   | "proof"
   | "value"
-  | "cta";
+  | "guarantee"
+  | "faq"
+  | "cta"
+  | "footer";
 
 export type SectionDef = {
   key: SectionKey;
@@ -107,7 +110,7 @@ const row = (key: string, label: string, kind: "text" | "textarea" = "text"): Su
 export const SECTIONS: SectionDef[] = [
   {
     key: "hero",
-    n: "1",
+    n: "1 + 2",
     title: "Hero",
     purpose:
       "The single outcome, said once, above the fold — then the shortest possible proof that it is believable.",
@@ -129,6 +132,8 @@ export const SECTIONS: SectionDef[] = [
       { kind: "text", key: "ctaSecondary", label: "Second button", hint: "Optional. For the reader who is not ready — “See how it works”. Scrolls down rather than buying." },
       { kind: "text", key: "ctaNote", label: "Line under the button", hint: "The risk removed, in a few words. Only what is actually true of this offer." },
       { kind: "text", key: "audience", label: "Built for", hint: "Who it is for, separated by ·  — e.g. Coaches · Consultants · Course creators." },
+      { kind: "text", key: "packageTitle", label: "Package card title", hint: "The small heading above the deliverables card — e.g. “What you get”." },
+      { kind: "textarea", key: "packageNote", label: "Package card note", rows: 3, hint: "A closing line inside that card. Optional." },
       { kind: "list", key: "facts", label: "Facts card", item: [row("label", "Label"), row("value", "Value"), row("detail", "Detail", "textarea")], addLabel: "Add a fact" },
       { kind: "list", key: "stats", label: "Figures strip", hint: "Sits directly under the hero as a break. Only figures you can stand behind. Leave empty to hide.", item: [row("value", "Figure"), row("label", "Label")], addLabel: "Add a figure" },
       {
@@ -153,43 +158,10 @@ export const SECTIONS: SectionDef[] = [
       ctaSecondary: "",
       ctaNote: "",
       audience: "",
+      packageTitle: "",
+      packageNote: "",
       facts: [],
       stats: [],
-    },
-  },
-  {
-    key: "offer",
-    n: "2",
-    title: "What you get",
-    purpose:
-      "The deliverables, early. A low-ticket page earns the read by showing the package before it argues for it.",
-    shape: "Numbered parts, then an optional value stack. The real price is added for you.",
-    defaultStyle: "paper",
-    fields: [
-      { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
-      { kind: "list", key: "modules", label: "What is inside", hint: "One line per deliverable, in the order they will use them.", item: [row("title", "Name"), row("body", "What it does", "textarea")], addLabel: "Add a part" },
-      { kind: "text", key: "note", label: "Line under the list", hint: "Optional. The one thing about the package worth saying in prose." },
-      { kind: "list", key: "stack", label: "Value stack", hint: "Optional. Your claimed values — the “you pay” line comes from the real price.", item: [row("label", "Line"), row("amount", "Worth")], addLabel: "Add a line" },
-      { kind: "text", key: "totalLabel", label: "Total row label" },
-      { kind: "text", key: "totalAmount", label: "Total worth" },
-      {
-        kind: "richtext",
-        key: "copy",
-        label: "Copy",
-        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
-      },
-    ],
-    defaults: {
-      copy: "",
-      heading: "Everything you get",
-      modules: [],
-      note: "",
-      // Amounts ship EMPTY on purpose. A value stack is a claim about what
-      // something is worth, and a default figure is a claim nobody made — it
-      // would go live the first time someone saved the page without reading it.
-      stack: [],
-      totalLabel: "Total value",
-      totalAmount: "",
     },
   },
   {
@@ -233,7 +205,7 @@ export const SECTIONS: SectionDef[] = [
   {
     key: "solution",
     n: "4",
-    title: "How it works",
+    title: "Solution",
     purpose: "What we offer, and why it answers that problem.",
     shape: "Numbered steps for a sequence, or a question grid for the checks it runs.",
     defaultStyle: "sand",
@@ -271,7 +243,7 @@ export const SECTIONS: SectionDef[] = [
   {
     key: "benefits",
     n: "5",
-    title: "What you walk away with",
+    title: "Benefits",
     purpose: "Their week after buying. Outcomes, not features.",
     shape: "Weighted rows, or cards.",
     defaultStyle: "rose",
@@ -281,7 +253,7 @@ export const SECTIONS: SectionDef[] = [
     ],
     fields: [
       { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
-      { kind: "list", key: "items", label: "Outcomes", hint: "What is different for them afterwards. Not what the product contains — that is the section above.", item: [row("title", "Outcome"), row("body", "Detail", "textarea")], addLabel: "Add an outcome" },
+      { kind: "list", key: "items", label: "Outcomes", hint: "What is different for them afterwards. Not what the product contains — that is the section above.", item: [row("title", "Outcome"), row("body", "Detail", "textarea"), row("icon", "Icon (SVG or image URL)", "textarea")], addLabel: "Add an outcome" },
       {
         kind: "richtext",
         key: "copy",
@@ -296,8 +268,47 @@ export const SECTIONS: SectionDef[] = [
     },
   },
   {
-    key: "authority",
+    key: "offer",
     n: "6",
+    title: "The Offer",
+    purpose:
+      "The deliverables, early. A low-ticket page earns the read by showing the package before it argues for it.",
+    shape: "Numbered parts, then an optional value stack. The real price is added for you.",
+    defaultStyle: "paper",
+    fields: [
+      { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
+      { kind: "list", key: "modules", label: "What is inside", hint: "One line per deliverable, in the order they will use them.", item: [row("title", "Name"), row("body", "What it does", "textarea")], addLabel: "Add a part" },
+      { kind: "text", key: "note", label: "Line under the list", hint: "Optional. The one thing about the package worth saying in prose." },
+      { kind: "list", key: "stack", label: "Value stack", hint: "Optional. Your claimed values — the “you pay” line comes from the real price.", item: [row("label", "Line"), row("amount", "Worth")], addLabel: "Add a line" },
+      { kind: "text", key: "totalLabel", label: "Total row label" },
+      { kind: "text", key: "totalAmount", label: "Total worth" },
+      { kind: "text", key: "ctaLabel", label: "Button", hint: "The stack piles up everything they get right before the button — so there has to be one here." },
+      { kind: "text", key: "ctaNote", label: "Line under the button" },
+      {
+        kind: "richtext",
+        key: "copy",
+        label: "Copy",
+        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
+      },
+    ],
+    defaults: {
+      copy: "",
+      heading: "Everything you get",
+      modules: [],
+      note: "",
+      // Amounts ship EMPTY on purpose. A value stack is a claim about what
+      // something is worth, and a default figure is a claim nobody made — it
+      // would go live the first time someone saved the page without reading it.
+      stack: [],
+      totalLabel: "Total value",
+      totalAmount: "",
+      ctaLabel: "",
+      ctaNote: "",
+    },
+  },
+  {
+    key: "authority",
+    n: "7",
     title: "Authority",
     purpose: "Why you specifically. The reason your experience makes this trustworthy.",
     shape: "Image beside copy, with credibility figures.",
@@ -307,6 +318,8 @@ export const SECTIONS: SectionDef[] = [
       { kind: "textarea", key: "body", label: "Body", hint: "First person. The specific experience that makes the promise credible.", rows: 5 },
       { kind: "image", key: "imageUrl", label: "Image", hint: "Upload a file, or paste a URL if it is hosted elsewhere." },
       { kind: "list", key: "figures", label: "Figures", hint: "Only what you can stand behind, and only what you could evidence if asked.", item: [row("value", "Figure"), row("label", "Label")], addLabel: "Add a figure" },
+      { kind: "text", key: "logosLabel", label: "Logos label", hint: "e.g. “Companies I have built for, or with”." },
+      { kind: "list", key: "logos", label: "Logos", hint: "Only companies you actually worked with, and only where you may use the mark.", item: [row("name", "Name"), row("url", "Image URL")], addLabel: "Add a logo" },
       {
         kind: "richtext",
         key: "copy",
@@ -322,11 +335,13 @@ export const SECTIONS: SectionDef[] = [
       body: "",
       imageUrl: "",
       figures: [],
+      logosLabel: "",
+      logos: [],
     },
   },
   {
     key: "proof",
-    n: "7",
+    n: "8",
     title: "Proof",
     purpose: "Evidence it works. Real quotes, or the mechanism itself until those exist.",
     shape: "One lead quote with two supporting, or the mechanism as proof.",
@@ -345,6 +360,14 @@ export const SECTIONS: SectionDef[] = [
         item: [row("quote", "Quote", "textarea"), row("name", "Name"), row("role", "Role")],
         addLabel: "Add a testimonial",
       },
+      {
+        kind: "list",
+        key: "results",
+        label: "Results",
+        hint: "A case story: what it was, what it became, and over how long. Only outcomes you can evidence.",
+        item: [row("title", "Who / what"), row("before", "Before"), row("after", "After"), row("detail", "Over what period", "textarea")],
+        addLabel: "Add a result",
+      },
       { kind: "list", key: "reasons", label: "Mechanism points", hint: "Used by the “mechanism as proof” layout — for when there are no testimonials yet.", item: [row("title", "Point"), row("body", "Detail", "textarea")], addLabel: "Add a point" },
       { kind: "text", key: "note", label: "Closing line" },
       {
@@ -358,14 +381,15 @@ export const SECTIONS: SectionDef[] = [
       copy: "",
       heading: "Proof it works",
       quotes: [],
+      results: [],
       reasons: [],
       note: "",
     },
   },
   {
     key: "value",
-    n: "8",
-    title: "Value, price, guarantee",
+    n: "9",
+    title: "Value & price",
     purpose: "What the result is worth, then what it costs, then the risk removed.",
     shape: "Comparison columns, a price card, a guarantee, and the questions worth answering.",
     defaultStyle: "plum",
@@ -378,24 +402,29 @@ export const SECTIONS: SectionDef[] = [
       { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
       {
         kind: "list",
+        key: "worth",
+        label: "What the result is worth",
+        hint: "The other half of the definition — what one outcome is worth to them, not just what it would cost elsewhere. Only figures they would recognise.",
+        item: [row("label", "The outcome"), row("amount", "Worth")],
+        addLabel: "Add a line",
+      },
+      {
+        kind: "list",
         key: "options",
-        label: "What it replaces",
+        label: "What it would cost another way",
         hint: "What they would otherwise pay, and to whom. Yours goes last and is highlighted automatically.",
         item: [row("label", "Option"), row("amount", "Cost"), row("note", "Note")],
         addLabel: "Add an option",
       },
       { kind: "list", key: "checklist", label: "Included", hint: "Restated at the price, so the number lands against the list rather than alone.", item: [row("text", "Line")], addLabel: "Add a line" },
       { kind: "text", key: "priceNote", label: "Line under the price" },
-      { kind: "text", key: "guaranteeTitle", label: "Guarantee title" },
-      { kind: "textarea", key: "guaranteeBody", label: "Guarantee", hint: "Only a guarantee you will actually honour. This one is enforceable against you.", rows: 3 },
-      {
-        kind: "list",
-        key: "faqs",
-        label: "Questions",
-        hint: "The objections worth answering before the price lands. Leave empty to hide.",
-        item: [row("q", "Question"), row("a", "Answer", "textarea")],
-        addLabel: "Add a question",
-      },
+      { kind: "text", key: "ctaLabel", label: "Button", hint: "This is where the price is revealed. A price with no way to act on it sends them looking for one." },
+      { kind: "text", key: "ctaNote", label: "Line under the button" },
+      { kind: "text", key: "priceEyebrow", label: "Price card eyebrow", hint: "e.g. “After trial”." },
+      { kind: "text", key: "altPrice", label: "Second price", hint: "e.g. an annual option. Only if it really exists." },
+      { kind: "text", key: "altPeriod", label: "Second price per" },
+      { kind: "text", key: "priceBadge", label: "Price badge", hint: "e.g. “40% off”. Only if it is true." },
+      { kind: "text", key: "secureNote", label: "Security line" },
       {
         kind: "richtext",
         key: "copy",
@@ -409,21 +438,74 @@ export const SECTIONS: SectionDef[] = [
     defaults: {
       copy: "",
       heading: "What it costs",
+      worth: [],
       options: [],
       checklist: [],
       priceNote: "",
-      guaranteeTitle: "",
-      guaranteeBody: "",
-      faqs: [],
+      ctaLabel: "",
+      ctaNote: "",
+      priceEyebrow: "",
+      altPrice: "",
+      altPeriod: "",
+      priceBadge: "",
+      secureNote: "",
     },
   },
   {
-    key: "cta",
+    key: "guarantee",
     n: "9",
+    title: "Guarantee",
+    purpose: "The last move of part nine: remove the final piece of risk, on its own, where it cannot be skimmed past.",
+    shape: "A single panel — the promise, then what it actually means.",
+    defaultStyle: "cream",
+    fields: [
+      { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
+      { kind: "textarea", key: "body", label: "The guarantee", hint: "Only a guarantee you will actually honour. This one is enforceable against you.", rows: 4 },
+      { kind: "list", key: "points", label: "What that means", hint: "The specifics — when they are charged, how they cancel, what they keep.", item: [row("text", "Line")], addLabel: "Add a line" },
+      { kind: "text", key: "note", label: "Closing line" },
+      {
+        kind: "richtext",
+        key: "copy",
+        label: "Copy",
+        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
+      },
+    ],
+    defaults: { copy: "", heading: "", body: "", points: [], note: "" },
+  },
+  {
+    key: "faq",
+    n: "+",
+    title: "FAQ",
+    purpose:
+      "Not one of Ajit's ten parts — an addition, because an objection answered after the price has already cost you the sale.",
+    shape: "Two columns of open questions. An accordion hides the answers, which is the opposite of the point.",
+    defaultStyle: "paper",
+    fields: [
+      { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
+      {
+        kind: "list",
+        key: "faqs",
+        label: "Questions",
+        hint: "The objections worth answering before they decide. Leave empty to hide the section.",
+        item: [row("q", "Question"), row("a", "Answer", "textarea")],
+        addLabel: "Add a question",
+      },
+      {
+        kind: "richtext",
+        key: "copy",
+        label: "Copy",
+        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
+      },
+    ],
+    defaults: { copy: "", heading: "FAQ", faqs: [] },
+  },
+  {
+    key: "cta",
+    n: "10",
     title: "Call to action + warning",
     purpose: "One clear instruction, paired with the cost of doing nothing.",
     shape: "Split — the action against the cost of waiting.",
-    defaultStyle: "paper",
+    defaultStyle: "sand",
     fields: [
       { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
       { kind: "list", key: "checklist", label: "Checklist", hint: "The same lines as the hero. Repetition at the close is the point.", item: [row("text", "Line")], addLabel: "Add a line" },
@@ -447,6 +529,26 @@ export const SECTIONS: SectionDef[] = [
       warningTitle: "",
       warningBody: "",
     },
+  },
+  {
+    key: "footer",
+    n: "+",
+    title: "Footer",
+    purpose: "The legal close. Not persuasion — the lines a buyer needs to find after they have decided.",
+    shape: "A rule, then the mark, the copyright and the links.",
+    defaultStyle: "paper",
+    fields: [
+      { kind: "image", key: "logoUrl", label: "Mark", hint: "Optional." },
+      { kind: "text", key: "note", label: "Copyright line" },
+      { kind: "list", key: "links", label: "Links", hint: "Privacy, terms, refunds — whatever this store is required to show.", item: [row("label", "Label"), row("url", "URL")], addLabel: "Add a link" },
+      {
+        kind: "richtext",
+        key: "copy",
+        label: "Copy",
+        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
+      },
+    ],
+    defaults: { copy: "", logoUrl: "", note: "", links: [] },
   },
 ];
 

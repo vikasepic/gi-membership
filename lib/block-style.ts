@@ -18,7 +18,9 @@ export function dimCss(d: Dim): string {
 export function backgroundCss(bg: Background, theme: BandTheme): CSSProperties {
   if (bg.type === "classic") {
     const css: CSSProperties = {};
-    if (bg.color) css.backgroundColor = bg.color;
+    // null means the band's own panel, the same way a null text colour means
+    // the band's ink — so a boxed panel follows the section it sits in.
+    css.backgroundColor = bg.color ?? theme.panel;
     if (bg.image) {
       // Quotes and backslashes are stripped rather than escaped: this value
       // lands inside url('…'), and the only safe answer to a quote here is
@@ -118,6 +120,7 @@ export function blockColors(block: Block, theme: BandTheme): BlockColors {
 }
 
 export const BLOCK_WIDTH: Record<BlockStyle["width"], string> = {
+  fit: "fit-content",
   narrow: "38ch",
   normal: "62ch",
   wide: "100%",

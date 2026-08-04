@@ -108,6 +108,13 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
     content: [
       { kind: "text", key: "text", label: "Label" },
       { kind: "text", key: "link", label: "Links to", placeholder: "https://…" },
+      {
+        kind: "select",
+        key: "variant",
+        label: "Style",
+        hint: "An outline button is the one for a reader who is not ready yet — it must not compete with the buy.",
+        options: [["solid", "Solid"], ["outline", "Outline"]],
+      },
       { kind: "toggle", key: "fullWidth", label: "Full width" },
     ],
     style: [
@@ -188,6 +195,120 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
     style: [],
   },
 
+  stats: {
+    content: [
+      {
+        kind: "list",
+        key: "items",
+        label: "Figures",
+        hint: "Only figures you can stand behind, and could evidence if asked.",
+        item: [
+          { key: "value", label: "Figure", kind: "text" },
+          { key: "label", label: "Label", kind: "text" },
+          { key: "detail", label: "Detail", kind: "textarea" },
+        ],
+        addLabel: "Add a figure",
+      },
+      { kind: "select", key: "layout", label: "Layout", options: [["strip", "Strip"], ["card", "Stacked card"]] },
+    ],
+    style: [...TYPOGRAPHY],
+  },
+
+  pricing: {
+    content: [
+      {
+        kind: "list",
+        key: "items",
+        label: "Lines",
+        hint: "For a comparison, what they would otherwise pay. For a value stack, what each part is worth.",
+        item: [
+          { key: "label", label: "Line", kind: "text" },
+          { key: "amount", label: "Amount", kind: "text" },
+          { key: "note", label: "Note", kind: "text" },
+        ],
+        addLabel: "Add a line",
+      },
+      { kind: "toggle", key: "highlightLast", label: "Highlight the last line", hint: "For a comparison, where yours goes last." },
+      { kind: "text", key: "totalLabel", label: "Total row" },
+      { kind: "text", key: "totalAmount", label: "Total amount" },
+    ],
+    style: [...TYPOGRAPHY],
+  },
+
+  faq: {
+    content: [
+      {
+        kind: "list",
+        key: "items",
+        label: "Questions",
+        hint: "The objections worth answering before the price lands.",
+        item: [
+          { key: "q", label: "Question", kind: "text" },
+          { key: "a", label: "Answer", kind: "textarea" },
+        ],
+        addLabel: "Add a question",
+      },
+      {
+        kind: "select",
+        key: "layout",
+        label: "Layout",
+        hint: "Closed until asked, or all open in two columns.",
+        options: [["accordion", "Open and close"], ["open", "All open, two columns"]],
+      },
+    ],
+    style: [...TYPOGRAPHY],
+  },
+
+  cards: {
+    content: [
+      {
+        kind: "list",
+        key: "items",
+        label: "Cards",
+        item: [
+          { key: "title", label: "Title", kind: "text" },
+          { key: "body", label: "Body", kind: "textarea" },
+          { key: "amount", label: "Amount", kind: "text" },
+          { key: "icon", label: "Icon (SVG or image URL)", kind: "textarea" },
+        ],
+        addLabel: "Add a card",
+      },
+      { kind: "text", key: "title", label: "Card title", hint: "Only shown by the one-card skin — the small heading above the rows." },
+      { kind: "textarea", key: "note", label: "Closing note", rows: 3, hint: "A panel under the rows, in the same card." },
+      { kind: "number", key: "columns", label: "Across", min: 1, max: 4, step: 1 },
+      {
+        kind: "toggle",
+        key: "numbered",
+        label: "Numbered",
+        hint: "Only when they are a real sequence — numbering a set of alternatives claims an order that is not there.",
+      },
+      {
+        kind: "select",
+        key: "skin",
+        label: "Skin",
+        hint: "Boxed for a set of things, plain for a sequence — a page where every section is boxed reads as one section repeated.",
+        options: [["boxed", "Boxed"], ["tinted", "Tinted"], ["bordered", "Outlined"], ["plain", "Plain"], ["list", "One card, compact rows"]],
+      },
+      { kind: "select", key: "numberStyle", label: "Number", options: [["eyebrow", "Small, above"], ["inline", "Before the title"], ["circle", "Circle"]] },
+    ],
+    style: [...TYPOGRAPHY],
+  },
+
+  pricecard: {
+    content: [
+      { kind: "text", key: "eyebrow", label: "Eyebrow", hint: "e.g. “After trial”." },
+      { kind: "text", key: "price", label: "Price", hint: "Leave empty to show the offer's real price. A typed price is a claim; the offer's price is a fact." },
+      { kind: "text", key: "period", label: "Per", hint: "e.g. “/per month”." },
+      { kind: "text", key: "altPrice", label: "Second price", hint: "e.g. an annual option. Optional." },
+      { kind: "text", key: "altPeriod", label: "Second per" },
+      { kind: "text", key: "badge", label: "Badge", hint: "e.g. “40% off”. Only if it is true." },
+      { kind: "text", key: "ctaLabel", label: "Button" },
+      { kind: "textarea", key: "note", label: "Small print", rows: 2 },
+      { kind: "text", key: "secureNote", label: "Security line" },
+    ],
+    style: [...TYPOGRAPHY],
+  },
+
   row: {
     content: [
       {
@@ -211,7 +332,7 @@ export const ADVANCED_CONTROLS: Control[] = [
   group("Layout"),
   style({ kind: "dim", key: "margin", label: "Margin" }),
   style({ kind: "dim", key: "padding", label: "Padding" }),
-  style({ kind: "select", key: "width", label: "Width", options: [["narrow", "Narrow"], ["normal", "Normal"], ["wide", "Wide"], ["full", "Full"]] }),
+  style({ kind: "select", key: "width", label: "Width", options: [["fit", "Hug content"], ["narrow", "Narrow"], ["normal", "Normal"], ["wide", "Wide"], ["full", "Full"]] }),
   style({ kind: "select", key: "align", label: "Align", options: [["left", "Left"], ["center", "Centre"], ["right", "Right"]] }),
 
   group("Background"),
@@ -304,6 +425,11 @@ export const PALETTE: { type: BlockType; label: string }[] = [
   { type: "iconlist", label: "List" },
   { type: "slides", label: "Slides" },
   { type: "row", label: "Columns" },
+  { type: "cards", label: "Cards" },
+  { type: "stats", label: "Figures" },
+  { type: "pricing", label: "Price table" },
+  { type: "pricecard", label: "Price card" },
+  { type: "faq", label: "FAQ" },
   { type: "spacer", label: "Spacer" },
   { type: "divider", label: "Divider" },
   { type: "html", label: "HTML" },

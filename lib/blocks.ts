@@ -21,6 +21,20 @@ export const BLOCK_TYPES = [
   "divider",
   "html",
   "row",
+  // Added so converting the typed sections is lossless. A facts card, a value
+  // stack, a price comparison and an FAQ are shapes the sections already had;
+  // without blocks that hold them, moving to the builder would have quietly
+  // flattened them into paragraphs.
+  "stats",
+  "pricing",
+  "faq",
+  // A grid of titled cards. Decomposing these into heading + text blocks threw
+  // away the design — the box, the numbered eyebrow, the columns — and left a
+  // sales page reading as a flat column of prose.
+  "cards",
+  // The price panel. It appears twice on the reference page and it is where
+  // the money actually is.
+  "pricecard",
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];
@@ -54,7 +68,7 @@ export type Background = {
 export type BlockStyle = {
   margin: Dim;
   padding: Dim;
-  width: "narrow" | "normal" | "wide" | "full";
+  width: "fit" | "narrow" | "normal" | "wide" | "full";
   align: "left" | "center" | "right";
   size: number | null;
   lineHeight: number | null;
@@ -133,6 +147,7 @@ export const ROW_STRUCTURES = {
   "1-1": [1, 1],
   "1-1-1": [1, 1, 1],
   "1-1-1-1": [1, 1, 1, 1],
+  "3-2": [3, 2],
   "2-1": [2, 1],
   "1-2": [1, 2],
 } as const;
@@ -143,13 +158,30 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   text: { html: "<p>Write something here.</p>" },
   image: { url: "", alt: "", caption: "", link: "", ratio: "16/9", maxWidth: 100 },
   video: { source: "youtube", url: "", poster: "", controls: true, mute: true, autoplay: false, loop: false, ratio: "16/9" },
-  button: { text: "Get instant access", link: "", fullWidth: false },
+  button: { text: "Get instant access", link: "", fullWidth: false, variant: "solid" },
   iconlist: { items: [], layout: "stacked", iconSize: 16, gap: 8, iconColor: null },
   slides: { items: [], skin: "card", perView: 1, arrows: true, dots: true },
   spacer: { height: 40 },
   divider: { thickness: 1, width: 100 },
   html: { code: "" },
   row: { structure: "1-1", verticalAlign: "stretch", gap: 24 },
+  stats: { items: [], layout: "strip" },
+  pricing: { items: [], highlightLast: true, totalLabel: "", totalAmount: "" },
+  faq: { items: [], layout: "accordion" },
+  cards: { items: [], columns: 3, numbered: false, skin: "boxed", numberStyle: "eyebrow", title: "", note: "" },
+  pricecard: {
+    eyebrow: "",
+    // Blank means "use the real price from the offer". A typed price is a
+    // claim; the offer's price is a fact.
+    price: "",
+    period: "",
+    altPrice: "",
+    altPeriod: "",
+    badge: "",
+    ctaLabel: "",
+    note: "",
+    secureNote: "",
+  },
 };
 
 /** A stable id. Prefixed so a malformed id in stored JSON is obvious. */
@@ -230,7 +262,7 @@ function normalizeStyle(v: unknown): BlockStyle {
   return {
     margin: normalizeDim(v.margin, d.margin),
     padding: normalizeDim(v.padding, d.padding),
-    width: oneOf(v.width, ["narrow", "normal", "wide", "full"] as const, d.width),
+    width: oneOf(v.width, ["fit", "narrow", "normal", "wide", "full"] as const, d.width),
     align: oneOf(v.align, ["left", "center", "right"] as const, d.align),
     size: nullableNum(v.size),
     lineHeight: nullableNum(v.lineHeight),
@@ -458,7 +490,15 @@ export function blockRendersNothing(block: Block): boolean {
       return !text(p.text);
     case "iconlist":
     case "slides":
+    case "stats":
+    case "faq":
+    case "cards":
       return list(p.items) === 0;
+    case "pricing":
+      return list(p.items) === 0 && !text(p.totalAmount);
+    // Never empty: it renders the real price even with nothing typed into it.
+    case "pricecard":
+      return false;
     case "row":
       return (block.columns ?? []).every((col) => col.every(blockRendersNothing));
     case "spacer":

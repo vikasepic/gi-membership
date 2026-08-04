@@ -33,7 +33,7 @@ export type PageMoney = {
   termsLabel: string | null;
 };
 
-function Band({ view, children }: { view: SectionView; children: React.ReactNode }) {
+function Band({ view, money, children }: { view: SectionView; money: PageMoney; children: React.ReactNode }) {
   return (
     <section className="@container px-6 py-12 md:py-16" style={{ background: view.theme.bg, color: view.theme.fg }}>
       <div className="mx-auto w-full max-w-[980px]">
@@ -42,7 +42,7 @@ function Band({ view, children }: { view: SectionView; children: React.ReactNode
             than nine, so a section cannot be given blocks and quietly not
             render them. A section with only blocks is one whose typed fields
             were left empty. */}
-        <Blocks blocks={normalizeBlocks((view.c as Record<string, unknown>).blocks)} theme={view.theme} />
+        <Blocks blocks={normalizeBlocks((view.c as Record<string, unknown>).blocks)} theme={view.theme} money={money} />
       </div>
     </section>
   );
@@ -94,7 +94,7 @@ export function SectionBand({
   if (!structural && !carriesPrice && isSectionEmpty(view) && !preview) return null;
   return (
     <>
-      <Band view={view}>{renderOne(view, money, cta, preview)}</Band>
+      <Band view={view} money={money}>{renderOne(view, money, cta, preview)}</Band>
       {view.def.key === "hero" && <HeroStats view={view} />}
     </>
   );

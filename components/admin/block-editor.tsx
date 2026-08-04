@@ -29,6 +29,7 @@ import {
   type DropTarget,
 } from "@/lib/blocks";
 import { blockWrapperCss } from "@/lib/block-style";
+import { imageSrc } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
 
 // The builder.
@@ -47,18 +48,24 @@ type DragPayload = { kind: "new"; type: BlockType } | { kind: "move"; id: string
 const input =
   "w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-fg";
 
+/** Uploads a file and returns the stored path, or an error. */
+export type UploadImage = (file: File) => Promise<{ path?: string; error?: string }>;
+
 export function BlockEditor({
   blocks,
   theme,
   title,
   onChange,
   onClose,
+  uploadImage,
 }: {
   blocks: Block[];
   theme: BandTheme;
   title: string;
   onChange: (next: Block[]) => void;
   onClose: () => void;
+  /** Without this an image block can only take a pasted URL. */
+  uploadImage?: UploadImage;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("content");
@@ -223,6 +230,7 @@ export function BlockEditor({
                       key={`${c.kind}:${c.key}`}
                       control={c}
                       block={selected}
+                      uploadImage={uploadImage}
                       onChange={(v) => patch(selected.id, writeControl(selected, c, v))}
                     />
                   ),
@@ -530,10 +538,12 @@ function ControlField({
   control,
   block,
   onChange,
+  uploadImage,
 }: {
   control: Control;
   block: Block;
   onChange: (v: unknown) => void;
+  uploadImage?: UploadImage;
 }) {
   if (isGroup(control)) return null;
   const value = readControl(block, control);
@@ -546,17 +556,26 @@ function ControlField({
 
   switch (control.kind) {
     case "text":
-    case "image":
       return (
         <label className="flex flex-col gap-1">
           {label}
           <input
             className={input}
             value={typeof value === "string" ? value : ""}
-            placeholder={control.kind === "text" ? control.placeholder : "Paste a URL"}
+            placeholder={control.placeholder}
             onChange={(e) => onChange(e.target.value)}
           />
         </label>
+      );
+
+    case "image":
+      return (
+        <ImageControl
+          label={label}
+          value={typeof value === "string" ? value : ""}
+          onChange={onChange}
+          uploadImage={uploadImage}
+        />
       );
 
     case "textarea":
@@ -756,4 +775,70 @@ function ControlField({
 /** A select's value is a string; the ones that are really numbers come back as numbers. */
 function coerce(v: string): string | number {
   return /^\d+$/.test(v) ? Number(v) : v;
+}
+
+/**
+ * An image: uploaded, or a pasted address.
+ *
+ * The upload writes into the draft rather than straight to the row — the page's
+ * one Save owns persistence, and an image that appeared before Save would be
+ * the only thing on this screen behaving differently from everything else.
+ */
+export function ImageControl({
+  label,
+  value,
+  onChange,
+  uploadImage,
+}: {
+  label: React.ReactNode;
+  value: string;
+  onChange: (v: unknown) => void;
+  uploadImage?: UploadImage;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const src = imageSrc(value);
+
+  async function pick(file: File | undefined) {
+    if (!file || !uploadImage) return;
+    setBusy(true);
+    setError(null);
+    const res = await uploadImage(file);
+    setBusy(false);
+    if (res.error || !res.path) setError(res.error ?? "Upload failed.");
+    else onChange(res.path);
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {label}
+      {src && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={src} alt="" className="aspect-[4/3] w-full rounded-lg border border-border object-cover" />
+      )}
+      {uploadImage && (
+        <label className="w-fit cursor-pointer rounded-full border border-border px-3 py-1 text-xs hover:border-fg">
+          {busy ? "Uploading…" : src ? "Replace" : "Upload"}
+          <input
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            disabled={busy}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              void pick(f);
+            }}
+          />
+        </label>
+      )}
+      <input
+        className={input}
+        value={value}
+        placeholder="…or paste a URL"
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {error && <span className="text-xs text-primary">{error}</span>}
+    </div>
+  );
 }

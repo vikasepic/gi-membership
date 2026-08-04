@@ -47,11 +47,15 @@ describe("heading", () => {
 
   it("changing the tag changes the size — the prototype bug", () => {
     // The tag control appeared to do nothing because the size was hard-set.
-    const h1 = render([make("heading", { tag: "h1" })]);
-    const h3 = render([make("heading", { tag: "h3" })]);
-    expect(h1).not.toBe(h3);
-    expect(h1).toContain("clamp(1.8rem,4vw,2.9rem)");
-    expect(h3).toContain("1.15rem");
+    // Asserted as a relationship rather than exact values, so retuning the
+    // scale does not fail a test about the tag doing something.
+    const sizeOf = (tag: string) =>
+      /font-size:([^;"]+)/.exec(render([make("heading", { tag })]))![1];
+    const sizes = ["h1", "h2", "h3", "h4", "h5", "h6"].map(sizeOf);
+    expect(new Set(sizes).size).toBe(6);
+    expect(sizes[0]).toContain("clamp(");
+    // h6 is a plain rem value; h1 is a clamp that starts well above it.
+    expect(parseFloat(sizes[5])).toBeLessThan(parseFloat(sizes[0].replace("clamp(", "")));
   });
 
   it("an explicit size wins over the tag's scale", () => {
@@ -245,5 +249,70 @@ describe("style is applied", () => {
 
   it("renders a divider using the band hairline", () => {
     expect(render([make("divider")], navy)).toContain(navy.rule);
+  });
+});
+
+describe("adjacent buttons share a line", () => {
+  it("wraps a run of buttons in one row", () => {
+    const out = render([
+      make("button", { text: "Buy" }),
+      make("button", { text: "See how", variant: "outline" }),
+    ]);
+    expect(out).toContain("flex flex-wrap items-center gap-3");
+  });
+
+  it("leaves a single button alone", () => {
+    expect(render([make("button", { text: "Buy" })])).not.toContain("flex flex-wrap items-center gap-3");
+  });
+
+  it("does not join buttons separated by something else", () => {
+    const out = render([
+      make("button", { text: "Buy" }),
+      make("heading", { text: "Between" }),
+      make("button", { text: "Later" }),
+    ]);
+    expect(out).not.toContain("flex flex-wrap items-center gap-3");
+  });
+
+  it("still renders every button's label", () => {
+    const out = render([make("button", { text: "Buy" }), make("button", { text: "See how" })]);
+    expect(out).toContain("Buy");
+    expect(out).toContain("See how");
+  });
+});
+
+describe("the FAQ", () => {
+  const faq = (props: Record<string, unknown>) => render([make("faq", props)]);
+  const items = [{ q: "Refunds?", a: "Yes." }, { q: "Cancel?", a: "One click." }];
+
+  it("opens and closes by default", () => {
+    const out = faq({ items });
+    expect(out).toContain("<details");
+    expect(out).toContain("<summary");
+  });
+
+  it("needs no JavaScript to open", () => {
+    // A <details> works before any bundle arrives and from the keyboard.
+    expect(faq({ items })).not.toContain("onclick");
+  });
+
+  it("groups them, so opening one closes the last", () => {
+    expect(faq({ items })).toContain('name="faq"');
+  });
+
+  it("still shows every question when closed", () => {
+    const out = faq({ items });
+    expect(out).toContain("Refunds?");
+    expect(out).toContain("Cancel?");
+  });
+
+  it("can still be set to all-open in two columns", () => {
+    const out = faq({ items, layout: "open" });
+    expect(out).not.toContain("<details");
+    expect(out).toContain("--faq");
+  });
+
+  it("renders nothing without questions", () => {
+    expect(faq({ items: [] })).toBe("");
   });
 });

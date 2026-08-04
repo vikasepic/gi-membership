@@ -16,24 +16,42 @@ import {
 } from "@/lib/page-sections";
 
 describe("the nine sections", () => {
-  it("runs in the funnel-kit order, with the package before the argument", () => {
+  it("keeps Ajit's ten parts, in his order", () => {
+    // The reference decides how a band LOOKS; the sequence of the argument is
+    // his — I moved the offer up once and had to put it back.
     expect(SECTION_KEYS).toEqual([
       "hero",
-      "offer",
       "problem",
       "solution",
       "benefits",
+      "offer",
       "authority",
       "proof",
       "value",
+      "guarantee",
+      "faq",
       "cta",
+      "footer",
     ]);
-    // The order is the point of the restructure: a low-ticket page shows what
-    // you get immediately after the promise, and only then argues for it.
-    // getPageSections maps over this list, so it orders existing pages too.
-    expect(SECTION_KEYS.indexOf("offer")).toBeLessThan(SECTION_KEYS.indexOf("problem"));
-    expect(sectionDef("hero")!.n).toBe("1");
-    expect(sectionDef("cta")!.n).toBe("9");
+    expect(sectionDef("hero")!.n).toBe("1 + 2");
+    expect(sectionDef("cta")!.n).toBe("10");
+  });
+
+  it("marks what is his and what was added", () => {
+    // The ten parts stay ten. The guarantee is part nine's third move given a
+    // band of its own; the FAQ and the footer are additions and say so.
+    const parts = SECTIONS.filter((d) => d.n !== "+").map((d) => d.n);
+    expect(parts).toEqual(["1 + 2", "3", "4", "5", "6", "7", "8", "9", "9", "10"]);
+    expect(SECTIONS.filter((d) => d.n === "+").map((d) => d.key)).toEqual(["faq", "footer"]);
+  });
+
+  it("never puts two bands with the same ground next to each other", () => {
+    // getPageSections maps over this list, so this order is what a reader
+    // actually walks down. Two identical grounds meeting reads as one long gap.
+    const grounds = SECTIONS.map((d) => d.defaultStyle);
+    for (let i = 1; i < grounds.length; i++) {
+      expect(grounds[i], `${SECTIONS[i - 1].key} -> ${SECTIONS[i].key}`).not.toBe(grounds[i - 1]);
+    }
   });
 
   it("has no duplicate keys", () => {
@@ -151,7 +169,7 @@ describe("what a default is allowed to say", () => {
     ["offer", "stack"], ["offer", "modules"],
     ["authority", "figures"],
     ["proof", "quotes"], ["proof", "reasons"],
-    ["value", "options"], ["value", "faqs"], ["value", "checklist"],
+    ["value", "options"], ["value", "checklist"], ["faq", "faqs"],
     ["cta", "checklist"],
   ] as const;
 
@@ -343,5 +361,43 @@ describe("isSectionEmpty", () => {
 
   it("does not count a list of blank rows as content", () => {
     expect(isSectionEmpty(mk("offer", { modules: [{ title: "", body: "" }] }))).toBe(true);
+  });
+});
+
+describe("every part can do the job its definition gives it", () => {
+  const has = (key: string, field: string) => sectionDef(key)!.fields.some((f) => f.key === field);
+
+  it("keeps Ajit's own names for the parts", () => {
+    // He thinks in these words. Renaming them in the editor makes his own
+    // structure harder for him to navigate.
+    expect(sectionDef("solution")!.title).toBe("Solution");
+    expect(sectionDef("benefits")!.title).toBe("Benefits");
+    expect(sectionDef("offer")!.title).toBe("The Offer");
+  });
+
+  it("puts a button where the stack ends", () => {
+    // "a value stack that piles up everything they get right before the
+    // button" — there was no button in section 6 at all.
+    expect(has("offer", "stack")).toBe(true);
+    expect(has("offer", "ctaLabel")).toBe(true);
+  });
+
+  it("puts a button where the price is revealed", () => {
+    // Section 9 named the price and gave no way to act on it.
+    expect(has("value", "ctaLabel")).toBe(true);
+  });
+
+  it("asks for the CTA to repeat down the page, not appear once", () => {
+    const withButton = SECTIONS.filter((d) => d.fields.some((f) => f.key === "ctaLabel")).map((d) => d.key);
+    expect(withButton).toEqual(["hero", "offer", "value", "cta"]);
+  });
+
+  it("keeps the reframe that puts the problem outside their character", () => {
+    expect(has("problem", "feels")).toBe(true);
+    expect(has("problem", "truth")).toBe(true);
+  });
+
+  it("lets proof stand on the mechanism when there are no reviews yet", () => {
+    expect(sectionDef("proof")!.variants?.map((v) => v.key)).toContain("mechanism");
   });
 });
