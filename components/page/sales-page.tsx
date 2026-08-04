@@ -1,5 +1,6 @@
 import {
   buildSectionView,
+  isSectionEmpty,
   type SectionRow,
   type SectionView,
 } from "@/lib/page-sections";
@@ -76,6 +77,12 @@ export function SectionBand({
 }) {
   const view = buildSectionView(row);
   if (!view) return null;
+  // The hero opens the page and the CTA closes it with the real buy button, so
+  // both stand on their own. Everything between them has to have something to
+  // say, or it is not shown — see isSectionEmpty.
+  const structural = view.def.key === "hero" || view.def.key === "cta";
+  const carriesPrice = view.def.key === "value" && Boolean(money.priceLabel);
+  if (!structural && !carriesPrice && isSectionEmpty(view) && !preview) return null;
   return (
     <>
       <Band view={view}>{renderOne(view, money, cta, preview)}</Band>

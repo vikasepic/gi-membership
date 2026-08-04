@@ -538,6 +538,37 @@ export function buildSectionView(row: SectionRow): SectionView | null {
   };
 }
 
+/**
+ * True when a section has nothing but its heading.
+ *
+ * This is the other half of taking the claims out of the defaults. A default
+ * used to be a paragraph of somebody's sales letter, so an unwritten section
+ * still filled a band; now it falls back to a heading and nothing else, and
+ * publishing that gives a buyer a band reading "Proof it works" that proves
+ * nothing. An unwritten section should be absent, not empty.
+ *
+ * The heading is excluded because every section has one by default, and a
+ * button label is excluded because a button is not an argument — though the
+ * closing CTA is exempt from this check entirely, since there the button IS
+ * the section.
+ */
+export function isSectionEmpty(view: SectionView): boolean {
+  const notContent = new Set(["heading", "ctaLabel", "totalLabel"]);
+  for (const f of view.def.fields) {
+    if (notContent.has(f.key)) continue;
+    const v = view.c[f.key];
+    if (Array.isArray(v)) {
+      if (listOf(v, f.kind === "list" ? f.item.map((i) => i.key) : []).length > 0) return false;
+      continue;
+    }
+    if (typeof v !== "string") continue;
+    // Strip tags first: an empty rich-text editor still stores "<p></p>".
+    const text = f.kind === "richtext" ? v.replace(/<[^>]*>/g, "") : v;
+    if (text.trim()) return false;
+  }
+  return true;
+}
+
 /** The rows a brand-new page starts with. */
 export function defaultRows(): SectionRow[] {
   return SECTIONS.map((def, i) => ({
