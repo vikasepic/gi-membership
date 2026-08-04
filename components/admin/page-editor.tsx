@@ -13,6 +13,7 @@ import {
 } from "@/lib/page-sections";
 import { BlockEditor } from "@/components/admin/block-editor";
 import { blocksForSection, isUnconverted } from "@/lib/section-to-blocks";
+import { starterBlocks } from "@/lib/page-starter";
 import type { Block } from "@/lib/blocks";
 import type { OwnerType } from "@/lib/pages";
 
@@ -125,6 +126,26 @@ export function PageEditor({
     setDirty((d) => ({ ...d, [key]: true }));
   };
 
+  // True only while nothing has been written anywhere on this page — the
+  // starter fills every band at once, and offering it over work someone has
+  // already done would be a button that destroys a page.
+  const pageIsBlank = rows.every((r) => {
+    const v = buildSectionView(r);
+    return !v || blocksForSection(v).length === 0;
+  });
+
+  function fillFromStarter() {
+    const starter = starterBlocks();
+    setRows((rs) =>
+      rs.map((r) => {
+        const blocks = starter[r.sectionKey] ?? [];
+        if (blocks.length === 0) return r;
+        return { ...r, content: { ...(r.content as Record<string, unknown>), blocks } };
+      }),
+    );
+    setDirty(Object.fromEntries(rows.filter((r) => (starter[r.sectionKey] ?? []).length > 0).map((r) => [r.sectionKey, true])));
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="sticky top-2 z-30 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface/95 px-4 py-3 backdrop-blur">
@@ -145,6 +166,16 @@ export function PageEditor({
                 ? "All changes saved."
                 : `${rows.length} sections. Open one to edit it.`}
         </span>
+        {pageIsBlank && (
+          <button
+            type="button"
+            onClick={fillFromStarter}
+            className="rounded-full border border-border px-4 py-2 text-sm hover:border-fg"
+            title="Fills every band with the layout and copy we built against the reference page. Nothing is saved until you press Save."
+          >
+            Start from the template
+          </button>
+        )}
         <div className="ml-auto flex items-center gap-1 rounded-full border border-border p-1">
           {(Object.keys(DEVICES) as Device[]).map((d) => (
             <button
