@@ -391,3 +391,32 @@ describe("a page has to be buyable", () => {
     expect(out).toContain("Start 7 days free");
   });
 });
+
+describe("the price card shows what it costs, not what is due today", () => {
+  // It read "$0" under the words "After the trial" — the wrong number in the
+  // largest type on the page, on a page that takes payment.
+  const card = make("pricecard", { eyebrow: "After the trial", ctaLabel: "Start" });
+
+  it("shows the headline price", () => {
+    const out = renderToStaticMarkup(
+      <Blocks blocks={[card]} theme={paper} money={{ priceLabel: "$29", termsLabel: "/month", dueNowLabel: "$0" }} />,
+    );
+    expect(out).toContain("$29");
+    expect(out).toContain("/month");
+  });
+
+  it("does not put the amount due today in the price", () => {
+    const out = renderToStaticMarkup(
+      <Blocks blocks={[card]} theme={paper} money={{ priceLabel: "$29", termsLabel: "/month", dueNowLabel: "$0" }} />,
+    );
+    const big = out.slice(out.indexOf("2.4rem"), out.indexOf("2.4rem") + 200);
+    expect(big).toContain("$29");
+    expect(big).not.toContain("$0");
+  });
+
+  it("still lets a typed price win, for a card someone overrode deliberately", () => {
+    const typed = make("pricecard", { price: "$99", ctaLabel: "Start" });
+    const out = renderToStaticMarkup(<Blocks blocks={[typed]} theme={paper} money={{ priceLabel: "$29" }} />);
+    expect(out).toContain("$99");
+  });
+});

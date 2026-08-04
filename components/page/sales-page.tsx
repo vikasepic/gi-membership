@@ -15,10 +15,19 @@ import { buildSectionView, type SectionRow, type SectionView } from "@/lib/page-
 // so nothing needed migrating and nothing was lost.
 
 export type PageMoney = {
-  /** The real charge, formatted. Never typed by an admin. */
+  /**
+   * The headline price — what this costs, formatted. For a subscription that
+   * is the recurring charge, not what is taken today: a card reading "$0"
+   * under the words "After the trial" is telling the buyer the wrong number,
+   * which is what it did until this was split.
+   *
+   * Never typed by an admin.
+   */
   priceLabel: string | null;
   /** e.g. "/month". */
   termsLabel: string | null;
+  /** What is actually taken today, where that differs — "$0" during a trial. */
+  dueNowLabel?: string | null;
 };
 
 export type { CtaRender } from "@/components/page/blocks";

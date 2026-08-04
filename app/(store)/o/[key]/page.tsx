@@ -6,6 +6,7 @@ import { ownershipFor } from "@/lib/checkout";
 import { isOfferEligible } from "@/lib/offers";
 import { hasPageSections, getPageSections } from "@/lib/pages";
 import { SalesPage } from "@/components/page/sales-page";
+import { money } from "@/lib/money";
 import { buildBumpView } from "@/lib/bump";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +44,13 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
     <div className="mx-[calc(50%-50vw)] w-screen overflow-x-clip">
       <SalesPage
         rows={rows}
-        money={{ priceLabel: view.nowLabel, termsLabel: view.termsLabel }}
+        money={{
+          // The headline price, not the charge today. During a trial those
+          // differ, and the card says "After the trial" above it.
+          priceLabel: money(offer.priceCents, offer.currency),
+          termsLabel: offer.interval ? `/${offer.interval}` : null,
+          dueNowLabel: view.nowLabel,
+        }}
         cta={(label) =>
           alreadyHas ? (
             <Link

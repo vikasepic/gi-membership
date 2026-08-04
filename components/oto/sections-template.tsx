@@ -22,8 +22,11 @@ export function SectionsOto({ view, rows }: { view: OtoView; rows: SectionRow[] 
       <SalesPage
         rows={rows}
         money={{
-          priceLabel,
+          // The headline price. `priceLabel` here was the charge-now figure,
+          // which is $0 through a trial — see PageMoney.
+          priceLabel: money(offer.priceCents, offer.currency),
           termsLabel: offer.interval ? `/${offer.interval}` : null,
+          dueNowLabel: priceLabel,
         }}
         cta={(label) => (
           <OtoActions
