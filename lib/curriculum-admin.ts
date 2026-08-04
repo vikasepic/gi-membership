@@ -150,3 +150,51 @@ export async function removeAttachment(itemId: string, path: string): Promise<vo
   if (error) throw new Error(`removeAttachment: ${error.message}`);
   await db.storage.from("paid-assets").remove([path]);
 }
+
+/**
+ * Move an item to a position, optionally under a different chapter.
+ *
+ * One database call, because sibling order is protected by a unique index and
+ * a unique index is checked per statement — renumbering a list from the app
+ * collides with itself part way through. See 0028_move_course_item.sql.
+ */
+export async function moveItemTo(
+  itemId: string,
+  parentId: string | null,
+  index: number,
+): Promise<void> {
+  if (!Number.isInteger(index) || index < 0) throw new Error("moveItemTo: bad index");
+  const db = createServiceClient();
+  const { error } = await db.rpc("move_course_item", {
+    p_item: itemId,
+    p_new_parent: parentId,
+    p_index: index,
+  });
+  if (error) throw new Error(`moveItemTo: ${error.message}`);
+}
+
+/**
+ * Publish or unpublish one item.
+ *
+ * Separate from updateItem because the curriculum screen toggles this from a
+ * row, and routing that through the full save would post every other field of
+ * a lesson nobody opened — quietly overwriting whatever someone else changed.
+ */
+export async function setItemPublished(itemId: string, isPublished: boolean): Promise<void> {
+  const db = createServiceClient();
+  const { error } = await db
+    .from("course_items")
+    .update({ is_published: isPublished })
+    .eq("id", itemId);
+  if (error) throw new Error(`setItemPublished: ${error.message}`);
+}
+
+/** Publish or unpublish every lesson in a chapter, and the chapter with them. */
+export async function setChapterPublished(chapterId: string, isPublished: boolean): Promise<void> {
+  const db = createServiceClient();
+  const { error } = await db
+    .from("course_items")
+    .update({ is_published: isPublished })
+    .or(`id.eq.${chapterId},parent_id.eq.${chapterId}`);
+  if (error) throw new Error(`setChapterPublished: ${error.message}`);
+}

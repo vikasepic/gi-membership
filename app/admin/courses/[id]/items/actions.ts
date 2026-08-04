@@ -4,13 +4,16 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/admin-guard";
 import {
-  createItem,
-  moveItem,
-  deleteItem,
-  updateItem,
   addAttachment,
+  createItem,
+  deleteItem,
+  moveItem,
+  moveItemTo,
   removeAttachment,
+  setChapterPublished,
   setCover,
+  setItemPublished,
+  updateItem,
 } from "@/lib/curriculum-admin";
 import { validateUpload, uploadAttachment, uploadCover } from "@/lib/media";
 import type { ItemType } from "@/lib/curriculum";
@@ -161,4 +164,34 @@ export async function uploadItemFileAction(formData: FormData): Promise<ItemUplo
   }
   revalidatePath(`/admin/courses/${courseId}/items/${itemId}`);
   return { ok: true };
+}
+
+/**
+ * Drag to a position, and possibly into another chapter.
+ *
+ * The whole destination order is decided in the browser and the finished
+ * position is sent — rather than a stream of up/down steps, which is what the
+ * buttons did and what made a drag impossible to express.
+ */
+export async function moveItemToAction(formData: FormData) {
+  await requireAdmin();
+  const courseId = String(formData.get("courseId"));
+  const parent = String(formData.get("parentId") ?? "");
+  await moveItemTo(
+    String(formData.get("itemId")),
+    parent === "" ? null : parent,
+    Number(formData.get("index") ?? 0),
+  );
+  revalidatePath(`/admin/courses/${courseId}`);
+}
+
+export async function setPublishedAction(formData: FormData) {
+  await requireAdmin();
+  const courseId = String(formData.get("courseId"));
+  const on = String(formData.get("published")) === "true";
+  const scope = String(formData.get("scope") ?? "item");
+  const itemId = String(formData.get("itemId"));
+  if (scope === "chapter") await setChapterPublished(itemId, on);
+  else await setItemPublished(itemId, on);
+  revalidatePath(`/admin/courses/${courseId}`);
 }
