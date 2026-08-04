@@ -8,7 +8,20 @@ import { useState } from "react";
 
 // Keeps its HTML in a hidden input so the surrounding <form action={serverAction}>
 // submits it like any other field. Output is sanitized server-side on save.
-export function RichText({ name, value }: { name: string; value: string }) {
+/**
+ * `name` posts the HTML in a hidden input, for the forms that still use one.
+ * `onChange` is for editors that hold their own state — the page editor has one
+ * Save for the whole page, so there is no form here to submit.
+ */
+export function RichText({
+  name,
+  value,
+  onChange,
+}: {
+  name?: string;
+  value: string;
+  onChange?: (html: string) => void;
+}) {
   const [html, setHtml] = useState(value ?? "");
   const editor = useEditor({
     immediatelyRender: false,
@@ -18,7 +31,11 @@ export function RichText({ name, value }: { name: string; value: string }) {
       Image,
     ],
     content: value ?? "",
-    onUpdate: ({ editor }) => setHtml(editor.getHTML()),
+    onUpdate: ({ editor }) => {
+      const next = editor.getHTML();
+      setHtml(next);
+      onChange?.(next);
+    },
     editorProps: {
       attributes: {
         class:
@@ -60,7 +77,7 @@ export function RichText({ name, value }: { name: string; value: string }) {
         </Btn>
       </div>
       <EditorContent editor={editor} />
-      <input type="hidden" name={name} value={html} />
+      {name && <input type="hidden" name={name} value={html} />}
     </div>
   );
 }

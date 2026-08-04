@@ -21,6 +21,32 @@ import { tint } from "@/lib/color";
 export type CtaRender = (label: string) => React.ReactNode;
 type P = { view: SectionView; cta?: CtaRender };
 
+/**
+ * The section's own block of writing.
+ *
+ * Every structured field on this page answers a shape someone decided in
+ * advance — steps, chips, stack rows. This one does not: it is a place to write
+ * the argument in whatever form it needs, formatted. Ajit's note was that the
+ * structured pieces are useful but miss the thing that matters most, which is
+ * being able to write and format a chunk of copy.
+ *
+ * A centred column with left-aligned text: centred so the section can carry a
+ * lot of it without running the width of the band, left-aligned because long
+ * prose set centred is hard to read line to line.
+ *
+ * Empty renders nothing, which is what makes it removable.
+ */
+function Copy({ html, t }: { html: string; t: BandTheme }) {
+  if (!html || !html.replace(/<[^>]*>/g, "").trim()) return null;
+  return (
+    <div
+      className="mx-auto mt-7 max-w-[68ch] text-[1rem] leading-relaxed [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_h2]:mt-6 [&_h2]:font-display [&_h2]:text-[1.3rem] [&_h2]:font-semibold [&_h3]:mt-5 [&_h3]:font-display [&_h3]:text-[1.1rem] [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-4 [&_ul]:list-disc [&_ul]:pl-6"
+      style={{ color: t.muted }}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
 function Tick({ color }: { color: string }) {
   return (
     <svg viewBox="0 0 20 20" fill="none" aria-hidden className="mt-[3px] size-[15px] shrink-0" style={{ color }}>
@@ -60,55 +86,89 @@ function Cta({ label, t, render }: { label: string; t: BandTheme; render?: CtaRe
 export function HeroSection({ view, cta }: P) {
   const { c, theme: t } = view;
   const facts = listOf(c.facts, ["label", "value", "detail"]);
+  const bullets = listOf(c.bullets, ["text"]);
   return (
-    <div className="grid grid-cols-1 gap-8 @3xl:grid-cols-[1.2fr_0.8fr] @3xl:gap-12">
-      <div>
-        {textOf(c, "prehead") && (
-          <p className="mb-4 max-w-[52ch] text-[0.92rem] italic" style={{ color: t.muted }}>
-            {textOf(c, "prehead")}
-          </p>
-        )}
-        <h1
-          className="font-display text-[clamp(1.8rem,4vw,2.9rem)] font-semibold leading-[1.1] tracking-[-0.02em] text-balance"
-          style={{ color: t.fg }}
-        >
-          {textOf(c, "headline")}
-        </h1>
-        {textOf(c, "subhead") && (
-          <p className="mt-4 max-w-[58ch] text-[1.02rem] leading-relaxed" style={{ color: t.muted }}>
-            {textOf(c, "subhead")}
-          </p>
-        )}
-        <div className="mt-7">
-          <Cta label={textOf(c, "ctaLabel")} t={t} render={cta} />
+    <>
+      <div className="grid grid-cols-1 gap-8 @3xl:grid-cols-[1.2fr_0.8fr] @3xl:gap-12">
+        <div>
+          {textOf(c, "prehead") && (
+            <p className="mb-4 max-w-[52ch] text-[0.92rem] italic" style={{ color: t.muted }}>
+              {textOf(c, "prehead")}
+            </p>
+          )}
+          <h1
+            className="font-display text-[clamp(1.8rem,4vw,2.9rem)] font-semibold leading-[1.1] tracking-[-0.02em] text-balance"
+            style={{ color: t.fg }}
+          >
+            {textOf(c, "headline")}
+          </h1>
+          {textOf(c, "subhead") && (
+            <p className="mt-4 max-w-[58ch] text-[1.02rem] leading-relaxed" style={{ color: t.muted }}>
+              {textOf(c, "subhead")}
+            </p>
+          )}
+
+          {/* The deliverables, above the fold. A low-ticket page is skimmed
+              before it is read, and this is the list a skimmer stops on. */}
+          {bullets.length > 0 && (
+            <ul className="mt-5 grid grid-cols-1 gap-x-6 gap-y-2 @xl:grid-cols-2">
+              {bullets.map((b, i) => (
+                <li key={i} className="flex items-start gap-2 text-[0.92rem]" style={{ color: t.fg }}>
+                  <Tick color={t.accent} />
+                  <span>{b.text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/* Two buttons, weighted. The second is for the reader who is not
+              ready to buy — without it they leave instead of scrolling. */}
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            <Cta label={textOf(c, "ctaLabel")} t={t} render={cta} />
+            {textOf(c, "ctaSecondary") && (
+              <a
+                href="#how"
+                className="inline-block w-fit rounded-full px-6 py-3 font-display text-[0.95rem] font-semibold"
+                style={{ color: t.fg, border: `1px solid ${t.rule}` }}
+              >
+                {textOf(c, "ctaSecondary")}
+              </a>
+            )}
+          </div>
+          {textOf(c, "ctaNote") && (
+            <p className="mt-3 text-[0.85rem]" style={{ color: t.muted }}>
+              {textOf(c, "ctaNote")}
+            </p>
+          )}
+          {textOf(c, "audience") && (
+            <p className="mt-5 text-[0.8rem] uppercase tracking-[0.09em]" style={{ color: t.muted }}>
+              {textOf(c, "audience")}
+            </p>
+          )}
         </div>
-        {textOf(c, "ctaNote") && (
-          <p className="mt-3 text-[0.85rem]" style={{ color: t.muted }}>
-            {textOf(c, "ctaNote")}
-          </p>
+
+        {facts.length > 0 && (
+          <div className="rounded-2xl px-5" style={{ background: t.panel }}>
+            {facts.map((f, i) => (
+              <div key={i} className="py-4" style={i ? { borderTop: `1px solid ${t.rule}` } : undefined}>
+                <div className="text-[0.66rem] uppercase tracking-[0.13em]" style={{ color: t.muted }}>
+                  {f.label}
+                </div>
+                <div className="mt-1 font-display text-[1.3rem] font-bold" style={{ color: t.fg }}>
+                  {f.value}
+                </div>
+                {f.detail && (
+                  <div className="mt-1 text-[0.8rem] leading-snug" style={{ color: t.muted }}>
+                    {f.detail}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </div>
-
-      {facts.length > 0 && (
-        <div className="rounded-2xl px-5" style={{ background: t.panel }}>
-          {facts.map((f, i) => (
-            <div key={i} className="py-4" style={i ? { borderTop: `1px solid ${t.rule}` } : undefined}>
-              <div className="text-[0.66rem] uppercase tracking-[0.13em]" style={{ color: t.muted }}>
-                {f.label}
-              </div>
-              <div className="mt-1 font-display text-[1.3rem] font-bold" style={{ color: t.fg }}>
-                {f.value}
-              </div>
-              {f.detail && (
-                <div className="mt-1 text-[0.8rem] leading-snug" style={{ color: t.muted }}>
-                  {f.detail}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+      <Copy html={textOf(c, "copy")} t={t} />
+    </>
   );
 }
 
@@ -140,6 +200,7 @@ export function HeroStats({ view }: { view: SectionView }) {
 export function ProblemSection({ view }: P) {
   const { c, theme: t } = view;
   const chips = listOf(c.chips, ["text"]);
+  const traps = listOf(c.traps, ["title", "body"]);
   const feels = textOf(c, "feels");
   const truth = textOf(c, "truth");
   return (
@@ -153,6 +214,34 @@ export function ProblemSection({ view }: P) {
         <p className="mt-3 max-w-[60ch] text-[0.95rem]" style={{ color: t.muted }}>
           {textOf(c, "lead")}
         </p>
+      )}
+
+      {/* The named traps. Numbered because they are alternatives to pick from,
+          not a sequence — a reader is meant to recognise themselves in exactly
+          one and skip the rest. */}
+      {traps.length > 0 && (
+        <div className="mt-7 grid grid-cols-1 gap-4 @2xl:grid-cols-3">
+          {traps.map((trap, i) => (
+            <div
+              key={i}
+              className="rounded-2xl px-5 py-5"
+              style={{ background: t.panel, border: `1px solid ${t.rule}` }}
+            >
+              <span
+                className="font-display text-[0.72rem] font-bold tracking-[0.14em]"
+                style={{ color: t.accent }}
+              >
+                {String(i + 1).padStart(2, "0")}
+              </span>
+              <h3 className="mb-1.5 mt-2 font-display text-[1.02rem] font-semibold" style={{ color: t.fg }}>
+                {trap.title}
+              </h3>
+              <p className="text-[0.88rem] leading-relaxed" style={{ color: t.muted }}>
+                {trap.body}
+              </p>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Their own words, as a group of voices. The previous version alternated
@@ -213,37 +302,66 @@ export function ProblemSection({ view }: P) {
           </div>
         </div>
       )}
+      <Copy html={textOf(c, "copy")} t={t} />
     </div>
   );
 }
 
 // --- 4 --------------------------------------------------------------------
 export function SolutionSection({ view }: P) {
-  const { c, theme: t } = view;
+  const { c, theme: t, variant } = view;
   const steps = listOf(c.steps, ["title", "body"]);
+  // Numbered steps claim a sequence. When the items are checks rather than
+  // stages — "is there a real problem?", "can they actually pay?" — numbering
+  // them says do this first, which is not true and reads as filler.
+  const asQuestions = variant === "questions";
   return (
-    <div>
+    // The hero's second button sends a reader here rather than to the price.
+    <div id="how" className="scroll-mt-20">
       <H t={t}>{textOf(c, "heading")}</H>
-      {steps.length > 0 && (
-        <div className="mt-7 grid grid-cols-1 gap-6 @2xl:grid-cols-3">
-          {steps.map((s, i) => (
-            <div key={i} className="relative pt-11">
-              <span
-                className="absolute left-0 top-0 grid size-9 place-content-center rounded-full font-display text-[0.9rem] font-bold"
-                style={{ background: t.accent, color: t.onAccent }}
-              >
-                {i + 1}
-              </span>
-              <h3 className="mb-1.5 font-display text-[1.02rem] font-semibold" style={{ color: t.fg }}>
-                {s.title}
-              </h3>
-              <p className="text-[0.88rem] leading-relaxed" style={{ color: t.muted }}>
-                {s.body}
-              </p>
-            </div>
-          ))}
-        </div>
+      {textOf(c, "lead") && (
+        <p className="mt-3 max-w-[62ch] text-[0.95rem] leading-relaxed" style={{ color: t.muted }}>
+          {textOf(c, "lead")}
+        </p>
       )}
+      {steps.length > 0 &&
+        (asQuestions ? (
+          <div className="mt-7 grid grid-cols-1 gap-4 @xl:grid-cols-2">
+            {steps.map((s, i) => (
+              <div
+                key={i}
+                className="rounded-2xl px-5 py-4"
+                style={{ background: t.panel, border: `1px solid ${t.rule}` }}
+              >
+                <h3 className="font-display text-[1rem] font-semibold" style={{ color: t.fg }}>
+                  {s.title}
+                </h3>
+                <p className="mt-1.5 text-[0.88rem] leading-relaxed" style={{ color: t.muted }}>
+                  {s.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-7 grid grid-cols-1 gap-6 @2xl:grid-cols-3">
+            {steps.map((s, i) => (
+              <div key={i} className="relative pt-11">
+                <span
+                  className="absolute left-0 top-0 grid size-9 place-content-center rounded-full font-display text-[0.9rem] font-bold"
+                  style={{ background: t.accent, color: t.onAccent }}
+                >
+                  {i + 1}
+                </span>
+                <h3 className="mb-1.5 font-display text-[1.02rem] font-semibold" style={{ color: t.fg }}>
+                  {s.title}
+                </h3>
+                <p className="text-[0.88rem] leading-relaxed" style={{ color: t.muted }}>
+                  {s.body}
+                </p>
+              </div>
+            ))}
+          </div>
+        ))}
       {textOf(c, "result") && (
         <div
           className="mt-7 rounded-xl px-5 py-4 text-[0.95rem] font-semibold"
@@ -252,6 +370,7 @@ export function SolutionSection({ view }: P) {
           {textOf(c, "result")}
         </div>
       )}
+      <Copy html={textOf(c, "copy")} t={t} />
     </div>
   );
 }
@@ -313,6 +432,7 @@ export function BenefitsSection({ view }: P) {
           ))}
         </div>
       )}
+      <Copy html={textOf(c, "copy")} t={t} />
     </div>
   );
 }
@@ -337,6 +457,12 @@ export function OfferSection({ view, priceLabel }: P & { priceLabel?: string | n
             </div>
           ))}
         </div>
+      )}
+
+      {textOf(c, "note") && (
+        <p className="mt-6 max-w-[62ch] text-[0.95rem] leading-relaxed" style={{ color: t.muted }}>
+          {textOf(c, "note")}
+        </p>
       )}
 
       {stack.length > 0 && (
@@ -374,6 +500,7 @@ export function OfferSection({ view, priceLabel }: P & { priceLabel?: string | n
           )}
         </div>
       )}
+      <Copy html={textOf(c, "copy")} t={t} />
     </div>
   );
 }
@@ -384,50 +511,53 @@ export function AuthoritySection({ view }: P) {
   const figures = listOf(c.figures, ["value", "label"]);
   const img = imageSrc(c.imageUrl);
   return (
-    <div className="grid grid-cols-1 items-center gap-8 @3xl:grid-cols-[0.8fr_1.2fr]">
-      {/* min-w-0 on both columns: without it a wide image sets the track width
-          and pushes the copy out past the band's edge. The frame follows the
-          image's own shape rather than forcing a portrait crop on artwork that
-          is usually square or landscape. */}
-      <div className="min-w-0">
-        {img ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={img}
-            alt=""
-            className="h-auto w-full rounded-2xl object-contain"
-            style={{ background: t.panel }}
-          />
-        ) : (
-          <div
-            className="grid aspect-[4/3] place-content-center rounded-2xl text-[0.8rem]"
-            style={{ background: t.panel, color: t.muted }}
-          >
-            Image
-          </div>
-        )}
+    <>
+      <div className="grid grid-cols-1 items-center gap-8 @3xl:grid-cols-[0.8fr_1.2fr]">
+        {/* min-w-0 on both columns: without it a wide image sets the track width
+            and pushes the copy out past the band's edge. The frame follows the
+            image's own shape rather than forcing a portrait crop on artwork that
+            is usually square or landscape. */}
+        <div className="min-w-0">
+          {img ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={img}
+              alt=""
+              className="h-auto w-full rounded-2xl object-contain"
+              style={{ background: t.panel }}
+            />
+          ) : (
+            <div
+              className="grid aspect-[4/3] place-content-center rounded-2xl text-[0.8rem]"
+              style={{ background: t.panel, color: t.muted }}
+            >
+              Image
+            </div>
+          )}
+        </div>
+        <div className="min-w-0">
+          <H t={t}>{textOf(c, "heading")}</H>
+          <p className="mt-4 text-[0.95rem] leading-relaxed" style={{ color: t.muted }}>
+            {textOf(c, "body")}
+          </p>
+          {figures.length > 0 && (
+            <div className="mt-6 flex flex-wrap gap-8">
+              {figures.map((f, i) => (
+                <div key={i}>
+                  <b className="block font-display text-[1.35rem] font-bold" style={{ color: t.fg }}>
+                    {f.value}
+                  </b>
+                  <span className="text-[0.76rem]" style={{ color: t.muted }}>
+                    {f.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-      <div className="min-w-0">
-        <H t={t}>{textOf(c, "heading")}</H>
-        <p className="mt-4 text-[0.95rem] leading-relaxed" style={{ color: t.muted }}>
-          {textOf(c, "body")}
-        </p>
-        {figures.length > 0 && (
-          <div className="mt-6 flex flex-wrap gap-8">
-            {figures.map((f, i) => (
-              <div key={i}>
-                <b className="block font-display text-[1.35rem] font-bold" style={{ color: t.fg }}>
-                  {f.value}
-                </b>
-                <span className="text-[0.76rem]" style={{ color: t.muted }}>
-                  {f.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+      <Copy html={textOf(c, "copy")} t={t} />
+    </>
   );
 }
 
@@ -523,6 +653,7 @@ export function ProofSection({ view, preview }: P & { preview?: boolean }) {
           )}
         </>
       )}
+      <Copy html={textOf(c, "copy")} t={t} />
     </div>
   );
 }
@@ -532,6 +663,7 @@ export function ValueSection({ view, priceLabel, termsLabel }: P & { priceLabel?
   const { c, theme: t, variant } = view;
   const options = listOf(c.options, ["label", "amount", "note"]);
   const faqs = listOf(c.faqs, ["q", "a"]);
+  const checklist = listOf(c.checklist, ["text"]);
   return (
     <div>
       <H t={t}>{textOf(c, "heading")}</H>
@@ -575,6 +707,19 @@ export function ValueSection({ view, priceLabel, termsLabel }: P & { priceLabel?
             );
           })}
         </div>
+      )}
+
+      {/* What the price buys, restated beside it. A number on its own invites
+          the reader to judge it against nothing. */}
+      {checklist.length > 0 && (
+        <ul className="mb-5 mt-6 grid grid-cols-1 gap-x-6 gap-y-2 @xl:grid-cols-2">
+          {checklist.map((li, i) => (
+            <li key={i} className="flex items-start gap-2 text-[0.92rem]" style={{ color: t.fg }}>
+              <Tick color={t.accent} />
+              <span>{li.text}</span>
+            </li>
+          ))}
+        </ul>
       )}
 
       <div
@@ -625,6 +770,7 @@ export function ValueSection({ view, priceLabel, termsLabel }: P & { priceLabel?
           ))}
         </div>
       )}
+      <Copy html={textOf(c, "copy")} t={t} />
     </div>
   );
 }
@@ -634,31 +780,41 @@ export function CtaSection({ view, cta }: P) {
   const { c, theme: t } = view;
   const checklist = listOf(c.checklist, ["text"]);
   return (
-    <div className="grid grid-cols-1 items-stretch gap-7 @3xl:grid-cols-[1.1fr_0.9fr]">
-      <div>
-        <H t={t}>{textOf(c, "heading")}</H>
-        {checklist.length > 0 && (
-          <ul className="mt-4 flex list-none flex-col gap-2 p-0">
-            {checklist.map((li, i) => (
-              <li key={i} className="flex items-start gap-2 text-[0.9rem]" style={{ color: t.fg }}>
-                <Tick color={t.accent} />
-                <span>{li.text}</span>
-              </li>
-            ))}
-          </ul>
+    <>
+      <div className="grid grid-cols-1 items-stretch gap-7 @3xl:grid-cols-[1.1fr_0.9fr]">
+        <div>
+          <H t={t}>{textOf(c, "heading")}</H>
+          {checklist.length > 0 && (
+            <ul className="mt-4 flex list-none flex-col gap-2 p-0">
+              {checklist.map((li, i) => (
+                <li key={i} className="flex items-start gap-2 text-[0.9rem]" style={{ color: t.fg }}>
+                  <Tick color={t.accent} />
+                  <span>{li.text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="mt-6">
+            <Cta label={textOf(c, "ctaLabel")} t={t} render={cta} />
+            {/* The same risk-reversal as the hero. A reader who scrolled this
+                far has forgotten it, and the close is where it matters most. */}
+            {textOf(c, "ctaNote") && (
+              <p className="mt-3 text-[0.85rem]" style={{ color: t.muted }}>
+                {textOf(c, "ctaNote")}
+              </p>
+            )}
+          </div>
+        </div>
+        {textOf(c, "warningBody") && (
+          <div className="rounded-2xl px-5 py-5 text-[0.9rem] leading-relaxed" style={{ background: t.panel }}>
+            <b className="mb-1.5 block font-display text-[0.98rem]" style={{ color: t.fg }}>
+              {textOf(c, "warningTitle")}
+            </b>
+            <span style={{ color: t.muted }}>{textOf(c, "warningBody")}</span>
+          </div>
         )}
-        <div className="mt-6">
-          <Cta label={textOf(c, "ctaLabel")} t={t} render={cta} />
-        </div>
       </div>
-      {textOf(c, "warningBody") && (
-        <div className="rounded-2xl px-5 py-5 text-[0.9rem] leading-relaxed" style={{ background: t.panel }}>
-          <b className="mb-1.5 block font-display text-[0.98rem]" style={{ color: t.fg }}>
-            {textOf(c, "warningTitle")}
-          </b>
-          <span style={{ color: t.muted }}>{textOf(c, "warningBody")}</span>
-        </div>
-      )}
-    </div>
+      <Copy html={textOf(c, "copy")} t={t} />
+    </>
   );
 }

@@ -72,6 +72,7 @@ export type SubField = { key: string; label: string; kind: "text" | "textarea" }
 export type FieldDef =
   | { kind: "text"; key: string; label: string; hint?: string }
   | { kind: "image"; key: string; label: string; hint?: string }
+  | { kind: "richtext"; key: string; label: string; hint?: string }
   | { kind: "textarea"; key: string; label: string; hint?: string; rows?: number }
   | { kind: "list"; key: string; label: string; hint?: string; item: SubField[]; addLabel: string };
 
@@ -106,38 +107,89 @@ const row = (key: string, label: string, kind: "text" | "textarea" = "text"): Su
 export const SECTIONS: SectionDef[] = [
   {
     key: "hero",
-    n: "1 + 2",
+    n: "1",
     title: "Hero",
     purpose:
-      "The pre-head names who this is for; the headline is the single most wanted outcome; the sub-head makes it believable.",
-    shape: "Asymmetric — copy left, a facts card right, then an optional figures strip.",
+      "The single outcome, said once, above the fold — then the shortest possible proof that it is believable.",
+    shape: "Copy left, a facts card right. Bullets under the sub-head, then an optional figures strip.",
     defaultStyle: "navy",
     fields: [
       { kind: "textarea", key: "prehead", label: "Pre-head", hint: "Who this is for. The wrong reader should leave here.", rows: 2 },
-      { kind: "textarea", key: "headline", label: "Headline", rows: 2 },
-      { kind: "textarea", key: "subhead", label: "Sub-headline", hint: "Backs the promise and hints at the mechanism.", rows: 3 },
+      { kind: "textarea", key: "headline", label: "Headline", hint: "One outcome. Not a description of the product — the thing they walk away with.", rows: 2 },
+      { kind: "textarea", key: "subhead", label: "Sub-headline", hint: "Backs the promise and hints at the mechanism. One sentence.", rows: 3 },
+      {
+        kind: "list",
+        key: "bullets",
+        label: "What is in it",
+        hint: "Four to six, each a deliverable rather than a feature. This is the first thing a skimmer reads.",
+        item: [row("text", "Line")],
+        addLabel: "Add a line",
+      },
       { kind: "text", key: "ctaLabel", label: "Button" },
-      { kind: "text", key: "ctaNote", label: "Line under the button" },
+      { kind: "text", key: "ctaSecondary", label: "Second button", hint: "Optional. For the reader who is not ready — “See how it works”. Scrolls down rather than buying." },
+      { kind: "text", key: "ctaNote", label: "Line under the button", hint: "The risk removed, in a few words. Only what is actually true of this offer." },
+      { kind: "text", key: "audience", label: "Built for", hint: "Who it is for, separated by ·  — e.g. Coaches · Consultants · Course creators." },
       { kind: "list", key: "facts", label: "Facts card", item: [row("label", "Label"), row("value", "Value"), row("detail", "Detail", "textarea")], addLabel: "Add a fact" },
-      { kind: "list", key: "stats", label: "Figures strip", hint: "Sits directly under the hero as a break. Leave empty to hide.", item: [row("value", "Figure"), row("label", "Label")], addLabel: "Add a figure" },
+      { kind: "list", key: "stats", label: "Figures strip", hint: "Sits directly under the hero as a break. Only figures you can stand behind. Leave empty to hide.", item: [row("value", "Figure"), row("label", "Label")], addLabel: "Add a figure" },
+      {
+        kind: "richtext",
+        key: "copy",
+        label: "Copy",
+        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
+      },
+    ],
+    // Prose defaults name the JOB of the field in the page's own voice, so an
+    // unwritten hero reads as an unwritten hero. Everything that would state a
+    // fact about the product — price, trial, platform, figures — ships empty.
+    // These defaults are inherited by every new product and upsell page, and a
+    // default that makes a claim is a claim nobody chose to make.
+    defaults: {
+      copy: "",
+      prehead: "",
+      headline: "The outcome they want, in one line.",
+      subhead: "Why it is believable — what it is, and the mechanism behind it.",
+      bullets: [],
+      ctaLabel: "Get instant access",
+      ctaSecondary: "",
+      ctaNote: "",
+      audience: "",
+      facts: [],
+      stats: [],
+    },
+  },
+  {
+    key: "offer",
+    n: "2",
+    title: "What you get",
+    purpose:
+      "The deliverables, early. A low-ticket page earns the read by showing the package before it argues for it.",
+    shape: "Numbered parts, then an optional value stack. The real price is added for you.",
+    defaultStyle: "paper",
+    fields: [
+      { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
+      { kind: "list", key: "modules", label: "What is inside", hint: "One line per deliverable, in the order they will use them.", item: [row("title", "Name"), row("body", "What it does", "textarea")], addLabel: "Add a part" },
+      { kind: "text", key: "note", label: "Line under the list", hint: "Optional. The one thing about the package worth saying in prose." },
+      { kind: "list", key: "stack", label: "Value stack", hint: "Optional. Your claimed values — the “you pay” line comes from the real price.", item: [row("label", "Line"), row("amount", "Worth")], addLabel: "Add a line" },
+      { kind: "text", key: "totalLabel", label: "Total row label" },
+      { kind: "text", key: "totalAmount", label: "Total worth" },
+      {
+        kind: "richtext",
+        key: "copy",
+        label: "Copy",
+        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
+      },
     ],
     defaults: {
-      prehead: "For the coach, consultant or creator who has been meaning to post consistently for longer than they would like to admit.",
-      headline: "Go from “I’ll be consistent someday” to “here’s this week’s content”",
-      subhead: "A guided system that studies what is already working in your niche, pulls out the hooks behind it, and drafts your carousels, reels and posts in your own voice.",
-      ctaLabel: "Start free for 7 days",
-      ctaNote: "No card charged today · cancel any time",
-      facts: [
-        { label: "What you get", value: "Carousels, reels + posts", detail: "Drafted in your voice for Instagram and LinkedIn." },
-        { label: "Time to start", value: "One afternoon", detail: "Add a few competitors and your drafts are waiting." },
-        { label: "Investment", value: "$47 / month", detail: "Seven days free. No contract." },
-      ],
-      stats: [
-        { value: "2", label: "Platforms" },
-        { value: "3", label: "Formats" },
-        { value: "7 days", label: "Free trial" },
-        { value: "$47", label: "Per month" },
-      ],
+      copy: "",
+      heading: "Everything you get",
+      modules: [],
+      note: "",
+      // Amounts ship EMPTY on purpose. A value stack is a claim about what
+      // something is worth, and a default figure is a claim nobody made — it
+      // would go live the first time someone saved the page without reading it.
+      stack: [],
+      totalLabel: "Total value",
+      totalAmount: "",
     },
   },
   {
@@ -145,53 +197,81 @@ export const SECTIONS: SectionDef[] = [
     n: "3",
     title: "Problem",
     purpose: "Name the pain, and put it outside their character rather than inside it.",
-    shape: "Their own words as chips, then a two-column reframe.",
+    shape: "Named traps as cards, their own words as chips, then a two-column reframe.",
     defaultStyle: "paper",
     fields: [
       { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
       { kind: "text", key: "lead", label: "Lead line" },
-      { kind: "list", key: "chips", label: "What they say", hint: "Quote marks are added for you.", item: [row("text", "Line")], addLabel: "Add a line" },
+      {
+        kind: "list",
+        key: "traps",
+        label: "The traps",
+        hint: "Two to four. Each is a situation they are stuck in — named, so they recognise themselves in one.",
+        item: [row("title", "Name of the trap"), row("body", "What it looks like", "textarea")],
+        addLabel: "Add a trap",
+      },
+      { kind: "list", key: "chips", label: "What they say", hint: "Their own words. Quote marks are added for you.", item: [row("text", "Line")], addLabel: "Add a line" },
       { kind: "textarea", key: "feels", label: "What it feels like", hint: "The story they tell themselves.", rows: 3 },
       { kind: "textarea", key: "truth", label: "What is actually true", hint: "The reframe. The problem is the situation, not them.", rows: 3 },
+      {
+        kind: "richtext",
+        key: "copy",
+        label: "Copy",
+        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
+      },
     ],
     defaults: {
-      heading: "You already know you should be posting more consistently.",
-      lead: "Here is what I hear every week.",
-      chips: [
-        { text: "I know I should post, I just never know what to say." },
-        { text: "I open the app, stare at it, and close it again." },
-        { text: "I’ve been meaning to be consistent for months." },
-      ],
-      feels: "“I’m not disciplined enough to keep this up.”",
-      truth: "Nobody gave you a repeatable way to turn what is already in your head into posts.",
+      copy: "",
+      heading: "The problem, in their words.",
+      lead: "",
+      traps: [],
+      chips: [],
+      feels: "",
+      truth: "",
     },
   },
   {
     key: "solution",
     n: "4",
-    title: "Solution",
+    title: "How it works",
     purpose: "What we offer, and why it answers that problem.",
-    shape: "Numbered steps — a real sequence, so the numbers carry meaning.",
+    shape: "Numbered steps for a sequence, or a question grid for the checks it runs.",
     defaultStyle: "sand",
+    variants: [
+      { key: "steps", label: "Numbered steps" },
+      { key: "questions", label: "Question grid" },
+    ],
     fields: [
       { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
-      { kind: "list", key: "steps", label: "Steps", item: [row("title", "Title"), row("body", "Body", "textarea")], addLabel: "Add a step" },
+      { kind: "textarea", key: "lead", label: "Lead line", hint: "One sentence on what they do versus what the product does.", rows: 2 },
+      {
+        kind: "list",
+        key: "steps",
+        label: "Steps",
+        hint: "Numbered steps read as a sequence; the question grid reads the title as a question and the body as the answer.",
+        item: [row("title", "Title"), row("body", "Body", "textarea")],
+        addLabel: "Add a step",
+      },
       { kind: "textarea", key: "result", label: "Result line", rows: 2 },
+      {
+        kind: "richtext",
+        key: "copy",
+        label: "Copy",
+        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
+      },
     ],
     defaults: {
-      heading: "Start from a draft, never from a blank page.",
-      steps: [
-        { title: "It studies your niche", body: "Reads the top posts and reels already performing where you compete." },
-        { title: "It pulls out the hooks", body: "Breaks down why each one travelled, so you start from a proven angle." },
-        { title: "It drafts in your voice", body: "Carousels, reels and posts you edit and publish — not generic captions." },
-      ],
-      result: "The result: a week of content ready to edit, in an afternoon rather than a weekend.",
+      copy: "",
+      heading: "How it works",
+      lead: "",
+      steps: [],
+      result: "",
     },
   },
   {
     key: "benefits",
     n: "5",
-    title: "Benefits",
+    title: "What you walk away with",
     purpose: "Their week after buying. Outcomes, not features.",
     shape: "Weighted rows, or cards.",
     defaultStyle: "rose",
@@ -201,79 +281,52 @@ export const SECTIONS: SectionDef[] = [
     ],
     fields: [
       { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
-      { kind: "list", key: "items", label: "Outcomes", item: [row("title", "Outcome"), row("body", "Detail", "textarea")], addLabel: "Add an outcome" },
+      { kind: "list", key: "items", label: "Outcomes", hint: "What is different for them afterwards. Not what the product contains — that is the section above.", item: [row("title", "Outcome"), row("body", "Detail", "textarea")], addLabel: "Add an outcome" },
+      {
+        kind: "richtext",
+        key: "copy",
+        label: "Copy",
+        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
+      },
     ],
     defaults: {
-      heading: "What changes once you post consistently",
-      items: [
-        { title: "You become the name people think of", body: "Show up every week with something worth reading and you stop being one option among many." },
-        { title: "You stop starting from zero", body: "Your best hooks and angles live in one place, ready to reuse and build on." },
-        { title: "Your ideas become a body of work", body: "What is currently in your head turns into a searchable library that is yours." },
-      ],
-    },
-  },
-  {
-    key: "offer",
-    n: "6",
-    title: "The Offer",
-    purpose: "What it is, part by part, then the stack — so it reads as a lot for a little.",
-    shape: "Module cards, then an itemised value table. The real price is added for you.",
-    defaultStyle: "paper",
-    fields: [
-      { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
-      { kind: "list", key: "modules", label: "What is inside", item: [row("title", "Name"), row("body", "What it does", "textarea")], addLabel: "Add a part" },
-      { kind: "list", key: "stack", label: "Value stack", hint: "Your claimed values. The “you pay” line comes from the real price.", item: [row("label", "Line"), row("amount", "Worth")], addLabel: "Add a line" },
-      { kind: "text", key: "totalLabel", label: "Total row label" },
-      { kind: "text", key: "totalAmount", label: "Total worth" },
-    ],
-    defaults: {
-      heading: "Here is exactly what you get",
-      modules: [
-        { title: "Niche research", body: "The top posts in your space and the hook behind each one." },
-        { title: "Drafting in your voice", body: "Carousels, reels and posts, ready to edit." },
-        { title: "The weekly planner", body: "One place to move each piece from draft to posted." },
-      ],
-      // Amounts ship EMPTY on purpose. A value stack is a claim about what
-      // something is worth, and a default figure is a claim nobody made — it
-      // would go live the first time someone saved the page without reading
-      // it. The lines describe real parts of the product; the numbers have to
-      // be typed by someone willing to stand behind them.
-      stack: [
-        { label: "Niche research, done continuously", amount: "" },
-        { label: "Drafts in your voice, every week", amount: "" },
-        { label: "Planning and publishing in one place", amount: "" },
-      ],
-      totalLabel: "Total value",
-      totalAmount: "",
+      copy: "",
+      heading: "What you walk away with",
+      items: [],
     },
   },
   {
     key: "authority",
-    n: "7",
+    n: "6",
     title: "Authority",
     purpose: "Why you specifically. The reason your experience makes this trustworthy.",
     shape: "Image beside copy, with credibility figures.",
     defaultStyle: "navy",
     fields: [
       { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
-      { kind: "textarea", key: "body", label: "Body", rows: 5 },
+      { kind: "textarea", key: "body", label: "Body", hint: "First person. The specific experience that makes the promise credible.", rows: 5 },
       { kind: "image", key: "imageUrl", label: "Image", hint: "Upload a file, or paste a URL if it is hosted elsewhere." },
-      { kind: "list", key: "figures", label: "Figures", hint: "Only what you can stand behind.", item: [row("value", "Figure"), row("label", "Label")], addLabel: "Add a figure" },
+      { kind: "list", key: "figures", label: "Figures", hint: "Only what you can stand behind, and only what you could evidence if asked.", item: [row("value", "Figure"), row("label", "Label")], addLabel: "Add a figure" },
+      {
+        kind: "richtext",
+        key: "copy",
+        label: "Copy",
+        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
+      },
     ],
+    // Figures ship empty. A credibility number is the single easiest thing to
+    // inherit by accident and the single worst thing to publish unchecked.
     defaults: {
-      heading: "Built by people who study what actually performs",
-      body: "Greater Inside spends its days on one question: why does one post travel and a nearly identical one does not. Content Engine does what a good researcher does — reads the top posts, transcribes the reels, and breaks down the hook behind each one.",
+      copy: "",
+      heading: "Why me",
+      body: "",
       imageUrl: "",
-      figures: [
-        { value: "Daily", label: "Niche research runs" },
-        { value: "2", label: "Platforms covered" },
-        { value: "100%", label: "Yours to keep" },
-      ],
+      figures: [],
     },
   },
   {
     key: "proof",
-    n: "8",
+    n: "7",
     title: "Proof",
     purpose: "Evidence it works. Real quotes, or the mechanism itself until those exist.",
     shape: "One lead quote with two supporting, or the mechanism as proof.",
@@ -292,23 +345,26 @@ export const SECTIONS: SectionDef[] = [
         item: [row("quote", "Quote", "textarea"), row("name", "Name"), row("role", "Role")],
         addLabel: "Add a testimonial",
       },
-      { kind: "list", key: "reasons", label: "Mechanism points", hint: "Used by the “mechanism as proof” layout.", item: [row("title", "Point"), row("body", "Detail", "textarea")], addLabel: "Add a point" },
+      { kind: "list", key: "reasons", label: "Mechanism points", hint: "Used by the “mechanism as proof” layout — for when there are no testimonials yet.", item: [row("title", "Point"), row("body", "Detail", "textarea")], addLabel: "Add a point" },
       { kind: "text", key: "note", label: "Closing line" },
+      {
+        kind: "richtext",
+        key: "copy",
+        label: "Copy",
+        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
+      },
     ],
     defaults: {
+      copy: "",
       heading: "Proof it works",
       quotes: [],
-      reasons: [
-        { title: "It reads what already won", body: "Only posts that actually performed in your niche, not guesses." },
-        { title: "It names the hook", body: "The specific reason each one travelled, written down." },
-        { title: "You approve every word", body: "Nothing publishes without you. The voice stays yours." },
-      ],
-      note: "Until there are reviews worth quoting, the mechanism is the proof — and it is true today.",
+      reasons: [],
+      note: "",
     },
   },
   {
     key: "value",
-    n: "9",
+    n: "8",
     title: "Value, price, guarantee",
     purpose: "What the result is worth, then what it costs, then the risk removed.",
     shape: "Comparison columns, a price card, a guarantee, and the questions worth answering.",
@@ -324,13 +380,14 @@ export const SECTIONS: SectionDef[] = [
         kind: "list",
         key: "options",
         label: "What it replaces",
-        hint: "Yours goes last and is highlighted automatically.",
+        hint: "What they would otherwise pay, and to whom. Yours goes last and is highlighted automatically.",
         item: [row("label", "Option"), row("amount", "Cost"), row("note", "Note")],
         addLabel: "Add an option",
       },
+      { kind: "list", key: "checklist", label: "Included", hint: "Restated at the price, so the number lands against the list rather than alone.", item: [row("text", "Line")], addLabel: "Add a line" },
       { kind: "text", key: "priceNote", label: "Line under the price" },
       { kind: "text", key: "guaranteeTitle", label: "Guarantee title" },
-      { kind: "textarea", key: "guaranteeBody", label: "Guarantee", rows: 3 },
+      { kind: "textarea", key: "guaranteeBody", label: "Guarantee", hint: "Only a guarantee you will actually honour. This one is enforceable against you.", rows: 3 },
       {
         kind: "list",
         key: "faqs",
@@ -339,50 +396,56 @@ export const SECTIONS: SectionDef[] = [
         item: [row("q", "Question"), row("a", "Answer", "textarea")],
         addLabel: "Add a question",
       },
+      {
+        kind: "richtext",
+        key: "copy",
+        label: "Copy",
+        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
+      },
     ],
+    // Everything here that could state a price, a trial, a refund window or a
+    // guarantee ships empty. The only money on this page a buyer can trust is
+    // the figure passed in from the real offer.
     defaults: {
-      heading: "What staying consistent actually costs",
-      options: [
-        { label: "Content agency", amount: "$2–5k", note: "per month, ongoing" },
-        { label: "In-house hire", amount: "A salary", note: "months to ramp" },
-        { label: "Doing it yourself", amount: "Your time", note: "hours every week" },
-        { label: "Content Engine", amount: "$47", note: "per month" },
-      ],
-      priceNote: "Seven days free. Cancel from your account in one click.",
-      guaranteeTitle: "Nothing today",
-      guaranteeBody: "Your card is not charged until day eight. Cancel before then and you pay nothing at all.",
-      // Empty by default. Every other default here is Content Engine's copy,
-      // which is harmless to inherit and obvious to replace — but an FAQ makes
-      // factual claims about charging and cancelling, and those are not true of
-      // every product that starts from these defaults.
+      copy: "",
+      heading: "What it costs",
+      options: [],
+      checklist: [],
+      priceNote: "",
+      guaranteeTitle: "",
+      guaranteeBody: "",
       faqs: [],
     },
   },
   {
     key: "cta",
-    n: "10",
+    n: "9",
     title: "Call to action + warning",
     purpose: "One clear instruction, paired with the cost of doing nothing.",
     shape: "Split — the action against the cost of waiting.",
     defaultStyle: "paper",
     fields: [
       { kind: "textarea", key: "heading", label: "Heading", rows: 2 },
-      { kind: "list", key: "checklist", label: "Checklist", item: [row("text", "Line")], addLabel: "Add a line" },
+      { kind: "list", key: "checklist", label: "Checklist", hint: "The same lines as the hero. Repetition at the close is the point.", item: [row("text", "Line")], addLabel: "Add a line" },
       { kind: "text", key: "ctaLabel", label: "Button" },
+      { kind: "text", key: "ctaNote", label: "Line under the button", hint: "The same risk-reversal as the hero, word for word." },
       { kind: "text", key: "warningTitle", label: "Warning title" },
       { kind: "textarea", key: "warningBody", label: "The cost of waiting", rows: 4 },
+      {
+        kind: "richtext",
+        key: "copy",
+        label: "Copy",
+        hint: "A block of writing for this section. Formatted, optional — leave it empty and nothing shows.",
+      },
     ],
     defaults: {
-      heading: "One login. One afternoon. A week of content.",
-      checklist: [
-        { text: "The research done for you" },
-        { text: "Drafts in your own voice" },
-        { text: "One place to plan and publish" },
-      ],
-      ctaLabel: "Start free for 7 days",
-      warningTitle: "And if you close this tab?",
-      warningBody:
-        "Later becomes next week, and next week becomes next month. A year from now someone with the same expertise has the audience you wanted — not because they were better, but because they kept publishing and you did not.",
+      copy: "",
+      heading: "Do not leave this for another month.",
+      checklist: [],
+      ctaLabel: "Get instant access",
+      ctaNote: "",
+      warningTitle: "",
+      warningBody: "",
     },
   },
 ];

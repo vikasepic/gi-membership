@@ -14,23 +14,25 @@ import {
   imageSrc,
 } from "@/lib/page-sections";
 
-describe("the ten sections", () => {
-  it("covers Ajit's structure, with the hero carrying parts 1 and 2", () => {
+describe("the nine sections", () => {
+  it("runs in the funnel-kit order, with the package before the argument", () => {
     expect(SECTION_KEYS).toEqual([
       "hero",
+      "offer",
       "problem",
       "solution",
       "benefits",
-      "offer",
       "authority",
       "proof",
       "value",
       "cta",
     ]);
-    // Nine bands, ten named parts — the pre-head cannot have a ground of its
-    // own, since it is defined as the line above the headline.
-    expect(sectionDef("hero")!.n).toBe("1 + 2");
-    expect(sectionDef("cta")!.n).toBe("10");
+    // The order is the point of the restructure: a low-ticket page shows what
+    // you get immediately after the promise, and only then argues for it.
+    // getPageSections maps over this list, so it orders existing pages too.
+    expect(SECTION_KEYS.indexOf("offer")).toBeLessThan(SECTION_KEYS.indexOf("problem"));
+    expect(sectionDef("hero")!.n).toBe("1");
+    expect(sectionDef("cta")!.n).toBe("9");
   });
 
   it("has no duplicate keys", () => {
@@ -137,6 +139,79 @@ describe("band styles", () => {
   });
 });
 
+describe("what a default is allowed to say", () => {
+  // Every default here is inherited by every product and upsell page that has
+  // not been written yet. Before this, they held one specific product's sales
+  // letter — so a new page opened claiming another product's price, platforms
+  // and credentials. A default may describe the JOB of a field. It may not
+  // state a fact about a product it has never seen.
+  const claimBearing = [
+    ["hero", "facts"], ["hero", "stats"],
+    ["offer", "stack"], ["offer", "modules"],
+    ["authority", "figures"],
+    ["proof", "quotes"], ["proof", "reasons"],
+    ["value", "options"], ["value", "faqs"], ["value", "checklist"],
+    ["cta", "checklist"],
+  ] as const;
+
+  it.each(claimBearing)("ships %s.%s empty", (key, field) => {
+    expect(sectionDef(key)!.defaults[field]).toEqual([]);
+  });
+
+  const moneyish = ["ctaNote", "priceNote", "guaranteeTitle", "guaranteeBody", "totalAmount"];
+  it("states no price, trial, refund or guarantee by default", () => {
+    for (const def of SECTIONS) {
+      for (const f of moneyish) {
+        if (f in def.defaults) expect(def.defaults[f]).toBe("");
+      }
+    }
+  });
+
+  it("carries no currency figure anywhere in its defaults", () => {
+    const blob = JSON.stringify(SECTIONS.map((s) => s.defaults));
+    expect(blob).not.toMatch(/[$£€]\s?\d/);
+  });
+
+  it("names no specific product, platform or brand", () => {
+    const blob = JSON.stringify(SECTIONS.map((s) => s.defaults)).toLowerCase();
+    for (const word of ["content engine", "instagram", "linkedin", "carousel", "greater inside"]) {
+      expect(blob).not.toContain(word);
+    }
+  });
+});
+
+describe("the funnel-kit fields", () => {
+  const fieldKeys = (key: string) => sectionDef(key)!.fields.map((f) => f.key);
+
+  it("gives the hero its deliverable list, second button and audience line", () => {
+    expect(fieldKeys("hero")).toEqual(expect.arrayContaining(["bullets", "ctaSecondary", "audience"]));
+  });
+
+  it("gives the problem section named traps, not just quoted chips", () => {
+    expect(fieldKeys("problem")).toContain("traps");
+  });
+
+  it("offers the question grid as well as numbered steps", () => {
+    expect(sectionDef("solution")!.variants?.map((v) => v.key)).toEqual(["steps", "questions"]);
+  });
+
+  it("repeats the risk-reversal at the close", () => {
+    expect(fieldKeys("cta")).toContain("ctaNote");
+  });
+
+  it("restates what is included beside the price", () => {
+    expect(fieldKeys("value")).toContain("checklist");
+  });
+
+  it("defaults an unset variant to the first one", () => {
+    const v = buildSectionView({
+      sectionKey: "solution", position: 3, enabled: true,
+      style: "sand", accent: null, variant: null, content: {},
+    })!;
+    expect(v.variant).toBe("steps");
+  });
+});
+
 describe("buildSectionView", () => {
   const row = {
     sectionKey: "solution",
@@ -151,14 +226,14 @@ describe("buildSectionView", () => {
   it("fills in the defaults for an unedited section", () => {
     const v = buildSectionView(row)!;
     expect(textOf(v.c, "heading")).toBe(sectionDef("solution")!.defaults.heading);
-    expect(listOf(v.c.steps, ["title", "body"])).toHaveLength(3);
   });
 
   it("prefers stored content over the default", () => {
-    const v = buildSectionView({ ...row, content: { heading: "Ours" } })!;
+    const stored = { heading: "Ours", steps: [{ title: "One", body: "First" }] };
+    const v = buildSectionView({ ...row, content: stored })!;
     expect(textOf(v.c, "heading")).toBe("Ours");
     // Untouched fields still come through, so a partial edit is not a blank band.
-    expect(listOf(v.c.steps, ["title", "body"])).toHaveLength(3);
+    expect(listOf(v.c.steps, ["title", "body"])).toHaveLength(1);
   });
 
   it("ignores empty strings so a cleared field shows the default", () => {

@@ -13,6 +13,7 @@ import {
   type BandStyleKey,
 } from "@/lib/page-sections";
 import { inputClass } from "@/components/admin/form-controls";
+import { RichText } from "@/components/editor/rich-text";
 import type { OwnerType } from "@/lib/pages";
 
 // The page editor.
@@ -522,6 +523,20 @@ function Field({
   if (def.kind === "image") {
     return (
       <ImageField def={def} value={value} onChange={onChange} ownerType={ownerType} ownerId={ownerId} />
+    );
+  }
+
+  if (def.kind === "richtext") {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Label text={def.label} hint={def.hint} />
+        {/* Keyed on nothing but the field: RichText holds its own editor state,
+            so remounting it on every keystroke would move the caret. */}
+        <RichText
+          value={typeof value === "string" ? value : ""}
+          onChange={(html) => onChange(html)}
+        />
+      </div>
     );
   }
 
