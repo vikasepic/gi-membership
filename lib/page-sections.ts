@@ -576,6 +576,14 @@ export type SectionView = {
   variant: string;
   /** Field values, defaults filled in. */
   c: Record<string, unknown>;
+  /**
+   * What was actually stored, with no defaults merged in.
+   *
+   * The builder converts from THIS. A default is guidance, not content — a
+   * section nobody has written should open as an empty canvas, not as a page
+   * of placeholder prose someone then has to delete.
+   */
+  stored: Record<string, unknown>;
 };
 
 /**
@@ -637,6 +645,7 @@ export function buildSectionView(row: SectionRow): SectionView | null {
     theme: bandTheme(row.style, row.accent),
     variant: row.variant || def.variants?.[0]?.key || "default",
     c,
+    stored,
   };
 }
 

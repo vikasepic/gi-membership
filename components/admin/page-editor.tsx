@@ -143,7 +143,7 @@ export function PageEditor({
               ? "Unsaved changes"
               : savedAt
                 ? "All changes saved."
-                : "Ten sections. Open one to edit it."}
+                : `${rows.length} sections. Open one to edit it.`}
         </span>
         <div className="ml-auto flex items-center gap-1 rounded-full border border-border p-1">
           {(Object.keys(DEVICES) as Device[]).map((d) => (

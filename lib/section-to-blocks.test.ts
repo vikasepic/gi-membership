@@ -489,3 +489,36 @@ describe("the authority band", () => {
     expect(walkBlocks(out).some((b) => b.type === "cards")).toBe(false);
   });
 });
+
+describe("a section nobody has written opens empty", () => {
+  const view = (content: Record<string, unknown>) =>
+    buildSectionView({
+      sectionKey: "hero", position: 0, enabled: true,
+      style: "navy", accent: null, variant: null, content,
+    })!;
+
+  it("converts nothing when nothing was stored", () => {
+    // The defaults are guidance, not content. Converting them handed someone a
+    // canvas full of placeholder prose to delete before they could start —
+    // "The outcome they want, in one line." is not anybody's headline.
+    expect(blocksForSection(view({}))).toEqual([]);
+  });
+
+  it("still shows the defaults where the page renders typed fields", () => {
+    // buildSectionView keeps merging them, because a section saved before the
+    // builder existed still renders through the typed components.
+    expect(view({}).c.headline).toBe(sectionDef("hero")!.defaults.headline);
+    expect(view({}).stored.headline).toBeUndefined();
+  });
+
+  it("converts what was actually written", () => {
+    const out = blocksForSection(view({ headline: "Write viral carousels" }));
+    expect(out).toHaveLength(1);
+    expect(out[0].props.text).toBe("Write viral carousels");
+  });
+
+  it("does not smuggle a default in beside real content", () => {
+    const out = blocksForSection(view({ headline: "Mine" }));
+    expect(JSON.stringify(out)).not.toContain("Get instant access");
+  });
+});

@@ -409,13 +409,16 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
  * simply has not been saved as one yet.
  */
 export function blocksForSection(view: SectionView): Block[] {
-  const stored = (view.c as Record<string, unknown>).blocks;
-  if (Array.isArray(stored) && stored.length > 0) return stored as Block[];
-  return sectionToBlocks(view.def, view.c);
+  const saved = view.stored.blocks;
+  if (Array.isArray(saved) && saved.length > 0) return saved as Block[];
+  // From what was STORED, not from the defaults merged over it. A default is
+  // guidance; converting it would hand someone a canvas full of placeholder
+  // prose to delete before they could start.
+  return sectionToBlocks(view.def, view.stored);
 }
 
 /** True when this section is still showing converted content rather than saved blocks. */
 export function isUnconverted(view: SectionView): boolean {
-  const stored = (view.c as Record<string, unknown>).blocks;
-  return !Array.isArray(stored) || stored.length === 0;
+  const saved = view.stored.blocks;
+  return !Array.isArray(saved) || saved.length === 0;
 }
