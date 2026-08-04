@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { saveSection, seedPage, type OwnerType } from "@/lib/pages";
 import { sectionDef } from "@/lib/page-sections";
 import { uploadPageImage, validateUpload } from "@/lib/media";
+import { sanitizeSectionContent } from "@/lib/sanitize-html";
 
 export type SectionSaveState = { error?: string; savedKey?: string };
 
@@ -41,7 +42,9 @@ export async function saveSectionAction(
       style: String(formData.get("style") ?? ""),
       accent: String(formData.get("accent") ?? "").trim() || null,
       variant: String(formData.get("variant") ?? "").trim() || null,
-      content,
+      // Sanitize on the way in, so what is stored is always safe to render
+      // regardless of what the editor or a paste produced.
+      content: sanitizeSectionContent(content),
     });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not save." };
