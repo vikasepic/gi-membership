@@ -116,3 +116,72 @@ describe("editing in the canvas", () => {
     expect(state.blocks[0].type).toBe("heading");
   });
 });
+
+describe("dropping into a column", () => {
+  // Both bugs this covers were live: the words "Drop here" sat outside the
+  // drop zone so the visible target accepted nothing, and the zone did not
+  // stop the event, so the row containing the column handled it too and put
+  // the block beside the row instead of inside it.
+  const rowWith = (): Block[] => {
+    const row = newBlock("row");
+    row.id = "row1";
+    return [row, { ...newBlock("heading"), id: "h1", props: { text: "Move me", tag: "h2" } }];
+  };
+
+  const dragTo = (target: Element) => {
+    const dt = { effectAllowed: "", setData() {}, getData() { return ""; } };
+    const grip = [...document.querySelectorAll("[draggable='true']")].find((g) =>
+      (g.getAttribute("title") ?? "").includes("Heading"),
+    )!;
+    act(() => {
+      grip.dispatchEvent(Object.assign(new Event("dragstart", { bubbles: true }), { dataTransfer: dt }));
+      target.dispatchEvent(Object.assign(new Event("dragover", { bubbles: true, cancelable: true }), { dataTransfer: dt }));
+      target.dispatchEvent(Object.assign(new Event("drop", { bubbles: true, cancelable: true }), { dataTransfer: dt }));
+    });
+  };
+
+  it("puts the block inside the column, not beside the row", () => {
+    document.body.innerHTML = "";
+    const state = mount(rowWith());
+    const col = document.querySelector('[data-zone="row1:0"]')!;
+    expect(col, "column zone should exist").toBeTruthy();
+    dragTo(col);
+    expect(state.blocks).toHaveLength(1);
+    expect(state.blocks[0].type).toBe("row");
+    expect(state.blocks[0].columns![0].map((b) => b.id)).toEqual(["h1"]);
+  });
+
+  it("accepts a drop on the words that say to drop there", () => {
+    document.body.innerHTML = "";
+    const state = mount(rowWith());
+    const label = [...document.querySelectorAll("p")].find((p) => p.textContent === "Drop here")!;
+    expect(label, "the empty column should say Drop here").toBeTruthy();
+    // The label cannot take the event itself, so the zone below it does.
+    expect(label.className).toContain("pointer-events-none");
+    dragTo(document.querySelector('[data-zone="row1:1"]')!);
+    expect(state.blocks[0].columns![1].map((b) => b.id)).toEqual(["h1"]);
+  });
+
+  it("shows the column is the target while dragging over it", () => {
+    document.body.innerHTML = "";
+    mount(rowWith());
+    const col = document.querySelector('[data-zone="row1:0"]') as HTMLElement;
+    const dt = { effectAllowed: "", setData() {}, getData() { return ""; } };
+    const grip = [...document.querySelectorAll("[draggable='true']")].find((g) =>
+      (g.getAttribute("title") ?? "").includes("Heading"),
+    )!;
+    act(() => {
+      grip.dispatchEvent(Object.assign(new Event("dragstart", { bubbles: true }), { dataTransfer: dt }));
+      col.dispatchEvent(Object.assign(new Event("dragover", { bubbles: true, cancelable: true }), { dataTransfer: dt }));
+    });
+    expect((document.querySelector('[data-zone="row1:0"]') as HTMLElement).style.outline).toContain("2px");
+  });
+
+  it("still drops on the canvas root", () => {
+    document.body.innerHTML = "";
+    const state = mount([{ ...newBlock("heading"), id: "h1", props: { text: "Move me", tag: "h2" } }]);
+    dragTo(document.querySelector('[data-zone="root"]')!);
+    expect(state.blocks).toHaveLength(1);
+    expect(state.blocks[0].id).toBe("h1");
+  });
+});

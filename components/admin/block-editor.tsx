@@ -306,6 +306,8 @@ function Zone({
   onDragStart,
   onPatch,
   target,
+  emptyLabel,
+  className,
 }: {
   blocks: Block[];
   theme: BandTheme;
@@ -318,20 +320,31 @@ function Zone({
   onDragStart: (id: string) => void;
   onPatch: (id: string, next: Block) => void;
   target: (index: number) => DropTarget;
+  /** Shown when the zone is empty. Never a drop target of its own — see below. */
+  emptyLabel?: string;
+  className?: string;
 }) {
+  const active = dropAt === `${zoneId}:${blocks.length}`;
   return (
     <div
       data-zone={zoneId}
-      className="flex min-h-[40px] flex-col"
+      className={className ?? "flex min-h-[40px] flex-col"}
+      style={active ? { outline: "2px solid var(--primary)", outlineOffset: -2 } : undefined}
       onDragOver={(e) => {
-        // Only claim the drop when it is not over a child; the child's own
-        // handler stops propagation and decides above-or-below itself.
+        // Anything reaching here is not over a block: every block stops the
+        // event itself and decides above-or-below. Testing currentTarget ===
+        // target instead meant only the bare strip between blocks accepted a
+        // drop, and the words "Drop here" — being a child — accepted nothing.
         e.preventDefault();
-        if (e.currentTarget === e.target) setDropAt(`${zoneId}:${blocks.length}`);
+        e.stopPropagation();
+        setDropAt(`${zoneId}:${blocks.length}`);
       }}
       onDrop={(e) => {
-        if (e.currentTarget !== e.target) return;
         e.preventDefault();
+        // Without this the row containing this column handles the drop too,
+        // and puts the block beside the row instead of inside it. The last
+        // handler wins, so the block lands nowhere near where it was dropped.
+        e.stopPropagation();
         onDrop(target(blocks.length));
       }}
     >
@@ -352,6 +365,11 @@ function Zone({
           target={target}
         />
       ))}
+      {blocks.length === 0 && emptyLabel && (
+        // pointer-events-none so the label cannot become the drop target and
+        // swallow the event before the zone sees it.
+        <p className="pointer-events-none py-3 text-center text-[0.68rem] opacity-70">{emptyLabel}</p>
+      )}
     </div>
   );
 }
@@ -544,8 +562,10 @@ function RowColumns({
       style={{ gridTemplateColumns: widths.map((w) => `${w}fr`).join(" "), gap: `${Number(block.props.gap ?? 24)}px` }}
     >
       {columns.map((col, c) => (
-        <div key={c} className="rounded border border-dashed p-1.5" style={{ borderColor: theme.rule }}>
+        <div key={c} style={{ borderColor: theme.rule }} className="min-w-0">
           <Zone
+            emptyLabel="Drop here"
+            className="flex min-h-[64px] flex-col rounded border border-dashed p-1.5"
             blocks={col}
             theme={theme}
             zoneId={`${block.id}:${c}`}
@@ -558,11 +578,6 @@ function RowColumns({
             onPatch={onPatch}
             target={(index) => ({ zone: "column", rowId: block.id, column: c, index })}
           />
-          {col.length === 0 && (
-            <p className="py-3 text-center text-[0.68rem]" style={{ color: theme.muted }}>
-              Drop here
-            </p>
-          )}
         </div>
       ))}
     </div>
