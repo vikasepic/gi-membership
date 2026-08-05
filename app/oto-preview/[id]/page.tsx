@@ -38,8 +38,14 @@ export default async function OtoPreviewFrame({
   const offer = await getOffer(id);
   if (!offer) notFound();
 
+  // Both prices, without the live page's `active` check: the preview's job is
+  // to show the layout being configured, and an alternative that is still a
+  // draft is exactly the one you are here to look at.
+  const altOffer = offer.altOfferId ? await getOffer(offer.altOfferId) : null;
+
   const view: OtoView = {
     offer,
+    altOffer,
     token: "preview",
     preview: true,
     // A representative 15 minutes so the countdown is visible in preview. The
