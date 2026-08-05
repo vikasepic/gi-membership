@@ -15,6 +15,7 @@ import { BlockEditor } from "@/components/admin/block-editor";
 import { DeviceSwitch } from "@/components/admin/device-switch";
 import { blocksForSection, isUnconverted } from "@/lib/section-to-blocks";
 import { starterBlocks } from "@/lib/page-starter";
+import { warnNotBuyable } from "@/lib/page-buyable";
 import { DEVICE_CANVAS, type Block, type Device } from "@/lib/blocks";
 import type { OwnerType } from "@/lib/pages";
 
@@ -140,8 +141,26 @@ export function PageEditor({
     setDirty(Object.fromEntries(rows.filter((r) => (starter[r.sectionKey] ?? []).length > 0).map((r) => [r.sectionKey, true])));
   }
 
+  // A page whose every button goes to a link is a page nobody can buy from. It
+  // renders perfectly and converts at zero, and nothing else in the system
+  // notices — the blocks are valid and the page is valid; only the money is
+  // missing. Computed from what is on screen, so it clears the moment you fix
+  // it rather than after a save.
+  const notBuyable = warnNotBuyable(rows);
+
   return (
     <div className="flex flex-col gap-4">
+      {notBuyable && (
+        <div className="flex flex-col gap-1 rounded-2xl border border-primary/45 bg-primary/5 px-5 py-4">
+          <span className="font-medium text-fg">Nothing on this page can be bought</span>
+          <p className="max-w-2xl text-sm text-muted">
+            Every button here goes to a link. Open a section, select a button and set{" "}
+            <b className="font-medium text-fg">What it does</b> to <b className="font-medium text-fg">Buy</b>{" "}
+            — or drag in a <b className="font-medium text-fg">Buy button</b>, which starts that way. A price
+            card with a button label counts too.
+          </p>
+        </div>
+      )}
       <div className="sticky top-2 z-30 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface/95 px-4 py-3 backdrop-blur">
         <button
           type="button"

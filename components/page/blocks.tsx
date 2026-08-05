@@ -740,6 +740,14 @@ function Inner({
               </div>
             </>
           )}
+          {/* What is actually taken today, where that differs from the headline
+              price. Through a trial the card reads "$29/month" and this line
+              reads "$0 today" — two true statements that need each other. */}
+          {money?.dueNowLabel && money.dueNowLabel !== price && (
+            <div className="mt-1 text-[0.8rem]" style={{ opacity: 0.8 }}>
+              {money.dueNowLabel} today
+            </div>
+          )}
           {str(p.badge) && (
             <span className="mt-2 inline-block text-[0.7rem] font-semibold"
               style={{ background: c.accent, color: readableOn(c.accent), borderRadius: 999, padding: "0.16rem 0.6rem" }}>

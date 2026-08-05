@@ -424,12 +424,24 @@ describe("the price card shows what it costs, not what is due today", () => {
   });
 
   it("does not put the amount due today in the price", () => {
+    // A card reading "$0" under the words "After the trial" tells the buyer
+    // the wrong number. The headline is what it costs; what is taken today is
+    // its own smaller line underneath, and both are true.
     const out = renderToStaticMarkup(
       <Blocks blocks={[card]} theme={paper} money={{ priceLabel: "$29", termsLabel: "/month", dueNowLabel: "$0" }} />,
     );
-    const big = out.slice(out.indexOf("2.4rem"), out.indexOf("2.4rem") + 200);
-    expect(big).toContain("$29");
-    expect(big).not.toContain("$0");
+    const headline = out.slice(out.indexOf("2.4rem"), out.indexOf("2.4rem") + 90);
+    expect(headline).toContain("$29");
+    expect(headline).not.toContain("$0");
+    expect(out).toContain("$0 today");
+  });
+
+  it("says nothing about today when today IS the price", () => {
+    // "$29 today" under "$29" is a line that adds nothing.
+    const out = renderToStaticMarkup(
+      <Blocks blocks={[card]} theme={paper} money={{ priceLabel: "$29", dueNowLabel: "$29" }} />,
+    );
+    expect(out).not.toContain("today");
   });
 
   it("still lets a typed price win, for a card someone overrode deliberately", () => {

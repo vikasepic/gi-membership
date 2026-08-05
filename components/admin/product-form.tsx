@@ -407,7 +407,9 @@ function Placement({
           >
             <option value="">— none, one price —</option>
             {offers
-              .filter((o) => o.id !== offerId)
+              // Same currency only. Two prices side by side in different
+              // currencies is a choice nobody can make.
+              .filter((o) => o.id !== offerId && (!chosen || o.currency === chosen.currency))
               .map((o) => (
                 <option key={o.id} value={o.id}>{offerLabel(o)}</option>
               ))}
