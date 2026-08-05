@@ -20,7 +20,7 @@ export default async function OfferBumpPage({ params }: { params: Promise<{ id: 
         </Link>
         <h1 className="text-2xl">Order bump</h1>
         <p className="max-w-[70ch] text-muted">
-          How this offer looks when it appears as a tick-box on a checkout. Changes go live as soon
+          How this offer looks when it appears as an add-on on a checkout. Changes go live as soon
           as you save.
         </p>
       </div>

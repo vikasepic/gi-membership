@@ -34,7 +34,10 @@ export function BumpEditor({ offer, alt }: { offer: Offer; alt?: Offer | null })
   const [bullets, setBullets] = useState((offer.bumpBullets ?? []).join("\n"));
   const [note, setNote] = useState(offer.bumpNote ?? "");
   const [accent, setAccent] = useState(normalizeAccent(offer.bumpAccent));
-  const [choice, setChoice] = useState<BumpChoice>("none");
+  // null when there is a second price, matching what a buyer first sees:
+  // nothing selected, including the decline. Starting the preview on "No
+  // thanks" reviews a state the checkout never renders.
+  const [choice, setChoice] = useState<BumpChoice | null>(alt ? null : "none");
 
   const view = useMemo(
     () =>
@@ -196,10 +199,10 @@ export function BumpEditor({ offer, alt }: { offer: Offer; alt?: Offer | null })
             <span className="kicker text-muted">Preview — how a buyer sees it</span>
             <button
               type="button"
-              onClick={() => setChoice((c) => (c === "none" ? "main" : "none"))}
+              onClick={() => setChoice((c) => (c === "main" ? (alt ? null : "none") : "main"))}
               className="rounded-full border border-border px-3 py-1 text-xs transition-colors hover:border-fg"
             >
-              {choice === "none" ? "Show taken" : "Show untaken"}
+              {choice === "main" ? "Show untaken" : "Show taken"}
             </button>
           </div>
 
