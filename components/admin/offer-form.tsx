@@ -4,7 +4,8 @@ import { useActionState, useState } from "react";
 import { saveOffer, removeOffer, type SaveState } from "@/app/admin/offers/actions";
 import { inputClass as input, Field, Section } from "@/components/admin/form-controls";
 import type { Offer } from "@/lib/types";
-import type { ProductOption, AppOption } from "@/lib/admin";
+import type { ProductOption, AppOption, OfferOption } from "@/lib/admin";
+import { money } from "@/lib/money";
 import { sectionsToForm } from "@/lib/oto-sections";
 
 /** Layouts that still read the fields below. Ten sections and Custom do not. */
@@ -14,10 +15,13 @@ export function OfferForm({
   offer,
   products,
   apps,
+  offers = [],
 }: {
   offer?: Offer;
   products: ProductOption[];
   apps: AppOption[];
+  /** Other offers, for this page's second price. */
+  offers?: OfferOption[];
 }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveOffer, {});
   const sections = sectionsToForm(offer?.otoSections as never);
@@ -220,6 +224,27 @@ export function OfferForm({
         </Field>
           </div>
         </details>
+
+        {/* Only this offer's OWN page. A bump or an upsell reads its second
+            price from the product that places it, because the same offer can
+            be two prices there and one price elsewhere. */}
+        <Field
+          label="Second price on this offer's page"
+          hint="Shown at /o/<key> only, as a second button beside the first. Bumps and upsells take theirs from the product. Leave as none for one price."
+        >
+          <select name="pageAltOfferId" defaultValue={offer?.pageAltOfferId ?? ""} className={input}>
+            <option value="">&mdash; none, one price &mdash;</option>
+            {offers
+              .filter((o) => o.id !== offer?.id && (!offer || o.currency === offer.currency))
+              .map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                  {o.interval ? ` — ${money(o.priceCents, o.currency)}/${o.interval}` : ""}
+                  {o.active ? "" : " (draft)"}
+                </option>
+              ))}
+          </select>
+        </Field>
 
         {/* The offer's own tag IS the buyer tag. It is only during a trial
             that "granted" and "paid for" differ, and that is what the trial tag

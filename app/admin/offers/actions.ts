@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createOffer, updateOffer, deleteOffer, type OfferInput } from "@/lib/admin";
 import { requireAdmin } from "@/lib/admin-guard";
+import { altOfferIdFor } from "@/lib/offers";
 
 const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
 const uuidish = z
@@ -36,6 +37,8 @@ const schema = z
     acceptLabel: z.string().trim().min(1).default("Yes, add this"),
     // Digits only, so a pasted tag NAME fails here rather than silently never
     // matching at purchase time.
+    // The second price on this offer's own page. Empty means one price.
+    pageAltOfferId: z.string().trim().optional().default(""),
     activecampaignTagId: z
       .string()
       .trim()
@@ -124,6 +127,7 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
       .filter(Boolean),
     imageUrl: v.imageUrl,
     acceptLabel: v.acceptLabel,
+    pageAltOfferId: altOfferIdFor(v.pageAltOfferId, v.id),
     activecampaignTagId: v.activecampaignTagId?.trim() || null,
     activecampaignTrialTagId: v.activecampaignTrialTagId?.trim() || null,
     activecampaignCancelledTagId: v.activecampaignCancelledTagId?.trim() || null,

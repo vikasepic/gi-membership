@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getOfferByKey } from "@/lib/store";
+import { getOffer, getOfferByKey } from "@/lib/store";
 import { ownershipFor } from "@/lib/checkout";
 import { isOfferEligible } from "@/lib/offers";
 import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
 import { SalesPage } from "@/components/page/sales-page";
 import { money } from "@/lib/money";
 import { buildBumpView } from "@/lib/bump";
+import { altSaving } from "@/lib/offers";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,10 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
     getPageSettings("offer", offer.id),
   ]);
   const view = buildBumpView(offer);
+  // This page's own second price, if it has one. Bumps and upsells read theirs
+  // from the product that places them; a page standing alone has no product.
+  const pageAlt = offer.pageAltOfferId ? await getOffer(offer.pageAltOfferId) : null;
+  const showAlt = pageAlt?.active ? pageAlt : null;
 
   // Someone who already has it gets the truth rather than a buy button they
   // would be refused at.
@@ -55,8 +60,10 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
           termsLabel: offer.interval ? `/${offer.interval}` : null,
           dueNowLabel: view.nowLabel,
           trialLabel: offer.trialDays ? `${offer.trialDays} days` : null,
+          altPriceLabel: showAlt ? money(showAlt.priceCents, showAlt.currency) : null,
+          altTermsLabel: showAlt?.interval ? `/${showAlt.interval}` : null,
         }}
-        cta={(label) =>
+        cta={(label, theme) =>
           alreadyHas ? (
             <Link
               href="/library"
@@ -65,12 +72,40 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
               You already have this — open your library
             </Link>
           ) : (
-            <Link
-              href={`/checkout/offer?offer=${offer.id}`}
-              className="inline-block w-fit rounded-full bg-primary px-7 py-3 font-display text-[0.95rem] font-semibold text-primary-fg transition-colors hover:bg-primary-hover"
-            >
-              {label}
-            </Link>
+            // Both prices when this page carries a second one. Two links
+            // rather than the upsell's two one-click forms, because nobody
+            // here has a card on file yet — each goes to the same checkout
+            // with a different offer.
+            <span className="flex flex-wrap items-stretch gap-3">
+              <Link
+                href={`/checkout/offer?offer=${offer.id}`}
+                className="inline-block w-fit rounded-full bg-primary px-7 py-3 font-display text-[0.95rem] font-semibold text-primary-fg transition-colors hover:bg-primary-hover"
+              >
+                {label}
+              </Link>
+              {showAlt && (
+                <Link
+                  href={`/checkout/offer?offer=${showAlt.id}`}
+                  // Ink from the band, like every other outlined control on a
+                  // page whose sections each choose their own ground.
+                  style={{
+                    color: theme.fg,
+                    borderColor: `color-mix(in srgb, ${theme.fg} 42%, transparent)`,
+                  }}
+                  className="inline-flex w-fit flex-col items-center justify-center rounded-full border px-6 py-3 font-display text-[0.95rem] font-semibold transition-colors"
+                >
+                  <span>
+                    {money(showAlt.priceCents, showAlt.currency)}
+                    {showAlt.interval ? ` / ${showAlt.interval}` : ""}
+                  </span>
+                  {altSaving(offer, showAlt) && (
+                    <span className="text-[0.72rem] font-normal opacity-75">
+                      {altSaving(offer, showAlt)}
+                    </span>
+                  )}
+                </Link>
+              )}
+            </span>
           )
         }
       />

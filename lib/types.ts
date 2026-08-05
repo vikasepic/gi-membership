@@ -71,6 +71,14 @@ export type Offer = {
    * it starts — see lifecycleTagOps.
    */
   activecampaignTagId: string | null;
+  /**
+   * A second price on this offer's OWN page at /o/<key>.
+   *
+   * Bumps and upsells read their pairing from the product that places them —
+   * the same offer may be two prices there and one price elsewhere. This page
+   * has no product behind it, so it carries its own.
+   */
+  pageAltOfferId: string | null;
   /** Applied when a trial starts. Kept if they cancel before ever paying. */
   activecampaignTrialTagId: string | null;
   /** Applied when access ends. Never removed. */

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { money } from "@/lib/money";
 import { acceptOtoAction } from "@/app/(store)/checkout/oto/actions";
 import type { Offer } from "@/lib/types";
+import { altSaving } from "@/lib/offers";
 
 // The parts of an upsell page that must never vary.
 //
@@ -89,22 +90,6 @@ export function LockIcon({ className = "" }: { className?: string }) {
 function altLabel(alt: Offer): string {
   const price = money(alt.priceCents, alt.currency);
   return alt.interval ? `${price} / ${alt.interval}` : price;
-}
-
-/**
- * What the alternative saves, in the alternative's own terms.
- *
- * Derived from the two prices rather than typed, so it cannot drift from them.
- * "5 months free" is a fact about $199 against 12 × $29; a number someone typed
- * once is a claim that survives the next price change.
- */
-function altSaving(main: Offer, alt: Offer): string | null {
-  if (main.interval !== "month" || alt.interval !== "year") return null;
-  const full = main.priceCents * 12;
-  if (alt.priceCents >= full) return null;
-  const months = Math.floor((full - alt.priceCents) / main.priceCents);
-  if (months < 1) return null;
-  return `${months} month${months === 1 ? "" : "s"} free`;
 }
 
 export function OtoActions({

@@ -90,3 +90,24 @@ export function altOfferIdFor(chosen: string | undefined | null, selfId?: string
   if (!id || id === selfId) return null;
   return id;
 }
+
+/**
+ * What the second price saves, in its own terms.
+ *
+ * Derived from the two prices rather than typed: "5 months free" is a fact
+ * about $199 against 12 × $29, and a number someone typed once outlives the
+ * next price change and starts lying. Null unless the pair is genuinely a
+ * monthly and a yearly of the same thing — anything else is a comparison the
+ * page should not be making up.
+ */
+export function altSaving(
+  main: { interval: string | null; priceCents: number },
+  alt: { interval: string | null; priceCents: number },
+): string | null {
+  if (main.interval !== "month" || alt.interval !== "year") return null;
+  const full = main.priceCents * 12;
+  if (alt.priceCents >= full) return null;
+  const months = Math.floor((full - alt.priceCents) / main.priceCents);
+  if (months < 1) return null;
+  return `${months} month${months === 1 ? "" : "s"} free`;
+}

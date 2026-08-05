@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { altOfferIdFor, offerForChoice, isOfferEligible, immediateChargeCents, type Ownership } from "@/lib/offers";
+import { altOfferIdFor, altSaving, offerForChoice, isOfferEligible, immediateChargeCents, type Ownership } from "@/lib/offers";
 
 const empty: Ownership = { productIds: new Set(), appIds: new Set() };
 
@@ -177,5 +177,40 @@ describe("saving the second billing option", () => {
 
   it("works on a new offer, which has no id yet", () => {
     expect(altOfferIdFor("offer-2", undefined)).toBe("offer-2");
+  });
+});
+
+describe("what the second price saves", () => {
+  const monthly = { interval: "month" as const, priceCents: 2900 };
+
+  it("is worked out from the two prices, not typed", () => {
+    // 12 × $29 is $348; $199 is five whole months less. A typed number would
+    // outlive the next price change and start lying.
+    expect(altSaving(monthly, { interval: "year", priceCents: 19900 })).toBe("5 months free");
+  });
+
+  it("follows a price change on its own", () => {
+    // $50 a month is $600 a year; $199 is $401 less, which is 8 whole months.
+    expect(altSaving({ interval: "month", priceCents: 5000 }, { interval: "year", priceCents: 19900 })).toBe(
+      "8 months free",
+    );
+  });
+
+  it("says nothing when the year costs more than twelve months", () => {
+    expect(altSaving(monthly, { interval: "year", priceCents: 40000 })).toBeNull();
+  });
+
+  it("says nothing when the saving is under a month", () => {
+    // "0 months free" is worse than silence.
+    expect(altSaving(monthly, { interval: "year", priceCents: 34000 })).toBeNull();
+  });
+
+  it("says nothing about a pair that is not monthly and yearly", () => {
+    expect(altSaving(monthly, { interval: "week", priceCents: 900 })).toBeNull();
+    expect(altSaving({ interval: null, priceCents: 2900 }, { interval: "year", priceCents: 19900 })).toBeNull();
+  });
+
+  it("gets the singular right", () => {
+    expect(altSaving(monthly, { interval: "year", priceCents: 31900 })).toBe("1 month free");
   });
 });
