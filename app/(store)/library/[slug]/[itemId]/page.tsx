@@ -5,6 +5,9 @@ import { listCurriculum, getCourseItem } from "@/lib/curriculum";
 import { flattenPlayable, neighbours } from "@/lib/curriculum-student";
 import { completedItemIds } from "@/lib/progress";
 import { LessonView } from "@/components/library/lesson-view";
+import { NOINDEX } from "@/lib/seo";
+
+export const metadata = NOINDEX;
 
 export default async function ItemPage({
   params,

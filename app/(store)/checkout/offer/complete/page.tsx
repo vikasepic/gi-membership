@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
 import { completeOfferCheckout } from "@/lib/offer-checkout";
+import { NOINDEX } from "@/lib/seo";
+
+export const metadata = NOINDEX;
 
 export const dynamic = "force-dynamic";
 

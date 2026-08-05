@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { confirmCheckout } from "@/app/(store)/checkout/actions";
+import { NOINDEX } from "@/lib/seo";
+
+export const metadata = NOINDEX;
 
 // Where every path after payment lands: straight from checkout, or via the
 // upsell having been accepted, declined, or failed.

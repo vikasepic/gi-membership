@@ -21,6 +21,9 @@ const OFFER_STATUS: Record<string, string> = {
     "Your saved card was declined, so nothing was charged. Update it under Account → Manage billing, then try again.",
 };
 import { money } from "@/lib/money";
+import { NOINDEX } from "@/lib/seo";
+
+export const metadata = NOINDEX;
 
 export default async function LibraryPage({
   searchParams,

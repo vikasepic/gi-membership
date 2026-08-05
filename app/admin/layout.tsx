@@ -1,9 +1,16 @@
 import { AdminSidebar } from "@/components/admin/sidebar";
+import { NOINDEX } from "@/lib/seo";
 import { navCounts } from "@/lib/admin-nav";
 import { stripeMode } from "@/lib/stripe";
 
 // Admin — always dynamic (server data uses runtime-only env, never prerender).
 export const dynamic = "force-dynamic";
+
+// Belt and braces. Middleware already redirects a non-admin to /login, so a
+// crawler never sees any of this — but a redirected URL can still be indexed as
+// a bare link, and the whole of /admin covered by one export is cheaper than
+// remembering it on every page added under it.
+export const metadata = NOINDEX;
 
 // Admin access is gated in middleware.ts (ADMIN_EMAILS); mutating actions also
 // call requireAdmin() as defense in depth.

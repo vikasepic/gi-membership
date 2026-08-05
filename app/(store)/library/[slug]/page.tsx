@@ -4,6 +4,9 @@ import { getCourseBySlug, userOwnsCourse } from "@/lib/courses";
 import { listCurriculum } from "@/lib/curriculum";
 import { completedItemIds } from "@/lib/progress";
 import { CourseOverview } from "@/components/library/course-overview";
+import { NOINDEX } from "@/lib/seo";
+
+export const metadata = NOINDEX;
 
 export default async function CoursePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

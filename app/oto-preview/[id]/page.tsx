@@ -8,6 +8,9 @@ import { SectionsOto } from "@/components/oto/sections-template";
 import { getPageSections } from "@/lib/pages";
 import type { OtoView } from "@/components/oto/shell";
 import { money } from "@/lib/money";
+import { NOINDEX } from "@/lib/seo";
+
+export const metadata = NOINDEX;
 
 export const dynamic = "force-dynamic";
 

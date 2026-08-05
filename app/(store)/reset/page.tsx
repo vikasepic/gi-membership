@@ -3,6 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { NOINDEX } from "@/lib/seo";
+
+export const metadata = NOINDEX;
 
 export default function ResetRequestPage() {
   const [email, setEmail] = useState("");

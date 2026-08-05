@@ -11,6 +11,9 @@ import { offerAsSoldTo } from "@/lib/trial-history";
 import { publicCoverUrl } from "@/lib/media";
 import { productDisplay } from "@/lib/courses";
 import { rememberLead } from "@/lib/leads";
+import { NOINDEX } from "@/lib/seo";
+
+export const metadata = NOINDEX;
 
 
 // Their last billing country, so a repeat buyer doesn't re-pick it.

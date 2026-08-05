@@ -5,6 +5,9 @@ import { listCurriculum, getCourseItem } from "@/lib/curriculum";
 import { flattenPlayable, neighbours } from "@/lib/curriculum-student";
 import { CourseOverview } from "@/components/library/course-overview";
 import { LessonView } from "@/components/library/lesson-view";
+import { NOINDEX } from "@/lib/seo";
+
+export const metadata = NOINDEX;
 
 export const dynamic = "force-dynamic";
 

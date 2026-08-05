@@ -11,6 +11,9 @@ import { OfferCheckoutForm } from "@/components/checkout/offer-checkout-form";
 export const dynamic = "force-dynamic";
 
 import { money } from "@/lib/money";
+import { NOINDEX } from "@/lib/seo";
+
+export const metadata = NOINDEX;
 
 // Checkout for a single offer, for a signed-in member with no card on file.
 // The product checkout can't serve this: it creates an account and charges a

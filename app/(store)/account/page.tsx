@@ -4,6 +4,9 @@ import { logout, openBillingPortal } from "./actions";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { purchaseDocsForUser, subscriptionInvoicesForUser } from "@/lib/receipts";
 import { money } from "@/lib/money";
+import { NOINDEX } from "@/lib/seo";
+
+export const metadata = NOINDEX;
 
 const when = (iso: string | number) =>
   new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(
