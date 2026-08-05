@@ -30,8 +30,13 @@ export default async function OtoPage({
   const offer = await getOffer(verified.payload.offerId);
   if (!offer) redirect("/checkout/thank-you");
 
+  // Resolved here, from the offer's own row — never from the request. The page
+  // shows two prices; the buyer picks a side, not an offer.
+  const altOffer = offer.altOfferId ? await getOffer(offer.altOfferId) : null;
+
   const view: OtoView = {
     offer,
+    altOffer: altOffer?.active ? altOffer : null,
     token,
     // Straight from the signed payload — the same value the server enforces.
     expiresAt: verified.payload.exp * 1000,

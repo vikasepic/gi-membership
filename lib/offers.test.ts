@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isOfferEligible, immediateChargeCents, type Ownership } from "@/lib/offers";
+import { offerForChoice, isOfferEligible, immediateChargeCents, type Ownership } from "@/lib/offers";
 
 const empty: Ownership = { productIds: new Set(), appIds: new Set() };
 
@@ -97,5 +97,40 @@ describe("shouldShowOffer", () => {
     expect(
       shouldShowOffer({ grantType: "subscription", grantProductId: null, grantAppId: null, active: true }, noneOwned),
     ).toBe(false);
+  });
+});
+
+describe("which offer a click on the upsell buys", () => {
+  const shown = { id: "main", altOfferId: "alt" };
+  const alt = { id: "alt", active: true };
+
+  it("buys what the token names when no side was sent", () => {
+    expect(offerForChoice(shown, alt, undefined)).toBe("main");
+  });
+
+  it("buys the alternative when the alternative was clicked", () => {
+    expect(offerForChoice(shown, alt, "alt")).toBe("alt");
+  });
+
+  it("refuses when the offer declares no alternative", () => {
+    // A form that grew a `choice` field on a page that never showed a second
+    // price is a request that should buy nothing.
+    expect(offerForChoice({ id: "main", altOfferId: null }, null, "alt")).toBeNull();
+  });
+
+  it("refuses an alternative that has been switched off", () => {
+    expect(offerForChoice(shown, { id: "alt", active: false }, "alt")).toBeNull();
+  });
+
+  it("refuses an alternative that is not the one this offer declares", () => {
+    // The id never comes from the request, but this is the assertion that says
+    // so — if resolution ever starts trusting a supplied id, this fails.
+    expect(offerForChoice(shown, { id: "something-else", active: true }, "alt")).toBeNull();
+  });
+
+  it("never returns the alternative for an ordinary accept", () => {
+    for (const a of [alt, null, { id: "alt", active: false }]) {
+      expect(offerForChoice(shown, a, undefined)).toBe("main");
+    }
   });
 });

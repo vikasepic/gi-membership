@@ -53,3 +53,25 @@ export function immediateChargeCents(offer: {
   if (offer.trialDays && offer.trialDays > 0) return 0;
   return offer.priceCents;
 }
+
+/**
+ * Which offer a click on the upsell actually buys.
+ *
+ * The page shows two prices; the form sends a side, never an id. So the only
+ * thing a tampered request can do is pick the alternative it was already
+ * shown — and only if the offer declares one, and only if that one is live.
+ *
+ * Pure and separate from acceptOto because this is the rule that decides what
+ * money moves, and a rule that only exists inside a Stripe call is a rule
+ * nobody can check.
+ */
+export function offerForChoice(
+  shown: { id: string; altOfferId: string | null },
+  alt: { id: string; active: boolean } | null,
+  choice: "alt" | undefined,
+): string | null {
+  if (choice !== "alt") return shown.id;
+  if (!shown.altOfferId) return null;
+  if (!alt || alt.id !== shown.altOfferId || !alt.active) return null;
+  return alt.id;
+}

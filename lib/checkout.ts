@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getProductBySlug, getOffer } from "@/lib/store";
-import { isOfferEligible, shouldShowOffer, immediateChargeCents, type Ownership } from "@/lib/offers";
+import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerForChoice, type Ownership } from "@/lib/offers";
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
 import { notifyAppEntitlement } from "@/lib/apps";
 import { trackPurchase } from "@/lib/tracking";
@@ -859,7 +859,7 @@ export type OtoAcceptResult =
 
 // Accept the OTO. POST-only, single-use: an atomic pending→completed update is
 // the replay guard, so a back-button/refresh/replay can never double-charge.
-export async function acceptOto(token: string): Promise<OtoAcceptResult> {
+export async function acceptOto(token: string, choice?: "alt"): Promise<OtoAcceptResult> {
   const verified = verifyOtoToken(token, otoSigningSecret());
   if (!verified.ok) return { ok: false, error: verified.reason };
   const { orderId, offerId, userId } = verified.payload;
@@ -878,8 +878,16 @@ export async function acceptOto(token: string): Promise<OtoAcceptResult> {
     .select("id, store_id, stripe_customer_id, stripe_payment_intent_id, email")
     .eq("id", orderId)
     .maybeSingle();
-  const offer = await getOffer(offerId);
-  if (!order || !offer) return { ok: false, error: "invalid" };
+  const shown = await getOffer(offerId);
+  if (!order || !shown) return { ok: false, error: "invalid" };
+
+  // "alt" is a choice between the two prices the page showed, not a free
+  // choice of offer. It resolves through the offer's OWN column, so the worst
+  // a tampered form can do is buy the alternative it was already offered.
+  const alt = shown.altOfferId ? await getOffer(shown.altOfferId) : null;
+  const buyId = offerForChoice(shown, alt, choice);
+  if (!buyId) return { ok: false, error: "invalid" };
+  const offer = buyId === shown.id ? shown : (alt as Offer);
 
   // Charge the same saved card the base order used.
   const pi = await stripe().paymentIntents.retrieve(order.stripe_payment_intent_id as string);

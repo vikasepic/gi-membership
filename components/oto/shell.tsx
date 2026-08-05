@@ -13,6 +13,14 @@ import type { Offer } from "@/lib/types";
 
 export type OtoView = {
   offer: Offer;
+  /**
+   * The second billing option, when the offer declares one.
+   *
+   * Shown as a button beside the first. Both are one click on the same saved
+   * card; which one was clicked travels as "alt", not as an id, so the choice
+   * stays between the two prices the page actually displayed.
+   */
+  altOffer?: Offer | null;
   token: string;
   chargeNowCents: number;
   /** e.g. "then $47/month after your 7-day trial" — null for one-off offers. */
@@ -77,6 +85,28 @@ export function LockIcon({ className = "" }: { className?: string }) {
  *
  * `tone="band"` renders it for a coloured section; the mechanics are identical.
  */
+/** "$199 / year" — the alternative says what it is, not "the other one". */
+function altLabel(alt: Offer): string {
+  const price = money(alt.priceCents, alt.currency);
+  return alt.interval ? `${price} / ${alt.interval}` : price;
+}
+
+/**
+ * What the alternative saves, in the alternative's own terms.
+ *
+ * Derived from the two prices rather than typed, so it cannot drift from them.
+ * "5 months free" is a fact about $199 against 12 × $29; a number someone typed
+ * once is a claim that survives the next price change.
+ */
+function altSaving(main: Offer, alt: Offer): string | null {
+  if (main.interval !== "month" || alt.interval !== "year") return null;
+  const full = main.priceCents * 12;
+  if (alt.priceCents >= full) return null;
+  const months = Math.floor((full - alt.priceCents) / main.priceCents);
+  if (months < 1) return null;
+  return `${months} month${months === 1 ? "" : "s"} free`;
+}
+
 export function OtoActions({
   view,
   tone = "plain",
@@ -106,9 +136,11 @@ export function OtoActions({
   acceptLabel?: string;
 }) {
   const onBand = tone === "band";
+  const alt = view.altOffer;
   return (
     <div className={`flex flex-col gap-4 ${align === "start" ? "items-start" : ""} ${className}`}>
-      <form action={acceptOtoAction} className={align === "start" ? "" : "w-full"}>
+      <div className={`flex flex-wrap items-stretch gap-3 ${align === "start" ? "" : "w-full"}`}>
+      <form action={acceptOtoAction} className={align === "start" ? "" : "flex-1"}>
         <input type="hidden" name="token" value={view.token} />
         <button
           type="submit"
@@ -123,6 +155,31 @@ export function OtoActions({
           <ArrowRight className="transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0" />
         </button>
       </form>
+
+      {alt && (
+        // The second price, quieter than the first: one of them has to lead, or
+        // the page asks the reader to make a decision before it has made a case.
+        <form action={acceptOtoAction} className={align === "start" ? "" : "flex-1"}>
+          <input type="hidden" name="token" value={view.token} />
+          <input type="hidden" name="choice" value="alt" />
+          <button
+            type="submit"
+            className={`flex w-full flex-col items-center justify-center rounded-xl border px-6 py-3 transition-colors ${
+              onBand
+                ? "border-white/35 text-white hover:bg-white/10"
+                : "border-[#b0532f]/45 text-[#b0532f] hover:bg-[#b0532f]/8"
+            }`}
+          >
+            <span className="text-[1.02rem] font-medium">{altLabel(alt)}</span>
+            {altSaving(view.offer, alt) && (
+              <span className={`text-xs ${onBand ? "text-white/70" : "text-muted"}`}>
+                {altSaving(view.offer, alt)}
+              </span>
+            )}
+          </button>
+        </form>
+      )}
+      </div>
 
       {showNote && (
         <p

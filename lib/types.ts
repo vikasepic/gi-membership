@@ -44,6 +44,13 @@ export type Offer = {
   grantProductId: string | null;
   grantAppId: string | null;
   grantEntitlementKey: string | null;
+  /**
+   * A second billing option for the same grant — monthly beside yearly.
+   *
+   * Read server-side only. The upsell accepts by sending "alt", never an id,
+   * so a client cannot substitute a cheaper offer for the one it was shown.
+   */
+  altOfferId: string | null;
   billingType: BillingType;
   interval: Interval | null;
   intervalCount: number | null;
