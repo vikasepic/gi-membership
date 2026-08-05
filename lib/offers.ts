@@ -75,3 +75,17 @@ export function offerForChoice(
   if (!alt || alt.id !== shown.altOfferId || !alt.active) return null;
   return alt.id;
 }
+
+/**
+ * The second billing option an offer is saved with.
+ *
+ * Empty means one price. Its own id means somebody picked the offer they are
+ * editing — the database refuses that row, and dropping it here turns a
+ * mis-click into nothing rather than into a failed save with a constraint
+ * error in the message.
+ */
+export function altOfferIdFor(chosen: string | undefined | null, selfId?: string | null): string | null {
+  const id = (chosen ?? "").trim();
+  if (!id || id === selfId) return null;
+  return id;
+}

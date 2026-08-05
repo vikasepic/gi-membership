@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { offerForChoice, isOfferEligible, immediateChargeCents, type Ownership } from "@/lib/offers";
+import { altOfferIdFor, offerForChoice, isOfferEligible, immediateChargeCents, type Ownership } from "@/lib/offers";
 
 const empty: Ownership = { productIds: new Set(), appIds: new Set() };
 
@@ -156,5 +156,27 @@ describe("the bump's two prices resolve the same way the upsell's do", () => {
 
   it("refuses an alternative that has been switched off since the page loaded", () => {
     expect(offerForChoice(bump, { id: "bump-yearly", active: false }, "alt")).toBeNull();
+  });
+});
+
+describe("saving the second billing option", () => {
+  it("is null when none was chosen", () => {
+    expect(altOfferIdFor("", "offer-1")).toBeNull();
+    expect(altOfferIdFor(undefined, "offer-1")).toBeNull();
+    expect(altOfferIdFor(null, "offer-1")).toBeNull();
+  });
+
+  it("is the offer that was chosen", () => {
+    expect(altOfferIdFor("offer-2", "offer-1")).toBe("offer-2");
+  });
+
+  it("is never the offer itself", () => {
+    // A row pointing at itself is refused by the database. Dropping it here
+    // turns a mis-click into nothing rather than a failed save.
+    expect(altOfferIdFor("offer-1", "offer-1")).toBeNull();
+  });
+
+  it("works on a new offer, which has no id yet", () => {
+    expect(altOfferIdFor("offer-2", undefined)).toBe("offer-2");
   });
 });

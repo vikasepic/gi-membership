@@ -23,8 +23,13 @@ export type OfferOption = {
   id: string;
   name: string;
   grantType: "product" | "subscription";
+  grantAppId: string | null;
+  grantEntitlementKey: string | null;
   priceCents: number;
+  currency: string;
+  interval: string | null;
   billingType: "one_time" | "recurring";
+  active: boolean;
 };
 
 export type ProductInput = {
@@ -64,14 +69,25 @@ export async function getProductById(id: string): Promise<Product | null> {
   return data ? camelize<Product>(data) : null;
 }
 
-export async function listOfferOptions(): Promise<OfferOption[]> {
+/**
+ * Offers you can attach to something.
+ *
+ * Active only by default — the product form's bump and upsell pickers should
+ * not offer a draft. `includeDrafts` is for the alternative-price picker,
+ * where the second option is normally built beside the first and neither is
+ * live yet; whether a buyer ever sees it is checked at render.
+ */
+export async function listOfferOptions(includeDrafts = false): Promise<OfferOption[]> {
   const db = createServiceClient();
-  const { data, error } = await db
+  const q = db
     .from("offers")
-    .select("id, name, grant_type, price_cents, billing_type")
-    .eq("store_id", await getStoreId())
-    .eq("active", true)
-    .order("created_at", { ascending: true });
+    .select(
+      "id, name, grant_type, grant_app_id, grant_entitlement_key, price_cents, currency, interval, billing_type, active",
+    )
+    .eq("store_id", await getStoreId());
+  const { data, error } = await (includeDrafts ? q : q.eq("active", true)).order("created_at", {
+    ascending: true,
+  });
   if (error) throw new Error(`listOfferOptions: ${error.message}`);
   return camelize<OfferOption[]>(data ?? []);
 }
@@ -162,6 +178,7 @@ export type OfferInput = {
   bullets: string[];
   imageUrl: string | null;
   acceptLabel: string;
+  altOfferId?: string | null;
   activecampaignTagId?: string | null;
   activecampaignTrialTagId?: string | null;
   activecampaignCancelledTagId?: string | null;
@@ -237,6 +254,7 @@ function toOfferRow(input: OfferInput, storeId: string) {
     bullets: input.bullets,
     image_url: input.imageUrl,
     accept_label: input.acceptLabel,
+    alt_offer_id: input.altOfferId ?? null,
     activecampaign_tag_id: input.activecampaignTagId ?? null,
     activecampaign_trial_tag_id: input.activecampaignTrialTagId ?? null,
     activecampaign_cancelled_tag_id: input.activecampaignCancelledTagId ?? null,

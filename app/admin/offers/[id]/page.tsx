@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OfferForm } from "@/components/admin/offer-form";
-import { getOfferById, listProductOptions, listAppOptions } from "@/lib/admin";
+import { getOfferById, listProductOptions, listAppOptions, listOfferOptions } from "@/lib/admin";
 import { hasCustomOtoPage } from "@/components/oto/registry";
 
 export default async function EditOfferPage({
@@ -10,10 +10,13 @@ export default async function EditOfferPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [offer, products, apps] = await Promise.all([
+  const [offer, products, apps, offers] = await Promise.all([
     getOfferById(id),
     listProductOptions(),
     listAppOptions(),
+    // Drafts too: the second price is usually built beside the first, and
+    // neither is live while they are being set up.
+    listOfferOptions(true),
   ]);
   if (!offer) notFound();
 
@@ -80,7 +83,7 @@ export default async function EditOfferPage({
           />
         </div>
       </div>
-      <OfferForm offer={offer} products={products} apps={apps} />
+      <OfferForm offer={offer} products={products} apps={apps} offers={offers} />
     </div>
   );
 }
