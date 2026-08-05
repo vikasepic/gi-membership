@@ -93,6 +93,12 @@ export async function notifyAppEntitlement(args: {
         occurredAt: Math.floor(Date.now() / 1000),
       }),
       signal: AbortSignal.timeout(5000),
+      // A provision call is server-to-server and authenticated by the header.
+      // If it gets bounced, it has been bounced to something that is not the
+      // app — a login page, an SSO gate — and following the redirect would let
+      // that page's 200 be read as "entitlement delivered". Funnel App's
+      // middleware did exactly this: 307 to /login on both endpoints.
+      redirect: "manual",
     });
     // ponytail: no retry queue. A missed grant self-heals when the user opens
     // the app (the handoff re-provisions); a missed REVOKE does not, which is
