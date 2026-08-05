@@ -2,7 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { pushOwnershipStateToApps } from "@/lib/app-sync";
 import { sendCrmEvent } from "@/lib/crm";
-import { untagRevoked } from "@/lib/ac-tags";
+import { tagLifecycle, untagRevoked } from "@/lib/ac-tags";
 
 // Subscription lifecycle -> ownership state. This is what keeps a cancelled or
 // refunded customer from retaining app access, and what stops a single failed
@@ -71,23 +71,22 @@ export async function syncSubscriptionOwnership(
 
   if (changed.length === 0) return;
 
-  // A cancellation must take the offer's tag back, or someone who cancelled
-  // keeps getting the sequence for a subscription they ended. past_due is NOT
-  // untagged: Stripe is still retrying the card and they still have access.
-  if (status === "canceled") {
-    try {
-      const { data: rows } = await db
-        .from("ownership")
-        .select("offer_id")
-        .eq("stripe_subscription_id", stripeSubscriptionId)
-        .not("offer_id", "is", null);
-      const offerIds = (rows ?? []).map((r) => r.offer_id as string);
-      for (const row of changed) {
-        await untagRevoked({ userId: row.user_id as string, offerIds });
-      }
-    } catch (e) {
-      console.error("[syncSubscriptionOwnership] untag failed:", e);
+  // Move the lifecycle tags to match. This is where a trial becoming a sale is
+  // recorded: `active` adds the buyer tag and takes the trial tag away, and a
+  // cancellation adds the cancelled tag while LEAVING the trial tag, which is
+  // the only record that someone tried this and never paid.
+  try {
+    const { data: rows } = await db
+      .from("ownership")
+      .select("offer_id")
+      .eq("stripe_subscription_id", stripeSubscriptionId)
+      .not("offer_id", "is", null);
+    const offerIds = (rows ?? []).map((r) => r.offer_id as string);
+    for (const row of changed) {
+      await tagLifecycle({ userId: row.user_id as string, offerIds, status });
     }
+  } catch (e) {
+    console.error("[syncSubscriptionOwnership] lifecycle tags failed:", e);
   }
 
   const crmType =
@@ -200,8 +199,15 @@ export async function revokeOwnershipForOrder(
     }
     // Take back exactly the tags this order applied. Guarded: the refund itself
     // has already gone through, and a CRM outage must not make it look failed.
+    //
+    // A refund is access ending, so the offers go through the same lifecycle as
+    // a cancellation — cancelled tag on, access tag off, trial tag left alone.
+    // Products have no lifecycle beyond owning them, so they stay with untag.
     try {
-      await untagRevoked({ userId: order.user_id as string, productIds, offerIds });
+      await untagRevoked({ userId: order.user_id as string, productIds });
+      if (offerIds.length > 0) {
+        await tagLifecycle({ userId: order.user_id as string, offerIds, status: "canceled" });
+      }
     } catch (e) {
       console.error("[revokeOwnershipForOrder] untag failed (refund still stands):", e);
     }

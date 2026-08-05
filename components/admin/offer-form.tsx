@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { saveOffer, removeOffer, type SaveState } from "@/app/admin/offers/actions";
 import { inputClass as input, Field, Section } from "@/components/admin/form-controls";
 import type { Offer } from "@/lib/types";
@@ -21,6 +21,11 @@ export function OfferForm({
 }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveOffer, {});
   const sections = sectionsToForm(offer?.otoSections as never);
+  // Held in state so the trial tag field appears the moment trial days are
+  // typed, rather than after a save — the field is the explanation of what a
+  // trial means to the list, and it is needed while deciding to have one.
+  const [trialDays, setTrialDays] = useState(String(offer?.trialDays ?? ""));
+  const hasTrial = Number(trialDays) > 0;
 
   return (
     <form action={action} className="flex flex-col gap-6">
@@ -90,7 +95,14 @@ export function OfferForm({
             <input name="intervalCount" type="number" min="1" defaultValue={offer?.intervalCount ?? ""} className={input} />
           </Field>
           <Field label="Trial days" hint="recurring">
-            <input name="trialDays" type="number" min="0" defaultValue={offer?.trialDays ?? ""} className={input} />
+            <input
+              name="trialDays"
+              type="number"
+              min="0"
+              value={trialDays}
+              onChange={(e) => setTrialDays(e.target.value)}
+              className={input}
+            />
           </Field>
         </div>
       </Section>
@@ -211,13 +223,61 @@ export function OfferForm({
 
         <Field
           label="ActiveCampaign tag ID"
-          hint="Numeric id, not the tag name. Applied when this offer is granted and removed if it is cancelled or refunded. Leave empty for no tag."
+          hint="Numeric id, not the tag name. Has access right now: applied when this offer is granted, removed if it is cancelled or refunded."
         >
           <input
             name="activecampaignTagId"
             defaultValue={offer?.activecampaignTagId ?? ""}
             inputMode="numeric"
             placeholder="e.g. 43"
+            className={input}
+          />
+        </Field>
+
+        {/* Only for an offer that actually has a trial. Without one there is no
+            trialing state to tag, and a field that can never fire is a field
+            someone fills in and then wonders about. */}
+        {hasTrial && (
+          <Field
+            label="Trial tag ID"
+            hint="Applied when the trial starts, removed the moment they pay. Kept if they cancel inside the trial — cancelled WITH this tag never paid, cancelled without it did."
+          >
+            <input
+              name="activecampaignTrialTagId"
+              defaultValue={offer?.activecampaignTrialTagId ?? ""}
+              inputMode="numeric"
+              placeholder="e.g. 44"
+              className={input}
+            />
+          </Field>
+        )}
+
+        <Field
+          label="Buyer tag ID"
+          hint={
+            hasTrial
+              ? "Applied the first time money is actually taken — when the trial converts. Removed again if they cancel, so that cancelled-without-a-trial-tag means they paid."
+              : "Applied when they pay. This offer charges immediately, so it lands with the grant. Removed if they cancel."
+          }
+        >
+          <input
+            name="activecampaignBuyerTagId"
+            defaultValue={offer?.activecampaignBuyerTagId ?? ""}
+            inputMode="numeric"
+            placeholder="e.g. 45"
+            className={input}
+          />
+        </Field>
+
+        <Field
+          label="Cancelled tag ID"
+          hint="Applied when access ends, by cancellation or refund, and never removed. Pair it with the access tag above to tell a churned customer from one who came back."
+        >
+          <input
+            name="activecampaignCancelledTagId"
+            defaultValue={offer?.activecampaignCancelledTagId ?? ""}
+            inputMode="numeric"
+            placeholder="e.g. 46"
             className={input}
           />
         </Field>

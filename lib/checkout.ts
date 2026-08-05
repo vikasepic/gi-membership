@@ -20,7 +20,7 @@ import { ensureUserProfile } from "@/lib/users";
 import { applyPendingEntitlements } from "@/lib/app-sync";
 import { sendCrmEvent, type CrmItem } from "@/lib/crm";
 import { resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
-import { tagPurchase } from "@/lib/ac-tags";
+import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
 import { markLeadConverted } from "@/lib/leads";
 import { LEGAL } from "@/lib/legal";
 import type { Offer } from "@/lib/types";
@@ -587,11 +587,28 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
     // Before tagging: a buffered lead for this buyer must not be forwarded
     // fifteen minutes after they have already paid.
     await markLeadConverted(order.email as string);
+    const boughtOfferIds = (bought ?? []).map((i) => i.offer_id).filter(Boolean) as string[];
     await tagPurchase({
       userId: order.user_id as string,
       productIds: (bought ?? []).map((i) => i.product_id).filter(Boolean) as string[],
-      offerIds: (bought ?? []).map((i) => i.offer_id).filter(Boolean) as string[],
+      offerIds: boughtOfferIds,
     });
+    // An offer bought with a trial has not been paid for yet, so it gets the
+    // trial tag rather than the buyer one. Grouped by what each offer actually
+    // started as — a checkout can carry both a trial bump and a paid one.
+    if (boughtOfferIds.length > 0) {
+      const offers = await Promise.all(boughtOfferIds.map((id) => getOffer(id)));
+      const byStatus = { trialing: [] as string[], active: [] as string[] };
+      for (const o of offers) {
+        if (!o) continue;
+        byStatus[o.trialDays && o.trialDays > 0 ? "trialing" : "active"].push(o.id);
+      }
+      for (const status of ["trialing", "active"] as const) {
+        if (byStatus[status].length > 0) {
+          await tagLifecycle({ userId: order.user_id as string, offerIds: byStatus[status], status });
+        }
+      }
+    }
   } catch (e) {
     console.error("[finalizeOrder] activecampaign failed (order is still complete):", e);
   }

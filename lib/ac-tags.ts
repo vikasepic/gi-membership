@@ -168,3 +168,127 @@ export async function untagRevoked(args: {
   if (removeTagIds.length === 0) return;
   await tagOrQueue({ ...contact, removeTagIds });
 }
+
+// ---------------------------------------------------------------------------
+// The trial / buyer / cancelled lifecycle
+// ---------------------------------------------------------------------------
+
+export type OwnershipStatus = "trialing" | "active" | "past_due" | "canceled";
+
+/** The four tags an offer can carry. Any of them may be unset. */
+export type LifecycleTags = {
+  /** Has access right now. Applied on grant, taken back on revoke. */
+  access: string | null;
+  /** In a trial and has never paid. */
+  trial: string | null;
+  /** Has paid at least once. */
+  buyer: string | null;
+  /** Access has ended at least once. Never taken back. */
+  cancelled: string | null;
+};
+
+/**
+ * Which tags a status implies.
+ *
+ * A map from status to operations, NOT from transition to operations. That is
+ * deliberate: Stripe sends customer.subscription.updated for a card change, a
+ * metadata edit and a renewal as well as a real status change, so anything
+ * keyed on "went active" would fire every month for the life of the
+ * subscription. Applying the same set again is a no-op at ActiveCampaign.
+ *
+ * The rules, in one place because they are the whole feature:
+ *
+ *   trialing   +access +trial
+ *   active     +access +buyer  −trial      the trial is over; they paid
+ *   past_due   nothing                     Stripe is still retrying the card
+ *   canceled   +cancelled −access −buyer   the trial tag is deliberately kept
+ *
+ * Keeping the trial tag through a cancellation is the point of the whole
+ * thing, and it is what makes the two segments a single condition each:
+ *
+ *   cancelled AND trial       tried it, never paid
+ *   cancelled AND NOT trial   paid, then left
+ *
+ * The buyer tag comes off at cancellation for the same reason: with it gone,
+ * a cancelled contact carrying no trial tag can only be someone who paid.
+ *
+ * The cost of that, stated so nobody rediscovers it: a former buyer who
+ * cancels and later starts a SECOND trial gets the trial tag back with no
+ * buyer tag left to contradict it, so they read as never having paid. Trials
+ * are seven days and this needs someone to leave and return, so it is rare —
+ * but it is the one case these four tags cannot describe.
+ */
+export function lifecycleTagOps(
+  tags: LifecycleTags,
+  status: OwnershipStatus,
+): { add: string[]; remove: string[] } {
+  const some = (...ids: (string | null)[]) => ids.filter((x): x is string => !!x);
+  switch (status) {
+    case "trialing":
+      return { add: some(tags.access, tags.trial), remove: [] };
+    case "active":
+      return { add: some(tags.access, tags.buyer), remove: some(tags.trial) };
+    case "past_due":
+      // Access is not withdrawn while Stripe retries, so nothing about their
+      // standing has changed yet either.
+      return { add: [], remove: [] };
+    case "canceled":
+      return { add: some(tags.cancelled), remove: some(tags.access, tags.buyer) };
+  }
+}
+
+/** The lifecycle tags configured on these offers. */
+export async function lifecycleTagsFor(offerIds: string[]): Promise<Map<string, LifecycleTags>> {
+  const out = new Map<string, LifecycleTags>();
+  if (offerIds.length === 0) return out;
+  const db = createServiceClient();
+  const { data } = await db
+    .from("offers")
+    .select(
+      "id, activecampaign_tag_id, activecampaign_trial_tag_id, activecampaign_buyer_tag_id, activecampaign_cancelled_tag_id",
+    )
+    .in("id", offerIds);
+  for (const row of data ?? []) {
+    out.set(row.id as string, {
+      access: (row.activecampaign_tag_id as string | null) ?? null,
+      trial: (row.activecampaign_trial_tag_id as string | null) ?? null,
+      buyer: (row.activecampaign_buyer_tag_id as string | null) ?? null,
+      cancelled: (row.activecampaign_cancelled_tag_id as string | null) ?? null,
+    });
+  }
+  return out;
+}
+
+/**
+ * Move someone's tags to match where their subscription now stands.
+ *
+ * Called from every path that learns a status — checkout, the Stripe webhook,
+ * and an app reporting its own sale — because a tag that only moves on one of
+ * them is a tag that is wrong for everyone who arrived another way.
+ */
+export async function tagLifecycle(args: {
+  userId: string;
+  offerIds: string[];
+  status: OwnershipStatus;
+}): Promise<void> {
+  if (!activeCampaignEnabled() || args.offerIds.length === 0) return;
+  const contact = await contactFor(args.userId);
+  if (!contact) return;
+  const tags = await lifecycleTagsFor(args.offerIds);
+
+  const add = new Set<string>();
+  const remove = new Set<string>();
+  for (const id of args.offerIds) {
+    const t = tags.get(id);
+    if (!t) continue;
+    const ops = lifecycleTagOps(t, args.status);
+    ops.add.forEach((x) => add.add(x));
+    ops.remove.forEach((x) => remove.add(x));
+  }
+  // Two offers could name the same tag with opposite intent. Adding wins: a
+  // subscription someone still holds must not lose its tag because a different
+  // one ended.
+  remove.forEach((x) => add.has(x) && remove.delete(x));
+  if (add.size === 0 && remove.size === 0) return;
+  await tagOrQueue({ ...contact, tagIds: [...add], removeTagIds: [...remove] });
+}

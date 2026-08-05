@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { getAppById, notifyAppEntitlement, type AppRow } from "@/lib/apps";
 import type { OwnershipStatus } from "@/lib/subscription-sync";
+import { tagLifecycle } from "@/lib/ac-tags";
 
 // Two-way entitlement sync.
 //
@@ -134,7 +135,40 @@ export async function recordAppEntitlement(args: {
     status: args.status,
     stripeSubscriptionId: args.stripeSubscriptionId,
   });
+  await tagAppLifecycle(args.app.id, args.entitlementKey, user.id as string, args.status);
   return { ok: true, linked: true };
+}
+
+/**
+ * Lifecycle tags for a sale the APP made, not the store.
+ *
+ * The tags live on offers and this sale came through none of them, so they are
+ * resolved from the offers that grant this app and entitlement. A trial someone
+ * started inside the app is still a trial, and leaving it untagged would put a
+ * hole in exactly the segment these tags exist to build.
+ *
+ * If the monthly and yearly offers carry DIFFERENT tags, an app-direct sale
+ * applies both — there is no way to know which one the app sold. Give the
+ * offers for one product the same three tags and that never comes up.
+ */
+async function tagAppLifecycle(
+  appId: string,
+  entitlementKey: string | null,
+  userId: string,
+  status: OwnershipStatus,
+): Promise<void> {
+  try {
+    const db = createServiceClient();
+    let q = db.from("offers").select("id").eq("grant_app_id", appId);
+    q = entitlementKey ? q.eq("grant_entitlement_key", entitlementKey) : q;
+    const { data } = await q;
+    const offerIds = (data ?? []).map((r) => r.id as string);
+    if (offerIds.length > 0) await tagLifecycle({ userId, offerIds, status });
+  } catch (e) {
+    // An app told us about a sale; that fact is recorded. A CRM failure here
+    // must not turn a 200 into a 500 and have them retry a sale we already have.
+    console.error("[recordAppEntitlement] lifecycle tags failed:", e);
+  }
 }
 
 // ownership has a partial unique index on (store_id, user_id, app_id), so this

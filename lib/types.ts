@@ -65,6 +65,15 @@ export type Offer = {
   acceptLabel: string;
   /** ActiveCampaign tag applied when granted, removed when cancelled. */
   activecampaignTagId: string | null;
+  /**
+   * The trial / buyer / cancelled lifecycle. See lifecycleTagOps.
+   *
+   * The access tag above says "has it now"; these three say how they got here
+   * and whether they ever paid, which is what survives them losing access.
+   */
+  activecampaignTrialTagId: string | null;
+  activecampaignBuyerTagId: string | null;
+  activecampaignCancelledTagId: string | null;
   /** Checkout-bump copy. Null falls back to headline/description. */
   bumpHeadline: string | null;
   bumpDescription: string | null;

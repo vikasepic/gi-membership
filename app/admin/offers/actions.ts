@@ -42,6 +42,26 @@ const schema = z
       .regex(/^\d*$/, "Tag ID must be the numeric id from ActiveCampaign")
       .optional()
       .default(""),
+    // The lifecycle three. Same rule: a pasted tag NAME has to fail here, not
+    // silently never match on the day someone's trial converts.
+    activecampaignTrialTagId: z
+      .string()
+      .trim()
+      .regex(/^\d*$/, "Trial tag ID must be the numeric id from ActiveCampaign")
+      .optional()
+      .default(""),
+    activecampaignBuyerTagId: z
+      .string()
+      .trim()
+      .regex(/^\d*$/, "Buyer tag ID must be the numeric id from ActiveCampaign")
+      .optional()
+      .default(""),
+    activecampaignCancelledTagId: z
+      .string()
+      .trim()
+      .regex(/^\d*$/, "Cancelled tag ID must be the numeric id from ActiveCampaign")
+      .optional()
+      .default(""),
     // Derived from OTO_TEMPLATES rather than repeated. Listing the layouts
     // here by hand is what broke saving: `sales` was added to the database
     // constraint, the registry and the dropdown, and this copy was missed, so
@@ -111,6 +131,9 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     imageUrl: v.imageUrl,
     acceptLabel: v.acceptLabel,
     activecampaignTagId: v.activecampaignTagId?.trim() || null,
+    activecampaignTrialTagId: v.activecampaignTrialTagId?.trim() || null,
+    activecampaignBuyerTagId: v.activecampaignBuyerTagId?.trim() || null,
+    activecampaignCancelledTagId: v.activecampaignCancelledTagId?.trim() || null,
     otoTemplate: v.otoTemplate,
     otoBody: v.otoBody,
     otoVideoUrl: v.otoVideoUrl,
