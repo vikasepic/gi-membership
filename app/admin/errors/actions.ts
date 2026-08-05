@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import { createServiceClient } from "@/lib/supabase/server";
 import { runDueJobs } from "@/lib/retry";
+import { repairSubscriptionDrift } from "@/lib/subscription-reconcile";
 
 /**
  * Run one queued job immediately, rather than waiting for its backoff.
@@ -26,5 +27,18 @@ export async function retryNowAction(formData: FormData): Promise<void> {
     .is("resolved_at", null);
 
   await runDueJobs();
+  revalidatePath("/admin/errors");
+}
+
+/**
+ * Make our subscription records match Stripe.
+ *
+ * Deliberately a button rather than something that runs on its own: it gives
+ * access back to people, and a repair that happens quietly is one nobody can
+ * check afterwards.
+ */
+export async function repairDriftAction(): Promise<void> {
+  await requireAdmin();
+  await repairSubscriptionDrift();
   revalidatePath("/admin/errors");
 }

@@ -42,11 +42,16 @@ async function ownershipFor(email: string) {
 }
 
 describe.skipIf(!canRun)("subscription + refund hardening (integration)", () => {
-  it("a refund revokes the product bought on that order and marks the order refunded", async () => {
+  it("a refund takes back the product and LEAVES a trial Stripe is still running", async () => {
+    // The bug this replaces: refunding the product revoked the bump's
+    // subscription in our records and told the app to withdraw access, while
+    // the Stripe subscription carried on billing. The customer paid for
+    // something they could no longer open, and nobody reports that — they
+    // just churn. Refunding this order refunds THIS order's PaymentIntent; a
+    // separate subscription is not part of it.
     const { email, piId } = await buyWithBump();
     expect(await ownershipFor(email)).toHaveLength(2); // product + trial subscription
 
-    // Real Stripe test-mode refund, then the webhook's handler.
     await stripe().refunds.create({ payment_intent: piId });
     const { revoked } = await revokeOwnershipForPaymentIntent(piId);
     expect(revoked).toBeGreaterThan(0);
@@ -59,12 +64,22 @@ describe.skipIf(!canRun)("subscription + refund hardening (integration)", () => 
       .single();
     expect(order!.status).toBe("refunded");
 
-    // The purchased product is gone; the subscription row is canceled, not left active.
     const after = await ownershipFor(email);
     expect(after.filter((o) => o.product_id)).toHaveLength(0);
-    for (const row of after.filter((o) => o.app_id)) {
-      expect(row.status).toBe("canceled");
-    }
+    // Still trialing, because Stripe still says so.
+    expect(after.find((o) => o.app_id)!.status).toBe("trialing");
+  });
+
+  it("a refund DOES take the subscription back once Stripe has ended it", async () => {
+    const { email, piId } = await buyWithBump();
+    const sub = (await ownershipFor(email)).find((o) => o.stripe_subscription_id)!;
+    await stripe().subscriptions.cancel(sub.stripe_subscription_id as string);
+
+    await stripe().refunds.create({ payment_intent: piId });
+    await revokeOwnershipForPaymentIntent(piId);
+
+    const after = await ownershipFor(email);
+    expect(after.find((o) => o.app_id)!.status).toBe("canceled");
   });
 
   it("a failed renewal marks the subscription past_due without revoking access", async () => {

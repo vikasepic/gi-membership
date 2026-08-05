@@ -2,6 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { pushOwnershipStateToApps } from "@/lib/app-sync";
 import { sendCrmEvent } from "@/lib/crm";
+import { stripe } from "@/lib/stripe";
 import { tagLifecycle, untagRevoked } from "@/lib/ac-tags";
 
 // Subscription lifecycle -> ownership state. This is what keeps a cancelled or
@@ -168,16 +169,50 @@ export async function revokeOwnershipForOrder(
     revoked += data?.length ?? 0;
   }
   if (offerIds.length > 0) {
-    const { data } = await db
+    // Only the ones Stripe agrees are over.
+    //
+    // Refunding this order refunds THIS order's PaymentIntent. A bump's trial
+    // subscription is a separate Stripe object that the refund does not touch,
+    // so revoking it here withdrew access while the card kept being charged —
+    // the customer paid for something they could no longer open, and nobody
+    // finds that themselves. Stripe holds the card, so Stripe decides.
+    const { data: subs } = await db
       .from("ownership")
-      .update({ status: "canceled" })
+      .select("id, stripe_subscription_id")
       .eq("user_id", order.user_id)
-      .in("offer_id", offerIds)
-      .select("id");
-    revoked += data?.length ?? 0;
-    // A refund must reach the app too, or the customer keeps the access they
-    // were just refunded for.
-    await pushOwnershipStateToApps((data ?? []).map((r) => r.id as string));
+      .in("offer_id", offerIds);
+
+    const endable: string[] = [];
+    for (const row of subs ?? []) {
+      const subId = row.stripe_subscription_id as string | null;
+      if (!subId) {
+        // A one-time offer, or a grant with no subscription behind it. Nothing
+        // is billing, so the refund is the whole story.
+        endable.push(row.id as string);
+        continue;
+      }
+      try {
+        const sub = await stripe().subscriptions.retrieve(subId);
+        if (mapSubscriptionStatus(sub.status) === "canceled") endable.push(row.id as string);
+      } catch {
+        // Stripe could not answer. Leaving access ON is the safe failure: the
+        // worst case is someone keeps a product for a while, rather than a
+        // paying customer being locked out by an API blip.
+        console.error(`[revokeOwnershipForOrder] could not check ${subId}; leaving access alone`);
+      }
+    }
+
+    if (endable.length > 0) {
+      const { data } = await db
+        .from("ownership")
+        .update({ status: "canceled" })
+        .in("id", endable)
+        .select("id");
+      revoked += data?.length ?? 0;
+      // A refund must reach the app too, or the customer keeps the access they
+      // were just refunded for.
+      await pushOwnershipStateToApps((data ?? []).map((r) => r.id as string));
+    }
   }
 
   // Tell the CRM too, so a refunded buyer can be untagged. Without this they
