@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
 import { getStoreId } from "@/lib/store";
+import { recordError } from "@/lib/errors";
 
 // App registry + the store SIDE of the app bridge. The store is the system of
 // record for accounts; each connected app gets a signed single-use handoff
@@ -93,6 +94,9 @@ export async function notifyAppEntitlement(args: {
   stripeSubscriptionId: string | null;
 }): Promise<{ ok: boolean; status?: number; error?: string }> {
   const app = await getAppById(args.appId);
+  // Not queued: an app that is switched off is a decision someone made, not a
+  // delivery that failed. Retrying it forever would fill the queue with work
+  // that is meant not to happen.
   if (!app || !app.active) return { ok: false, error: "app_inactive" };
 
   const url = `${app.baseUrl}${app.provisionEndpoint}`;
@@ -118,12 +122,39 @@ export async function notifyAppEntitlement(args: {
       // middleware did exactly this: 307 to /login on both endpoints.
       redirect: "manual",
     });
-    // ponytail: no retry queue. A missed grant self-heals when the user opens
-    // the app (the handoff re-provisions); a missed REVOKE does not, which is
-    // why the guide tells apps to expire access on a window rather than trust
-    // this call to always land.
+    if (!res.ok) await queueRetry(args, `app returned ${res.status}`);
     return { ok: res.ok, status: res.status };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "fetch_failed" };
+    const error = e instanceof Error ? e.message : "fetch_failed";
+    await queueRetry(args, error);
+    return { ok: false, error };
+  }
+}
+
+/**
+ * Queue a failed push so it is tried again.
+ *
+ * A missed GRANT self-heals — the handoff re-provisions the moment they open
+ * the app. A missed REVOKE does not: nothing ever brings that person back to
+ * trigger a correction, so they keep a product they stopped paying for, and
+ * the only evidence is a support email that never comes. The runner and its
+ * backoff already existed in lib/retry.ts; nothing had ever enqueued to it.
+ */
+async function queueRetry(
+  args: Parameters<typeof notifyAppEntitlement>[0],
+  message: string,
+): Promise<void> {
+  try {
+    await recordError({
+      source: "app_bridge",
+      message: `Could not tell the app: ${message}`,
+      context: { appId: args.appId, email: args.email, status: args.status },
+      jobKind: "app_entitlement",
+      jobPayload: args as unknown as Record<string, unknown>,
+    });
+  } catch (e) {
+    // The queue itself is unreachable. Nothing further to do — the alternative
+    // is failing a purchase or a refund over a bookkeeping write.
+    console.error("[notifyAppEntitlement] could not queue a retry:", e);
   }
 }

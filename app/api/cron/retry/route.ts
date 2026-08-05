@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runDueJobs } from "@/lib/retry";
 import { flushDueLeads } from "@/lib/leads";
+import { repairSubscriptionDrift } from "@/lib/subscription-reconcile";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,11 @@ export async function POST(request: Request) {
     // rather than five minutes later.
     const leads = await flushDueLeads();
     const jobs = await runDueJobs();
-    return NextResponse.json({ ok: true, leads, jobs });
+    // Our records against Stripe's. Someone being billed with no access does
+    // not report it — they churn — so this cannot wait for an admin to open
+    // the errors page and notice.
+    const drift = await repairSubscriptionDrift();
+    return NextResponse.json({ ok: true, leads, jobs, driftRepaired: drift.repaired.length, driftSkipped: drift.skipped.length });
   } catch (e) {
     // The sweep itself failing must be visible to whatever called it, but it
     // must not take the route down — cron will come back in five minutes.

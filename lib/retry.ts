@@ -40,6 +40,7 @@ const RUNNERS: Record<JobKind, Runner> = {
       status: p.status as "active" | "trialing" | "canceled" | "past_due",
       stripeCustomerId: (p.stripeCustomerId as string) ?? null,
       stripeSubscriptionId: (p.stripeSubscriptionId as string) ?? null,
+      fullName: (p.fullName as string) ?? null,
     });
     // notifyAppEntitlement reports failure by return value rather than by
     // throwing, so without this the sweep would mark a still-broken push done.
