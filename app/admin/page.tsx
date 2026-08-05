@@ -3,17 +3,23 @@ import { listAllProducts } from "@/lib/admin";
 import { productCourseIds } from "@/lib/courses";
 
 import { money } from "@/lib/money";
+import { storeTake } from "@/lib/admin-nav";
 
 export default async function AdminProductsPage() {
-  const products = await listAllProducts();
+  const [products, take] = await Promise.all([listAllProducts(), storeTake()]);
   const published = products.filter((p) => p.status === "published").length;
+  const drafts = products.length - published;
+  const refundRate = take.paid + take.refunded > 0
+    ? Math.round((take.refunded / (take.paid + take.refunded)) * 100)
+    : 0;
 
   // The library delivers courses, so a published product with no course is
   // buyable but undeliverable. Saving one is blocked now, but anything already
   // in that state predates the check and has to be surfaced, not assumed fixed.
   const courseIdsByProduct = await productCourseIds(products.map((p) => p.id));
+  const courseCount = (id: string) => courseIdsByProduct.get(id)?.length ?? 0;
   const undeliverable = products.filter(
-    (p) => p.status === "published" && (courseIdsByProduct.get(p.id)?.length ?? 0) === 0,
+    (p) => p.status === "published" && courseCount(p.id) === 0,
   );
 
   return (
@@ -53,19 +59,38 @@ export default async function AdminProductsPage() {
         </div>
       )}
 
-      {/* KPIs — orders/revenue land in phase 2 (checkout). */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <Kpi label="Products" value={String(products.length)} />
-        <Kpi label="Published" value={String(published)} />
-        <Kpi label="Revenue" value="—" hint="see Orders" />
-      </div>
+      {/* One line rather than three cards. "Products 2" above a two-row table
+          and a "Revenue —" card pointing at Orders were cards that cost a row
+          of the page to repeat what was already on it. */}
+      <p className="-mt-3 flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm text-muted">
+        <span>
+          <b className="font-semibold tabular-nums text-fg">{money(take.netCents)}</b> net
+        </span>
+        <span>
+          <b className="font-semibold tabular-nums text-fg">{take.paid + take.refunded}</b> orders
+          {take.refunded > 0 && (
+            <>
+              {" · "}
+              <b className="font-semibold tabular-nums text-primary">{take.refunded} refunded</b>
+              {" "}({refundRate}%)
+            </>
+          )}
+        </span>
+        <span>
+          <b className="font-semibold tabular-nums text-fg">{published}</b> published
+          {drafts > 0 && `, ${drafts} draft`}
+        </span>
+      </p>
 
       <div className="overflow-x-auto rounded-2xl border border-border">
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead className="border-b border-border text-muted">
             <tr>
               <th className="px-4 py-3 font-medium">Title</th>
-              <th className="px-4 py-3 font-medium">Type</th>
+              {/* Type moved onto the course, so this column had nothing left to
+                  read and rendered blank on every row. What a product delivers
+                  is the thing you actually check here. */}
+              <th className="px-4 py-3 font-medium">Delivers</th>
               <th className="px-4 py-3 font-medium">Price</th>
               <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Offers</th>
@@ -83,17 +108,25 @@ export default async function AdminProductsPage() {
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3 uppercase text-muted">{p.type}</td>
-                <td className="px-4 py-3">{money(p.priceCents)}</td>
+                <td className="px-4 py-3 text-muted">
+                  {courseCount(p.id) > 0
+                    ? `${courseCount(p.id)} ${courseCount(p.id) === 1 ? "course" : "courses"}`
+                    : "nothing"}
+                </td>
+                <td className="px-4 py-3 tabular-nums">{money(p.priceCents)}</td>
                 <td className="px-4 py-3">
-                  <span
-                    className={
-                      p.status === "published"
-                        ? "text-navy"
-                        : "text-muted"
-                    }
-                  >
-                    {p.status}
+                  {/* A dot and a word, not a filled pill: two states on a
+                      two-row table do not need to shout. */}
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className={`size-1.5 rounded-full ${
+                        p.status === "published" ? "bg-[#3f9b6d]" : "bg-border"
+                      }`}
+                    />
+                    <span className={p.status === "published" ? "text-fg" : "text-muted"}>
+                      {p.status === "published" ? "Published" : "Draft"}
+                    </span>
                   </span>
                 </td>
                 <td className="px-4 py-3 text-muted">
@@ -116,16 +149,6 @@ export default async function AdminProductsPage() {
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
-
-function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-2xl border border-border bg-surface p-5">
-      <span className="kicker text-muted">{label}</span>
-      <span className="font-display text-3xl">{value}</span>
-      {hint && <span className="text-xs text-muted">{hint}</span>}
     </div>
   );
 }
