@@ -26,6 +26,19 @@ import { readableInk as readableOn } from "@/lib/color";
 // sanitizeSectionContent.
 
 const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
+
+/**
+ * `{trial}` becomes the offer's real trial length.
+ *
+ * Typed copy is where a page goes stale: "7 days free" survives the day the
+ * trial becomes 14. The token is the only way to say it that cannot.
+ * Unresolvable — no trial on this offer — it disappears rather than printing
+ * the word "{trial}" at a buyer.
+ */
+const fillTokens = (text: string, money?: BlockMoney): string =>
+  text.includes("{trial}")
+    ? text.replace(/\{trial\}/g, money?.trialLabel ?? "").replace(/\s{2,}/g, " ").trim()
+    : text;
 const num = (v: unknown, fallback: number): number =>
   typeof v === "number" && Number.isFinite(v) ? v : fallback;
 const bool = (v: unknown): boolean => v === true;
@@ -42,6 +55,16 @@ export type BlockMoney = {
   termsLabel?: string | null;
   /** What is taken today, where that differs. */
   dueNowLabel?: string | null;
+  /**
+   * The second billing option this placement offers, already formatted.
+   *
+   * Passed in rather than typed, for the same reason the first price is: a
+   * figure someone typed outlives the price it was copied from.
+   */
+  altPriceLabel?: string | null;
+  altTermsLabel?: string | null;
+  /** "7 days" — derived from the offer, so changing the trial changes the page. */
+  trialLabel?: string | null;
 };
 
 /**
@@ -692,6 +715,9 @@ function Inner({
       // trust is the figure the offer actually charges.
       const price = str(p.price) || str(money?.priceLabel) || "";
       const period = str(p.period) || str(money?.termsLabel) || "";
+      // Blank means the real one, exactly like the price above it.
+      const altPrice = str(p.altPrice) || str(money?.altPriceLabel) || "";
+      const altPeriod = str(p.altPeriod) || str(money?.altTermsLabel) || "";
       if (!price) return null;
       const ink = readableOn(c.fill);
       return (
@@ -703,13 +729,13 @@ function Inner({
             {price}
             {period && <span className="font-display font-semibold" style={{ fontSize: "1rem", opacity: 0.8 }}>{period}</span>}
           </div>
-          {str(p.altPrice) && (
+          {altPrice && (
             <>
               <div className="mt-1 text-[0.82rem]" style={{ opacity: 0.7 }}>or</div>
               <div className="font-display font-bold" style={{ fontSize: "1.7rem", lineHeight: 1.1 }}>
-                {str(p.altPrice)}
-                {str(p.altPeriod) && (
-                  <span className="font-display font-semibold" style={{ fontSize: "0.92rem", opacity: 0.8 }}>{str(p.altPeriod)}</span>
+                {altPrice}
+                {altPeriod && (
+                  <span className="font-display font-semibold" style={{ fontSize: "0.92rem", opacity: 0.8 }}>{altPeriod}</span>
                 )}
               </div>
             </>
@@ -729,7 +755,11 @@ function Inner({
                 {str(p.ctaLabel)}
               </span>
             ))}
-          {str(p.note) && <p className="mt-3 text-[0.76rem] leading-snug" style={{ opacity: 0.75 }}>{str(p.note)}</p>}
+          {fillTokens(str(p.note), money) && (
+            <p className="mt-3 text-[0.76rem] leading-snug" style={{ opacity: 0.75 }}>
+              {fillTokens(str(p.note), money)}
+            </p>
+          )}
           {str(p.secureNote) && <p className="mt-2 text-[0.68rem]" style={{ opacity: 0.6 }}>{str(p.secureNote)}</p>}
         </div>
       );

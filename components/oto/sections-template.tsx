@@ -14,7 +14,7 @@ import { money } from "@/lib/money";
  * is not. The button label is editable and the action behind it is not.
  */
 export function SectionsOto({ view, rows }: { view: OtoView; rows: SectionRow[] }) {
-  const { offer } = view;
+  const { offer, altOffer: alt } = view;
   const priceLabel = money(view.chargeNowCents, offer.currency);
 
   return (
@@ -27,6 +27,11 @@ export function SectionsOto({ view, rows }: { view: OtoView; rows: SectionRow[] 
           priceLabel: money(offer.priceCents, offer.currency),
           termsLabel: offer.interval ? `/${offer.interval}` : null,
           dueNowLabel: priceLabel,
+          // The same second price the buttons below offer, so a price card
+          // cannot advertise one figure while the button charges another.
+          altPriceLabel: alt ? money(alt.priceCents, alt.currency) : null,
+          altTermsLabel: alt?.interval ? `/${alt.interval}` : null,
+          trialLabel: offer.trialDays ? `${offer.trialDays} days` : null,
         }}
         // The band's own ink goes with it: the second price is an outlined
         // button, and an outline has to be drawn in a colour the band reads

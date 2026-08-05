@@ -30,6 +30,11 @@ export type PageMoney = {
   termsLabel: string | null;
   /** What is actually taken today, where that differs — "$0" during a trial. */
   dueNowLabel?: string | null;
+  /** The second billing option this placement offers, if it has one. */
+  altPriceLabel?: string | null;
+  altTermsLabel?: string | null;
+  /** "7 days", for the `{trial}` token. Derived, never typed. */
+  trialLabel?: string | null;
 };
 
 export type { CtaRender } from "@/components/page/blocks";

@@ -6,6 +6,8 @@ import { savePageSettings, saveSection, seedPage, type OwnerType } from "@/lib/p
 import { sectionDef } from "@/lib/page-sections";
 import { uploadPageImage, validateUpload } from "@/lib/media";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
+import { priceProblems, priceProblemMessage } from "@/lib/page-price-truth";
+import { realPriceLabel } from "@/lib/page-money";
 
 export type SectionSaveState = { error?: string; savedKey?: string };
 
@@ -35,6 +37,15 @@ export async function saveSectionAction(
   } catch {
     return { error: "Could not read the section's content." };
   }
+
+  // A price card may state a figure the checkout will not charge, and once
+  // stored nothing catches it — this store shipped a page saying $47 while the
+  // offer took $29. Refused at the save, where the person who typed it is
+  // still here to fix it.
+  const problem = priceProblemMessage(
+    priceProblems(content.blocks, sectionKey, await realPriceLabel(owner, ownerId)),
+  );
+  if (problem) return { error: problem };
 
   try {
     await saveSection(owner, ownerId, sectionKey, {

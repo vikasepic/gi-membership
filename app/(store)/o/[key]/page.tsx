@@ -54,6 +54,7 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
           priceLabel: money(offer.priceCents, offer.currency),
           termsLabel: offer.interval ? `/${offer.interval}` : null,
           dueNowLabel: view.nowLabel,
+          trialLabel: offer.trialDays ? `${offer.trialDays} days` : null,
         }}
         cta={(label) =>
           alreadyHas ? (

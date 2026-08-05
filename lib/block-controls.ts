@@ -336,11 +336,11 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "text", key: "eyebrow", label: "Eyebrow", hint: "e.g. “After trial”." },
       { kind: "text", key: "price", label: "Price", hint: "Leave empty to show the offer's real price. A typed price is a claim; the offer's price is a fact." },
       { kind: "text", key: "period", label: "Per", hint: "e.g. “/per month”." },
-      { kind: "text", key: "altPrice", label: "Second price", hint: "e.g. an annual option. Optional." },
+      { kind: "text", key: "altPrice", label: "Second price", hint: "Leave empty to show this placement's real second price, if it has one. A typed figure outlives the price it was copied from." },
       { kind: "text", key: "altPeriod", label: "Second per" },
       { kind: "text", key: "badge", label: "Badge", hint: "e.g. “40% off”. Only if it is true." },
       { kind: "text", key: "ctaLabel", label: "Button" },
-      { kind: "textarea", key: "note", label: "Small print", rows: 2 },
+      { kind: "textarea", key: "note", label: "Small print", rows: 2, hint: "{trial} becomes the offer's real trial length — “{trial} free, cancel any time”." },
       { kind: "text", key: "secureNote", label: "Security line" },
     ],
     style: [...TYPOGRAPHY],
@@ -518,12 +518,23 @@ function setIn(obj: Record<string, unknown>, path: string[], value: unknown): Re
 }
 
 /** Every block type, in the order the palette offers them. */
-export const PALETTE: { type: BlockType; label: string }[] = [
+/**
+ * What you can add, and what it starts as.
+ *
+ * `props` presets a block rather than introducing a type. "Buy button" and
+ * "Button" are the same block with a different starting `action`: a second
+ * block type would mean a second renderer, a second control list and a second
+ * thing every converter has to know about, to express one dropdown.
+ */
+export const PALETTE: { type: BlockType; label: string; props?: Record<string, unknown> }[] = [
   { type: "heading", label: "Heading" },
   { type: "text", label: "Text" },
   { type: "image", label: "Image" },
   { type: "video", label: "Video" },
-  { type: "button", label: "Button" },
+  // First, because on a sales page it is the one you almost always want. The
+  // plain Button is for anchors and secondary links.
+  { type: "button", label: "Buy button", props: { action: "buy", text: "Get instant access" } },
+  { type: "button", label: "Button", props: { action: "link" } },
   { type: "iconlist", label: "List" },
   { type: "slides", label: "Slides" },
   { type: "row", label: "Columns" },
@@ -538,5 +549,7 @@ export const PALETTE: { type: BlockType; label: string }[] = [
 ];
 
 export const BLOCK_LABEL: Record<BlockType, string> = Object.fromEntries(
-  BLOCK_TYPES.map((t) => [t, PALETTE.find((p) => p.type === t)?.label ?? t]),
+  // The LAST palette entry for a type wins, so a button reads as "Button" in
+  // the inspector rather than "Buy button" whichever way it was added.
+  BLOCK_TYPES.map((t) => [t, [...PALETTE].reverse().find((p) => p.type === t)?.label ?? t]),
 ) as Record<BlockType, string>;

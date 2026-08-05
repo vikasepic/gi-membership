@@ -26,9 +26,28 @@ describe("every block type is covered", () => {
     for (const t of BLOCK_TYPES) expect(BLOCK_CONTROLS[t]).toBeTruthy();
   });
 
-  it("is offered in the palette exactly once", () => {
-    expect(PALETTE.map((p) => p.type).sort()).toEqual([...BLOCK_TYPES].sort());
-    expect(new Set(PALETTE.map((p) => p.type)).size).toBe(PALETTE.length);
+  it("is offered in the palette", () => {
+    expect([...new Set(PALETTE.map((p) => p.type))].sort()).toEqual([...BLOCK_TYPES].sort());
+  });
+
+  it("is offered more than once only where the second entry presets something", () => {
+    // "Buy button" and "Button" are the same block with a different starting
+    // action. A repeat with no preset would just be the same thing twice.
+    const seen = new Set<string>();
+    for (const p of PALETTE) {
+      if (seen.has(p.type)) expect(p.props, p.label).toBeTruthy();
+      seen.add(p.type);
+    }
+  });
+
+  it("presets only keys the block actually has", () => {
+    // A preset writing a key nothing reads is a control that appears to work.
+    for (const p of PALETTE.filter((x) => x.props)) {
+      const block = newBlock(p.type);
+      for (const key of Object.keys(p.props!)) {
+        expect(key in block.props, `${p.label}.${key}`).toBe(true);
+      }
+    }
   });
 
   it("has a human label", () => {

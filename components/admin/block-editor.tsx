@@ -62,7 +62,9 @@ import type { BandTheme } from "@/lib/page-sections";
 // block belongs to the editor.
 
 type Tab = "content" | "style" | "advanced";
-type DragPayload = { kind: "new"; type: BlockType } | { kind: "move"; id: string };
+type DragPayload =
+  | { kind: "new"; type: BlockType; props?: Record<string, unknown> }
+  | { kind: "move"; id: string };
 
 const input =
   "w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-fg";
@@ -137,7 +139,8 @@ export function BlockEditor({
     setDropAt(null);
     if (!payload) return;
     if (payload.kind === "new") {
-      const block = newBlock(payload.type);
+      const base = newBlock(payload.type);
+      const block = payload.props ? { ...base, props: { ...base.props, ...payload.props } } : base;
       // insertBlock refuses a row inside a column; say so rather than letting
       // the click appear to do nothing.
       if (block.type === "row" && target.zone === "column") return;
@@ -149,8 +152,12 @@ export function BlockEditor({
     }
   }
 
-  function add(type: BlockType) {
-    const block = newBlock(type);
+  function add(type: BlockType, preset?: Record<string, unknown>) {
+    // Merged over the type's own defaults rather than replacing them — a
+    // preset says what is different about this way of adding it, not
+    // everything the block needs.
+    const base = newBlock(type);
+    const block = preset ? { ...base, props: { ...base.props, ...preset } } : base;
     commit(insertBlock(blocks, block, addTarget(blocks, selectedId, type)));
     setSelectedId(block.id);
     setTab("content");
@@ -234,7 +241,7 @@ export function BlockEditor({
                 type="button"
                 draggable
                 onDragStart={(e) => {
-                  drag.current = { kind: "new", type: p.type };
+                  drag.current = { kind: "new", type: p.type, props: p.props };
                   e.dataTransfer.effectAllowed = "copy";
                   e.dataTransfer.setData("text/plain", p.type);
                 }}
@@ -242,7 +249,7 @@ export function BlockEditor({
                   drag.current = null;
                   setDropAt(null);
                 }}
-                onClick={() => add(p.type)}
+                onClick={() => add(p.type, p.props)}
                 className="cursor-grab rounded-lg border border-border bg-surface-2 px-2 py-2.5 text-xs hover:border-fg"
               >
                 {p.label}
