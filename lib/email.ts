@@ -143,3 +143,66 @@ export async function sendEmail(to: string, mail: BuiltEmail): Promise<void> {
     console.error("[email] send threw:", e);
   }
 }
+
+/**
+ * Three days before a trial converts.
+ *
+ * Sent because the alternative is a charge nobody was expecting — the single
+ * most common reason a first subscription payment gets disputed. It says the
+ * date, the amount, and how to stop it, because a warning that makes cancelling
+ * hard is not a warning.
+ */
+export function buildTrialEndingEmail(args: {
+  productName: string;
+  priceLabel: string;
+  intervalLabel: string;
+  chargeOn: string;
+  manageUrl: string;
+}): BuiltEmail {
+  const line = `${args.priceLabel}${args.intervalLabel} on ${args.chargeOn}`;
+  return {
+    subject: `Your ${args.productName} trial ends on ${args.chargeOn}`,
+    html: shell(`
+      <h1 style="font-size:22px;margin:0 0 12px;color:#0b0b0d;">Your trial ends soon</h1>
+      <p style="font-size:15px;line-height:1.6;color:#0b0b0d;margin:0 0 16px;">
+        Your free trial of <strong>${args.productName}</strong> ends on ${args.chargeOn}. After that
+        it is <strong>${line}</strong>, and it carries on until you cancel.
+      </p>
+      <p style="font-size:15px;line-height:1.6;color:#0b0b0d;margin:0 0 24px;">
+        Nothing to do if you want to keep it. If you would rather not, you can cancel now and keep
+        access until the trial runs out.
+      </p>
+      ${btn(args.manageUrl, "Manage or cancel")}
+    `),
+    text: `Your free trial of ${args.productName} ends on ${args.chargeOn}. After that it is ${line}.\n\nKeep it and there is nothing to do. To cancel: ${args.manageUrl}`,
+  };
+}
+
+/**
+ * The card was declined.
+ *
+ * Access is deliberately NOT withdrawn here — Stripe is still retrying a card
+ * that often works on the second attempt — so this is the only thing standing
+ * between a expired card and a customer who silently disappears.
+ */
+export function buildPaymentFailedEmail(args: {
+  productName: string;
+  manageUrl: string;
+}): BuiltEmail {
+  return {
+    subject: `We could not take payment for ${args.productName}`,
+    html: shell(`
+      <h1 style="font-size:22px;margin:0 0 12px;color:#0b0b0d;">Your card was declined</h1>
+      <p style="font-size:15px;line-height:1.6;color:#0b0b0d;margin:0 0 16px;">
+        We could not take this month's payment for <strong>${args.productName}</strong>. It is
+        usually an expired card or a bank declining an online charge.
+      </p>
+      <p style="font-size:15px;line-height:1.6;color:#0b0b0d;margin:0 0 24px;">
+        <strong>You still have access.</strong> We will try the card again over the next few days —
+        updating it now is the quickest way to stop the reminders.
+      </p>
+      ${btn(args.manageUrl, "Update your card")}
+    `),
+    text: `We could not take payment for ${args.productName}. You still have access and we will retry — update your card here: ${args.manageUrl}`,
+  };
+}

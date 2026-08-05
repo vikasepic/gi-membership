@@ -23,6 +23,7 @@ export type CrmEventType =
   | "subscription_active"
   | "subscription_canceled"
   | "subscription_past_due"
+  | "trial_ending"
   | "refunded";
 
 /** Mirrors the order_items.kind check constraint — 'product' | 'bump' | 'oto'. */

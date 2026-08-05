@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { finalizeOrder } from "@/lib/checkout";
+import { sendPaymentFailedEmail, sendTrialEndingEmail } from "@/lib/subscription-emails";
 import {
   syncSubscriptionOwnership,
   revokeOwnershipForPaymentIntent,
@@ -51,7 +52,30 @@ export async function POST(req: Request) {
       const invoice = event.data.object as Stripe.Invoice & { subscription?: string | null };
       const subId =
         typeof invoice.subscription === "string" ? invoice.subscription : undefined;
-      if (subId) await syncSubscriptionOwnership(subId, "past_due");
+      if (subId) {
+        await syncSubscriptionOwnership(subId, "past_due");
+        // Access is deliberately kept while Stripe retries, so this email is
+        // the only thing standing between an expired card and a customer who
+        // silently disappears. Guarded: a mail failure must not 500 the
+        // webhook and have Stripe redeliver a state we already applied.
+        try {
+          await sendPaymentFailedEmail(subId);
+        } catch (e) {
+          console.error("[stripe webhook] dunning email failed:", e);
+        }
+      }
+      break;
+    }
+
+    // Three days before a trial converts. The most common reason a first
+    // subscription charge is disputed is that nobody remembers signing up a
+    // week ago.
+    case "customer.subscription.trial_will_end": {
+      try {
+        await sendTrialEndingEmail(event.data.object as Stripe.Subscription);
+      } catch (e) {
+        console.error("[stripe webhook] trial-ending email failed:", e);
+      }
       break;
     }
 
