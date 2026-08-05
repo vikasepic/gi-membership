@@ -7,6 +7,7 @@ import { ownershipFor } from "@/lib/checkout";
 import { stripePublishableKey } from "@/lib/env";
 import { CheckoutForm, type BumpSummary } from "@/components/checkout/checkout-form";
 import { buildBumpView } from "@/lib/bump";
+import { offerAsSoldTo } from "@/lib/trial-history";
 import { publicCoverUrl } from "@/lib/media";
 import { productDisplay } from "@/lib/courses";
 import { rememberLead } from "@/lib/leads";
@@ -78,13 +79,19 @@ export default async function CheckoutPage({
 
   // Built by lib/bump.ts, which the admin preview also uses — so what an admin
   // approves in the editor is literally what renders here.
+  // Resolved for whoever is here. A member we already know is shown the terms
+  // that will actually apply; an anonymous buyer we cannot know yet is shown
+  // the trial, and createCheckoutIntent refuses rather than charging them if
+  // the address they type turns out to have used it.
+  const bumpAsSold = bumpOffer ? await offerAsSoldTo(user?.email ?? null, bumpOffer) : null;
   const bump: BumpSummary | null =
-    bumpOffer && shouldShowOffer(bumpOffer, owned) ? buildBumpView(bumpOffer) : null;
+    bumpAsSold && shouldShowOffer(bumpAsSold, owned) ? buildBumpView(bumpAsSold) : null;
 
   // The second price, if THIS product asks for one. On the product rather than
   // the offer, so the same offer can be sold at two prices here and one price
   // somewhere else. The browser sends "alt", never an id.
-  const altOffer = bump && product.bumpAltOfferId ? await getOffer(product.bumpAltOfferId) : null;
+  const altRaw = bump && product.bumpAltOfferId ? await getOffer(product.bumpAltOfferId) : null;
+  const altOffer = altRaw ? await offerAsSoldTo(user?.email ?? null, altRaw) : null;
   const bumpAlt: BumpSummary | null =
     altOffer && altOffer.active && shouldShowOffer(altOffer, owned) ? buildBumpView(altOffer) : null;
 

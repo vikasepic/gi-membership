@@ -1,0 +1,109 @@
+import { describe, it, expect } from "vitest";
+import { grantKeyOf, withoutTrial } from "@/lib/trial-history";
+import type { Offer } from "@/lib/types";
+
+// A free trial is a thing you get once. The rules that decide it, without the
+// database around them.
+
+const offer = (over: Partial<Offer>): Offer =>
+  ({
+    id: "o1",
+    grantAppId: null,
+    grantEntitlementKey: null,
+    grantProductId: null,
+    trialDays: 7,
+    priceCents: 2900,
+    interval: "month",
+    billingType: "recurring",
+    currency: "usd",
+    ...over,
+  }) as Offer;
+
+describe("what a trial is remembered against", () => {
+  it("the app and entitlement it granted, not the offer that sold it", () => {
+    // The monthly and the yearly Funnel App offers grant the same thing, so
+    // trialling one has to close the other. An offer-keyed record would be a
+    // loophole with two doors.
+    const monthly = offer({ id: "m", grantAppId: "app1", grantEntitlementKey: "funnel" });
+    const yearly = offer({ id: "y", grantAppId: "app1", grantEntitlementKey: "funnel" });
+    expect(grantKeyOf(monthly)).toBe(grantKeyOf(yearly));
+  });
+
+  it("keeps different apps apart", () => {
+    expect(grantKeyOf(offer({ grantAppId: "a", grantEntitlementKey: "x" }))).not.toBe(
+      grantKeyOf(offer({ grantAppId: "b", grantEntitlementKey: "x" })),
+    );
+  });
+
+  it("keeps different entitlements of one app apart", () => {
+    expect(grantKeyOf(offer({ grantAppId: "a", grantEntitlementKey: "basic" }))).not.toBe(
+      grantKeyOf(offer({ grantAppId: "a", grantEntitlementKey: "pro" })),
+    );
+  });
+
+  it("handles an offer that grants a product instead", () => {
+    expect(grantKeyOf(offer({ grantProductId: "p1" }))).toBe("product:p1");
+  });
+
+  it("is null for an offer that grants nothing identifiable", () => {
+    expect(grantKeyOf(offer({}))).toBeNull();
+  });
+});
+
+describe("selling to someone who has already had one", () => {
+  it("takes the trial off", () => {
+    expect(withoutTrial(offer({ trialDays: 7 })).trialDays).toBeNull();
+  });
+
+  it("changes nothing else about the offer", () => {
+    const before = offer({ trialDays: 7, priceCents: 2900 });
+    const after = withoutTrial(before);
+    expect(after.priceCents).toBe(2900);
+    expect(after.interval).toBe("month");
+    expect(after.id).toBe(before.id);
+  });
+
+  it("returns the very same object when there is no trial to remove", () => {
+    // The common path must allocate nothing and behave exactly as before.
+    const plain = offer({ trialDays: null });
+    expect(withoutTrial(plain)).toBe(plain);
+  });
+});
+
+describe("what removing the trial makes every surface do", () => {
+  // The point of doing it this way: six things read the trial off the offer,
+  // so removing it there moves all six together and none can disagree.
+  const repeat = withoutTrial(offer({ trialDays: 7, priceCents: 2900 }));
+
+  it("charges the full price today instead of nothing", async () => {
+    const { immediateChargeCents } = await import("@/lib/offers");
+    expect(immediateChargeCents(offer({ trialDays: 7 }))).toBe(0);
+    expect(immediateChargeCents(repeat)).toBe(2900);
+  });
+
+  it("stops the bump badging a free trial", async () => {
+    const { saveBadge } = await import("@/lib/bump");
+    expect(saveBadge(offer({ trialDays: 7 }))).toBe("7 days free");
+    expect(saveBadge(repeat)).toBeNull();
+  });
+
+  it("starts ownership active rather than trialing", () => {
+    // The same expression grantOfferOwnership uses.
+    const status = (o: Offer) => (o.trialDays && o.trialDays > 0 ? "trialing" : "active");
+    expect(status(offer({ trialDays: 7 }))).toBe("trialing");
+    expect(status(repeat)).toBe("active");
+  });
+
+  it("applies the buyer tag rather than the trial tag", async () => {
+    const { lifecycleTagOps } = await import("@/lib/ac-tags");
+    const tags = { trial: "T", buyer: "B", cancelled: "C" };
+    expect(lifecycleTagOps(tags, "trialing").add).toContain("T");
+    expect(lifecycleTagOps(tags, "active").add).toContain("B");
+  });
+
+  it("leaves {trial} with nothing to say", () => {
+    const label = (o: Offer) => (o.trialDays ? `${o.trialDays} days` : null);
+    expect(label(offer({ trialDays: 7 }))).toBe("7 days");
+    expect(label(repeat)).toBeNull();
+  });
+});

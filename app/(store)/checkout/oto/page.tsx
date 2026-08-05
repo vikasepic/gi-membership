@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { verifyOtoToken } from "@/lib/oto-token";
 import { otoSigningSecret } from "@/lib/env";
 import { getOffer } from "@/lib/store";
-import { upsellAltFor } from "@/lib/checkout";
+import { upsellAltFor, orderEmailFor } from "@/lib/checkout";
+import { offerAsSoldTo } from "@/lib/trial-history";
 import { immediateChargeCents } from "@/lib/offers";
 import { otoComponentFor } from "@/components/oto/registry";
 import { SectionsOto } from "@/components/oto/sections-template";
@@ -28,8 +29,11 @@ export default async function OtoPage({
   const verified = verifyOtoToken(token, otoSigningSecret());
   if (!verified.ok) redirect("/checkout/thank-you?oto=" + verified.reason);
 
-  const offer = await getOffer(verified.payload.offerId);
-  if (!offer) redirect("/checkout/thank-you");
+  const shown = await getOffer(verified.payload.offerId);
+  if (!shown) redirect("/checkout/thank-you");
+  // The upsell always follows a purchase, so we know exactly who this is: the
+  // page shows the terms that will actually be charged.
+  const offer = await offerAsSoldTo(await orderEmailFor(verified.payload.orderId), shown);
 
   // From the PRODUCT this order was for, never from the request. The page shows
   // two prices; the buyer picks a side, not an offer.

@@ -33,6 +33,7 @@ const schema = z.object({
       return "none" as const;
     }),
   bumpTaken: z.union([z.boolean(), z.string()]).optional(),
+  bumpTrialShown: z.coerce.boolean().optional(),
   country: z.string().trim().optional().nullable(),
 });
 

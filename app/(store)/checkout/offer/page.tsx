@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getOffer } from "@/lib/store";
+import { offerAsSoldTo } from "@/lib/trial-history";
 import { ownershipFor } from "@/lib/checkout";
 import { isOfferEligible, immediateChargeCents } from "@/lib/offers";
 import { stripePublishableKey } from "@/lib/env";
@@ -28,8 +29,10 @@ export default async function OfferCheckoutPage({
   } = await supabase.auth.getUser();
   if (!user?.email) redirect(`/login?next=${encodeURIComponent(`/checkout/offer?offer=${offerId}`)}`);
 
-  const offer = await getOffer(offerId);
-  if (!offer || !offer.active) notFound();
+  const listed = await getOffer(offerId);
+  if (!listed || !listed.active) notFound();
+  // Signed in by the redirect above, so we know exactly what they have had.
+  const offer = await offerAsSoldTo(user.email, listed);
 
   // Someone who already has it should never see a payment form for it.
   const owned = await ownershipFor(user.id);

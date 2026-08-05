@@ -4,6 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getProductBySlug, getOffer } from "@/lib/store";
 import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerForChoice, type Ownership } from "@/lib/offers";
 import type { BumpChoice } from "@/lib/bump";
+import { offerAsSoldTo, recordTrialStart } from "@/lib/trial-history";
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
 import { notifyAppEntitlement } from "@/lib/apps";
 import { trackPurchase } from "@/lib/tracking";
@@ -69,6 +70,14 @@ export type CheckoutInput = {
    * and nothing else.
    */
   bumpChoice: BumpChoice;
+  /**
+   * Whether the bump the buyer saw advertised a free trial.
+   *
+   * Only ever used to REFUSE. A page rendered for someone we did not yet know
+   * may promise a trial they have already used; charging them anyway would be
+   * the deception this feature exists to avoid.
+   */
+  bumpTrialShown?: boolean;
   anonId?: string | null; // attribution visitor cookie, read by the action layer
   country?: string | null; // ISO-2, required when Stripe Tax is enabled
   trackingConsent?: boolean; // GDPR opt-in, read from the cookie by the action layer
@@ -76,7 +85,7 @@ export type CheckoutInput = {
 
 export type CheckoutResult =
   | { ok: true; clientSecret: string }
-  | { ok: false; error: string; code?: "account_exists" | "already_owned" | "bump_unavailable" };
+  | { ok: false; error: string; code?: "account_exists" | "already_owned" | "bump_unavailable" | "bump_trial_used" };
 
 const normEmail = (e: string) => e.trim().toLowerCase();
 
@@ -220,7 +229,22 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
     const wantId = shown
       ? offerForChoice(shown, alt, input.bumpChoice === "alt" ? "alt" : undefined)
       : null;
-    const offer = wantId === shown?.id ? shown : wantId === alt?.id ? alt : null;
+    const picked = wantId === shown?.id ? shown : wantId === alt?.id ? alt : null;
+    // A free trial is a thing you get once. Resolved before anything is
+    // charged, so the subscription, the amount taken today, the ownership
+    // status and the CRM tags all follow the same decision.
+    const offer = picked ? await offerAsSoldTo(email, picked) : null;
+    // Shown one thing, charged another, is worse than the abuse it prevents.
+    // The page tells us what it displayed; a client that lies about this can
+    // only cause a refusal or a trial we had already decided to give.
+    if (offer && picked?.trialDays && !offer.trialDays && input.bumpTrialShown) {
+      return {
+        ok: false,
+        error:
+          "The free trial for that add-on has already been used on this email, so it would start today at full price. Untick it to continue, or add it from your library afterwards.",
+        code: "bump_trial_used",
+      };
+    }
     if (offer && shouldShowOffer(offer, owned)) {
       bumpOffer = offer;
     } else {
@@ -353,6 +377,20 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
 // Fulfil an offer on the customer's saved card. one-time -> off-session
 // PaymentIntent; subscription -> Stripe Subscription (with trial). Idempotent
 // via a deterministic idempotency key. Returns the created Stripe id.
+/**
+ * Note that a trial has been used up.
+ *
+ * After the subscription exists, never before: a call that failed granted
+ * nothing, and burning someone's one free trial on a declined card would be
+ * the worst possible way to lose a sale.
+ */
+async function noteTrial(orderId: string, offer: Offer): Promise<void> {
+  if (!offer.trialDays || offer.trialDays <= 0) return;
+  const db = createServiceClient();
+  const { data } = await db.from("orders").select("email").eq("id", orderId).maybeSingle();
+  if (data?.email) await recordTrialStart(data.email as string, offer);
+}
+
 export async function fulfilOffer(args: {
   order: { id: string; stripeCustomerId: string };
   offer: Offer;
@@ -385,6 +423,9 @@ export async function fulfilOffer(args: {
             },
           },
         ],
+        // Already resolved for this buyer — offerAsSoldTo strips it for anyone
+        // who has had one, so this is the single place it is granted and the
+        // single place worth recording.
         trial_period_days: offer.trialDays ?? undefined,
         // Tag as store-created so Content Engine's webhook doesn't clobber it.
         // offerName rides along for the same reason as the base charge: Zapier
@@ -399,6 +440,7 @@ export async function fulfilOffer(args: {
       },
       { idempotencyKey: idem },
     );
+    await noteTrial(args.order.id, offer);
     return { subscriptionId: sub.id };
   }
 
@@ -930,7 +972,11 @@ export async function acceptOto(token: string, choice?: "alt"): Promise<OtoAccep
   const alt = await upsellAltFor(orderId);
   const buyId = offerForChoice(shown, alt, choice);
   if (!buyId) return { ok: false, error: "invalid" };
-  const offer = buyId === shown.id ? shown : (alt as Offer);
+  const picked = buyId === shown.id ? shown : (alt as Offer);
+  // Same decision as the bump. The upsell always follows a purchase, so the
+  // buyer is known and the page they were shown was already resolved for them
+  // — there is nothing here to refuse, only a trial not to hand out twice.
+  const offer = await offerAsSoldTo(order.email as string, picked);
 
   // Charge the same saved card the base order used.
   const pi = await stripe().paymentIntents.retrieve(order.stripe_payment_intent_id as string);
@@ -985,6 +1031,13 @@ export async function acceptOto(token: string, choice?: "alt"): Promise<OtoAccep
  * product this order was for. Never from the request: the page sends "alt",
  * and the id it resolves to comes from here.
  */
+/** Who an order belongs to, for resolving what they have already had. */
+export async function orderEmailFor(orderId: string): Promise<string | null> {
+  const db = createServiceClient();
+  const { data } = await db.from("orders").select("email").eq("id", orderId).maybeSingle();
+  return (data?.email as string | null) ?? null;
+}
+
 export async function upsellAltFor(orderId: string): Promise<Offer | null> {
   const db = createServiceClient();
   const { data: items } = await db

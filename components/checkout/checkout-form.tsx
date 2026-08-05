@@ -190,6 +190,11 @@ function Inner({
       // The code, never the amount: the server prices it again.
       couponCode: coupon ? couponInput.trim() : null,
       bumpChoice: bumpChoice ?? "none",
+      // What this page actually promised. Only ever used to refuse: an
+      // anonymous buyer is shown a trial we cannot yet know they have used,
+      // and charging them full price for something labelled free would be
+      // the deception this whole feature exists to avoid.
+      bumpTrialShown: (chosenBump?.chargeNowCents ?? null) === 0,
       country,
     });
     if (!res.ok) {

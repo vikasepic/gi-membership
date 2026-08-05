@@ -8,6 +8,7 @@ import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
 import { SalesPage } from "@/components/page/sales-page";
 import { money } from "@/lib/money";
 import { buildBumpView } from "@/lib/bump";
+import { offerAsSoldTo } from "@/lib/trial-history";
 import { altSaving } from "@/lib/offers";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +23,16 @@ export const dynamic = "force-dynamic";
  */
 export default async function OfferSalesPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
-  const offer = await getOfferByKey(key);
-  if (!offer || !offer.active) notFound();
-  if (!(await hasPageSections("offer", offer.id))) notFound();
+  const listed = await getOfferByKey(key);
+  if (!listed || !listed.active) notFound();
+  if (!(await hasPageSections("offer", listed.id))) notFound();
+
+  // Who is reading it decides what it may promise: a free trial is a thing you
+  // get once, so anyone who has had this one is shown what they will be
+  // charged rather than an offer we would not honour.
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const offer = await offerAsSoldTo(user?.email ?? null, listed);
 
   const [rows, settings] = await Promise.all([
     getPageSections("offer", offer.id),
@@ -33,13 +41,12 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
   const view = buildBumpView(offer);
   // This page's own second price, if it has one. Bumps and upsells read theirs
   // from the product that places them; a page standing alone has no product.
-  const pageAlt = offer.pageAltOfferId ? await getOffer(offer.pageAltOfferId) : null;
+  const pageAltRaw = offer.pageAltOfferId ? await getOffer(offer.pageAltOfferId) : null;
+  const pageAlt = pageAltRaw ? await offerAsSoldTo(user?.email ?? null, pageAltRaw) : null;
   const showAlt = pageAlt?.active ? pageAlt : null;
 
   // Someone who already has it gets the truth rather than a buy button they
   // would be refused at.
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
   const owned = user ? await ownershipFor(user.id) : null;
   const alreadyHas = owned ? !isOfferEligible(offer, owned) : false;
 
