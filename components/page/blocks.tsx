@@ -52,7 +52,7 @@ export type BlockMoney = {
  * as plain text — which is what a sales page that cannot be bought from looks
  * like, and is exactly what happened here.
  */
-export type CtaRender = (label: string) => React.ReactNode;
+export type CtaRender = (label: string, theme: BandTheme) => React.ReactNode;
 
 export function Blocks({
   blocks,
@@ -303,7 +303,7 @@ function Inner({
       };
       // A buy button with no control to render is plain text — a sales page
       // nobody can buy from. Rendered through the page's own control instead.
-      if (str(p.action, "link") === "buy" && cta) return <>{cta(label)}</>;
+      if (str(p.action, "link") === "buy" && cta) return <>{cta(label, theme)}</>;
       const link = str(p.link);
       return link ? (
         <a href={link} className="w-fit px-7 py-3 font-display text-[0.95rem] font-semibold" style={style}>
@@ -722,7 +722,7 @@ function Inner({
           )}
           {str(p.ctaLabel) &&
             (cta ? (
-              <div className="mt-4">{cta(str(p.ctaLabel))}</div>
+              <div className="mt-4">{cta(str(p.ctaLabel), theme)}</div>
             ) : (
               <span className="mt-4 block w-full px-6 py-3 font-display text-[0.95rem] font-semibold"
                 style={{ background: c.accent, color: readableOn(c.accent), borderRadius: 999 }}>

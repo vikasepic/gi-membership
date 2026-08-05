@@ -115,6 +115,7 @@ export function OtoActions({
   showNote = true,
   align = "stretch",
   acceptLabel,
+  ink,
 }: {
   view: OtoView;
   tone?: "plain" | "band";
@@ -134,6 +135,15 @@ export function OtoActions({
    * beneath it may not.
    */
   acceptLabel?: string;
+  /**
+   * The ink of the band this sits on.
+   *
+   * The alternative price is an outlined button, so it is drawn in the page's
+   * text colour rather than a brand one — the same rule every block follows.
+   * `currentColor` cannot do it: a button does not inherit colour by default,
+   * and the value that reached it was black on a navy band, 1.6:1.
+   */
+  ink?: string;
 }) {
   const onBand = tone === "band";
   const alt = view.altOffer;
@@ -168,7 +178,11 @@ export function OtoActions({
             // on the navy band is 2.0:1 — this button lands on whichever band
             // the section is painted, so the only colour it can safely use is
             // the one the band already reads with.
-            className="flex w-full flex-col items-center justify-center rounded-xl border px-6 py-3 text-current transition-colors [border-color:color-mix(in_srgb,currentColor_42%,transparent)] hover:[background-color:color-mix(in_srgb,currentColor_10%,transparent)]"
+            className="flex w-full flex-col items-center justify-center rounded-xl border px-6 py-3 transition-colors hover:[background-color:color-mix(in_srgb,currentColor_10%,transparent)]"
+            style={{
+              color: ink ?? (onBand ? "#ffffff" : undefined),
+              borderColor: `color-mix(in srgb, ${ink ?? (onBand ? "#ffffff" : "currentColor")} 42%, transparent)`,
+            }}
           >
             <span className="text-[1.02rem] font-medium">{altLabel(alt)}</span>
             {altSaving(view.offer, alt) && (

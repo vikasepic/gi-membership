@@ -96,14 +96,21 @@ describe("the second price", () => {
     expect(out.split("choice")[1]).toContain("border");
   });
 
-  it("takes its ink from the band rather than a fixed brand colour", () => {
+  it("draws itself in the band's ink, not a brand colour", () => {
     // This button lands on whichever band the section is painted. Terracotta on
-    // the navy band is 2.0:1 — the only colour it can safely use is the one the
-    // band already reads with.
-    const alt = render(yearly).split("choice")[1];
-    expect(alt).toContain("text-current");
-    expect(alt).toContain("currentColor");
+    // the navy hero is 2.0:1, and inheriting is not an option — a button does
+    // not inherit colour, which left it black on navy at 1.6:1.
+    const alt = renderToStaticMarkup(
+      <OtoActions view={view(yearly)} ink="#f4f1ea" />,
+    ).split("choice")[1];
+    expect(alt).toContain("#f4f1ea");
     expect(alt).not.toContain("#b0532f");
-    expect(alt).not.toContain("text-white");
+  });
+
+  it("falls back to the band tone when no ink is given", () => {
+    const alt = renderToStaticMarkup(
+      <OtoActions view={view(yearly)} tone="band" />,
+    ).split("choice")[1];
+    expect(alt).toContain("#ffffff");
   });
 });

@@ -28,12 +28,16 @@ export function SectionsOto({ view, rows }: { view: OtoView; rows: SectionRow[] 
           termsLabel: offer.interval ? `/${offer.interval}` : null,
           dueNowLabel: priceLabel,
         }}
-        cta={(label) => (
+        // The band's own ink goes with it: the second price is an outlined
+        // button, and an outline has to be drawn in a colour the band reads
+        // with — terracotta on the navy hero is 2.0:1.
+        cta={(label, theme) => (
           <OtoActions
             view={view}
             align="start"
             showNote={false}
             acceptLabel={label}
+            ink={theme.fg}
             className="pt-1"
           />
         )}
