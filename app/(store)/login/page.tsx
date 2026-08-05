@@ -6,9 +6,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { authErrorMessage, isPasswordError } from "@/lib/auth-errors";
 import { Logo } from "@/components/logo";
-import { NOINDEX } from "@/lib/seo";
-
-export const metadata = NOINDEX;
 
 // Errors the callback route bounces back here, in the reader's words.
 const CALLBACK_ERRORS: Record<string, string> = {

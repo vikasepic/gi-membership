@@ -27,7 +27,13 @@ const MUST_INDEX = ["app/(store)/p/[slug]/page.tsx", "app/(store)/o/[key]/page.t
 describe("what may be indexed", () => {
   it.each(MUST_NOINDEX)("%s is kept out of search", (file) => {
     expect(existsSync(file), file).toBe(true);
-    expect(readFileSync(file, "utf8")).toContain("NOINDEX");
+    // A client component may not export metadata, so for those it lives in the
+    // layout beside the page. Either satisfies the requirement.
+    const beside = file.replace(/\/(page|layout)\.tsx$/, "/layout.tsx");
+    const found =
+      readFileSync(file, "utf8").includes("NOINDEX") ||
+      (existsSync(beside) && readFileSync(beside, "utf8").includes("NOINDEX"));
+    expect(found, file).toBe(true);
   });
 
   it.each(MUST_INDEX)("%s is left indexable", (file) => {

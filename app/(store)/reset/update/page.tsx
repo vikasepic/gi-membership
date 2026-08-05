@@ -3,9 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { NOINDEX } from "@/lib/seo";
-
-export const metadata = NOINDEX;
 
 // Reached from the reset email link. supabase-js picks up the recovery session
 // from the URL automatically, so updateUser can set the new password.
