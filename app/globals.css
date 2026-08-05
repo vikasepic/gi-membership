@@ -182,3 +182,16 @@ h1, h2, h3, h4 {
   .rise { animation: none; }
   body { background-attachment: scroll; }
 }
+
+/* Width of the admin sidebar, and zero when it is not on screen. A page that
+   breaks out of the admin's centred column has to know how much of the window
+   the navigation is holding — `100vw` measures the window, which stopped being
+   the content area the moment the sidebar arrived. */
+.admin-shell {
+  --admin-nav: 0px;
+}
+@media (min-width: 1024px) {
+  .admin-shell {
+    --admin-nav: 216px;
+  }
+}

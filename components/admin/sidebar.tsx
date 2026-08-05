@@ -142,7 +142,11 @@ export function AdminSidebar({ counts, live }: { counts: NavCounts; live: boolea
       <div id="admin-nav" className={`bg-navy lg:hidden ${open ? "" : "hidden"}`}>
         {nav}
       </div>
-      <aside className="sticky top-0 hidden h-dvh w-[216px] shrink-0 bg-navy lg:block">{nav}</aside>
+      {/* Width lives in --admin-nav (globals.css) because the full-bleed pages
+          have to subtract it from the window. */}
+      <aside className="sticky top-0 hidden h-dvh w-[var(--admin-nav)] shrink-0 bg-navy lg:block">
+        {nav}
+      </aside>
     </>
   );
 }

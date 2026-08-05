@@ -56,7 +56,7 @@ export default async function CoursePreviewPage({
   const frameSrc = `/course-preview/${id}?progress=${progress}${drafts ? "&drafts=1" : ""}`;
 
   return (
-    <div className="mx-[calc(50%-50vw)] flex h-[calc(100vh-4rem)] w-screen flex-col px-5 md:px-6">
+    <div className="mx-[calc(50%-50vw+var(--admin-nav)/2)] flex h-[calc(100vh-4rem)] w-[calc(100vw-var(--admin-nav))] flex-col px-5 md:px-6">
       <div className="flex flex-wrap items-center gap-3 py-3">
         <Link href={`/admin/courses/${id}`} className="kicker text-muted hover:text-fg">
           &larr; Back to the course

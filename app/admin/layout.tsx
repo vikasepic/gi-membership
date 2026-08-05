@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const counts = await navCounts();
   return (
-    <div className="flex min-h-dvh flex-col lg:flex-row">
+    <div className="admin-shell flex min-h-dvh flex-col lg:flex-row">
       <AdminSidebar counts={counts} live={stripeMode() === "live"} />
       {/* The width is the point of the change. A table with six columns and a
           curriculum with nested rows were both being asked to live in half a
