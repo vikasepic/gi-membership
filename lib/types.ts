@@ -63,16 +63,15 @@ export type Offer = {
   bullets: string[];
   imageUrl: string | null;
   acceptLabel: string;
-  /** ActiveCampaign tag applied when granted, removed when cancelled. */
-  activecampaignTagId: string | null;
   /**
-   * The trial / buyer / cancelled lifecycle. See lifecycleTagOps.
-   *
-   * The access tag above says "has it now"; these three say how they got here
-   * and whether they ever paid, which is what survives them losing access.
+   * The BUYER tag: applied the first time money is taken, removed at
+   * cancellation. On a trial offer that is when the trial converts, not when
+   * it starts — see lifecycleTagOps.
    */
+  activecampaignTagId: string | null;
+  /** Applied when a trial starts. Kept if they cancel before ever paying. */
   activecampaignTrialTagId: string | null;
-  activecampaignBuyerTagId: string | null;
+  /** Applied when access ends. Never removed. */
   activecampaignCancelledTagId: string | null;
   /** Checkout-bump copy. Null falls back to headline/description. */
   bumpHeadline: string | null;

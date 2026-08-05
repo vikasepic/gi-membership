@@ -5,12 +5,12 @@ import { lifecycleTagOps, type LifecycleTags } from "@/lib/ac-tags";
 // is segmented on, so what happens at each status is stated here rather than
 // inferred from the CRM afterwards.
 
-const ALL: LifecycleTags = { access: "1", trial: "2", buyer: "3", cancelled: "4" };
+const ALL: LifecycleTags = { trial: "2", buyer: "3", cancelled: "4" };
 const ops = (status: Parameters<typeof lifecycleTagOps>[1], tags = ALL) => lifecycleTagOps(tags, status);
 
 describe("a trial that is running", () => {
-  it("gets access and the trial tag", () => {
-    expect(ops("trialing")).toEqual({ add: ["1", "2"], remove: [] });
+  it("gets the trial tag and nothing else — no money has moved", () => {
+    expect(ops("trialing")).toEqual({ add: ["2"], remove: [] });
   });
 
   it("takes nothing away — there is nothing yet to take", () => {
@@ -20,11 +20,7 @@ describe("a trial that is running", () => {
 
 describe("the first payment", () => {
   it("adds the buyer tag and takes the trial tag off", () => {
-    expect(ops("active")).toEqual({ add: ["1", "3"], remove: ["2"] });
-  });
-
-  it("keeps access, which they have not lost", () => {
-    expect(ops("active").add).toContain("1");
+    expect(ops("active")).toEqual({ add: ["3"], remove: ["2"] });
   });
 
   it("is safe to apply again", () => {
@@ -36,7 +32,7 @@ describe("the first payment", () => {
 
   it("takes the trial tag off an offer that never had a trial, harmlessly", () => {
     const noTrial = { ...ALL, trial: null };
-    expect(ops("active", noTrial)).toEqual({ add: ["1", "3"], remove: [] });
+    expect(ops("active", noTrial)).toEqual({ add: ["3"], remove: [] });
   });
 });
 
@@ -49,8 +45,8 @@ describe("a card that is failing", () => {
 });
 
 describe("cancelling", () => {
-  it("adds the cancelled tag and takes access and the buyer tag away", () => {
-    expect(ops("canceled")).toEqual({ add: ["4"], remove: ["1", "3"] });
+  it("adds the cancelled tag and takes the buyer tag away", () => {
+    expect(ops("canceled")).toEqual({ add: ["4"], remove: ["3"] });
   });
 
   it("LEAVES the trial tag — that is the whole point", () => {
@@ -97,21 +93,18 @@ describe("the two segments this exists to build", () => {
     expect([...run(["active", "canceled"])]).toEqual(["4"]);
   });
 
-  it("still paying → buyer + access, no cancelled", () => {
-    const held = run(["trialing", "active"]);
-    expect([...held].sort()).toEqual(["1", "3"]);
+  it("still paying → just the buyer tag", () => {
+    expect([...run(["trialing", "active"])]).toEqual(["3"]);
   });
 
-  it("bought outright, no trial → buyer + access", () => {
-    expect([...run(["active"])].sort()).toEqual(["1", "3"]);
+  it("bought outright, no trial → just the buyer tag", () => {
+    expect([...run(["active"])]).toEqual(["3"]);
   });
 
-  it("cancelled once and came back → cancelled stays, access returns", () => {
+  it("cancelled once and came back → cancelled stays, buyer returns", () => {
     // This is why the cancelled tag alone cannot mean "churned": pair it with
-    // the access tag, or a win-back campaign emails paying customers.
-    const held = run(["trialing", "active", "canceled", "active"]);
-    expect(held.has("4")).toBe(true);
-    expect(held.has("1")).toBe(true);
+    // the buyer tag, or a win-back campaign emails paying customers.
+    expect([...run(["trialing", "active", "canceled", "active"])].sort()).toEqual(["3", "4"]);
   });
 
   it("cannot tell a former buyer's SECOND trial from a first one", () => {
@@ -126,15 +119,18 @@ describe("the two segments this exists to build", () => {
 
 describe("offers with only some tags set", () => {
   it("emits nothing at all when none are configured", () => {
-    const none: LifecycleTags = { access: null, trial: null, buyer: null, cancelled: null };
+    const none: LifecycleTags = { trial: null, buyer: null, cancelled: null };
     for (const s of ["trialing", "active", "past_due", "canceled"] as const) {
       expect(lifecycleTagOps(none, s), s).toEqual({ add: [], remove: [] });
     }
   });
 
-  it("works with the access tag alone, as every existing offer has", () => {
-    const legacy: LifecycleTags = { access: "1", trial: null, buyer: null, cancelled: null };
-    expect(lifecycleTagOps(legacy, "trialing")).toEqual({ add: ["1"], remove: [] });
+  it("works with the offer's own tag alone, as every existing offer has", () => {
+    // The behaviour change on an existing trial offer: this tag used to land
+    // when the trial STARTED and now lands when it converts.
+    const legacy: LifecycleTags = { trial: null, buyer: "1", cancelled: null };
+    expect(lifecycleTagOps(legacy, "trialing")).toEqual({ add: [], remove: [] });
+    expect(lifecycleTagOps(legacy, "active")).toEqual({ add: ["1"], remove: [] });
     expect(lifecycleTagOps(legacy, "canceled")).toEqual({ add: [], remove: ["1"] });
   });
 });

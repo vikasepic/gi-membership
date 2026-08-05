@@ -221,9 +221,16 @@ export function OfferForm({
           </div>
         </details>
 
+        {/* The offer's own tag IS the buyer tag. It is only during a trial
+            that "granted" and "paid for" differ, and that is what the trial tag
+            is for — a separate access field just got the same id typed twice. */}
         <Field
-          label="ActiveCampaign tag ID"
-          hint="Numeric id, not the tag name. Has access right now: applied when this offer is granted, removed if it is cancelled or refunded."
+          label="Buyer tag ID"
+          hint={
+            hasTrial
+              ? "Numeric id, not the tag name. Applied when the trial converts and money is first taken — not when the trial starts. Removed if they cancel, so this tag means paying right now."
+              : "Numeric id, not the tag name. Applied when they pay, removed if they cancel or are refunded. This tag means paying right now."
+          }
         >
           <input
             name="activecampaignTagId"
@@ -253,25 +260,8 @@ export function OfferForm({
         )}
 
         <Field
-          label="Buyer tag ID"
-          hint={
-            hasTrial
-              ? "Applied the first time money is actually taken — when the trial converts. Removed again if they cancel, so that cancelled-without-a-trial-tag means they paid."
-              : "Applied when they pay. This offer charges immediately, so it lands with the grant. Removed if they cancel."
-          }
-        >
-          <input
-            name="activecampaignBuyerTagId"
-            defaultValue={offer?.activecampaignBuyerTagId ?? ""}
-            inputMode="numeric"
-            placeholder="e.g. 45"
-            className={input}
-          />
-        </Field>
-
-        <Field
           label="Cancelled tag ID"
-          hint="Applied when access ends, by cancellation or refund, and never removed. Pair it with the access tag above to tell a churned customer from one who came back."
+          hint="Applied when access ends, by cancellation or refund, and never removed. Cancelled WITH a trial tag never paid; cancelled without one did."
         >
           <input
             name="activecampaignCancelledTagId"

@@ -135,16 +135,13 @@ export async function tagPurchase(args: {
   // buyer who abandons product A and later buys product B keeps A's abandoned
   // tag — and A's sequence still reaches them, which is the point of tagging
   // per product rather than per store.
-  const [products, offers, abandoned] = await Promise.all([
+  // Products only. An offer's tag now depends on whether money was actually
+  // taken, which this function has no way of knowing — tagLifecycle owns it.
+  const [products, abandoned] = await Promise.all([
     productTagIds(args.productIds),
-    offerTagIds(args.offerIds),
     abandonedTagIds(args.productIds),
   ]);
-  await tagOrQueue({
-    ...contact,
-    tagIds: [...products, ...offers],
-    removeTagIds: abandoned,
-  });
+  await tagOrQueue({ ...contact, tagIds: products, removeTagIds: abandoned });
 }
 
 /**
@@ -160,11 +157,7 @@ export async function untagRevoked(args: {
   if (!activeCampaignEnabled()) return;
   const contact = await contactFor(args.userId);
   if (!contact) return;
-  const [products, offers] = await Promise.all([
-    productTagIds(args.productIds ?? []),
-    offerTagIds(args.offerIds ?? []),
-  ]);
-  const removeTagIds = [...products, ...offers];
+  const removeTagIds = await productTagIds(args.productIds ?? []);
   if (removeTagIds.length === 0) return;
   await tagOrQueue({ ...contact, removeTagIds });
 }
@@ -175,13 +168,11 @@ export async function untagRevoked(args: {
 
 export type OwnershipStatus = "trialing" | "active" | "past_due" | "canceled";
 
-/** The four tags an offer can carry. Any of them may be unset. */
+/** The three tags an offer can carry. Any of them may be unset. */
 export type LifecycleTags = {
-  /** Has access right now. Applied on grant, taken back on revoke. */
-  access: string | null;
-  /** In a trial and has never paid. */
+  /** In a trial and has not paid. Kept if they cancel before paying. */
   trial: string | null;
-  /** Has paid at least once. */
+  /** Paying right now. This is the offer's own activecampaign_tag_id. */
   buyer: string | null;
   /** Access has ended at least once. Never taken back. */
   cancelled: string | null;
@@ -208,9 +199,11 @@ export type LifecycleTags = {
  *
  *   cancelled AND trial       tried it, never paid
  *   cancelled AND NOT trial   paid, then left
+ *   buyer                     paying right now
  *
  * The buyer tag comes off at cancellation for the same reason: with it gone,
- * a cancelled contact carrying no trial tag can only be someone who paid.
+ * a cancelled contact carrying no trial tag can only be someone who paid, and
+ * the tag itself means "paying now" rather than "paid once".
  *
  * The cost of that, stated so nobody rediscovers it: a former buyer who
  * cancels and later starts a SECOND trial gets the trial tag back with no
@@ -225,15 +218,15 @@ export function lifecycleTagOps(
   const some = (...ids: (string | null)[]) => ids.filter((x): x is string => !!x);
   switch (status) {
     case "trialing":
-      return { add: some(tags.access, tags.trial), remove: [] };
+      return { add: some(tags.trial), remove: [] };
     case "active":
-      return { add: some(tags.access, tags.buyer), remove: some(tags.trial) };
+      return { add: some(tags.buyer), remove: some(tags.trial) };
     case "past_due":
       // Access is not withdrawn while Stripe retries, so nothing about their
       // standing has changed yet either.
       return { add: [], remove: [] };
     case "canceled":
-      return { add: some(tags.cancelled), remove: some(tags.access, tags.buyer) };
+      return { add: some(tags.cancelled), remove: some(tags.buyer) };
   }
 }
 
@@ -244,15 +237,15 @@ export async function lifecycleTagsFor(offerIds: string[]): Promise<Map<string, 
   const db = createServiceClient();
   const { data } = await db
     .from("offers")
-    .select(
-      "id, activecampaign_tag_id, activecampaign_trial_tag_id, activecampaign_buyer_tag_id, activecampaign_cancelled_tag_id",
-    )
+    .select("id, activecampaign_tag_id, activecampaign_trial_tag_id, activecampaign_cancelled_tag_id")
     .in("id", offerIds);
   for (const row of data ?? []) {
     out.set(row.id as string, {
-      access: (row.activecampaign_tag_id as string | null) ?? null,
       trial: (row.activecampaign_trial_tag_id as string | null) ?? null,
-      buyer: (row.activecampaign_buyer_tag_id as string | null) ?? null,
+      // The offer's own tag. It was called "access" for one afternoon; the two
+      // only ever differed during a trial, which is exactly what the trial tag
+      // is for.
+      buyer: (row.activecampaign_tag_id as string | null) ?? null,
       cancelled: (row.activecampaign_cancelled_tag_id as string | null) ?? null,
     });
   }

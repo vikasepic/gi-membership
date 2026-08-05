@@ -59,24 +59,25 @@ const type = (name: string, to: string) => {
 };
 
 describe("the lifecycle tag fields", () => {
-  it("offers all four when there is a trial", () => {
+  it("offers all three when there is a trial", () => {
     mount(7);
-    for (const n of [
-      "activecampaignTagId",
-      "activecampaignTrialTagId",
-      "activecampaignBuyerTagId",
-      "activecampaignCancelledTagId",
-    ]) {
+    for (const n of ["activecampaignTagId", "activecampaignTrialTagId", "activecampaignCancelledTagId"]) {
       expect(field(n), n).toBeTruthy();
     }
+  });
+
+  it("does not offer a separate access field, which was the same tag twice", () => {
+    mount(7);
+    expect(field("activecampaignBuyerTagId")).toBeNull();
+    expect(document.querySelectorAll("input[name^=activecampaign]")).toHaveLength(3);
   });
 
   it("hides the trial one when there is no trial", () => {
     mount(0);
     expect(field("activecampaignTrialTagId")).toBeNull();
-    // The other three still apply: anything that takes money has a buyer, and
+    // The other two still apply: anything that takes money has a buyer, and
     // anything that can be refunded can be cancelled.
-    expect(field("activecampaignBuyerTagId")).toBeTruthy();
+    expect(field("activecampaignTagId")).toBeTruthy();
     expect(field("activecampaignCancelledTagId")).toBeTruthy();
   });
 

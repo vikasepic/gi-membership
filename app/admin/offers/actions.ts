@@ -50,12 +50,6 @@ const schema = z
       .regex(/^\d*$/, "Trial tag ID must be the numeric id from ActiveCampaign")
       .optional()
       .default(""),
-    activecampaignBuyerTagId: z
-      .string()
-      .trim()
-      .regex(/^\d*$/, "Buyer tag ID must be the numeric id from ActiveCampaign")
-      .optional()
-      .default(""),
     activecampaignCancelledTagId: z
       .string()
       .trim()
@@ -132,7 +126,6 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     acceptLabel: v.acceptLabel,
     activecampaignTagId: v.activecampaignTagId?.trim() || null,
     activecampaignTrialTagId: v.activecampaignTrialTagId?.trim() || null,
-    activecampaignBuyerTagId: v.activecampaignBuyerTagId?.trim() || null,
     activecampaignCancelledTagId: v.activecampaignCancelledTagId?.trim() || null,
     otoTemplate: v.otoTemplate,
     otoBody: v.otoBody,
