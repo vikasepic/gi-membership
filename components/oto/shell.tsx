@@ -164,17 +164,15 @@ export function OtoActions({
           <input type="hidden" name="choice" value="alt" />
           <button
             type="submit"
-            className={`flex w-full flex-col items-center justify-center rounded-xl border px-6 py-3 transition-colors ${
-              onBand
-                ? "border-white/35 text-white hover:bg-white/10"
-                : "border-[#b0532f]/45 text-[#b0532f] hover:bg-[#b0532f]/8"
-            }`}
+            // Ink and rule from the band, not a fixed brand colour. Terracotta
+            // on the navy band is 2.0:1 — this button lands on whichever band
+            // the section is painted, so the only colour it can safely use is
+            // the one the band already reads with.
+            className="flex w-full flex-col items-center justify-center rounded-xl border px-6 py-3 text-current transition-colors [border-color:color-mix(in_srgb,currentColor_42%,transparent)] hover:[background-color:color-mix(in_srgb,currentColor_10%,transparent)]"
           >
             <span className="text-[1.02rem] font-medium">{altLabel(alt)}</span>
             {altSaving(view.offer, alt) && (
-              <span className={`text-xs ${onBand ? "text-white/70" : "text-muted"}`}>
-                {altSaving(view.offer, alt)}
-              </span>
+              <span className="text-xs opacity-75">{altSaving(view.offer, alt)}</span>
             )}
           </button>
         </form>

@@ -95,4 +95,15 @@ describe("the second price", () => {
     expect(out).toContain("bg-[#b0532f]");
     expect(out.split("choice")[1]).toContain("border");
   });
+
+  it("takes its ink from the band rather than a fixed brand colour", () => {
+    // This button lands on whichever band the section is painted. Terracotta on
+    // the navy band is 2.0:1 — the only colour it can safely use is the one the
+    // band already reads with.
+    const alt = render(yearly).split("choice")[1];
+    expect(alt).toContain("text-current");
+    expect(alt).toContain("currentColor");
+    expect(alt).not.toContain("#b0532f");
+    expect(alt).not.toContain("text-white");
+  });
 });
