@@ -101,3 +101,45 @@ describe("what is deliberately not queued", () => {
     expect(queued).toHaveLength(0);
   });
 });
+
+describe("a retry does not queue itself", () => {
+  it("stays one job however many times it fails", async () => {
+    // Without this, a permanently-down app adds a job every sweep: the runner
+    // calls notifyAppEntitlement, that fails, that queues another one, and the
+    // queue multiplies instead of backing off a single row.
+    queued.length = 0;
+    vi.resetModules();
+    vi.doMock("@/lib/errors", () => ({
+      recordError: async (a: { jobKind?: string }) => {
+        queued.push(a);
+      },
+      messageOf: (e: unknown) => String(e),
+    }));
+    vi.doMock("@/lib/supabase/server", () => ({
+      createServiceClient: () => ({
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { id: "a1", base_url: "https://x", provision_endpoint: "/p", shared_secret: "s", active: true, entitlement_mapping: {} },
+              }),
+            }),
+          }),
+        }),
+      }),
+    }));
+    vi.stubGlobal("fetch", async () => new Response("no", { status: 500 }));
+    const { notifyAppEntitlement } = await import("@/lib/apps");
+    const args = {
+      appId: "a1",
+      email: "b@example.com",
+      entitlementKey: null,
+      status: "canceled" as const,
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+    };
+    await notifyAppEntitlement(args, { queueOnFailure: false });
+    await notifyAppEntitlement(args, { queueOnFailure: false });
+    expect(queued).toHaveLength(0);
+  });
+});

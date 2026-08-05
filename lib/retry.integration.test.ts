@@ -28,6 +28,23 @@ async function clear() {
   await db().from("error_events").delete().eq("source", "test_source");
 }
 
+/**
+ * Everything else waiting in the queue, put out of reach of this sweep.
+ *
+ * The queue is one shared table and other suites leave real work in it — a
+ * failed push to an app that is not running is exactly what the retry queue is
+ * FOR. Asserting on a store-wide count means asserting on whatever those
+ * suites happened to do, so their rows are pushed into the future and this
+ * sweep sees only its own.
+ */
+async function isolate() {
+  await db()
+    .from("error_events")
+    .update({ next_attempt_at: new Date(Date.now() + 3_600_000).toISOString() })
+    .is("resolved_at", null)
+    .neq("source", "test_source");
+}
+
 async function row() {
   const { data } = await db()
     .from("error_events")
@@ -65,6 +82,7 @@ describe.skipIf(!canRun)("retry sweep (integration)", () => {
     vi.stubEnv("ACTIVECAMPAIGN_API_URL", "");
     vi.stubEnv("ACTIVECAMPAIGN_API_TOKEN", "");
     await queueDue({ email: "a@b.com", tagIds: ["1"] });
+    await isolate();
 
     const res = await runDueJobs();
     expect(res.succeeded).toBe(1);
@@ -76,6 +94,7 @@ describe.skipIf(!canRun)("retry sweep (integration)", () => {
     vi.stubEnv("ACTIVECAMPAIGN_API_TOKEN", "tok");
     failAcOnly();
     await queueDue({ email: "a@b.com", tagIds: ["1"] });
+    await isolate();
 
     await runDueJobs();
     const r = await row();
@@ -92,6 +111,7 @@ describe.skipIf(!canRun)("retry sweep (integration)", () => {
       jobKind: "ac_tag",
       jobPayload: { email: "a@b.com", tagIds: ["1"] },
     });
+    await isolate();
     const res = await runDueJobs();
     expect(res.attempted).toBe(0);
   });

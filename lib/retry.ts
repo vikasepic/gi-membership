@@ -41,7 +41,9 @@ const RUNNERS: Record<JobKind, Runner> = {
       stripeCustomerId: (p.stripeCustomerId as string) ?? null,
       stripeSubscriptionId: (p.stripeSubscriptionId as string) ?? null,
       fullName: (p.fullName as string) ?? null,
-    });
+    },
+    // This IS the retry. Queueing from here would add a job per sweep.
+    { queueOnFailure: false });
     // notifyAppEntitlement reports failure by return value rather than by
     // throwing, so without this the sweep would mark a still-broken push done.
     if (!res.ok) throw new Error(res.error ?? `app returned ${res.status}`);

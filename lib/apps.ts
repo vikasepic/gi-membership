@@ -92,7 +92,19 @@ export async function notifyAppEntitlement(args: {
   status: "active" | "trialing" | "canceled" | "past_due";
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
-}): Promise<{ ok: boolean; status?: number; error?: string }> {
+},
+  /**
+   * Whether a failure should be queued for another go.
+   *
+   * The retry runner passes false. It is ALREADY the retry — it throws on
+   * failure, which is how the sweep records the attempt and backs off — and
+   * queueing from inside it would add a second job every time the first one
+   * failed, so a permanently-down app would multiply the queue on every sweep
+   * instead of retrying one row.
+   */
+  opts: { queueOnFailure?: boolean } = {},
+): Promise<{ ok: boolean; status?: number; error?: string }> {
+  const queueOnFailure = opts.queueOnFailure !== false;
   const app = await getAppById(args.appId);
   // Not queued: an app that is switched off is a decision someone made, not a
   // delivery that failed. Retrying it forever would fill the queue with work
@@ -122,11 +134,11 @@ export async function notifyAppEntitlement(args: {
       // middleware did exactly this: 307 to /login on both endpoints.
       redirect: "manual",
     });
-    if (!res.ok) await queueRetry(args, `app returned ${res.status}`);
+    if (!res.ok && queueOnFailure) await queueRetry(args, `app returned ${res.status}`);
     return { ok: res.ok, status: res.status };
   } catch (e) {
     const error = e instanceof Error ? e.message : "fetch_failed";
-    await queueRetry(args, error);
+    if (queueOnFailure) await queueRetry(args, error);
     return { ok: false, error };
   }
 }
