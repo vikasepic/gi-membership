@@ -3,6 +3,10 @@ import { SECTIONS, buildSectionView, defaultRows, sectionDef, type SectionRow } 
 import { blocksForSection, evenColumns, isUnconverted, sectionToBlocks } from "@/lib/section-to-blocks";
 import { normalizeBlocks, walkBlocks, type Block } from "@/lib/blocks";
 
+/** A row of exactly these column widths. Rows are described by widths now. */
+const isRow = (b: Block, widths: number[]) =>
+  b.type === "row" && JSON.stringify(b.props.widths) === JSON.stringify(widths);
+
 const view = (sectionKey: string, content: Record<string, unknown>) =>
   buildSectionView({ sectionKey, position: 0, enabled: true, style: "paper", accent: null, variant: null, content })!;
 
@@ -85,7 +89,7 @@ describe("each section gets its own layout", () => {
     const out = convert("hero", { headline: "x", bullets: [{ text: "One" }, { text: "Two" }] });
     const row = out.find((b) => b.type === "row")!;
     // The copy leads and the card supports — the proportion the model uses.
-    expect(row.props.structure).toBe("3-2");
+    expect(row.props.widths).toEqual([60, 40]);
     const card = row.columns![1][0];
     expect(card.type).toBe("cards");
     expect(card.props.columns).toBe(1);
@@ -124,7 +128,7 @@ describe("each section gets its own layout", () => {
 
   it("closes with the checklist beside the price card", () => {
     const out = convert("cta", { heading: "Do not wait", checklist: [{ text: "a" }], ctaLabel: "Buy" });
-    const row = out.find((b) => b.type === "row" && b.props.structure === "1-1")!;
+    const row = out.find((b) => isRow(b, [50, 50]))!;
     expect(row.columns![0].map((x) => x.type)).toEqual(["heading", "iconlist"]);
     const card = row.columns![1][0];
     expect(card.type).toBe("pricecard");
@@ -203,7 +207,7 @@ describe("the shapes come across", () => {
     // Buried under a price it is a guarantee nobody reads, which is why it was
     // pulled out of section nine.
     const out = convert("guarantee", { heading: "Nothing today", body: "Not charged until day eight.", points: [{ text: "Cancel in one click" }] });
-    const panel = out.find((b) => b.type === "row" && b.props.structure === "1")!;
+    const panel = out.find((b) => isRow(b, [100]))!;
     expect(panel.style.background.type).toBe("classic");
     expect(panel.columns![0].map((b) => b.type)).toEqual(["heading", "text", "iconlist"]);
   });
@@ -283,14 +287,14 @@ describe("the shapes come across", () => {
       priceNote: "Cancel any time",
       ctaLabel: "Start now",
     });
-    const row = out.find((b) => b.type === "row" && b.props.structure === "1-1")!;
+    const row = out.find((b) => isRow(b, [50, 50]))!;
     expect(row.columns![0].map((x) => x.type)).toEqual(["iconlist", "text"]);
     expect(row.columns![1][0].type).toBe("pricecard");
   });
 
   it("wraps the checkout details in a box when there is no price card", () => {
     const out = convert("value", { heading: "x", checklist: [{ text: "Included" }] });
-    const box = out.find((b) => b.type === "row" && b.props.structure === "1")!;
+    const box = out.find((b) => isRow(b, [100]))!;
     expect(box.style.background.type).toBe("classic");
     expect(box.style.background.color).toBeNull();
   });
@@ -476,7 +480,7 @@ describe("the authority band", () => {
       logosLabel: "Companies I have built for",
       logos: [{ name: "Mindvalley", url: "https://x.test/mv.svg" }, { name: "Evercoach", url: "https://x.test/ec.svg" }],
     });
-    const panel = walkBlocks(out).find((b) => b.type === "row" && b.props.structure === "1")!;
+    const panel = walkBlocks(out).find((b) => isRow(b, [100]))!;
     expect(panel.style.background.type).toBe("classic");
     const inside = panel.columns![0].map((b) => b.type);
     expect(inside).toEqual(["text", "cards"]);

@@ -1,4 +1,4 @@
-import { newBlock, normalizeBlocks, ROW_STRUCTURES, type Block, type BlockType, type RowStructure } from "@/lib/blocks";
+import { newBlock, normalizeBlocks, widthsOf, type Block, type BlockType, type RowStructure } from "@/lib/blocks";
 import { listOf, textOf, type SectionDef, type SectionView } from "@/lib/page-sections";
 
 // Turning a section's typed content into blocks.
@@ -40,7 +40,7 @@ const wide = <T extends Block>(b: T): T => ({ ...b, style: { ...b.style, width: 
 function split(left: Block[], right: Block[], structure: RowStructure): Block | null {
   if (left.length === 0 && right.length === 0) return null;
   if (left.length === 0 || right.length === 0) return null;
-  const row = block("row", { structure, verticalAlign: "flex-start" }, { width: "full" });
+  const row = block("row", { widths: widthsOf(structure), verticalAlign: "flex-start" }, { width: "full" });
   row.columns = [left, right];
   return row;
 }
@@ -110,7 +110,7 @@ function priceCard(c: Record<string, unknown>, t: (k: string) => string): Block 
 /** A single boxed panel holding blocks — funnel-kit's bordered sections. */
 function boxed(inner: Block[]): Block | null {
   if (inner.length === 0) return null;
-  const row = block("row", { structure: "1", gap: 0 }, {
+  const row = block("row", { widths: widthsOf("1"), gap: 0 }, {
     width: "full",
     padding: { t: 24, r: 24, b: 24, l: 24, u: "px", link: true },
     radius: 18,

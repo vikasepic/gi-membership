@@ -9,6 +9,7 @@ import {
   PALETTE,
   clearControl,
   controlsFor,
+  deviceOf,
   isGroup,
   readControl,
   scopeOf,
@@ -26,12 +27,11 @@ import {
   newBlock,
   removeBlock,
   updateBlock,
+  evenWidths,
   hasOverride,
-  styleFor,
+  setColumnWidth,
   DEVICE_CANVAS,
-  ROW_STRUCTURES,
   type Block,
-  type BlockStyle,
   type BlockType,
   type Device,
   type DropTarget,
@@ -46,7 +46,7 @@ import { DeviceSwitch } from "@/components/admin/device-switch";
  * except to hand it on.
  */
 const CanvasDevice = createContext<Device>("desktop");
-import { blockCssAt } from "@/lib/block-style";
+import { blockCssAt, effectiveWidths, rowLayout } from "@/lib/block-style";
 import { imageSrc } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
 
@@ -582,18 +582,17 @@ function RowColumns({
   onDragStart: (id: string) => void;
   onPatch: (id: string, next: Block) => void;
 }) {
-  const structure = (String(block.props.structure ?? "1-1") in ROW_STRUCTURES
-    ? String(block.props.structure)
-    : "1-1") as keyof typeof ROW_STRUCTURES;
-  const widths = ROW_STRUCTURES[structure];
+  const device = useContext(CanvasDevice);
+  // The same layout the page gets, applied directly — the canvas is 390px
+  // inside a full-size window, so its media queries never fire. Without this
+  // the phone view shows two columns side by side and the editor is lying
+  // about the thing you switched to it to check.
+  const layout = rowLayout(block, device);
   const columns = block.columns ?? [];
   return (
-    <div
-      className="grid gap-3"
-      style={{ gridTemplateColumns: widths.map((w) => `${w}fr`).join(" "), gap: `${Number(block.props.gap ?? 24)}px` }}
-    >
+    <div style={layout.container}>
       {columns.map((col, c) => (
-        <div key={c} style={{ borderColor: theme.rule }} className="min-w-0">
+        <div key={c} style={{ borderColor: theme.rule, ...layout.columns[c] }}>
           <Zone
             emptyLabel="Drop here"
             className="flex min-h-[64px] flex-col rounded border border-dashed p-1.5"
@@ -640,8 +639,8 @@ function ControlField({
   const value = readControl(block, control, device);
   // Only style controls have a wider device to inherit from; a heading's text
   // is the same words at every width.
-  const responsive = scopeOf(control) === "style" && device !== "desktop";
-  const set = responsive && hasOverride(block, device, control.key.split(".")[0] as keyof BlockStyle);
+  const at = deviceOf(control, device);
+  const set = at !== "desktop" && hasOverride(block, at, control.key.split(".")[0], scopeOf(control));
   // One label builder for every control kind. The device badge has to appear on
   // all of them — a slider that does not say it is holding a tablet-only value
   // is a slider you will change on desktop and wonder why nothing moved.
@@ -653,10 +652,10 @@ function ControlField({
           <button
             type="button"
             onClick={onClear}
-            title={`Set for ${device}. Click to use the ${device === "mobile" ? "tablet" : "desktop"} value again.`}
+            title={`Set for ${at}. Click to use the ${at === "mobile" ? "tablet" : "desktop"} value again.`}
             className="rounded-full bg-primary/15 px-1.5 text-[0.6rem] font-medium text-primary hover:bg-primary/25"
           >
-            {device} ✕
+            {at} ✕
           </button>
         )}
       </span>
@@ -737,6 +736,71 @@ function ControlField({
           <span className="flex-1">{head()}</span>
         </label>
       );
+
+    case "columns": {
+      const count = block.columns?.length ?? 0;
+      return (
+        <label className="flex flex-col gap-1">
+          {head(<span className="text-[0.66rem] font-normal text-muted">{count}</span>)}
+          <select
+            className={input}
+            value={count}
+            onChange={(e) => onChange(Number(e.target.value))}
+          >
+            {Array.from({ length: control.max }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                {n} column{n === 1 ? "" : "s"}
+              </option>
+            ))}
+          </select>
+          {count > 1 && (
+            <span className="text-[0.66rem] text-muted">
+              Fewer columns moves what is in them into the last one — nothing is deleted.
+            </span>
+          )}
+        </label>
+      );
+    }
+
+    case "widths": {
+      const count = block.columns?.length ?? 0;
+      if (count < 2) return null;
+      // What is actually drawn at this width, not what is stored — on a phone
+      // that is 100 per column until someone says otherwise, and a panel
+      // showing 60/40 beside a stacked canvas is a panel telling a lie.
+      const widths = effectiveWidths(block, at);
+      return (
+        <div className="flex flex-col gap-1.5">
+          {head()}
+          {/* One field per column, because "column width for each" is the thing
+              being asked for. Setting one takes the difference from the others
+              in proportion, so the row always adds up to a row. */}
+          <div className="flex flex-wrap gap-1.5">
+            {widths.map((w, i) => (
+              <label key={i} className="flex flex-1 basis-16 flex-col gap-0.5">
+                <span className="text-[0.62rem] text-muted">Col {i + 1}</span>
+                <input
+                  type="number"
+                  min={5}
+                  max={95}
+                  step={1}
+                  className={`${input} px-1.5 text-center tabular-nums`}
+                  value={Math.round(w * 100) / 100}
+                  onChange={(e) => onChange(setColumnWidth(widths, i, Number(e.target.value)))}
+                />
+              </label>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => onChange(evenWidths(count))}
+            className="w-fit rounded px-1 text-[0.66rem] text-muted hover:text-fg"
+          >
+            Even
+          </button>
+        </div>
+      );
+    }
 
     case "number":
       return (

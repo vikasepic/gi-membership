@@ -93,10 +93,24 @@ describe("normalizeBlocks — stored JSON is untrusted", () => {
     expect(b.columns![1]).toEqual([]);
   });
 
+  it("turns the structure into widths, so there is one description of the row", () => {
+    const b = normalizeBlocks([{ type: "row", props: { structure: "3-2" } }])[0];
+    expect(b.props.widths).toEqual([60, 40]);
+    expect(b.props.structure).toBeUndefined();
+  });
+
+  it("keeps a column the structure does not know about, and its content", () => {
+    const b = normalizeBlocks([
+      { type: "row", props: { structure: "1-1" }, columns: [[], [], [{ type: "text" }]] },
+    ])[0];
+    expect(b.columns).toHaveLength(3);
+    expect(b.columns![2]).toHaveLength(1);
+  });
+
   it("falls back to a known structure when the stored one is nonsense", () => {
     const b = normalizeBlocks([{ type: "row", props: { structure: "9-9-9" } }])[0];
-    expect(Object.keys(ROW_STRUCTURES)).toContain(b.props.structure);
     expect(b.columns).toHaveLength(2);
+    expect(b.props.widths).toEqual([50, 50]);
   });
 
   it("stops nesting at MAX_DEPTH instead of recursing on a self-referential tree", () => {

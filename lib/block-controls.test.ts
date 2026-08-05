@@ -46,10 +46,20 @@ describe("a control writes somewhere that is actually read", () => {
   it.each(BLOCK_TYPES)("%s: every key exists on the block it edits", (type) => {
     const block = newBlock(type);
     for (const c of editable(all(type))) {
+      // `columns` changes the block's shape rather than one of its values —
+      // there is no key for it, and writeControl routes it to setColumnCount.
+      if (c.kind === "columns") continue;
       const root = scopeOf(c) === "style" ? (block.style as unknown as Record<string, unknown>) : block.props;
       const head = c.key.split(".")[0];
       expect(head in root, `${type}.${scopeOf(c)}.${c.key}`).toBe(true);
     }
+  });
+
+  it("the columns control really restructures the row", () => {
+    const control = all("row").find((c) => !isGroup(c) && c.kind === "columns")!;
+    const before = newBlock("row");
+    const after = writeControl(before, control, 4);
+    expect(after.columns).toHaveLength(4);
   });
 
   it.each(BLOCK_TYPES)("%s: no key appears twice in one tab", (type) => {

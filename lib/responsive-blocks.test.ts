@@ -87,7 +87,8 @@ describe("what survives a round trip through the database", () => {
 
   it("stays sparse — a round trip must not freeze the desktop values in", () => {
     const b = setStyleAt(setStyleAt(heading(), "desktop", { size: 48 }), "mobile", { size: 28 });
-    expect(Object.keys(trip(b).responsive!.mobile)).toEqual(["size"]);
+    expect(Object.keys(trip(b).responsive!.mobile.style)).toEqual(["size"]);
+    expect(trip(b).responsive!.mobile.props).toEqual({});
   });
 
   it("drops a value the desktop style would have rejected", () => {

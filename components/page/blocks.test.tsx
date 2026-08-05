@@ -192,10 +192,11 @@ describe("lists and slides", () => {
 });
 
 describe("rows and columns", () => {
-  it("renders one column per structure slot", () => {
+  it("renders one element per column", () => {
     const row = newBlock("row");
     row.columns![0] = [make("heading", { text: "In here" })];
-    expect(render([row]).match(/min-w-0/g)).toHaveLength(2);
+    const out = render([row]);
+    expect(out.match(/nth-child\(\d\)/g)?.length).toBeGreaterThanOrEqual(2);
   });
 
   it("renders nothing for a row nobody put anything in", () => {
@@ -211,8 +212,25 @@ describe("rows and columns", () => {
 
   it("lays columns out in the given proportions", () => {
     const base = newBlock("row");
-    const row: Block = { ...base, props: { ...base.props, structure: "2-1" }, columns: [[make("heading", { text: "A" })], []] };
-    expect(render([row])).toContain("2fr 1fr");
+    const row: Block = {
+      ...base,
+      props: { ...base.props, widths: [66.67, 33.33] },
+      columns: [[make("heading", { text: "A" })], []],
+    };
+    const out = render([row]);
+    expect(out).toContain("width:calc(66.67%");
+    expect(out).toContain("width:calc(33.33%");
+  });
+
+  it("stacks the columns on a phone without being told to", () => {
+    const base = newBlock("row");
+    const row: Block = {
+      ...base,
+      props: { ...base.props, widths: [66.67, 33.33] },
+      columns: [[make("heading", { text: "A" })], []],
+    };
+    const mobile = render([row]).split("max-width:767px")[1] ?? "";
+    expect(mobile).toContain("width:calc(100% - 0px)");
   });
 
   it("a nested block still resolves its colour against the band", () => {

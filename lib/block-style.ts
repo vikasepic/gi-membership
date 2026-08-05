@@ -1,7 +1,18 @@
 import type { CSSProperties } from "react";
 import { readableInk, tint } from "@/lib/color";
 import type { BandTheme } from "@/lib/page-sections";
-import { DEVICE_MAX, styleFor, type Background, type Block, type BlockStyle, type Device, type Dim } from "@/lib/blocks";
+import {
+  DEVICE_MAX,
+  columnWidths,
+  hasOverride,
+  propsFor,
+  styleFor,
+  type Background,
+  type Block,
+  type BlockStyle,
+  type Device,
+  type Dim,
+} from "@/lib/blocks";
 
 // Turning a block's stored style into CSS.
 //
@@ -184,6 +195,65 @@ export function hiddenClasses(block: Block): string {
 }
 
 // ---------------------------------------------------------------------------
+// Columns
+// ---------------------------------------------------------------------------
+
+export type RowLayout = {
+  container: CSSProperties;
+  columns: CSSProperties[];
+};
+
+/**
+ * How a row lays out at one width.
+ *
+ * Flex with wrapping rather than a grid template, because a grid puts every
+ * column on one line: "two across, then two more" is a thing people build, and
+ * with percentage widths it falls out of wrapping for free.
+ *
+ * The width arithmetic is the whole trick. A column of W% in a container with
+ * gap G cannot simply be W%, or a row of them overflows by G×(k−1). Taking
+ * `G × (100−W)/100` off each column makes any subset that adds to 100 come out
+ * at exactly 100% — including a single 100% column, which loses nothing.
+ */
+export function effectiveWidths(block: Block, device: Device): number[] {
+  const p = propsFor(block, device);
+  const count = block.columns?.length ?? 0;
+  // Stacking is a default, not a lock: an explicit width for this device wins.
+  // Without it every row would keep its desktop columns on a 390px phone, which
+  // is exactly what people complain about.
+  const stack = String(p.stack ?? "mobile");
+  const stacksHere =
+    (device === "mobile" && stack !== "none") || (device === "tablet" && stack === "tablet");
+  return stacksHere && !hasOverride(block, device, "widths", "props")
+    ? Array.from({ length: count }, () => 100)
+    : columnWidths(p, count);
+}
+
+export function rowLayout(block: Block, device: Device): RowLayout {
+  const p = propsFor(block, device);
+  const count = block.columns?.length ?? 0;
+  const gap = typeof p.gap === "number" ? p.gap : 24;
+  const widths = effectiveWidths(block, device);
+
+  return {
+    container: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: `${gap}px`,
+      alignItems: String(p.verticalAlign ?? "stretch"),
+    },
+    columns: widths.map((w, i) => ({
+      // minWidth:0 or a long unbroken word makes the column refuse to shrink.
+      minWidth: 0,
+      width: `calc(${w}% - ${Math.round((gap * (100 - w)) / 100 * 100) / 100}px)`,
+      // Order, not reversed markup: the columns have to stay where they are in
+      // the DOM or the editor's drop targets and the reading order move too.
+      order: p.reverse === true ? count - i : i,
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Per-device CSS
 // ---------------------------------------------------------------------------
 
@@ -320,9 +390,56 @@ export function blockRules(block: Block, theme: BandTheme): string {
     }
   }
 
+  if (block.type === "row") out.push(...rowRules(block, sel));
+
   const custom = customCss(block.style.customCss, sel);
   if (custom) out.push(custom);
   return out.join("");
+}
+
+/**
+ * The column rules, per width.
+ *
+ * `> [data-row]` and `> [data-row] > :nth-child(n)` are direct children on
+ * purpose: a row nested inside a column would otherwise match its parent's
+ * selector and take the outer row's widths.
+ */
+function rowRules(block: Block, sel: string): string[] {
+  const out: string[] = [];
+  const at = (device: Device) => rowLayout(block, device);
+  const write = (layout: RowLayout, prev: RowLayout | null): string => {
+    const parts: string[] = [];
+    const box = prev ? diff(layout.container, prev.container) : layout.container;
+    const boxDecls = declarations(box);
+    if (boxDecls) parts.push(`${sel} > [data-row]{${boxDecls}}`);
+    layout.columns.forEach((col, i) => {
+      const d = prev?.columns[i] ? diff(col, prev.columns[i]) : col;
+      const decls = declarations(d);
+      if (decls) parts.push(`${sel} > [data-row] > :nth-child(${i + 1}){${decls}}`);
+    });
+    return parts.join("");
+  };
+
+  const desktop = at("desktop");
+  out.push(write(desktop, null));
+
+  let wider = desktop;
+  for (const device of ["tablet", "mobile"] as const) {
+    const here = at(device);
+    const body = write(here, wider);
+    if (body) out.push(`@media (max-width:${DEVICE_MAX[device]}px){${body}}`);
+    wider = here;
+  }
+  return out.filter(Boolean);
+}
+
+/** Only what changed, so a media query does not freeze the wider values in. */
+function diff(next: CSSProperties, prev: CSSProperties): CSSProperties {
+  const out: CSSProperties = {};
+  for (const [k, v] of Object.entries(next)) {
+    if (v !== prev[k as keyof CSSProperties]) (out as Record<string, unknown>)[k] = v;
+  }
+  return out;
 }
 
 /**

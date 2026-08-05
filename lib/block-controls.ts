@@ -1,11 +1,12 @@
 import {
   BLOCK_TYPES,
-  ROW_STRUCTURES,
-  clearStyleAt,
-  setStyleAt,
+  MAX_COLUMNS,
+  clearAt,
+  propsFor,
+  setAt,
+  setColumnCount,
   styleFor,
   type Block,
-  type BlockStyle,
   type BlockType,
   type Device,
 } from "@/lib/blocks";
@@ -23,7 +24,22 @@ import {
 
 export type ControlScope = "props" | "style";
 
-type Base = { key: string; label: string; hint?: string; scope?: ControlScope; when?: (b: Block) => boolean };
+type Base = {
+  key: string;
+  label: string;
+  hint?: string;
+  scope?: ControlScope;
+  when?: (b: Block) => boolean;
+  /**
+   * Whether this control holds a value per device.
+   *
+   * Every `style` control does — spacing and type are what a phone changes.
+   * Props are layout for some blocks and content for others, and a heading that
+   * said something different on mobile would be a page nobody could proofread,
+   * so props opt in one at a time.
+   */
+  responsive?: boolean;
+};
 
 export type Control =
   | (Base & { kind: "text"; placeholder?: string })
@@ -36,6 +52,10 @@ export type Control =
   | (Base & { kind: "color" })
   | (Base & { kind: "dim" })
   | (Base & { kind: "list"; item: { key: string; label: string; kind: "text" | "textarea" }[]; addLabel: string })
+  // Rows only. Both need the block itself — how many columns there are, and how
+  // wide each one is — which a key and a value cannot express.
+  | (Base & { kind: "columns"; max: number })
+  | (Base & { kind: "widths" })
   | { kind: "group"; label: string; when?: (b: Block) => boolean };
 
 export const isGroup = (c: Control): c is { kind: "group"; label: string } => c.kind === "group";
@@ -328,14 +348,31 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
 
   row: {
     content: [
+      // Structural, so not per device: the columns are where content lives, and
+      // a phone that had fewer of them would have nowhere to put it. What
+      // changes per device is how wide they are and what order they come in.
+      { kind: "columns", key: "columnCount", label: "Columns", max: MAX_COLUMNS },
+      { kind: "widths", key: "widths", label: "Column widths", responsive: true, hint: "% of the row" },
       {
         kind: "select",
-        key: "structure",
-        label: "Columns",
-        options: Object.keys(ROW_STRUCTURES).map((k) => [k, k.split("-").join(" · ")] as [string, string]),
+        key: "stack",
+        label: "Stack into one",
+        options: [
+          ["mobile", "On mobile"],
+          ["tablet", "On tablet and mobile"],
+          ["none", "Never — keep them side by side"],
+        ],
+        hint: "Setting widths for a device overrides this",
       },
-      { kind: "number", key: "gap", label: "Gap", min: 0, max: 80, step: 4, unit: "px" },
-      { kind: "select", key: "verticalAlign", label: "Align", options: [["stretch", "Stretch"], ["flex-start", "Top"], ["center", "Middle"], ["flex-end", "Bottom"]] },
+      { kind: "toggle", key: "reverse", label: "Reverse the order", responsive: true },
+      { kind: "number", key: "gap", label: "Gap", min: 0, max: 80, step: 4, unit: "px", responsive: true },
+      {
+        kind: "select",
+        key: "verticalAlign",
+        label: "Align",
+        responsive: true,
+        options: [["stretch", "Stretch"], ["flex-start", "Top"], ["center", "Middle"], ["flex-end", "Bottom"]],
+      },
     ],
     style: [],
   },
@@ -412,12 +449,24 @@ export function readControl(block: Block, c: Control, device: Device = "desktop"
   if (isGroup(c)) return undefined;
   const root: Record<string, unknown> =
     scopeOf(c) === "style"
-      ? (styleFor(block, device) as unknown as Record<string, unknown>)
-      : block.props;
+      ? (styleFor(block, deviceOf(c, device)) as unknown as Record<string, unknown>)
+      : propsFor(block, deviceOf(c, device));
   return c.key.split(".").reduce<unknown>((acc, part) => {
     if (acc === null || acc === undefined || typeof acc !== "object") return undefined;
     return (acc as Record<string, unknown>)[part];
   }, root);
+}
+
+/**
+ * The device a control actually writes at.
+ *
+ * A control that does not hold a value per device always writes desktop, so
+ * switching to Mobile and typing into it edits the one value there is rather
+ * than quietly forking the block's content by screen size.
+ */
+export function deviceOf(c: Control, device: Device): Device {
+  if (isGroup(c) || device === "desktop") return "desktop";
+  return scopeOf(c) === "style" || c.responsive === true ? device : "desktop";
 }
 
 /**
@@ -428,28 +477,36 @@ export function readControl(block: Block, c: Control, device: Device = "desktop"
  */
 export function writeControl(block: Block, c: Control, value: unknown, device: Device = "desktop"): Block {
   if (isGroup(c)) return block;
-  const path = c.key.split(".");
-  if (scopeOf(c) !== "style") return { ...block, props: setIn(block.props, path, value) };
+  // The column count is the one control that changes the block's shape rather
+  // than one of its values, and it has to move content rather than drop it.
+  if (c.kind === "columns") return setColumnCount(block, Number(value));
 
-  // Style controls write at the device being edited. A dotted key still lands
-  // as one top-level override — `background.color` on mobile stores the whole
-  // background, because a Partial<BlockStyle> has no room for half of one, and
-  // half a background is not a thing CSS can express either.
-  const at = styleFor(block, device) as unknown as Record<string, unknown>;
-  const next = setIn(at, path, value) as unknown as BlockStyle;
-  const key = path[0] as keyof BlockStyle;
-  return setStyleAt(block, device, { [key]: next[key] } as Partial<BlockStyle>);
+  const at = deviceOf(c, device);
+  const path = c.key.split(".");
+  const scope = scopeOf(c);
+
+  // A dotted key still lands as ONE top-level override: `background.color` on
+  // mobile stores the whole background, because a sparse patch has no room for
+  // half of one and half a background is not a thing CSS can express either.
+  const current =
+    scope === "style"
+      ? (styleFor(block, at) as unknown as Record<string, unknown>)
+      : propsFor(block, at);
+  const next = setIn(current, path, value);
+  return setAt(block, at, scope, { [path[0]]: next[path[0]] });
 }
 
 /**
  * Give a control back to the wider device.
  *
- * Only meaningful on a style control away from desktop — everything else has
- * nowhere to fall back to.
+ * Only meaningful on a control that holds a value per device, away from
+ * desktop — everything else has nowhere to fall back to.
  */
 export function clearControl(block: Block, c: Control, device: Device): Block {
-  if (isGroup(c) || scopeOf(c) !== "style" || device === "desktop") return block;
-  return clearStyleAt(block, device, c.key.split(".")[0] as keyof BlockStyle);
+  if (isGroup(c)) return block;
+  const at = deviceOf(c, device);
+  if (at === "desktop") return block;
+  return clearAt(block, at, c.key.split(".")[0], scopeOf(c));
 }
 
 function setIn(obj: Record<string, unknown>, path: string[], value: unknown): Record<string, unknown> {

@@ -39,7 +39,7 @@ describe("the starter page", () => {
 
   it("builds the hero the way the reference page does", () => {
     const row = starter.hero.find((b) => b.type === "row")!;
-    expect(row.props.structure).toBe("3-2");
+    expect(row.props.widths).toEqual([60, 40]);
     expect(all(row.columns![1])).toContain("cards");
   });
 

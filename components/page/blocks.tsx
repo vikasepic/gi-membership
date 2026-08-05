@@ -1,9 +1,10 @@
-import { ROW_STRUCTURES, blockRendersNothing, styleFor, type Block, type Device, type RowStructure } from "@/lib/blocks";
+import { blockRendersNothing, styleFor, type Block, type Device } from "@/lib/blocks";
 import {
   blockClass,
   blockColors,
   blockCssAt,
   blockRules,
+  rowLayout,
   headingTag,
   hiddenClasses,
   softAccent,
@@ -735,24 +736,17 @@ function Inner({
     }
 
     case "row": {
-      const structure = (str(p.structure, "1-1") as RowStructure) in ROW_STRUCTURES
-        ? (str(p.structure, "1-1") as RowStructure)
-        : "1-1";
       const columns = block.columns ?? [];
+      // The layout is emitted as rules on the block's own class, so a phone can
+      // stack what a desktop puts side by side. Pinned to a device — an editor
+      // canvas 390px wide inside a 1900px window — it comes back inline, since
+      // no media query would fire there.
+      const layout = at ? rowLayout(block, at) : null;
       return (
-        <div
-          className="grid grid-cols-1 @2xl:grid-cols-[var(--cols)]"
-          style={
-            {
-              gap: `${num(p.gap, 24)}px`,
-              alignItems: str(p.verticalAlign, "stretch"),
-              "--cols": ROW_STRUCTURES[structure].map((w) => `${w}fr`).join(" "),
-            } as React.CSSProperties
-          }
-        >
+        <div data-row style={layout?.container}>
           {columns.map((col, i) => (
-            <div key={i} className="flex min-w-0 flex-col">
-              {flow(col.filter((child) => !blockRendersNothing(child)), theme, money, cta)}
+            <div key={i} className="flex flex-col" style={layout?.columns[i]}>
+              {flow(col.filter((child) => !blockRendersNothing(child)), theme, money, cta, at)}
             </div>
           ))}
         </div>

@@ -172,3 +172,93 @@ describe("every style control can be set per device", () => {
     }
   });
 });
+
+describe("managing columns", () => {
+  const rowWith = (props: Record<string, unknown> = {}, cols = 2): Block => {
+    const b = newBlock("row");
+    return { ...b, props: { ...b.props, ...props }, columns: Array.from({ length: cols }, () => []) };
+  };
+  const widthFields = () =>
+    [...document.querySelectorAll<HTMLInputElement>('input[type="number"]')];
+  const type = (el: HTMLInputElement, to: number) => {
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    act(() => {
+      set.call(el, String(to));
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+  const pick = (el: HTMLSelectElement, value: string) => {
+    const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
+    act(() => {
+      set.call(el, value);
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  };
+  const open = (initial: Block[]) => {
+    const editor = mount(initial);
+    click(document.querySelector("[data-block]"));
+    return editor;
+  };
+
+  it("offers a width field per column", () => {
+    open([rowWith({}, 3)]);
+    expect(widthFields()).toHaveLength(3);
+  });
+
+  it("resizes one column and keeps the row adding up", () => {
+    const editor = open([rowWith({ widths: [50, 50] })]);
+    type(widthFields()[0], 70);
+    expect(editor.blocks[0].props.widths).toEqual([70, 30]);
+  });
+
+  it("changes how many columns there are", () => {
+    const editor = open([rowWith({}, 2)]);
+    const count = [...document.querySelectorAll("select")].find((s) =>
+      [...s.options].some((o) => o.textContent?.includes("column")),
+    )!;
+    pick(count, "4");
+    expect(editor.blocks[0].columns).toHaveLength(4);
+    expect(widthFields()).toHaveLength(4);
+  });
+
+  it("shows the phone as stacked, not as the desktop widths", () => {
+    // The panel has to agree with the canvas: on mobile the row is one column
+    // per line until someone says otherwise, so the fields read 100.
+    open([rowWith({ widths: [60, 40] })]);
+    click(tab("Mobile"));
+    expect(widthFields().map((f) => Number(f.value))).toEqual([100, 100]);
+  });
+
+  it("writes a phone-only width, leaving the desktop row alone", () => {
+    const editor = open([rowWith({ widths: [60, 40] })]);
+    click(tab("Mobile"));
+    type(widthFields()[0], 50);
+    expect(editor.blocks[0].props.widths).toEqual([60, 40]);
+    expect(styleFor(editor.blocks[0], "mobile")).toBeTruthy();
+    expect(editor.blocks[0].responsive?.mobile.props.widths).toEqual([50, 50]);
+  });
+
+  it("keeps the column count out of the per-device overrides", () => {
+    // Columns hold content. A phone with fewer of them would have nowhere to
+    // put what the desktop wrote, so the count is one number for all widths.
+    const editor = open([rowWith({}, 2)]);
+    click(tab("Mobile"));
+    const count = [...document.querySelectorAll("select")].find((s) =>
+      [...s.options].some((o) => o.textContent?.includes("column")),
+    )!;
+    pick(count, "3");
+    expect(editor.blocks[0].columns).toHaveLength(3);
+    expect(editor.blocks[0].responsive?.mobile.props.columnCount).toBeUndefined();
+  });
+
+  it("reverses the order for one device only", () => {
+    const editor = open([rowWith({}, 2)]);
+    click(tab("Mobile"));
+    const reverse = [...document.querySelectorAll("label")].find((l) =>
+      l.textContent?.includes("Reverse"),
+    )?.querySelector("input");
+    click(reverse);
+    expect(editor.blocks[0].props.reverse).not.toBe(true);
+    expect(editor.blocks[0].responsive?.mobile.props.reverse).toBe(true);
+  });
+});

@@ -115,17 +115,27 @@ export const DEVICE_CANVAS: Record<Device, number | null> = {
 /**
  * What a device changes about a block, relative to the one above it.
  *
- * Desktop IS `style`; these are sparse patches on top, and sparse is the whole
- * point. A tablet that stored a full copy of the style would go on rendering
- * last week's colour after the desktop colour changed — the override has to
- * remember only what someone actually set on that device.
+ * Both halves, because layout is not all in `style`: how many columns sit side
+ * by side, in what order and at what widths lives in `props`, and those are the
+ * things that most need to differ on a phone.
+ *
+ * Sparse is the whole point. A tablet that stored a full copy would go on
+ * rendering last week's value after the desktop one changed — an override has
+ * to remember only what someone actually set on that device.
  *
  * Mobile layers on tablet, not on desktop, matching the CSS the renderer emits:
  * a narrower screen is also a tablet screen.
  */
+export type OverrideScope = "style" | "props";
+
+export type DeviceOverride = {
+  style: Partial<BlockStyle>;
+  props: Record<string, unknown>;
+};
+
 export type ResponsiveStyle = {
-  tablet: Partial<BlockStyle>;
-  mobile: Partial<BlockStyle>;
+  tablet: DeviceOverride;
+  mobile: DeviceOverride;
 };
 
 export type Block = {
@@ -187,6 +197,13 @@ export const baseStyle = (over: Partial<BlockStyle> = {}): BlockStyle => ({
   ...over,
 });
 
+/** A preset named as fractions, as the percentages a row is actually built from. */
+export function widthsOf(structure: RowStructure): number[] {
+  const parts = ROW_STRUCTURES[structure];
+  const total = parts.reduce((a, b) => a + b, 0);
+  return toHundred(parts.map((w) => (w / total) * 100));
+}
+
 /** The columns each row structure produces. */
 export const ROW_STRUCTURES = {
   "1": [1],
@@ -213,7 +230,12 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   spacer: { height: 40 },
   divider: { thickness: 1, width: 100 },
   html: { code: "" },
-  row: { structure: "1-1", verticalAlign: "stretch", gap: 24 },
+  // No `widths` here on purpose: a default array would be present on every row
+  // read out of the database and would outrank the `structure` those rows were
+  // actually saved with, flattening every 3-2 into a 50/50. Widths are derived
+  // by columnWidths until someone sets them. `stack` is what makes columns fall
+  // into one on a phone by default, which is what almost every row wants.
+  row: { verticalAlign: "stretch", gap: 24, reverse: false, stack: "mobile" },
   stats: { items: [], layout: "strip" },
   pricing: { items: [], highlightLast: true, totalLabel: "", totalAmount: "" },
   faq: { items: [], layout: "accordion" },
@@ -249,8 +271,10 @@ export function newBlock(type: BlockType, over: Partial<Block> = {}): Block {
     ...over,
   };
   if (type === "row" && !block.columns) {
-    const structure = String(block.props.structure ?? "1-1") as RowStructure;
-    block.columns = (ROW_STRUCTURES[structure] ?? ROW_STRUCTURES["1-1"]).map(() => []);
+    const widths = block.props.widths;
+    const count = Array.isArray(widths) && widths.length > 0 ? widths.length : 2;
+    block.columns = Array.from({ length: count }, () => []);
+    if (!Array.isArray(widths)) block.props = { ...block.props, widths: evenWidths(count) };
   }
   return block;
 }
@@ -337,20 +361,37 @@ export const STYLE_KEYS = Object.keys(baseStyle()) as (keyof BlockStyle)[];
 /**
  * A device override: only the keys someone actually set, each validated.
  *
- * Runs the full-style normalizer over `{...desktop, ...patch}` and then keeps
- * only the keys the patch mentioned. That way validation lives in one place —
+ * The style half runs the full-style normalizer over `{...desktop, ...patch}`
+ * and keeps only the keys the patch mentioned. Validation lives in one place —
  * a second, looser normalizer for overrides is how a value that desktop would
  * have rejected gets in through the tablet door.
  */
-function normalizeOverride(v: unknown, desktop: BlockStyle): Partial<BlockStyle> {
-  if (!isRecord(v)) return {};
-  const keys = STYLE_KEYS.filter((k) => k in v);
-  if (keys.length === 0) return {};
-  const full = normalizeStyle({ ...desktop, ...v });
-  const out: Partial<BlockStyle> = {};
-  for (const k of keys) (out as Record<string, unknown>)[k] = full[k];
-  return out;
+function normalizeOverride(v: unknown, desktop: BlockStyle): DeviceOverride {
+  const empty: DeviceOverride = { style: {}, props: {} };
+  if (!isRecord(v)) return empty;
+
+  // Written before overrides could carry props: the whole object was the style
+  // patch. Read on, because reading is where old rows are brought forward.
+  const legacy = !("style" in v) && !("props" in v);
+  const rawStyle = legacy ? v : v.style;
+  const rawProps = legacy ? undefined : v.props;
+
+  const style: Partial<BlockStyle> = {};
+  if (isRecord(rawStyle)) {
+    const keys = STYLE_KEYS.filter((k) => k in rawStyle);
+    if (keys.length > 0) {
+      const full = normalizeStyle({ ...desktop, ...rawStyle });
+      for (const k of keys) (style as Record<string, unknown>)[k] = full[k];
+    }
+  }
+  // Props are per block type, so they are validated where they are read — the
+  // same deal desktop props already have. What is enforced here is the shape.
+  const props: Record<string, unknown> = isRecord(rawProps) ? { ...rawProps } : {};
+  return { style, props };
 }
+
+const isBare = (o: DeviceOverride) =>
+  Object.keys(o.style).length === 0 && Object.keys(o.props).length === 0;
 
 function normalizeResponsive(v: unknown, desktop: BlockStyle): ResponsiveStyle | undefined {
   if (!isRecord(v)) return undefined;
@@ -358,7 +399,7 @@ function normalizeResponsive(v: unknown, desktop: BlockStyle): ResponsiveStyle |
   const mobile = normalizeOverride(v.mobile, desktop);
   // No override is stored as no key at all, so a block that was never touched
   // on tablet does not carry an empty object into the database forever.
-  if (Object.keys(tablet).length === 0 && Object.keys(mobile).length === 0) return undefined;
+  if (isBare(tablet) && isBare(mobile)) return undefined;
   return { tablet, mobile };
 }
 
@@ -366,24 +407,56 @@ function normalizeResponsive(v: unknown, desktop: BlockStyle): ResponsiveStyle |
 export function styleFor(block: Block, device: Device): BlockStyle {
   const r = block.responsive;
   if (!r || device === "desktop") return block.style;
-  const tablet = { ...block.style, ...r.tablet };
-  return device === "tablet" ? tablet : { ...tablet, ...r.mobile };
+  const tablet = { ...block.style, ...r.tablet.style };
+  return device === "tablet" ? tablet : { ...tablet, ...r.mobile.style };
+}
+
+/** The props a block has at a given width. */
+export function propsFor(block: Block, device: Device): Record<string, unknown> {
+  const r = block.responsive;
+  if (!r || device === "desktop") return block.props;
+  const tablet = { ...block.props, ...r.tablet.props };
+  return device === "tablet" ? tablet : { ...tablet, ...r.mobile.props };
 }
 
 /** Whether this exact device sets this key itself, rather than inheriting it. */
-export function hasOverride(block: Block, device: Device, key: keyof BlockStyle): boolean {
+export function hasOverride(
+  block: Block,
+  device: Device,
+  key: string,
+  scope: OverrideScope = "style",
+): boolean {
   if (device === "desktop") return false;
-  return !!block.responsive && key in block.responsive[device];
+  return !!block.responsive && key in block.responsive[device][scope];
 }
 
-const emptyResponsive = (): ResponsiveStyle => ({ tablet: {}, mobile: {} });
+const emptyOverride = (): DeviceOverride => ({ style: {}, props: {} });
+const emptyResponsive = (): ResponsiveStyle => ({ tablet: emptyOverride(), mobile: emptyOverride() });
 
-/** Write one or more style values at one device, leaving the others alone. */
-export function setStyleAt(block: Block, device: Device, patch: Partial<BlockStyle>): Block {
-  if (device === "desktop") return { ...block, style: { ...block.style, ...patch } };
+/** Write one or more values at one device, leaving the other widths alone. */
+export function setAt(
+  block: Block,
+  device: Device,
+  scope: OverrideScope,
+  patch: Record<string, unknown>,
+): Block {
+  if (device === "desktop") {
+    return scope === "style"
+      ? { ...block, style: { ...block.style, ...patch } as BlockStyle }
+      : { ...block, props: { ...block.props, ...patch } };
+  }
   const r = block.responsive ?? emptyResponsive();
-  return { ...block, responsive: { ...r, [device]: { ...r[device], ...patch } } };
+  return {
+    ...block,
+    responsive: { ...r, [device]: { ...r[device], [scope]: { ...r[device][scope], ...patch } } },
+  };
 }
+
+export const setStyleAt = (block: Block, device: Device, patch: Partial<BlockStyle>): Block =>
+  setAt(block, device, "style", patch);
+
+export const setPropsAt = (block: Block, device: Device, patch: Record<string, unknown>): Block =>
+  setAt(block, device, "props", patch);
 
 /**
  * Drop an override so the value falls back to the wider device again.
@@ -392,15 +465,122 @@ export function setStyleAt(block: Block, device: Device, patch: Partial<BlockSty
  * desktop value LOOKS the same and is not — it pins the value, so the next
  * desktop edit silently stops reaching tablet.
  */
-export function clearStyleAt(block: Block, device: Device, key: keyof BlockStyle): Block {
+export function clearAt(
+  block: Block,
+  device: Device,
+  key: string,
+  scope: OverrideScope = "style",
+): Block {
   if (device === "desktop" || !block.responsive) return block;
-  const next = { ...block.responsive[device] };
-  delete next[key];
-  const responsive = { ...block.responsive, [device]: next };
-  const bare = Object.keys(responsive.tablet).length === 0 && Object.keys(responsive.mobile).length === 0;
+  const scoped: Record<string, unknown> = { ...block.responsive[device][scope] };
+  delete scoped[key];
+  const responsive = {
+    ...block.responsive,
+    [device]: { ...block.responsive[device], [scope]: scoped },
+  };
   const out = { ...block };
-  if (bare) delete out.responsive;
+  if (isBare(responsive.tablet) && isBare(responsive.mobile)) delete out.responsive;
   else out.responsive = responsive;
+  return out;
+}
+
+export const clearStyleAt = (block: Block, device: Device, key: keyof BlockStyle): Block =>
+  clearAt(block, device, key, "style");
+
+// ---------------------------------------------------------------------------
+// Columns
+// ---------------------------------------------------------------------------
+
+/** As many columns as a sales page has any business holding. */
+export const MAX_COLUMNS = 6;
+
+/** Percentages that add up to exactly 100, to two places. */
+function toHundred(parts: number[]): number[] {
+  if (parts.length === 0) return [];
+  const out = parts.map((p) => Math.max(1, Math.round(p * 100) / 100));
+  const drift = 100 - out.reduce((a, b) => a + b, 0);
+  // Rounding drift goes on the widest column, where a hundredth of a percent
+  // is least visible. Left uncorrected it accumulates and the last column wraps.
+  let widest = 0;
+  for (let i = 1; i < out.length; i++) if (out[i] > out[widest]) widest = i;
+  out[widest] = Math.round((out[widest] + drift) * 100) / 100;
+  return out;
+}
+
+export const evenWidths = (count: number): number[] =>
+  toHundred(Array.from({ length: count }, () => 100 / count));
+
+/**
+ * How wide each column is, as a percentage.
+ *
+ * Derived rather than stored until someone edits it: `structure` is what every
+ * existing row has, and the converter builds rows by naming a structure. A
+ * widths array written eagerly at construction would be overwritten by the
+ * props spread that follows and describe the wrong shape.
+ */
+export function columnWidths(props: Record<string, unknown>, count: number): number[] {
+  if (count <= 0) return [];
+  const raw = props.widths;
+  if (Array.isArray(raw) && raw.length === count && raw.every((n) => typeof n === "number" && n > 0)) {
+    return toHundred(raw as number[]);
+  }
+  const key = String(props.structure ?? "");
+  const preset = key in ROW_STRUCTURES ? ROW_STRUCTURES[key as RowStructure] : null;
+  const base = preset && preset.length === count ? [...preset] : Array.from({ length: count }, () => 1);
+  const total = base.reduce((a, b) => a + b, 0);
+  return toHundred(base.map((w) => (w / total) * 100));
+}
+
+/**
+ * One column resized, with the rest absorbing the difference.
+ *
+ * Proportionally, so a 60/20/20 row asked for 40 in the first column becomes
+ * 40/30/30 rather than 40/20/20 with a gap on the end. Widths that do not add
+ * up to 100 are not a thing the renderer can draw.
+ */
+export function setColumnWidth(widths: number[], index: number, value: number): number[] {
+  const n = widths.length;
+  if (n <= 1) return [100];
+  if (index < 0 || index >= n) return toHundred(widths);
+  const w = Math.max(5, Math.min(95, value));
+  const rest = 100 - w;
+  const others = widths.filter((_, j) => j !== index);
+  const sum = others.reduce((a, b) => a + b, 0);
+  const scaled = others.map((o) => (sum > 0 ? (o / sum) * rest : rest / others.length));
+  let k = 0;
+  return toHundred(widths.map((_, j) => (j === index ? w : scaled[k++])));
+}
+
+/**
+ * A row with a different number of columns.
+ *
+ * Content is never dropped: everything in the columns being removed moves into
+ * the last one that survives. Losing a paragraph because a select went from
+ * three to two is not a thing an editor may do.
+ *
+ * Widths reset to even, and any per-device widths are cleared with them — an
+ * override written for three columns describes a shape that no longer exists.
+ */
+export function setColumnCount(block: Block, count: number): Block {
+  if (block.type !== "row") return block;
+  const want = Math.max(1, Math.min(MAX_COLUMNS, Math.round(count)));
+  const cols = block.columns ?? [];
+  if (want === cols.length) return block;
+
+  const columns: Block[][] =
+    want > cols.length
+      ? [...cols.map((c) => [...c]), ...Array.from({ length: want - cols.length }, () => [] as Block[])]
+      : cols.slice(0, want).map((c) => [...c]);
+  if (want < cols.length) {
+    columns[want - 1] = [...columns[want - 1], ...cols.slice(want).flat()];
+  }
+
+  let out: Block = {
+    ...block,
+    columns,
+    props: { ...block.props, widths: evenWidths(want) },
+  };
+  for (const device of ["tablet", "mobile"] as const) out = clearAt(out, device, "widths", "props");
   return out;
 }
 
@@ -436,15 +616,33 @@ export function normalizeBlocks(value: unknown, depth = 0): Block[] {
     const responsive = normalizeResponsive(raw.responsive, block.style);
     if (responsive) block.responsive = responsive;
     if (t === "row") {
-      const structure = oneOf(
-        block.props.structure,
-        Object.keys(ROW_STRUCTURES) as RowStructure[],
-        "1-1",
-      );
-      block.props.structure = structure;
-      const want = ROW_STRUCTURES[structure].length;
+      // The stored columns decide how many there are. `structure` only names a
+      // preset — once someone picks a count or drags a width it no longer
+      // describes the row, and reading the count from it would truncate the
+      // columns it does not know about, taking their content with them.
       const stored = Array.isArray(raw.columns) ? raw.columns : [];
+      const widths = block.props.widths;
+      const preset = ROW_STRUCTURES[
+        oneOf(block.props.structure, Object.keys(ROW_STRUCTURES) as RowStructure[], "1-1")
+      ].length;
+      const want = Math.max(
+        1,
+        Math.min(
+          MAX_COLUMNS,
+          Array.isArray(widths) && widths.length > 0 ? widths.length : Math.max(stored.length, preset),
+        ),
+      );
       block.columns = Array.from({ length: want }, (_, i) => normalizeBlocks(stored[i], depth + 1));
+      // Anything the stored columns hold beyond `want` would otherwise vanish.
+      if (stored.length > want) {
+        const spill = stored.slice(want).flatMap((c) => normalizeBlocks(c, depth + 1));
+        block.columns[want - 1] = [...block.columns[want - 1], ...spill];
+      }
+      // Widths replace the preset rather than sitting beside it. Two sources for
+      // one fact is how a row ends up drawn one way and edited as another —
+      // `structure` cannot describe a row someone has since resized.
+      block.props.widths = columnWidths(block.props, want);
+      delete block.props.structure;
     }
     out.push(block);
   }
