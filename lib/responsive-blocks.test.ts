@@ -13,6 +13,7 @@ import {
 } from "@/lib/blocks";
 import { blockClass, blockRules, customCss } from "@/lib/block-style";
 import { bandTheme } from "@/lib/page-sections";
+import { blocksForSection } from "@/lib/section-to-blocks";
 
 const paper = bandTheme("paper");
 const heading = () => newBlock("heading", { props: { text: "Hi", tag: "h2" } });
@@ -207,5 +208,26 @@ describe("a block's own custom CSS", () => {
 
   it("emits nothing at all when it is blank", () => {
     expect(blockRules(withCss("   "), paper)).not.toContain("{}");
+  });
+});
+
+describe("blocks stored before a field existed", () => {
+  it("still render, because reading normalizes them", () => {
+    // Exactly the shape on the live store: saved months ago, so no customCss
+    // and no responsive. A cast would have promised both and blockRules would
+    // have thrown on the first one it read.
+    const old = {
+      id: "b_old1",
+      type: "heading",
+      props: { text: "Hi", tag: "h2" },
+      style: { margin: { t: 0, r: 0, b: 16, l: 0, u: "px", link: false }, align: "left" },
+    };
+    const view = {
+      def: { key: "hero", label: "Hero" },
+      stored: { blocks: [old] },
+    } as unknown as Parameters<typeof blocksForSection>[0];
+    const [block] = blocksForSection(view);
+    expect(block.style.customCss).toBe("");
+    expect(() => blockRules(block, paper)).not.toThrow();
   });
 });

@@ -1,4 +1,4 @@
-import { newBlock, ROW_STRUCTURES, type Block, type BlockType, type RowStructure } from "@/lib/blocks";
+import { newBlock, normalizeBlocks, ROW_STRUCTURES, type Block, type BlockType, type RowStructure } from "@/lib/blocks";
 import { listOf, textOf, type SectionDef, type SectionView } from "@/lib/page-sections";
 
 // Turning a section's typed content into blocks.
@@ -395,7 +395,12 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
  */
 export function blocksForSection(view: SectionView): Block[] {
   const saved = view.stored.blocks;
-  if (Array.isArray(saved) && saved.length > 0) return saved as Block[];
+  // Normalized, not cast. These rows were written before today's BlockStyle
+  // existed, so a cast promises fields that are not in them — and the first
+  // renderer to read a new one unguarded takes the page down. Saving already
+  // normalizes; reading has to as well, or every field added from here on is
+  // a live incident waiting for the next deploy.
+  if (Array.isArray(saved) && saved.length > 0) return normalizeBlocks(saved);
   // From what was STORED, not from the defaults merged over it. A default is
   // guidance; converting it would hand someone a canvas full of placeholder
   // prose to delete before they could start.
