@@ -34,7 +34,7 @@ export async function pushOwnershipStateToApps(ownershipIds: string[]): Promise<
   for (const row of rows) {
     const { data: user } = await db
       .from("users")
-      .select("email")
+      .select("email, username")
       .eq("id", row.user_id as string)
       .maybeSingle();
     if (!user?.email) continue;
@@ -54,6 +54,7 @@ export async function pushOwnershipStateToApps(ownershipIds: string[]): Promise<
     await notifyAppEntitlement({
       appId: row.app_id as string,
       email: user.email as string,
+      fullName: (user.username as string | null) ?? null,
       entitlementKey,
       status: row.status as OwnershipStatus,
       stripeCustomerId: null,

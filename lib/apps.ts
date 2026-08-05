@@ -43,7 +43,7 @@ export async function getAppById(id: string): Promise<AppRow | null> {
 // Signed with the APP's shared secret so the app can verify it. Short TTL; the
 // app enforces single-use on arrival (provisioning by email is idempotent).
 export function signHandoffToken(
-  payload: { email: string; userId: string; appId: string; exp: number },
+  payload: { email: string; userId: string; appId: string; exp: number; fullName?: string | null },
   secret: string,
 ): string {
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -51,9 +51,18 @@ export function signHandoffToken(
   return `${body}.${sig}`;
 }
 
-export function buildHandoffUrl(app: AppRow, user: { id: string; email: string }): string {
+export function buildHandoffUrl(
+  app: AppRow,
+  user: { id: string; email: string; fullName?: string | null },
+): string {
   const exp = Math.floor(Date.now() / 1000) + 5 * 60; // 5-minute TTL
-  const token = signHandoffToken({ email: user.email, userId: user.id, appId: app.id, exp }, app.sharedSecret);
+  // The name rides along here as well as on the provision call. Handoff is what
+  // creates the session, so for anyone who arrives that way first it is the
+  // only chance the app gets to learn what to call them.
+  const token = signHandoffToken(
+    { email: user.email, userId: user.id, appId: app.id, exp, fullName: user.fullName ?? null },
+    app.sharedSecret,
+  );
   const sep = app.handoffEndpoint.includes("?") ? "&" : "?";
   return `${app.baseUrl}${app.handoffEndpoint}${sep}token=${encodeURIComponent(token)}`;
 }
@@ -70,6 +79,14 @@ export function buildHandoffUrl(app: AppRow, user: { id: string; email: string }
 export async function notifyAppEntitlement(args: {
   appId: string;
   email: string;
+  /**
+   * What to call them, when the store knows.
+   *
+   * Without it an app has an email address and nothing else, so every account
+   * it creates from a store sale is nameless — which is what happened to
+   * everyone who bought a trial while already signed in.
+   */
+  fullName?: string | null;
   entitlementKey: string | null;
   status: "active" | "trialing" | "canceled" | "past_due";
   stripeCustomerId: string | null;
@@ -85,6 +102,7 @@ export async function notifyAppEntitlement(args: {
       headers: { "content-type": "application/json", "x-store-secret": app.sharedSecret },
       body: JSON.stringify({
         email: args.email,
+        fullName: args.fullName ?? null,
         entitlementKey: args.entitlementKey,
         status: args.status,
         hasAccess: args.status !== "canceled",

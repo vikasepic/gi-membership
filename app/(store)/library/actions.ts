@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { acceptStandingOffer } from "@/lib/checkout";
 import { setProductProgress, ownsProduct, subscribedToApp } from "@/lib/library";
 import { getAppById, buildHandoffUrl } from "@/lib/apps";
+import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 
 export async function acceptStandingOfferAction(formData: FormData) {
@@ -33,7 +34,18 @@ export async function openAppAction(formData: FormData) {
   if (!(await subscribedToApp(user.id, appId))) redirect("/library");
   const app = await getAppById(appId);
   if (!app) redirect("/library");
-  redirect(buildHandoffUrl(app, { id: user.id, email: user.email }));
+  // The name goes with them. Handoff is what creates the session in the app,
+  // so for anyone who lands there before a provision call it is the only place
+  // the app can learn what to call them.
+  const db = createServiceClient();
+  const { data: row } = await db.from("users").select("username").eq("id", user.id).maybeSingle();
+  redirect(
+    buildHandoffUrl(app, {
+      id: user.id,
+      email: user.email,
+      fullName: (row?.username as string | null) ?? null,
+    }),
+  );
 }
 
 export async function markCompleteAction(formData: FormData) {

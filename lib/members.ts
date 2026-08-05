@@ -199,7 +199,7 @@ export async function grantOfferAccess(args: {
   const offer = await getOffer(args.offerId);
   if (!offer) return { ok: false, error: "That offer no longer exists." };
 
-  const { data: user } = await db.from("users").select("email").eq("id", args.userId).maybeSingle();
+  const { data: user } = await db.from("users").select("email, username").eq("id", args.userId).maybeSingle();
   if (!user?.email) return { ok: false, error: "That member has no email on file." };
 
   const { error } = await db.from("ownership").insert({
@@ -218,6 +218,7 @@ export async function grantOfferAccess(args: {
     await notifyAppEntitlement({
       appId: offer.grantAppId,
       email: user.email as string,
+      fullName: (user.username as string | null) ?? null,
       entitlementKey: offer.grantEntitlementKey,
       status: "active",
       stripeCustomerId: null,
@@ -250,7 +251,7 @@ export async function revokeOwnership(ownershipId: string): Promise<{ ok: boolea
       .eq("id", ownershipId);
     const { data: user } = await db
       .from("users")
-      .select("email")
+      .select("email, username")
       .eq("id", row.user_id as string)
       .maybeSingle();
     const offer = row.offer_id ? await getOffer(row.offer_id as string) : null;

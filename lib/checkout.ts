@@ -663,7 +663,7 @@ export async function grantOfferOwnership(
   offer: Offer,
   source: "bump" | "oto" | "grant",
   subscriptionId: string | null,
-  ctx?: { email: string; stripeCustomerId: string | null },
+  ctx?: { email: string; fullName?: string | null; stripeCustomerId: string | null },
 ) {
   const db = createServiceClient();
   const trialing = offer.trialDays && offer.trialDays > 0;
@@ -705,9 +705,19 @@ export async function grantOfferOwnership(
     // Provision the connected app (best-effort, server-to-server). A failure
     // here never breaks the purchase — the handoff re-provisions on first open.
     if (ctx) {
+      // Looked up here rather than passed in by four call sites. An order does
+      // not store a name; the account does. Getting it wrong means the app
+      // creates a nameless account, which is what happened to every trial
+      // bought by someone already signed in.
+      const { data: buyer } = await db
+        .from("users")
+        .select("username")
+        .eq("id", userId)
+        .maybeSingle();
       await notifyAppEntitlement({
         appId: offer.grantAppId,
         email: ctx.email,
+        fullName: ctx.fullName ?? (buyer?.username as string | null) ?? null,
         entitlementKey: offer.grantEntitlementKey,
         status: trialing ? "trialing" : "active",
         stripeCustomerId: ctx.stripeCustomerId,

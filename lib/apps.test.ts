@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { createHmac } from "node:crypto";
-import { signHandoffToken } from "@/lib/apps";
+import { buildHandoffUrl, signHandoffToken } from "@/lib/apps";
 
 // Locks the handoff-token format documented in docs/app-bridge-contract.md.
 // If this changes, the Content Machine repo's verification breaks.
@@ -94,5 +94,46 @@ describe("notifyAppEntitlement", () => {
     vi.stubGlobal("fetch", fetchMock);
     expect(await call()).toEqual({ ok: false, error: "app_inactive" });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("the name goes with the person", () => {
+  // An app that only ever receives an email address creates nameless accounts.
+  // That is what happened to every trial bought by someone already signed in:
+  // the store knew who they were and never said.
+  it("rides in the handoff token, which is what creates the session", () => {
+    const app = {
+      id: "a1",
+      baseUrl: "https://app.example",
+      handoffEndpoint: "/auth/store-handoff",
+      sharedSecret: "s3cret",
+    } as never;
+    const url = buildHandoffUrl(app, { id: "u1", email: "buyer@example.com", fullName: "Ronit Surana" });
+    const token = decodeURIComponent(url.split("token=")[1]);
+    const payload = JSON.parse(Buffer.from(token.split(".")[0], "base64url").toString());
+    expect(payload.fullName).toBe("Ronit Surana");
+    expect(payload.email).toBe("buyer@example.com");
+  });
+
+  it("is null rather than absent when the store does not know it", () => {
+    // An explicit null is a fact the app can act on; a missing key is a
+    // question about whether the field exists at all.
+    const app = { id: "a1", baseUrl: "https://x", handoffEndpoint: "/h", sharedSecret: "s" } as never;
+    const url = buildHandoffUrl(app, { id: "u1", email: "b@example.com" });
+    const token = decodeURIComponent(url.split("token=")[1]);
+    const payload = JSON.parse(Buffer.from(token.split(".")[0], "base64url").toString());
+    expect(payload).toHaveProperty("fullName", null);
+  });
+
+  it("still signs the token over everything it carries", () => {
+    // The name is inside the signed body, so it cannot be edited in transit.
+    const secret = "s3cret";
+    const app = { id: "a1", baseUrl: "https://x", handoffEndpoint: "/h", sharedSecret: secret } as never;
+    const url = buildHandoffUrl(app, { id: "u1", email: "b@example.com", fullName: "Real Name" });
+    const [body, sig] = decodeURIComponent(url.split("token=")[1]).split(".");
+    const forged = Buffer.from(
+      JSON.stringify({ ...JSON.parse(Buffer.from(body, "base64url").toString()), fullName: "Someone Else" }),
+    ).toString("base64url");
+    expect(createHmac("sha256", secret).update(forged).digest("base64url")).not.toBe(sig);
   });
 });
