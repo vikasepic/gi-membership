@@ -5,7 +5,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { startCheckout, previewCoupon, captureAbandonedCart } from "@/app/(store)/checkout/actions";
 import { OrderBump } from "@/components/checkout/order-bump";
-import type { BumpChoice } from "@/lib/bump";
+import { bumpNeedsAnswer, type BumpChoice } from "@/lib/bump";
 import type { BumpView } from "@/lib/bump";
 
 type AppliedDiscount = { label: string; discountCents: number; clamped: boolean };
@@ -108,9 +108,15 @@ function Inner({
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [country, setCountry] = useState(defaultCountry);
-  // Which of the bump's prices was taken, if any. A single-price bump only ever
-  // moves between "none" and "main", which is what the checkbox writes.
-  const [bumpChoice, setBumpChoice] = useState<BumpChoice>("none");
+  // Which of the bump's prices was taken, if any.
+  //
+  // null is "has not answered yet" and is NOT the same as "none" — with two
+  // prices nothing starts selected, so declining has to be a thing someone
+  // does rather than a thing that happens to them by not reading. A
+  // single-price bump has nothing to answer: an unticked box IS "none".
+  const [bumpChoice, setBumpChoice] = useState<BumpChoice | null>(bumpAlt ? null : "none");
+  const bumpUnanswered = bumpNeedsAnswer(!!bumpAlt, bumpChoice);
+  const bumpRef = useRef<HTMLDivElement>(null);
   const chosenBump = bumpChoice === "alt" ? bumpAlt : bumpChoice === "main" ? bump : null;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -157,6 +163,15 @@ function Inner({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    // Asked before the card is touched. Stripe validating the card first and
+    // THEN being told to pick an add-on is two rounds of correction for one
+    // form, and the second one arrives after the slow part.
+    if (bumpUnanswered) {
+      setError("Choose one of the options above to continue — including “No thanks”.");
+      bumpRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      bumpRef.current?.querySelector<HTMLInputElement>('input[type="radio"]')?.focus();
+      return;
+    }
     if (!stripe || !elements) return;
     setBusy(true);
 
@@ -174,7 +189,7 @@ function Inner({
       ...(signedInEmail ? {} : { email, fullName }),
       // The code, never the amount: the server prices it again.
       couponCode: coupon ? couponInput.trim() : null,
-      bumpChoice,
+      bumpChoice: bumpChoice ?? "none",
       country,
     });
     if (!res.ok) {
@@ -404,7 +419,9 @@ function Inner({
           </p>
 
           {bump && (
-            <OrderBump view={bump} alt={bumpAlt} choice={bumpChoice} onChoose={setBumpChoice} />
+            <div ref={bumpRef}>
+              <OrderBump view={bump} alt={bumpAlt} choice={bumpChoice} onChoose={setBumpChoice} />
+            </div>
           )}
 
           {error && (
@@ -416,10 +433,17 @@ function Inner({
           {/* The amount lives in the button so the thing being agreed to is on
               the thing being pressed — and it moves with the bump, so ticking
               the add-on visibly changes what you are about to pay. */}
+          {/* Held, not disabled, while the add-on is unanswered. A disabled
+              button cannot be clicked, so it can never say why it is not
+              working — it just fails silently and the buyer leaves. This one
+              looks inert, takes the click, and answers. */}
           <button
             type="submit"
             disabled={busy || !stripe}
-            className="group relative flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-full bg-primary px-6 py-4 font-medium text-primary-fg transition-[transform,background-color,box-shadow] duration-200 hover:bg-primary-hover hover:shadow-[0_14px_30px_-12px_color-mix(in_srgb,var(--primary)_70%,transparent)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:scale-100"
+            aria-disabled={bumpUnanswered || undefined}
+            className={`group relative flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-full bg-primary px-6 py-4 font-medium text-primary-fg transition-[transform,background-color,box-shadow,opacity,filter] duration-200 hover:bg-primary-hover hover:shadow-[0_14px_30px_-12px_color-mix(in_srgb,var(--primary)_70%,transparent)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:scale-100 ${
+              bumpUnanswered ? "opacity-55 blur-[0.7px] hover:bg-primary hover:shadow-none" : ""
+            }`}
           >
             {busy ? (
               <>

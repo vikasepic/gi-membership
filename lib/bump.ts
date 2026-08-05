@@ -91,6 +91,19 @@ export function saveBadge(offer: Pick<OfferLike, "billingType" | "priceCents" | 
  */
 export type BumpChoice = "none" | "main" | "alt";
 
+/**
+ * Whether the buyer still owes an answer about the bump.
+ *
+ * Only when there are two prices: nothing is selected to begin with, so
+ * declining is something someone does rather than something that happens to
+ * them by not reading. A single-price bump has nothing to answer — an unticked
+ * box IS "none" — and demanding an answer there would hold the pay button over
+ * a question nobody was asked.
+ */
+export function bumpNeedsAnswer(hasAlt: boolean, choice: BumpChoice | null): boolean {
+  return hasAlt && choice === null;
+}
+
 export type BumpView = {
   banner: string | null;
   saveBadge: string | null;

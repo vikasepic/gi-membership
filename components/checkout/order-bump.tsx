@@ -51,14 +51,15 @@ export function OrderBump({
    * to — a radio cannot be unticked by clicking it again.
    */
   alt?: BumpView | null;
-  choice: BumpChoice;
+  /** null while nobody has answered — nothing is selected and nothing is implied. */
+  choice: BumpChoice | null;
   onChoose: (next: BumpChoice) => void;
   compact?: boolean;
 }) {
   const id = useId();
   const descId = `${id}-desc`;
   const { accent, ink } = view;
-  const checked = choice !== "none";
+  const checked = choice !== "none" && choice !== null;
 
   return (
     <div
@@ -197,14 +198,6 @@ export function OrderBump({
               <legend className="sr-only">{view.headline} — choose how you pay</legend>
               <Option
                 name={id}
-                label="No thanks"
-                selected={choice === "none"}
-                accent={accent}
-                compact={compact}
-                onSelect={() => onChoose("none")}
-              />
-              <Option
-                name={id}
                 // The plan price, not the charge-now one: through a trial both
                 // options are $0 today, and a choice between two $0s is not a
                 // choice anyone can make.
@@ -227,6 +220,17 @@ export function OrderBump({
                 accent={accent}
                 compact={compact}
                 onSelect={() => onChoose("alt")}
+              />
+              {/* Last, and nothing is selected until someone does. A decline
+                  offered first is offered before the reason to accept, and a
+                  decline pre-selected is one the buyer never actually made. */}
+              <Option
+                name={id}
+                label="No thanks"
+                selected={choice === "none"}
+                accent={accent}
+                compact={compact}
+                onSelect={() => onChoose("none")}
               />
             </fieldset>
           )}
