@@ -15,6 +15,11 @@ import { listCurriculum } from "@/lib/curriculum";
 // single transaction or it collides with itself. That cannot be asserted from
 // a unit test — it either works in Postgres or it does not.
 
+// No database in CI, so the whole file stands down there — the sibling suites
+// do the same. Without this the root beforeAll still runs and the file fails
+// on a missing NEXT_PUBLIC_SUPABASE_URL rather than skipping.
+const canRun = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+
 const db = () => createServiceClient();
 let courseId = "";
 
@@ -55,7 +60,7 @@ afterAll(async () => {
   if (courseId) await db().from("courses").delete().eq("id", courseId);
 });
 
-describe("moving a lesson", () => {
+describe.skipIf(!canRun)("moving a lesson", () => {
   it("starts in the order it was created", async () => {
     expect(await chapterTitles()).toEqual(["One", "Two", "Three"]);
     expect(await lessonTitles(0)).toEqual(["One-a", "One-b", "One-c"]);
@@ -100,7 +105,7 @@ describe("moving a lesson", () => {
   });
 });
 
-describe("moving a chapter", () => {
+describe.skipIf(!canRun)("moving a chapter", () => {
   it("reorders among chapters", async () => {
     const tree = await listCurriculum(courseId, { includeDrafts: true });
     await moveItemTo(tree[2].id, null, 0);
@@ -112,7 +117,7 @@ describe("moving a chapter", () => {
   });
 });
 
-describe("what it refuses", () => {
+describe.skipIf(!canRun)("what it refuses", () => {
   it("will not nest a chapter inside another", async () => {
     const tree = await listCurriculum(courseId, { includeDrafts: true });
     await expect(moveItemTo(tree[0].id, tree[1].id, 0)).rejects.toThrow(/chapter cannot be nested/i);
@@ -136,7 +141,7 @@ describe("what it refuses", () => {
   });
 });
 
-describe("publishing from the curriculum row", () => {
+describe.skipIf(!canRun)("publishing from the curriculum row", () => {
   it("toggles one lesson without touching its other fields", async () => {
     const tree = await listCurriculum(courseId, { includeDrafts: true });
     const lesson = tree[0].children[0];
