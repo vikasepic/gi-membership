@@ -262,3 +262,85 @@ describe("managing columns", () => {
     expect(editor.blocks[0].responsive?.mobile.props.reverse).toBe(true);
   });
 });
+
+describe("undo and redo", () => {
+  const press = (key: string, mods: { meta?: boolean; shift?: boolean; ctrl?: boolean } = {}) =>
+    act(() => {
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key,
+          metaKey: mods.meta ?? false,
+          ctrlKey: mods.ctrl ?? false,
+          shiftKey: mods.shift ?? false,
+          bubbles: true,
+        }),
+      );
+    });
+  const button = (label: string) =>
+    document.querySelector<HTMLButtonElement>(`button[aria-label^="${label}"]`);
+
+  it("takes back an added block", () => {
+    const editor = mount([newBlock("heading")]);
+    click([...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Text"));
+    expect(editor.blocks).toHaveLength(2);
+    press("z", { meta: true });
+    expect(editor.blocks).toHaveLength(1);
+  });
+
+  it("puts it back with shift", () => {
+    const editor = mount([newBlock("heading")]);
+    click([...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Text"));
+    press("z", { meta: true });
+    press("z", { meta: true, shift: true });
+    expect(editor.blocks).toHaveLength(2);
+  });
+
+  it("takes Ctrl+Y too", () => {
+    const editor = mount([newBlock("heading")]);
+    click([...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Text"));
+    press("z", { ctrl: true });
+    press("y", { ctrl: true });
+    expect(editor.blocks).toHaveLength(2);
+  });
+
+  it("takes back a deleted block, which is the one that matters", () => {
+    const editor = mount([newBlock("heading"), newBlock("text")]);
+    click(document.querySelector("[data-block]"));
+    click(button("Delete"));
+    expect(editor.blocks).toHaveLength(1);
+    press("z", { meta: true });
+    expect(editor.blocks).toHaveLength(2);
+  });
+
+  it("has buttons, because a shortcut nobody knows about is not an undo", () => {
+    mount([newBlock("heading")]);
+    expect(button("Undo")?.disabled).toBe(true);
+    click([...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Text"));
+    expect(button("Undo")?.disabled).toBe(false);
+    expect(button("Redo")?.disabled).toBe(true);
+  });
+
+  it("undoes a whole slider drag in one step", () => {
+    const editor = mount([newBlock("heading")]);
+    click(document.querySelector("[data-block]"));
+    click(tab("style"));
+    const slider = document.querySelector<HTMLInputElement>('input[type="range"]')!;
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    for (const v of [20, 30, 40]) {
+      act(() => {
+        set.call(slider, String(v));
+        slider.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+    expect(editor.blocks[0].style.size).toBe(40);
+    press("z", { meta: true });
+    expect(editor.blocks[0].style.size).toBeNull();
+  });
+
+  it("does nothing when there is nothing to take back", () => {
+    const editor = mount([newBlock("heading")]);
+    const before = editor.blocks;
+    press("z", { meta: true });
+    expect(editor.blocks).toBe(before);
+  });
+});

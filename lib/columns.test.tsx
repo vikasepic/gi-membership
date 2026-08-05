@@ -12,6 +12,8 @@ import {
   type Block,
 } from "@/lib/blocks";
 import { blockRules, rowLayout } from "@/lib/block-style";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Blocks } from "@/components/page/blocks";
 import { bandTheme } from "@/lib/page-sections";
 
 const paper = bandTheme("paper");
@@ -181,5 +183,42 @@ describe("the CSS a row emits", () => {
     const mobile = blockRules(b, paper).split("max-width:767px")[1] ?? "";
     expect(mobile).toContain("gap:8px");
     expect(mobile).not.toContain("align-items");
+  });
+});
+
+describe("reverse, from the markup a preview actually renders", () => {
+  const render = (b: Block, at?: "desktop" | "tablet" | "mobile") =>
+    renderToStaticMarkup(<Blocks blocks={[b]} theme={paper} at={at} />);
+  const filled = (props: Record<string, unknown>) => {
+    const r = row(props);
+    r.columns = [[newBlock("heading", { props: { text: "First" } })], [newBlock("heading", { props: { text: "Second" } })]];
+    return r;
+  };
+
+  it("puts the second column first, on the page", () => {
+    // The preview pane and the canvas both render this component pinned to a
+    // device, so if the order is not in the markup it is not anywhere.
+    const out = render(filled({ reverse: true }), "desktop");
+    expect(out).toMatch(/order:2[^]*order:1/);
+  });
+
+  it("leaves the markup order alone — only the painting order changes", () => {
+    const out = render(filled({ reverse: true }), "desktop");
+    expect(out.indexOf("First")).toBeLessThan(out.indexOf("Second"));
+  });
+
+  it("does not reverse a row nobody asked to reverse", () => {
+    expect(render(filled({}), "desktop")).toMatch(/order:0[^]*order:1/);
+  });
+
+  it("reverses on the phone only, when that is where it was set", () => {
+    const b = setPropsAt(filled({}), "mobile", { reverse: true });
+    expect(render(b, "desktop")).toMatch(/order:0/);
+    expect(render(b, "mobile")).toMatch(/order:2/);
+  });
+
+  it("reaches the live page as a rule, not just the preview", () => {
+    const css = blockRules(filled({ reverse: true }), paper);
+    expect(css).toContain("order:2");
   });
 });

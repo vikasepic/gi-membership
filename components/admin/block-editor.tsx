@@ -37,6 +37,7 @@ import {
   type DropTarget,
 } from "@/lib/blocks";
 import { DeviceSwitch } from "@/components/admin/device-switch";
+import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/lib/undo";
 
 /**
  * The width being edited, for the canvas.
@@ -93,14 +94,41 @@ export function BlockEditor({
   const [device, setDevice] = useState<Device>("desktop");
   const drag = useRef<DragPayload | null>(null);
   const [dropAt, setDropAt] = useState<string | null>(null);
+  const [history, setHistory] = useState<History<Block[]>>(() => emptyHistory<Block[]>());
+
+  /**
+   * Every change to the tree goes through here.
+   *
+   * `key` is what caused it, so a run of the same thing — dragging one slider,
+   * typing into one heading — collapses into a single step. Structural changes
+   * pass no key and always stand alone.
+   */
+  function commit(next: Block[], key: string | null = null) {
+    setHistory((h) => record(h, blocks, key, Date.now()));
+    onChange(next);
+  }
+
+  function stepBack() {
+    const step = undo(history, blocks);
+    if (!step) return;
+    setHistory(step.history);
+    onChange(step.value);
+  }
+
+  function stepForward() {
+    const step = redo(history, blocks);
+    if (!step) return;
+    setHistory(step.history);
+    onChange(step.value);
+  }
 
   const selected = useMemo(
     () => (selectedId ? findBlock(blocks, selectedId)?.block ?? null : null),
     [blocks, selectedId],
   );
 
-  function patch(id: string, next: Block) {
-    onChange(updateBlock(blocks, id, () => next));
+  function patch(id: string, next: Block, key?: string) {
+    commit(updateBlock(blocks, id, () => next), key ?? `edit:${id}`);
   }
 
   function drop(target: DropTarget) {
@@ -113,17 +141,17 @@ export function BlockEditor({
       // insertBlock refuses a row inside a column; say so rather than letting
       // the click appear to do nothing.
       if (block.type === "row" && target.zone === "column") return;
-      onChange(insertBlock(blocks, block, target));
+      commit(insertBlock(blocks, block, target));
       setSelectedId(block.id);
       setTab("content");
     } else {
-      onChange(moveBlock(blocks, payload.id, target));
+      commit(moveBlock(blocks, payload.id, target));
     }
   }
 
   function add(type: BlockType) {
     const block = newBlock(type);
-    onChange(insertBlock(blocks, block, addTarget(blocks, selectedId, type)));
+    commit(insertBlock(blocks, block, addTarget(blocks, selectedId, type)));
     setSelectedId(block.id);
     setTab("content");
   }
@@ -131,10 +159,19 @@ export function BlockEditor({
   const tabs = selected ? controlsFor(selected) : null;
 
   // Escape closes it. A full-screen editor with only one way out is a trap the
-  // first time a click misses.
+  // first time a click misses. Cmd/Ctrl+Z is the other reflex — and the one
+  // that decides whether dragging a block somewhere feels safe to try.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      const intent = undoIntent(e);
+      if (!intent) return;
+      e.preventDefault();
+      if (intent === "undo") stepBack();
+      else stepForward();
     };
     document.addEventListener("keydown", onKey);
     // The page behind must not scroll under the overlay.
@@ -144,7 +181,8 @@ export function BlockEditor({
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = previous;
     };
-  }, [onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onClose, history, blocks]);
 
   const overlay = (
     <CanvasDevice.Provider value={device}>
@@ -153,6 +191,17 @@ export function BlockEditor({
         <strong className="font-display text-sm">Builder</strong>
         <span className="text-sm text-muted">{title}</span>
         <DeviceSwitch device={device} onChange={setDevice} className="mx-auto" />
+        <div className="flex items-center gap-0.5">
+          {/* Visible as well as bound to the keyboard: a shortcut nobody knows
+              about is not an undo, and the button is what tells you there is
+              one. Disabled states double as "there is nothing to undo". */}
+          <IconBtn label="Undo (⌘Z)" onClick={stepBack} disabled={history.past.length === 0}>
+            ↶
+          </IconBtn>
+          <IconBtn label="Redo (⇧⌘Z)" onClick={stepForward} disabled={history.future.length === 0}>
+            ↷
+          </IconBtn>
+        </div>
         <span className="text-xs text-muted">
           {blocks.length === 0 ? "Empty" : `${blocks.length} block${blocks.length === 1 ? "" : "s"}`}
         </span>
@@ -241,13 +290,13 @@ export function BlockEditor({
               <div className="flex items-center gap-2 border-b border-border px-3 py-2">
                 <strong className="font-display text-sm">{BLOCK_LABEL[selected.type]}</strong>
                 <div className="ml-auto flex gap-1">
-                  <IconBtn label="Duplicate" onClick={() => onChange(duplicateBlock(blocks, selected.id))}>
+                  <IconBtn label="Duplicate" onClick={() => commit(duplicateBlock(blocks, selected.id))}>
                     ⧉
                   </IconBtn>
                   <IconBtn
                     label="Delete"
                     onClick={() => {
-                      onChange(removeBlock(blocks, selected.id));
+                      commit(removeBlock(blocks, selected.id));
                       setSelectedId(null);
                     }}
                   >
@@ -282,7 +331,11 @@ export function BlockEditor({
                       block={selected}
                       device={device}
                       uploadImage={uploadImage}
-                      onChange={(v) => patch(selected.id, writeControl(selected, c, v, device))}
+                      // Keyed per control, so dragging one slider is one undo
+                      // step but moving to the next control starts another.
+                      onChange={(v) =>
+                        patch(selected.id, writeControl(selected, c, v, device), `set:${selected.id}:${c.key}`)
+                      }
                       onClear={() => patch(selected.id, clearControl(selected, c, device))}
                     />
                   ),
@@ -308,14 +361,25 @@ export function BlockEditor({
   return typeof document === "undefined" ? overlay : createPortal(overlay, document.body);
 }
 
-function IconBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+function IconBtn({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="rounded px-1.5 py-0.5 text-sm text-muted hover:bg-surface-2 hover:text-fg"
+      disabled={disabled}
+      className="rounded px-1.5 py-0.5 text-sm text-muted enabled:hover:bg-surface-2 enabled:hover:text-fg disabled:opacity-35"
     >
       {children}
     </button>
