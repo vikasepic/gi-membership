@@ -3,7 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import { saveBumpAction, type BumpSaveState } from "@/app/admin/offers/[id]/bump/actions";
 import { OrderBump } from "@/components/checkout/order-bump";
-import { buildBumpView, normalizeAccent, BUMP_ACCENT_DEFAULT, defaultBanner } from "@/lib/bump";
+import { buildBumpView, normalizeAccent, BUMP_ACCENT_DEFAULT, defaultBanner, type BumpChoice } from "@/lib/bump";
 import { inputClass } from "@/components/admin/form-controls";
 import type { Offer } from "@/lib/types";
 
@@ -22,7 +22,7 @@ const SWATCHES = [
   { hex: "#8a5a2b", name: "Bronze" },
 ];
 
-export function BumpEditor({ offer }: { offer: Offer }) {
+export function BumpEditor({ offer, alt }: { offer: Offer; alt?: Offer | null }) {
   const [state, action, pending] = useActionState<BumpSaveState, FormData>(saveBumpAction, {});
 
   // Pre-filled with what is live. The banner shows its effective value, so
@@ -34,7 +34,7 @@ export function BumpEditor({ offer }: { offer: Offer }) {
   const [bullets, setBullets] = useState((offer.bumpBullets ?? []).join("\n"));
   const [note, setNote] = useState(offer.bumpNote ?? "");
   const [accent, setAccent] = useState(normalizeAccent(offer.bumpAccent));
-  const [checked, setChecked] = useState(false);
+  const [choice, setChoice] = useState<BumpChoice>("none");
 
   const view = useMemo(
     () =>
@@ -196,17 +196,26 @@ export function BumpEditor({ offer }: { offer: Offer }) {
             <span className="kicker text-muted">Preview — how a buyer sees it</span>
             <button
               type="button"
-              onClick={() => setChecked((c) => !c)}
+              onClick={() => setChoice((c) => (c === "none" ? "main" : "none"))}
               className="rounded-full border border-border px-3 py-1 text-xs transition-colors hover:border-fg"
             >
-              {checked ? "Show unticked" : "Show ticked"}
+              {choice === "none" ? "Show taken" : "Show untaken"}
             </button>
           </div>
 
           {/* The checkout's own background, so contrast is judged truthfully
               rather than against the admin surface. */}
           <div className="rounded-2xl border border-border bg-bg p-4">
-            <OrderBump view={view} choice={checked ? "main" : "none"} onChoose={(c) => setChecked(c !== "none")} />
+            <OrderBump
+              view={view}
+              // The preview has to show the control the checkout will render.
+              // With a second price that is a radio group, not a tickbox, and
+              // reviewing the tickbox version would be reviewing a card nobody
+              // gets.
+              alt={alt ? buildBumpView(alt) : null}
+              choice={choice}
+              onChoose={setChoice}
+            />
           </div>
 
           <p className="text-sm text-muted">

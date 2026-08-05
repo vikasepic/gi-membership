@@ -25,7 +25,9 @@ export default async function OfferBumpPage({ params }: { params: Promise<{ id: 
         </p>
       </div>
 
-      <BumpEditor offer={offer} />
+      {/* The alternative price, so the preview shows the control a buyer gets
+          rather than the single-price version of it. */}
+      <BumpEditor offer={offer} alt={offer.altOfferId ? await getOfferById(offer.altOfferId) : null} />
     </div>
   );
 }
