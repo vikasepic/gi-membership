@@ -16,14 +16,14 @@ const canRun =
 
 const createdEmails: string[] = [];
 
-async function buy(bumpTaken: boolean) {
+async function buy(withBump: boolean) {
   const email = `it_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@example.com`;
   createdEmails.push(email);
   const res = await createCheckoutIntent({
     productSlug: "placeholder-offer",
     email,
     fullName: "Test Buyer",
-    bumpTaken,
+    bumpChoice: withBump ? ("main" as const) : ("none" as const),
   });
   if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
   const piId = res.clientSecret.split("_secret_")[0];
@@ -177,7 +177,7 @@ describe.skipIf(!canRun)("signed-in checkout (integration)", () => {
     const repeat = await createIntent({
       productSlug: "placeholder-offer",
       existingUserId: user!.id,
-      bumpTaken: false,
+      bumpChoice: "none",
       country: "US",
     });
     expect(repeat).toMatchObject({ ok: false, code: "already_owned" });
@@ -187,7 +187,7 @@ describe.skipIf(!canRun)("signed-in checkout (integration)", () => {
     const second = await createIntent({
       productSlug: "field-guide",
       existingUserId: user!.id,
-      bumpTaken: false,
+      bumpChoice: "none",
       country: "US",
     });
     if (!second.ok) throw new Error(`signed-in checkout failed: ${second.error}`);

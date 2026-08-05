@@ -19,7 +19,7 @@ async function buyWithBump() {
     productSlug: "placeholder-offer",
     email,
     fullName: "Test Buyer",
-    bumpTaken: true,
+    bumpChoice: "main",
   });
   if (!res.ok) throw new Error(`createCheckoutIntent: ${res.error}`);
   const piId = res.clientSecret.split("_secret_")[0];
@@ -115,7 +115,7 @@ describe.skipIf(!canRun)("OTO token vs failed charge (integration)", () => {
       productSlug: "placeholder-offer",
       email,
       fullName: "Test Buyer",
-      bumpTaken: false, // decline the bump so an OTO is offered
+      bumpChoice: "none", // decline the bump so an OTO is offered
     });
     if (!res.ok) throw new Error(res.error);
     const piId = res.clientSecret.split("_secret_")[0];
@@ -157,7 +157,7 @@ describe.skipIf(!canRun)("standing offer vs failed charge (integration)", () => 
       productSlug: "placeholder-offer",
       email,
       fullName: "Test Buyer",
-      bumpTaken: false, // decline, so the subscription is still on offer
+      bumpChoice: "none", // decline, so the subscription is still on offer
     });
     if (!res.ok) throw new Error(res.error);
     const piId = res.clientSecret.split("_secret_")[0];

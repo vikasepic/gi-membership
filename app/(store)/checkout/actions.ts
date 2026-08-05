@@ -18,9 +18,21 @@ const schema = z.object({
   email: z.string().email("Enter a valid email").optional(),
   fullName: z.string().trim().min(2, "Enter your full name").optional(),
   couponCode: z.string().trim().max(64).optional().nullable(),
-  bumpTaken: z
-    .union([z.boolean(), z.string()])
-    .transform((v) => v === true || v === "true" || v === "on"),
+  // Which of the bump's prices was taken. A SIDE, never an offer id — the
+  // server resolves the alternative through the offer's own alt_offer_id, so
+  // the worst a tampered post can do is buy the second price it was shown.
+  // The old boolean still parses: a page loaded before this shipped and
+  // submitted after it must not silently lose the bump someone ticked.
+  bumpChoice: z
+    .union([z.enum(["none", "main", "alt"]), z.boolean(), z.string()])
+    .optional()
+    .transform((v) => {
+      if (v === "alt") return "alt" as const;
+      if (v === "main") return "main" as const;
+      if (v === true || v === "true" || v === "on") return "main" as const;
+      return "none" as const;
+    }),
+  bumpTaken: z.union([z.boolean(), z.string()]).optional(),
   country: z.string().trim().optional().nullable(),
 });
 

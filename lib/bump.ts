@@ -82,6 +82,15 @@ export function saveBadge(offer: Pick<OfferLike, "billingType" | "priceCents" | 
   return pct > 0 ? `Save ${pct}%` : null;
 }
 
+/**
+ * Which of a bump's prices was taken.
+ *
+ * "none" is a real option rather than the absence of one: with two prices the
+ * control is a radio group, and a radio cannot be unticked by clicking it
+ * again — so declining has to be something you can select.
+ */
+export type BumpChoice = "none" | "main" | "alt";
+
 export type BumpView = {
   banner: string | null;
   saveBadge: string | null;
@@ -93,7 +102,16 @@ export type BumpView = {
   ink: string;
   /** Struck-through price, already formatted. Null when there is nothing to compare. */
   wasLabel: string | null;
+  /** What is taken TODAY. Zero through a trial, which is the point of one. */
   nowLabel: string;
+  /**
+   * What it costs on its own terms — "$29/month", "$199/year".
+   *
+   * Separate from nowLabel because a trial makes them different, and a choice
+   * between two trials cannot be made on the charge-now figure: both read $0.
+   * Null for a one-time price, where nowLabel already is the price.
+   */
+  planLabel: string | null;
   termsLabel: string | null;
   chargeNowCents: number;
   currency: string;
@@ -128,6 +146,10 @@ export function buildBumpView(offer: OfferLike): BumpView {
         ? money(offer.compareAtCents, offer.currency)
         : null,
     nowLabel: money(chargeNowCents, offer.currency),
+    planLabel:
+      offer.billingType === "recurring"
+        ? `${money(offer.priceCents, offer.currency)}/${offer.interval ?? "month"}`
+        : null,
     termsLabel: terms,
     chargeNowCents,
     currency: offer.currency,

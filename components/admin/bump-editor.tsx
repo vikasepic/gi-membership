@@ -206,7 +206,7 @@ export function BumpEditor({ offer }: { offer: Offer }) {
           {/* The checkout's own background, so contrast is judged truthfully
               rather than against the admin surface. */}
           <div className="rounded-2xl border border-border bg-bg p-4">
-            <OrderBump view={view} checked={checked} onChange={setChecked} />
+            <OrderBump view={view} choice={checked ? "main" : "none"} onChoose={(c) => setChecked(c !== "none")} />
           </div>
 
           <p className="text-sm text-muted">

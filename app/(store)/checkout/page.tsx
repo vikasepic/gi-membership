@@ -81,6 +81,13 @@ export default async function CheckoutPage({
   const bump: BumpSummary | null =
     bumpOffer && shouldShowOffer(bumpOffer, owned) ? buildBumpView(bumpOffer) : null;
 
+  // The second billing option, if the bump offer names one. Resolved through
+  // the offer's own alt_offer_id — the browser sends "alt", never an id, so
+  // the choice stays between the two prices the page actually rendered.
+  const altOffer = bump && bumpOffer?.altOfferId ? await getOffer(bumpOffer.altOfferId) : null;
+  const bumpAlt: BumpSummary | null =
+    altOffer && altOffer.active && shouldShowOffer(altOffer, owned) ? buildBumpView(altOffer) : null;
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 py-4">
       <div className="flex flex-col gap-2">
@@ -105,6 +112,7 @@ export default async function CheckoutPage({
           ),
         }}
         bump={bump}
+        bumpAlt={bumpAlt}
         publishableKey={stripePublishableKey()}
         signedInEmail={user?.email ?? null}
         defaultCountry={defaultCountry}

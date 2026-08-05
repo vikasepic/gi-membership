@@ -5,6 +5,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { startCheckout, previewCoupon, captureAbandonedCart } from "@/app/(store)/checkout/actions";
 import { OrderBump } from "@/components/checkout/order-bump";
+import type { BumpChoice } from "@/lib/bump";
 import type { BumpView } from "@/lib/bump";
 
 type AppliedDiscount = { label: string; discountCents: number; clamped: boolean };
@@ -51,12 +52,14 @@ const COUNTRIES = [
 export function CheckoutForm({
   product,
   bump,
+  bumpAlt,
   publishableKey,
   signedInEmail,
   defaultCountry,
 }: {
   product: CheckoutProduct;
   bump: BumpSummary | null;
+  bumpAlt?: BumpSummary | null;
   publishableKey: string;
   // Present when a member is already signed in — we then ask for nothing but
   // payment, since we already know who they are.
@@ -78,6 +81,7 @@ export function CheckoutForm({
       <Inner
         product={product}
         bump={bump}
+        bumpAlt={bumpAlt ?? null}
         signedInEmail={signedInEmail ?? null}
         defaultCountry={defaultCountry ?? ""}
       />
@@ -89,10 +93,13 @@ function Inner({
   product,
   bump,
   signedInEmail,
+  bumpAlt,
   defaultCountry,
 }: {
   product: CheckoutProduct;
   bump: BumpSummary | null;
+  /** The bump's second billing option, when it has one. */
+  bumpAlt: BumpSummary | null;
   signedInEmail: string | null;
   defaultCountry: string;
 }) {
@@ -101,7 +108,10 @@ function Inner({
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [country, setCountry] = useState(defaultCountry);
-  const [bumpTaken, setBumpTaken] = useState(false);
+  // Which of the bump's prices was taken, if any. A single-price bump only ever
+  // moves between "none" and "main", which is what the checkbox writes.
+  const [bumpChoice, setBumpChoice] = useState<BumpChoice>("none");
+  const chosenBump = bumpChoice === "alt" ? bumpAlt : bumpChoice === "main" ? bump : null;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -125,7 +135,7 @@ function Inner({
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponBusy, setCouponBusy] = useState(false);
 
-  const bumpNow = bumpTaken && bump ? bump.chargeNowCents : 0;
+  const bumpNow = chosenBump?.chargeNowCents ?? 0;
   const discount = coupon?.discountCents ?? 0;
   const totalNow = product.priceCents - discount + bumpNow;
 
@@ -164,7 +174,7 @@ function Inner({
       ...(signedInEmail ? {} : { email, fullName }),
       // The code, never the amount: the server prices it again.
       couponCode: coupon ? couponInput.trim() : null,
-      bumpTaken,
+      bumpChoice,
       country,
     });
     if (!res.ok) {
@@ -328,10 +338,10 @@ function Inner({
             </div>
           )}
 
-          {bumpTaken && bump && (
+          {chosenBump && (
             <div className="flex items-center justify-between text-sm">
-              <span className="text-muted">{bump.headline}</span>
-              <span>{money(bump.chargeNowCents, product.currency)}</span>
+              <span className="text-muted">{chosenBump.headline}</span>
+              <span>{money(chosenBump.chargeNowCents, product.currency)}</span>
             </div>
           )}
 
@@ -384,16 +394,18 @@ function Inner({
             <span className="text-muted">Total now</span>
             <span className="font-display text-2xl">{money(totalNow, product.currency)}</span>
           </div>
-          {bumpTaken && bump?.termsLabel && (
+          {chosenBump?.termsLabel && (
             <p className="-mt-2 text-sm text-muted">
-              {bump.headline}: {bump.termsLabel}.
+              {chosenBump.headline}: {chosenBump.termsLabel}.
             </p>
           )}
           <p className="-mt-2 text-xs text-muted">
             Tax is calculated at your country&rsquo;s rate and shown on your receipt.
           </p>
 
-          {bump && <OrderBump view={bump} checked={bumpTaken} onChange={setBumpTaken} />}
+          {bump && (
+            <OrderBump view={bump} alt={bumpAlt} choice={bumpChoice} onChoose={setBumpChoice} />
+          )}
 
           {error && (
             <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">

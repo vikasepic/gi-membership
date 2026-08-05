@@ -119,7 +119,7 @@ describe.skipIf(!canRunStripe)("refunding a genuinely charged order (integration
       productSlug: "placeholder-offer",
       email,
       fullName: "Test Buyer",
-      bumpTaken: false,
+      bumpChoice: "none",
       country: "US",
     });
     if (!res.ok) throw new Error(`checkout failed: ${res.error}`);

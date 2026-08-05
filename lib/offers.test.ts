@@ -134,3 +134,27 @@ describe("which offer a click on the upsell buys", () => {
     }
   });
 });
+
+describe("the bump's two prices resolve the same way the upsell's do", () => {
+  // One rule, two surfaces. The bump is a radio group and the upsell is a pair
+  // of buttons, but both send a SIDE and both resolve it through the offer's
+  // own alt_offer_id — so neither can be talked into charging something else.
+  const bump = { id: "bump-monthly", altOfferId: "bump-yearly" };
+  const yearly = { id: "bump-yearly", active: true };
+
+  it("buys the price on the card when no side is sent", () => {
+    expect(offerForChoice(bump, yearly, undefined)).toBe("bump-monthly");
+  });
+
+  it("buys the yearly when the yearly radio was chosen", () => {
+    expect(offerForChoice(bump, yearly, "alt")).toBe("bump-yearly");
+  });
+
+  it("refuses a side on a bump that only has one price", () => {
+    expect(offerForChoice({ id: "bump-monthly", altOfferId: null }, null, "alt")).toBeNull();
+  });
+
+  it("refuses an alternative that has been switched off since the page loaded", () => {
+    expect(offerForChoice(bump, { id: "bump-yearly", active: false }, "alt")).toBeNull();
+  });
+});

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getProductBySlug, getOffer } from "@/lib/store";
 import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerForChoice, type Ownership } from "@/lib/offers";
+import type { BumpChoice } from "@/lib/bump";
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
 import { notifyAppEntitlement } from "@/lib/apps";
 import { trackPurchase } from "@/lib/tracking";
@@ -60,7 +61,14 @@ export type CheckoutInput = {
   // Set from the session by the action layer — NEVER from the client payload,
   // or a caller could buy in someone else's name.
   existingUserId?: string | null;
-  bumpTaken: boolean;
+  /**
+   * Which of the bump's prices was taken.
+   *
+   * A side, not an id. The alternative is resolved from the bump offer's own
+   * alt_offer_id, so a tampered post can pick the second price it was shown
+   * and nothing else.
+   */
+  bumpChoice: BumpChoice;
   anonId?: string | null; // attribution visitor cookie, read by the action layer
   country?: string | null; // ISO-2, required when Stripe Tax is enabled
   trackingConsent?: boolean; // GDPR opt-in, read from the cookie by the action layer
@@ -203,8 +211,15 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   // withdrawn offer chargeable from a stale page or a replayed POST.
   const owned = await ownershipFor(userId);
   let bumpOffer: Offer | null = null;
-  if (input.bumpTaken && product.bumpOfferId) {
-    const offer = await getOffer(product.bumpOfferId);
+  if (input.bumpChoice !== "none" && product.bumpOfferId) {
+    const shown = await getOffer(product.bumpOfferId);
+    const alt = shown?.altOfferId ? await getOffer(shown.altOfferId) : null;
+    // Same resolution the upsell uses: the id comes from the offer row, the
+    // request only says which side of it.
+    const wantId = shown
+      ? offerForChoice(shown, alt, input.bumpChoice === "alt" ? "alt" : undefined)
+      : null;
+    const offer = wantId === shown?.id ? shown : wantId === alt?.id ? alt : null;
     if (offer && shouldShowOffer(offer, owned)) {
       bumpOffer = offer;
     } else {

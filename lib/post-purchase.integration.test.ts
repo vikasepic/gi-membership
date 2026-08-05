@@ -17,7 +17,7 @@ async function buyAndPay() {
     productSlug: "placeholder-offer",
     email,
     fullName: "Test Buyer",
-    bumpTaken: false,
+    bumpChoice: "none",
   });
   if (!res.ok) throw new Error(res.error);
   const piId = res.clientSecret.split("_secret_")[0];
@@ -60,7 +60,7 @@ describe.skipIf(!canRun)("post-purchase auto sign-in (integration)", () => {
       productSlug: "placeholder-offer",
       email,
       fullName: "Test Buyer",
-      bumpTaken: false,
+      bumpChoice: "none",
     });
     if (!res.ok) throw new Error(res.error);
     const piId = res.clientSecret.split("_secret_")[0];

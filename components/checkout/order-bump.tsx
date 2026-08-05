@@ -1,7 +1,7 @@
 "use client";
 
 import { useId } from "react";
-import { tint, type BumpView } from "@/lib/bump";
+import { tint, type BumpChoice, type BumpView } from "@/lib/bump";
 
 // The order bump, as a buyer sees it.
 //
@@ -35,19 +35,30 @@ function Check({ className = "", color }: { className?: string; color?: string }
 
 export function OrderBump({
   view,
-  checked,
-  onChange,
+  alt = null,
+  choice,
+  onChoose,
   /** Tighter spacing for the admin preview pane. */
   compact = false,
 }: {
   view: BumpView;
-  checked: boolean;
-  onChange: (next: boolean) => void;
+  /**
+   * A second billing option for the same thing — monthly beside yearly.
+   *
+   * With one price a tickbox is the right control: there is a single thing to
+   * say yes to. With two, ticking is not enough, so the card grows a radio
+   * group and "No thanks" becomes an option someone has to be able to get back
+   * to — a radio cannot be unticked by clicking it again.
+   */
+  alt?: BumpView | null;
+  choice: BumpChoice;
+  onChoose: (next: BumpChoice) => void;
   compact?: boolean;
 }) {
   const id = useId();
   const descId = `${id}-desc`;
   const { accent, ink } = view;
+  const checked = choice !== "none";
 
   return (
     <div
@@ -88,19 +99,21 @@ export function OrderBump({
       )}
 
       <div className={`flex items-start gap-3 ${compact ? "p-3" : "p-4"}`}>
-        <input
-          id={id}
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-          aria-describedby={view.description ? descId : undefined}
-          className="mt-0.5 size-[22px] shrink-0 cursor-pointer rounded-md border-2 border-border bg-surface accent-transparent"
-          style={
-            checked
-              ? { backgroundColor: accent, borderColor: accent, accentColor: accent }
-              : { accentColor: accent }
-          }
-        />
+        {!alt && (
+          <input
+            id={id}
+            type="checkbox"
+            checked={checked}
+            onChange={(e) => onChoose(e.target.checked ? "main" : "none")}
+            aria-describedby={view.description ? descId : undefined}
+            className="mt-0.5 size-[22px] shrink-0 cursor-pointer rounded-md border-2 border-border bg-surface accent-transparent"
+            style={
+              checked
+                ? { backgroundColor: accent, borderColor: accent, accentColor: accent }
+                : { accentColor: accent }
+            }
+          />
+        )}
 
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           {/* Side-by-side only at @md (448px). Measured: the live order summary
@@ -119,8 +132,11 @@ export function OrderBump({
             {/* Narrow: was and now sit on one line under the headline. Wide:
                 they stack in a right-aligned column beside it. Capped rather
                 than shrink-0 — an uncapped column pushed the terms line out
-                over the headline. */}
-            <span className="flex flex-wrap items-baseline gap-x-2 tabular-nums @md:max-w-[46%] @md:flex-col @md:items-end @md:gap-x-0 @md:text-right">
+                over the headline.
+
+                Hidden when there are two prices: each option carries its own
+                below, and a third figure up here would be a price nobody chose. */}
+            <span className={`flex flex-wrap items-baseline gap-x-2 tabular-nums @md:max-w-[46%] @md:flex-col @md:items-end @md:gap-x-0 @md:text-right ${alt ? "hidden" : ""}`}>
               {view.wasLabel && (
                 <span
                   className={`text-muted line-through ${compact ? "text-[0.75rem]" : "text-sm"}`}
@@ -175,6 +191,45 @@ export function OrderBump({
               {view.note}
             </p>
           )}
+
+          {alt && (
+            <fieldset className="flex flex-col gap-1.5 border-0 p-0">
+              <legend className="sr-only">{view.headline} — choose how you pay</legend>
+              <Option
+                name={id}
+                label="No thanks"
+                selected={choice === "none"}
+                accent={accent}
+                compact={compact}
+                onSelect={() => onChoose("none")}
+              />
+              <Option
+                name={id}
+                // The plan price, not the charge-now one: through a trial both
+                // options are $0 today, and a choice between two $0s is not a
+                // choice anyone can make.
+                label={view.planLabel ?? view.nowLabel}
+                terms={optionTerms(view)}
+                was={view.wasLabel}
+                badge={view.saveBadge}
+                selected={choice === "main"}
+                accent={accent}
+                compact={compact}
+                onSelect={() => onChoose("main")}
+              />
+              <Option
+                name={id}
+                label={alt.planLabel ?? alt.nowLabel}
+                terms={optionTerms(alt)}
+                was={alt.wasLabel}
+                badge={alt.saveBadge}
+                selected={choice === "alt"}
+                accent={accent}
+                compact={compact}
+                onSelect={() => onChoose("alt")}
+              />
+            </fieldset>
+          )}
         </div>
       </div>
 
@@ -194,5 +249,85 @@ export function OrderBump({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The small print under one option.
+ *
+ * `termsLabel` reads "then $29/month, cancel any time" — right beneath a
+ * headline price, and a repetition beside a radio that already says $29/month.
+ * What is worth saying there is what happens today.
+ */
+function optionTerms(v: BumpView): string | null {
+  if (v.chargeNowCents === 0) return "nothing today, cancel any time";
+  return v.planLabel ? `${v.nowLabel} today` : null;
+}
+
+/**
+ * One line of the choice: a radio, what it costs, and on what terms.
+ *
+ * The whole row is the label, so the hit area is the row rather than a 16px
+ * circle — this card is often 330px wide on a phone, in the middle of a
+ * checkout, and a miss there costs the sale rather than a click.
+ */
+function Option({
+  name,
+  label,
+  terms,
+  was,
+  badge,
+  selected,
+  accent,
+  compact,
+  onSelect,
+}: {
+  name: string;
+  label: string;
+  terms?: string | null;
+  was?: string | null;
+  badge?: string | null;
+  selected: boolean;
+  accent: string;
+  compact: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <label
+      className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 transition-colors ${
+        compact ? "py-1.5" : "py-2.5"
+      }`}
+      style={{
+        borderColor: selected ? accent : "var(--border)",
+        background: selected ? tint(accent, 0.08) : undefined,
+      }}
+    >
+      <input
+        type="radio"
+        name={name}
+        checked={selected}
+        onChange={onSelect}
+        className="size-[18px] shrink-0 cursor-pointer"
+        style={{ accentColor: accent }}
+      />
+      <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+        <span
+          className={`font-display font-semibold tabular-nums ${compact ? "text-[0.92rem]" : "text-[1.02rem]"}`}
+          style={selected ? { color: accent } : undefined}
+        >
+          {label}
+        </span>
+        {was && <span className="text-[0.78rem] text-muted line-through tabular-nums">{was}</span>}
+        {terms && <span className="text-[0.76rem] leading-snug text-muted">{terms}</span>}
+      </span>
+      {badge && (
+        <span
+          className="shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-[0.68rem] font-semibold"
+          style={{ background: tint(accent, 0.16), color: accent }}
+        >
+          {badge}
+        </span>
+      )}
+    </label>
   );
 }
