@@ -66,13 +66,14 @@ export function immediateChargeCents(offer: {
  * nobody can check.
  */
 export function offerForChoice(
-  shown: { id: string; altOfferId: string | null },
+  shown: { id: string },
   alt: { id: string; active: boolean } | null,
   choice: "alt" | undefined,
 ): string | null {
   if (choice !== "alt") return shown.id;
-  if (!shown.altOfferId) return null;
-  if (!alt || alt.id !== shown.altOfferId || !alt.active) return null;
+  // `alt` is resolved server-side from the placement — the product's
+  // bump_alt_offer_id or upsell_alt_offer_id — and never from the request.
+  if (!alt || !alt.active || alt.id === shown.id) return null;
   return alt.id;
 }
 

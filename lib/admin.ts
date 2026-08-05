@@ -14,10 +14,10 @@ import type {
 // Admin-side reads/writes. Service-role; callers are admin server actions/pages.
 
 const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order";
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, is_placeholder, sort_order";
 
 const OFFER_COLUMNS =
-  "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, alt_offer_id, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, activecampaign_trial_tag_id, activecampaign_cancelled_tag_id, bump_headline, bump_description, bump_banner, bump_bullets, bump_note, bump_accent, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live";
+  "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, activecampaign_trial_tag_id, activecampaign_cancelled_tag_id, bump_headline, bump_description, bump_banner, bump_bullets, bump_note, bump_accent, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live";
 
 export type OfferOption = {
   id: string;
@@ -46,6 +46,8 @@ export type ProductInput = {
   status: ProductStatus;
   bumpOfferId: string | null;
   upsellOfferId: string | null;
+  bumpAltOfferId?: string | null;
+  upsellAltOfferId?: string | null;
   activecampaignTagId: string | null;
   activecampaignAbandonedTagId: string | null;
 };
@@ -105,6 +107,8 @@ function toRow(input: ProductInput, storeId: string) {
     status: input.status,
     bump_offer_id: input.bumpOfferId,
     upsell_offer_id: input.upsellOfferId,
+    bump_alt_offer_id: input.bumpAltOfferId ?? null,
+    upsell_alt_offer_id: input.upsellAltOfferId ?? null,
     // Empty string means "no tag" — stored as null so the purchase path can
     // test for absence rather than for an empty string it would then have to
     // remember to trim.
@@ -178,7 +182,6 @@ export type OfferInput = {
   bullets: string[];
   imageUrl: string | null;
   acceptLabel: string;
-  altOfferId?: string | null;
   activecampaignTagId?: string | null;
   activecampaignTrialTagId?: string | null;
   activecampaignCancelledTagId?: string | null;
@@ -254,7 +257,6 @@ function toOfferRow(input: OfferInput, storeId: string) {
     bullets: input.bullets,
     image_url: input.imageUrl,
     accept_label: input.acceptLabel,
-    alt_offer_id: input.altOfferId ?? null,
     activecampaign_tag_id: input.activecampaignTagId ?? null,
     activecampaign_trial_tag_id: input.activecampaignTrialTagId ?? null,
     activecampaign_cancelled_tag_id: input.activecampaignCancelledTagId ?? null,

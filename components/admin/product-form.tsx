@@ -54,15 +54,19 @@ export function ProductForm({
   // Until someone edits the slug themselves it tracks the title. A saved product
   // already has a slug people may have linked to, so we never auto-touch that.
   const [slugEdited, setSlugEdited] = useState(Boolean(product));
+
+  // Held here so each placement can say, as you pick, exactly what the buyer
+  // will be shown.
+  const [bumpOfferId, setBumpOfferId] = useState(product?.bumpOfferId ?? "");
+  const [bumpAltOfferId, setBumpAltOfferId] = useState(product?.bumpAltOfferId ?? "");
+  const [upsellOfferId, setUpsellOfferId] = useState(product?.upsellOfferId ?? "");
+  const [upsellAltOfferId, setUpsellAltOfferId] = useState(product?.upsellAltOfferId ?? "");
   const [clientErr, setClientErr] = useState<Record<string, string>>({});
 
   // A field's own client error wins; otherwise fall back to the server's.
   // Editing clears the client error to "", so this must be `||` not `??` —
   // `??` treats "" as present and would hide the server error underneath.
   const err = (name: string) => clientErr[name] || state.errors?.[name];
-
-  const offerLabel = (o: OfferOption) =>
-    `${o.name} — ${money(o.priceCents)}${o.billingType === "recurring" ? "/mo" : ""}`;
 
   function toggleCourse(id: string) {
     setCourseIds((cur) => (cur.includes(id) ? cur.filter((c) => c !== id) : [...cur, id]));
@@ -224,23 +228,38 @@ export function ProductForm({
         title="Upsells"
         hint="The bump shows on checkout. If it's declined, the upsell shows once, right after."
       >
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <Field label="Order bump" hint="on the checkout page" error={err("bumpOfferId")}>
-            <select name="bumpOfferId" defaultValue={product?.bumpOfferId ?? ""} className={inputClass}>
-              <option value="">— none —</option>
-              {offers.map((o) => (
-                <option key={o.id} value={o.id}>{offerLabel(o)}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Upsell (one-time offer)" hint="after checkout, if the bump was declined" error={err("upsellOfferId")}>
-            <select name="upsellOfferId" defaultValue={product?.upsellOfferId ?? ""} className={inputClass}>
-              <option value="">— none —</option>
-              {offers.map((o) => (
-                <option key={o.id} value={o.id}>{offerLabel(o)}</option>
-              ))}
-            </select>
-          </Field>
+        {/* Two selects per placement rather than one. A single select where
+            picking the monthly offer silently produced two radio buttons was a
+            form that could not be read — this says what a buyer will see. */}
+        <div className="flex flex-col gap-5">
+          <Placement
+            label="Order bump"
+            hint="on the checkout page"
+            name="bumpOfferId"
+            altName="bumpAltOfferId"
+            offers={offers}
+            offerId={bumpOfferId}
+            onOffer={setBumpOfferId}
+            altId={bumpAltOfferId}
+            onAlt={setBumpAltOfferId}
+            error={err("bumpOfferId")}
+            single="A tick-box for this one price."
+            both="A choice: the buyer picks one of the two, or No thanks."
+          />
+          <Placement
+            label="Upsell (one-time offer)"
+            hint="after checkout, if the bump was declined"
+            name="upsellOfferId"
+            altName="upsellAltOfferId"
+            offers={offers}
+            offerId={upsellOfferId}
+            onOffer={setUpsellOfferId}
+            altId={upsellAltOfferId}
+            onAlt={setUpsellAltOfferId}
+            error={err("upsellOfferId")}
+            single="One button, one click."
+            both="Two buttons side by side, one click each."
+          />
         </div>
       </Section>
 
@@ -309,5 +328,109 @@ export function ProductForm({
         )}
       </div>
     </form>
+  );
+}
+
+/** "Funnel App - Yearly — $199/year". The interval, not a hardcoded "/mo". */
+const offerLabel = (o: OfferOption) =>
+  `${o.name} — ${money(o.priceCents, o.currency)}${o.interval ? `/${o.interval}` : ""}${o.active ? "" : " (draft)"}`;
+
+/**
+ * One place an offer can be shown, with an optional second price beside it.
+ *
+ * The summary line under it is the point: a form where choosing one offer
+ * quietly changes a tick-box into a radio group is a form nobody can read.
+ */
+function Placement({
+  label,
+  hint,
+  name,
+  altName,
+  offers,
+  offerId,
+  onOffer,
+  altId,
+  onAlt,
+  error,
+  single,
+  both,
+}: {
+  label: string;
+  hint: string;
+  name: string;
+  altName: string;
+  offers: OfferOption[];
+  offerId: string;
+  onOffer: (v: string) => void;
+  altId: string;
+  onAlt: (v: string) => void;
+  error?: string;
+  single: string;
+  both: string;
+}) {
+  const chosen = offers.find((o) => o.id === offerId);
+  const alt = offers.find((o) => o.id === altId);
+  const price = (o: OfferOption) =>
+    `${money(o.priceCents, o.currency)}${o.interval ? `/${o.interval}` : ""}`;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-border p-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <Field label={label} hint={hint} error={error}>
+          <select
+            name={name}
+            value={offerId}
+            onChange={(e) => {
+              onOffer(e.target.value);
+              // An alternative left pointing at the offer that just became the
+              // main one would render the same price twice.
+              if (!e.target.value || e.target.value === altId) onAlt("");
+            }}
+            className={inputClass}
+          >
+            <option value="">— none —</option>
+            {offers.map((o) => (
+              <option key={o.id} value={o.id}>{offerLabel(o)}</option>
+            ))}
+          </select>
+        </Field>
+        <Field
+          label="Second price"
+          hint={offerId ? "optional — leave empty for one price" : "pick an offer first"}
+        >
+          <select
+            name={altName}
+            value={altId}
+            onChange={(e) => onAlt(e.target.value)}
+            disabled={!offerId}
+            className={`${inputClass} disabled:opacity-50`}
+          >
+            <option value="">— none, one price —</option>
+            {offers
+              .filter((o) => o.id !== offerId)
+              .map((o) => (
+                <option key={o.id} value={o.id}>{offerLabel(o)}</option>
+              ))}
+          </select>
+        </Field>
+      </div>
+
+      {chosen && (
+        <p className="text-sm text-muted">
+          {alt ? (
+            <>
+              <b className="font-medium text-fg">
+                {price(chosen)} or {price(alt)}
+              </b>{" "}
+              — {both}
+            </>
+          ) : (
+            <>
+              <b className="font-medium text-fg">{price(chosen)}</b> — {single}
+            </>
+          )}
+        </p>
+      )}
+    </div>
   );
 }

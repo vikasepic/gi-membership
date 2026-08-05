@@ -28,6 +28,15 @@ export type Product = {
   status: ProductStatus;
   bumpOfferId: string | null;
   upsellOfferId: string | null;
+  /**
+   * A second price beside each, shown on THIS product's checkout.
+   *
+   * On the placement rather than the offer: the same offer may want both
+   * prices in one product's bump and only the monthly in another's, and a
+   * product form that does not say which is a form nobody can read.
+   */
+  bumpAltOfferId: string | null;
+  upsellAltOfferId: string | null;
   isPlaceholder: boolean;
   sortOrder: number;
 };
@@ -44,13 +53,6 @@ export type Offer = {
   grantProductId: string | null;
   grantAppId: string | null;
   grantEntitlementKey: string | null;
-  /**
-   * A second billing option for the same grant — monthly beside yearly.
-   *
-   * Read server-side only. The upsell accepts by sending "alt", never an id,
-   * so a client cannot substitute a cheaper offer for the one it was shown.
-   */
-  altOfferId: string | null;
   billingType: BillingType;
   interval: Interval | null;
   intervalCount: number | null;

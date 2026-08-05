@@ -81,10 +81,10 @@ export default async function CheckoutPage({
   const bump: BumpSummary | null =
     bumpOffer && shouldShowOffer(bumpOffer, owned) ? buildBumpView(bumpOffer) : null;
 
-  // The second billing option, if the bump offer names one. Resolved through
-  // the offer's own alt_offer_id — the browser sends "alt", never an id, so
-  // the choice stays between the two prices the page actually rendered.
-  const altOffer = bump && bumpOffer?.altOfferId ? await getOffer(bumpOffer.altOfferId) : null;
+  // The second price, if THIS product asks for one. On the product rather than
+  // the offer, so the same offer can be sold at two prices here and one price
+  // somewhere else. The browser sends "alt", never an id.
+  const altOffer = bump && product.bumpAltOfferId ? await getOffer(product.bumpAltOfferId) : null;
   const bumpAlt: BumpSummary | null =
     altOffer && altOffer.active && shouldShowOffer(altOffer, owned) ? buildBumpView(altOffer) : null;
 

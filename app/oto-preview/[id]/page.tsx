@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getOffer } from "@/lib/store";
+import { previewUpsellAlt } from "@/lib/checkout";
 import { immediateChargeCents } from "@/lib/offers";
 import { otoComponentFor } from "@/components/oto/registry";
 import { SectionsOto } from "@/components/oto/sections-template";
@@ -40,8 +41,9 @@ export default async function OtoPreviewFrame({
 
   // Both prices, without the live page's `active` check: the preview's job is
   // to show the layout being configured, and an alternative that is still a
-  // draft is exactly the one you are here to look at.
-  const altOffer = offer.altOfferId ? await getOffer(offer.altOfferId) : null;
+  // draft is exactly the one you are here to look at. Taken from the first
+  // product that upsells this offer, since a preview has no order behind it.
+  const altOffer = await previewUpsellAlt(offer.id);
 
   const view: OtoView = {
     offer,

@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { OfferForm } from "@/components/admin/offer-form";
-import { listProductOptions, listAppOptions, listOfferOptions } from "@/lib/admin";
+import { listProductOptions, listAppOptions } from "@/lib/admin";
 
 export default async function NewOfferPage() {
-  const [products, apps, offers] = await Promise.all([
+  const [products, apps] = await Promise.all([
     listProductOptions(),
     listAppOptions(),
-    listOfferOptions(true),
   ]);
   return (
     <div className="flex flex-col gap-8">
@@ -14,7 +13,7 @@ export default async function NewOfferPage() {
         <Link href="/admin/offers" className="kicker w-fit text-muted hover:text-fg">&larr; Offers</Link>
         <h1 className="text-2xl">New offer</h1>
       </div>
-      <OfferForm products={products} apps={apps} offers={offers} />
+      <OfferForm products={products} apps={apps} />
     </div>
   );
 }

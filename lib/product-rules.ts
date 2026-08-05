@@ -44,6 +44,10 @@ export const productSchema = z.object({
   status: z.enum(["draft", "published"]),
   bumpOfferId: z.preprocess(emptyToNull, uuidish.nullable().default(null)),
   upsellOfferId: z.preprocess(emptyToNull, uuidish.nullable().default(null)),
+  // The second price at each placement. Optional, and dropped below when it
+  // would be the same offer twice.
+  bumpAltOfferId: z.preprocess(emptyToNull, uuidish.nullable().default(null)),
+  upsellAltOfferId: z.preprocess(emptyToNull, uuidish.nullable().default(null)),
   // ActiveCampaign tag ids are numeric, but kept as a string: it is an opaque
   // identifier handed straight back to AC, never arithmetic. Digits only, so a
   // pasted tag NAME is rejected here rather than silently failing at purchase
@@ -77,6 +81,8 @@ export type ParsedProduct = {
   status: "draft" | "published";
   bumpOfferId: string | null;
   upsellOfferId: string | null;
+  bumpAltOfferId: string | null;
+  upsellAltOfferId: string | null;
   activecampaignTagId: string | null;
   activecampaignAbandonedTagId: string | null;
 };
@@ -112,8 +118,19 @@ export function parseProductForm(raw: Record<string, unknown>): ParseResult {
       status: v.status,
       bumpOfferId: v.bumpOfferId,
       upsellOfferId: v.upsellOfferId,
+      // A second price with no first price is nothing, and a second price that
+      // IS the first would render the same figure twice — the database refuses
+      // it, so it is dropped here rather than failing the save.
+      bumpAltOfferId: altFor(v.bumpOfferId, v.bumpAltOfferId),
+      upsellAltOfferId: altFor(v.upsellOfferId, v.upsellAltOfferId),
       activecampaignTagId: v.activecampaignTagId,
       activecampaignAbandonedTagId: v.activecampaignAbandonedTagId,
     },
   };
+}
+
+/** The second price a placement actually keeps. */
+export function altFor(offerId: string | null, altId: string | null): string | null {
+  if (!offerId || !altId || altId === offerId) return null;
+  return altId;
 }

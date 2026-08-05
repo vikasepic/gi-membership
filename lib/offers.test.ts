@@ -101,7 +101,7 @@ describe("shouldShowOffer", () => {
 });
 
 describe("which offer a click on the upsell buys", () => {
-  const shown = { id: "main", altOfferId: "alt" };
+  const shown = { id: "main" };
   const alt = { id: "alt", active: true };
 
   it("buys what the token names when no side was sent", () => {
@@ -112,20 +112,19 @@ describe("which offer a click on the upsell buys", () => {
     expect(offerForChoice(shown, alt, "alt")).toBe("alt");
   });
 
-  it("refuses when the offer declares no alternative", () => {
+  it("refuses when the placement declares no alternative", () => {
     // A form that grew a `choice` field on a page that never showed a second
     // price is a request that should buy nothing.
-    expect(offerForChoice({ id: "main", altOfferId: null }, null, "alt")).toBeNull();
+    expect(offerForChoice({ id: "main" }, null, "alt")).toBeNull();
   });
 
   it("refuses an alternative that has been switched off", () => {
     expect(offerForChoice(shown, { id: "alt", active: false }, "alt")).toBeNull();
   });
 
-  it("refuses an alternative that is not the one this offer declares", () => {
-    // The id never comes from the request, but this is the assertion that says
-    // so — if resolution ever starts trusting a supplied id, this fails.
-    expect(offerForChoice(shown, { id: "something-else", active: true }, "alt")).toBeNull();
+  it("refuses an alternative that is the same offer twice", () => {
+    // Both radios would read the same price, and one of them would be a lie.
+    expect(offerForChoice(shown, { id: "main", active: true }, "alt")).toBeNull();
   });
 
   it("never returns the alternative for an ordinary accept", () => {
@@ -139,7 +138,7 @@ describe("the bump's two prices resolve the same way the upsell's do", () => {
   // One rule, two surfaces. The bump is a radio group and the upsell is a pair
   // of buttons, but both send a SIDE and both resolve it through the offer's
   // own alt_offer_id — so neither can be talked into charging something else.
-  const bump = { id: "bump-monthly", altOfferId: "bump-yearly" };
+  const bump = { id: "bump-monthly" };
   const yearly = { id: "bump-yearly", active: true };
 
   it("buys the price on the card when no side is sent", () => {
@@ -151,7 +150,7 @@ describe("the bump's two prices resolve the same way the upsell's do", () => {
   });
 
   it("refuses a side on a bump that only has one price", () => {
-    expect(offerForChoice({ id: "bump-monthly", altOfferId: null }, null, "alt")).toBeNull();
+    expect(offerForChoice({ id: "bump-monthly" }, null, "alt")).toBeNull();
   });
 
   it("refuses an alternative that has been switched off since the page loaded", () => {

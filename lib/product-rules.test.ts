@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { blocksPublish, parseProductForm } from "@/lib/product-rules";
+import { altFor, blocksPublish, parseProductForm } from "@/lib/product-rules";
+
+const OFFER_A = "11111111-1111-4111-8111-111111111111";
+const OFFER_B = "22222222-2222-4222-8222-222222222222";
 
 // The exact payload the admin product form submits. Note what is ABSENT:
 // mediaMode, mediaEmbedUrl and coverImageUrl have no inputs in the form, and
@@ -111,5 +114,57 @@ describe("the FormData the product form actually submits", () => {
     const res = parseProductForm(Object.fromEntries(fd) as Record<string, unknown>);
     if (!res.ok) throw new Error("parse failed");
     expect(blocksPublish(res.data.status, fd.getAll("courseIds").map(String))).toBe(true);
+  });
+});
+
+describe("the second price at a placement", () => {
+  it("is kept when it is a different offer", () => {
+    expect(altFor("main", "second")).toBe("second");
+  });
+
+  it("is nothing without a first price", () => {
+    // A second price on a placement that shows no offer is a setting that
+    // renders nowhere and outlives the reason it was set.
+    expect(altFor(null, "second")).toBeNull();
+  });
+
+  it("is nothing when it is the same offer twice", () => {
+    // Both radios would show the same figure, and one of them would be a lie.
+    // The database refuses the row, so dropping it here turns a mis-click into
+    // nothing rather than a failed save.
+    expect(altFor("main", "main")).toBeNull();
+  });
+
+  it("is nothing when none was chosen", () => {
+    expect(altFor("main", null)).toBeNull();
+  });
+});
+
+describe("what the product form saves for a placement", () => {
+  const form = (over: Record<string, unknown>) =>
+    parseProductForm({
+      title: "T",
+      slug: "t",
+      price: "10",
+      status: "draft",
+      currency: "usd",
+      ...over,
+    });
+
+  it("keeps both ids when two prices were picked", () => {
+    const r = form({ bumpOfferId: OFFER_A, bumpAltOfferId: OFFER_B });
+    expect(r.ok && r.data.bumpOfferId).toBe(OFFER_A);
+    expect(r.ok && r.data.bumpAltOfferId).toBe(OFFER_B);
+  });
+
+  it("drops the second when the placement was cleared", () => {
+    const r = form({ bumpOfferId: "", bumpAltOfferId: OFFER_B });
+    expect(r.ok && r.data.bumpAltOfferId).toBeNull();
+  });
+
+  it("keeps the bump and upsell independent of each other", () => {
+    const r = form({ bumpOfferId: OFFER_A, upsellOfferId: OFFER_B, upsellAltOfferId: OFFER_A });
+    expect(r.ok && r.data.bumpAltOfferId).toBeNull();
+    expect(r.ok && r.data.upsellAltOfferId).toBe(OFFER_A);
   });
 });

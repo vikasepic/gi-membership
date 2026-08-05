@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { verifyOtoToken } from "@/lib/oto-token";
 import { otoSigningSecret } from "@/lib/env";
 import { getOffer } from "@/lib/store";
+import { upsellAltFor } from "@/lib/checkout";
 import { immediateChargeCents } from "@/lib/offers";
 import { otoComponentFor } from "@/components/oto/registry";
 import { SectionsOto } from "@/components/oto/sections-template";
@@ -30,9 +31,9 @@ export default async function OtoPage({
   const offer = await getOffer(verified.payload.offerId);
   if (!offer) redirect("/checkout/thank-you");
 
-  // Resolved here, from the offer's own row — never from the request. The page
-  // shows two prices; the buyer picks a side, not an offer.
-  const altOffer = offer.altOfferId ? await getOffer(offer.altOfferId) : null;
+  // From the PRODUCT this order was for, never from the request. The page shows
+  // two prices; the buyer picks a side, not an offer.
+  const altOffer = await upsellAltFor(verified.payload.orderId);
 
   const view: OtoView = {
     offer,

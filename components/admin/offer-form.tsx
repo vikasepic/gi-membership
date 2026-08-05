@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { saveOffer, removeOffer, type SaveState } from "@/app/admin/offers/actions";
 import { inputClass as input, Field, Section } from "@/components/admin/form-controls";
 import type { Offer } from "@/lib/types";
-import type { ProductOption, AppOption, OfferOption } from "@/lib/admin";
+import type { ProductOption, AppOption } from "@/lib/admin";
 import { sectionsToForm } from "@/lib/oto-sections";
 
 /** Layouts that still read the fields below. Ten sections and Custom do not. */
@@ -14,13 +14,10 @@ export function OfferForm({
   offer,
   products,
   apps,
-  offers = [],
 }: {
   offer?: Offer;
   products: ProductOption[];
   apps: AppOption[];
-  /** Other offers, for the second billing option. */
-  offers?: OfferOption[];
 }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveOffer, {});
   const sections = sectionsToForm(offer?.otoSections as never);
@@ -223,31 +220,6 @@ export function OfferForm({
         </Field>
           </div>
         </details>
-
-        {/* Whether this offer is sold at one price or two. Set it and the bump
-            becomes a radio group and the upsell grows a second button; leave it
-            and both stay single, which is right for most offers. */}
-        <Field
-          label="Second billing option"
-          hint="Another offer granting the same thing at a different price — monthly beside yearly. The bump becomes a choice and the upsell shows both. Leave as none for a single price."
-        >
-          <select
-            name="altOfferId"
-            defaultValue={offer?.altOfferId ?? ""}
-            className={input}
-          >
-            <option value="">&mdash; none, single price &mdash;</option>
-            {offers
-              .filter((o) => o.id !== offer?.id)
-              .map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                  {o.interval ? ` — ${o.interval}ly` : ""}
-                  {o.active ? "" : " (draft)"}
-                </option>
-              ))}
-          </select>
-        </Field>
 
         {/* The offer's own tag IS the buyer tag. It is only during a trial
             that "granted" and "paid for" differ, and that is what the trial tag

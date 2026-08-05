@@ -213,9 +213,10 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   let bumpOffer: Offer | null = null;
   if (input.bumpChoice !== "none" && product.bumpOfferId) {
     const shown = await getOffer(product.bumpOfferId);
-    const alt = shown?.altOfferId ? await getOffer(shown.altOfferId) : null;
-    // Same resolution the upsell uses: the id comes from the offer row, the
-    // request only says which side of it.
+    // The second price comes from THIS product, not from the offer — the same
+    // offer may be sold at two prices here and one price elsewhere. The request
+    // only says which side of it.
+    const alt = product.bumpAltOfferId ? await getOffer(product.bumpAltOfferId) : null;
     const wantId = shown
       ? offerForChoice(shown, alt, input.bumpChoice === "alt" ? "alt" : undefined)
       : null;
@@ -923,10 +924,10 @@ export async function acceptOto(token: string, choice?: "alt"): Promise<OtoAccep
   const shown = await getOffer(offerId);
   if (!order || !shown) return { ok: false, error: "invalid" };
 
-  // "alt" is a choice between the two prices the page showed, not a free
-  // choice of offer. It resolves through the offer's OWN column, so the worst
-  // a tampered form can do is buy the alternative it was already offered.
-  const alt = shown.altOfferId ? await getOffer(shown.altOfferId) : null;
+  // "alt" is a choice between the two prices the page showed, not a free choice
+  // of offer. It resolves through the ORDER's product, so the worst a tampered
+  // form can do is buy the alternative it was already offered.
+  const alt = await upsellAltFor(orderId);
   const buyId = offerForChoice(shown, alt, choice);
   if (!buyId) return { ok: false, error: "invalid" };
   const offer = buyId === shown.id ? shown : (alt as Offer);
@@ -972,3 +973,56 @@ export async function acceptOto(token: string, choice?: "alt"): Promise<OtoAccep
   });
   return { ok: true };
 }
+
+// ---------------------------------------------------------------------------
+// The second price, resolved from the placement
+// ---------------------------------------------------------------------------
+
+/**
+ * The alternative price for the upsell on the order that minted this token.
+ *
+ * The pairing lives on the product, not the offer, so it is read from the
+ * product this order was for. Never from the request: the page sends "alt",
+ * and the id it resolves to comes from here.
+ */
+export async function upsellAltFor(orderId: string): Promise<Offer | null> {
+  const db = createServiceClient();
+  const { data: items } = await db
+    .from("order_items")
+    .select("product_id")
+    .eq("order_id", orderId)
+    .not("product_id", "is", null);
+  const productId = items?.[0]?.product_id as string | undefined;
+  if (!productId) return null;
+  const { data: product } = await db
+    .from("products")
+    .select("upsell_alt_offer_id")
+    .eq("id", productId)
+    .maybeSingle();
+  const altId = product?.upsell_alt_offer_id as string | null | undefined;
+  if (!altId) return null;
+  const alt = await getOffer(altId);
+  return alt?.active ? alt : null;
+}
+
+/**
+ * The alternative an admin PREVIEW should show.
+ *
+ * A preview has no order behind it, so it borrows the first product that
+ * places this offer. Unlike the live page it does not require the alternative
+ * to be active — a draft second price is exactly the one being set up.
+ */
+async function previewAltFor(offerId: string, column: "bump" | "upsell"): Promise<Offer | null> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("products")
+    .select(`${column}_alt_offer_id`)
+    .eq(`${column}_offer_id`, offerId)
+    .not(`${column}_alt_offer_id`, "is", null)
+    .limit(1);
+  const altId = (data?.[0] as Record<string, string | null> | undefined)?.[`${column}_alt_offer_id`];
+  return altId ? await getOffer(altId) : null;
+}
+
+export const previewBumpAlt = (offerId: string) => previewAltFor(offerId, "bump");
+export const previewUpsellAlt = (offerId: string) => previewAltFor(offerId, "upsell");

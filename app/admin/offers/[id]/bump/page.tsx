@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getOfferById } from "@/lib/admin";
+import { previewBumpAlt } from "@/lib/checkout";
 import { BumpEditor } from "@/components/admin/bump-editor";
 
 export const dynamic = "force-dynamic";
@@ -26,8 +27,9 @@ export default async function OfferBumpPage({ params }: { params: Promise<{ id: 
       </div>
 
       {/* The alternative price, so the preview shows the control a buyer gets
-          rather than the single-price version of it. */}
-      <BumpEditor offer={offer} alt={offer.altOfferId ? await getOfferById(offer.altOfferId) : null} />
+          rather than the single-price version of it. Taken from the first
+          product that bumps this offer — the pairing lives on the placement. */}
+      <BumpEditor offer={offer} alt={await previewBumpAlt(offer.id)} />
     </div>
   );
 }
