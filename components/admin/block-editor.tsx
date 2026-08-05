@@ -642,7 +642,10 @@ function ControlField({
   // is the same words at every width.
   const responsive = scopeOf(control) === "style" && device !== "desktop";
   const set = responsive && hasOverride(block, device, control.key.split(".")[0] as keyof BlockStyle);
-  const label = (
+  // One label builder for every control kind. The device badge has to appear on
+  // all of them — a slider that does not say it is holding a tablet-only value
+  // is a slider you will change on desktop and wonder why nothing moved.
+  const head = (right?: React.ReactNode) => (
     <span className="flex items-baseline justify-between gap-2 text-xs font-medium">
       <span className="flex items-center gap-1.5">
         {control.label}
@@ -657,9 +660,11 @@ function ControlField({
           </button>
         )}
       </span>
-      {control.hint && <span className="text-[0.66rem] font-normal text-muted">{control.hint}</span>}
+      {right ??
+        (control.hint && <span className="text-[0.66rem] font-normal text-muted">{control.hint}</span>)}
     </span>
   );
+  const label = head();
 
   switch (control.kind) {
     case "text":
@@ -729,19 +734,18 @@ function ControlField({
             onChange={(e) => onChange(e.target.checked)}
             className="size-4 accent-[var(--primary)]"
           />
-          {control.label}
+          <span className="flex-1">{head()}</span>
         </label>
       );
 
     case "number":
       return (
         <label className="flex flex-col gap-1">
-          <span className="flex items-baseline justify-between text-xs font-medium">
-            {control.label}
-            <span className="text-[0.66rem] text-muted">
+          {head(
+            <span className="text-[0.66rem] font-normal text-muted">
               {value === null || value === undefined ? "theme" : `${value}${control.unit ?? ""}`}
-            </span>
-          </span>
+            </span>,
+          )}
           <div className="flex items-center gap-1.5">
             <input
               type="range"
@@ -769,10 +773,11 @@ function ControlField({
     case "color":
       return (
         <label className="flex flex-col gap-1">
-          <span className="flex items-baseline justify-between text-xs font-medium">
-            {control.label}
-            <span className="text-[0.66rem] text-muted">{typeof value === "string" ? value : "theme"}</span>
-          </span>
+          {head(
+            <span className="text-[0.66rem] font-normal text-muted">
+              {typeof value === "string" ? value : "theme"}
+            </span>,
+          )}
           <div className="flex items-center gap-1.5">
             <input
               type="color"
