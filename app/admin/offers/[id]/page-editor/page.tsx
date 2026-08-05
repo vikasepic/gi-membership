@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getOfferById } from "@/lib/admin";
-import { getPageSections } from "@/lib/pages";
+import { getPageSections, getPageSettings } from "@/lib/pages";
 import { PageEditor } from "@/components/admin/page-editor";
+import { PageSettings } from "@/components/admin/page-settings";
 import { buildBumpView } from "@/lib/bump";
 import { siteUrl } from "@/lib/env";
 import { CopyLink } from "@/components/admin/copy-link";
@@ -16,7 +17,10 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
   const offer = await getOfferById(id);
   if (!offer) notFound();
 
-  const rows = await getPageSections("offer", id);
+  const [rows, settings] = await Promise.all([
+    getPageSections("offer", id),
+    getPageSettings("offer", id),
+  ]);
   // The price shown on the page comes from the offer, never from a copy field —
   // the same rule as the order bump.
   const view = buildBumpView(offer);
@@ -45,6 +49,13 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
         url={`${siteUrl()}/o/${offer.key}`}
         label="Public link"
         note="The same nine sections at an address you can paste into an ad or an email. Live once you save a section; buying goes through the normal checkout."
+      />
+
+      <PageSettings
+        ownerType="offer"
+        ownerId={id}
+        customCss={settings.customCss}
+        customJs={settings.customJs}
       />
 
       <PageEditor

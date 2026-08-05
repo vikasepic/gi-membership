@@ -126,3 +126,42 @@ export async function seedPage(owner: OwnerType, ownerId: string): Promise<void>
     .upsert(rows, { onConflict: "owner_type,owner_id,section_key", ignoreDuplicates: true });
   if (error) throw new Error(`seedPage: ${error.message}`);
 }
+
+// --- page-level custom code -------------------------------------------------
+
+export type PageSettings = { customCss: string; customJs: string };
+
+export const NO_PAGE_SETTINGS: PageSettings = { customCss: "", customJs: "" };
+
+export async function getPageSettings(owner: OwnerType, ownerId: string): Promise<PageSettings> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("page_settings")
+    .select("custom_css, custom_js")
+    .eq("owner_type", owner)
+    .eq("owner_id", ownerId)
+    .maybeSingle();
+  // A page renders without its custom code; it does not render without the
+  // page. So a failure here is empty custom code, not a 500 on a sales page.
+  if (error || !data) return NO_PAGE_SETTINGS;
+  return camelize<PageSettings>(data);
+}
+
+export async function savePageSettings(
+  owner: OwnerType,
+  ownerId: string,
+  input: PageSettings,
+): Promise<void> {
+  const db = createServiceClient();
+  const { error } = await db.from("page_settings").upsert(
+    {
+      store_id: await getStoreId(),
+      owner_type: owner,
+      owner_id: ownerId,
+      custom_css: input.customCss,
+      custom_js: input.customJs,
+    },
+    { onConflict: "owner_type,owner_id" },
+  );
+  if (error) throw new Error(`savePageSettings: ${error.message}`);
+}

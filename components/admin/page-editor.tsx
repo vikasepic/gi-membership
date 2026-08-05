@@ -12,9 +12,10 @@ import {
   type BandStyleKey,
 } from "@/lib/page-sections";
 import { BlockEditor } from "@/components/admin/block-editor";
+import { DeviceSwitch } from "@/components/admin/device-switch";
 import { blocksForSection, isUnconverted } from "@/lib/section-to-blocks";
 import { starterBlocks } from "@/lib/page-starter";
-import type { Block } from "@/lib/blocks";
+import { DEVICE_CANVAS, type Block, type Device } from "@/lib/blocks";
 import type { OwnerType } from "@/lib/pages";
 
 // The page editor.
@@ -29,16 +30,9 @@ import type { OwnerType } from "@/lib/pages";
 
 type Draft = Record<string, unknown>;
 
-/**
- * Preview widths.
- *
- * "Desktop" fills whatever the pane gives it rather than scaling a fixed
- * canvas down: the sections use container queries, so a real width renders the
- * real composition, while a scaled canvas would show desktop styling at a size
- * nobody views it at. Mobile is a true 390px for the same reason.
- */
-const DEVICES = { desktop: null, mobile: 390 } as const;
-type Device = keyof typeof DEVICES;
+// Preview widths come from lib/blocks: the same three the builder edits at and
+// the same three the emitted CSS breaks at. A preview on its own list of widths
+// is a preview that can disagree with the page.
 
 export function PageEditor({
   ownerType,
@@ -176,21 +170,7 @@ export function PageEditor({
             Start from the template
           </button>
         )}
-        <div className="ml-auto flex items-center gap-1 rounded-full border border-border p-1">
-          {(Object.keys(DEVICES) as Device[]).map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setDevice(d)}
-              aria-pressed={device === d}
-              className={`rounded-full px-3 py-1 text-xs capitalize transition-colors ${
-                device === d ? "bg-navy text-white" : "text-muted hover:text-fg"
-              }`}
-            >
-              {d}
-            </button>
-          ))}
-        </div>
+        <DeviceSwitch device={device} onChange={setDevice} className="ml-auto" />
         <a
           href={liveHref}
           target="_blank"
@@ -408,14 +388,15 @@ function SectionPanel({
       <div className="border-t border-border bg-bg p-5 lg:sticky lg:top-4 lg:max-h-[calc(100vh-5rem)] lg:self-start lg:overflow-y-auto lg:border-l lg:border-t-0">
         <div className="flex flex-col gap-2">
           <span className="kicker text-muted">
-            Preview — this section only{device === "mobile" ? " · 390px" : ""}
+            Preview — this section only
+            {DEVICE_CANVAS[device] ? ` · ${DEVICE_CANVAS[device]}px` : ""}
           </span>
           <div className="overflow-hidden rounded-xl border border-border">
             <div
               className="mx-auto transition-[max-width] duration-200"
-              style={{ maxWidth: DEVICES[device] ?? undefined }}
+              style={{ maxWidth: DEVICE_CANVAS[device] ?? undefined }}
             >
-              <SectionBand row={{ ...row, content }} money={money} preview />
+              <SectionBand row={{ ...row, content }} money={money} preview at={device} />
             </div>
           </div>
           <p className="text-xs text-muted">

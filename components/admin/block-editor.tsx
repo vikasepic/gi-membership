@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BlockBody } from "@/components/page/blocks";
 import { RichText } from "@/components/editor/rich-text";
 import {
   BLOCK_LABEL,
   PALETTE,
+  clearControl,
   controlsFor,
   isGroup,
   readControl,
+  scopeOf,
   writeControl,
   type Control,
 } from "@/lib/block-controls";
@@ -24,12 +26,27 @@ import {
   newBlock,
   removeBlock,
   updateBlock,
+  hasOverride,
+  styleFor,
+  DEVICE_CANVAS,
   ROW_STRUCTURES,
   type Block,
+  type BlockStyle,
   type BlockType,
+  type Device,
   type DropTarget,
 } from "@/lib/blocks";
-import { blockWrapperCss } from "@/lib/block-style";
+import { DeviceSwitch } from "@/components/admin/device-switch";
+
+/**
+ * The width being edited, for the canvas.
+ *
+ * Context rather than a prop: it would otherwise be threaded through Zone,
+ * CanvasBlock, RowColumns and Editable, none of which have any use for it
+ * except to hand it on.
+ */
+const CanvasDevice = createContext<Device>("desktop");
+import { blockCssAt } from "@/lib/block-style";
 import { imageSrc } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
 
@@ -70,6 +87,10 @@ export function BlockEditor({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("content");
+  // Which width is being edited. One piece of state for both halves: the canvas
+  // narrows and the inspector writes to the same device, because a panel that
+  // edits mobile while the canvas shows desktop is a panel you cannot trust.
+  const [device, setDevice] = useState<Device>("desktop");
   const drag = useRef<DragPayload | null>(null);
   const [dropAt, setDropAt] = useState<string | null>(null);
 
@@ -126,11 +147,13 @@ export function BlockEditor({
   }, [onClose]);
 
   const overlay = (
+    <CanvasDevice.Provider value={device}>
     <div className="fixed inset-0 z-[100] flex flex-col bg-surface-2">
       <header className="flex items-center gap-3 border-b border-border bg-surface px-4 py-2.5">
         <strong className="font-display text-sm">Builder</strong>
         <span className="text-sm text-muted">{title}</span>
-        <span className="ml-auto text-xs text-muted">
+        <DeviceSwitch device={device} onChange={setDevice} className="mx-auto" />
+        <span className="text-xs text-muted">
           {blocks.length === 0 ? "Empty" : `${blocks.length} block${blocks.length === 1 ? "" : "s"}`}
         </span>
         <button
@@ -181,7 +204,10 @@ export function BlockEditor({
 
         {/* Canvas */}
         <div className="min-w-0 overflow-y-auto p-6" style={{ background: theme.bg }}>
-          <div className="mx-auto w-full max-w-[900px]">
+          <div
+            className="mx-auto w-full transition-[max-width] duration-200"
+            style={{ maxWidth: DEVICE_CANVAS[device] ?? 900 }}
+          >
             <Zone
               blocks={blocks}
               theme={theme}
@@ -254,8 +280,10 @@ export function BlockEditor({
                       key={`${c.kind}:${c.key}`}
                       control={c}
                       block={selected}
+                      device={device}
                       uploadImage={uploadImage}
-                      onChange={(v) => patch(selected.id, writeControl(selected, c, v))}
+                      onChange={(v) => patch(selected.id, writeControl(selected, c, v, device))}
+                      onClear={() => patch(selected.id, clearControl(selected, c, device))}
                     />
                   ),
                 )}
@@ -270,6 +298,7 @@ export function BlockEditor({
         </aside>
       </div>
     </div>
+    </CanvasDevice.Provider>
   );
 
   // Portalled to the body. The editor's own panes are position: sticky, which
@@ -401,6 +430,7 @@ function CanvasBlock({
   onPatch: (id: string, next: Block) => void;
   target: (index: number) => DropTarget;
 }) {
+  const device = useContext(CanvasDevice);
   const selected = selectedId === block.id;
   const empty = blockRendersNothing(block);
 
@@ -453,7 +483,7 @@ function CanvasBlock({
           ⠿ {BLOCK_LABEL[block.type]}
         </span>
 
-        <div style={blockWrapperCss(block, theme)}>
+        <div style={blockCssAt(block, theme, device)}>
           {block.type === "row" ? (
             <RowColumns
               block={block}
@@ -505,9 +535,10 @@ function Editable({
   selected: boolean;
   onPatch: (id: string, next: Block) => void;
 }) {
+  const device = useContext(CanvasDevice);
   const key = block.type === "heading" || block.type === "button" ? "text" : null;
-  if (!key) return <BlockBody block={block} theme={theme} />;
-  if (!selected) return <BlockBody block={block} theme={theme} />;
+  if (!key) return <BlockBody block={block} theme={theme} at={device} />;
+  if (!selected) return <BlockBody block={block} theme={theme} at={device} />;
   return (
     <div
       contentEditable
@@ -525,7 +556,7 @@ function Editable({
       onClick={(e) => e.stopPropagation()}
       className="cursor-text outline-none"
     >
-      <BlockBody block={block} theme={theme} />
+      <BlockBody block={block} theme={theme} at={device} />
     </div>
   );
 }
@@ -593,19 +624,39 @@ function DropLine() {
 function ControlField({
   control,
   block,
+  device = "desktop",
   onChange,
+  onClear,
   uploadImage,
 }: {
   control: Control;
   block: Block;
+  device?: Device;
   onChange: (v: unknown) => void;
+  onClear?: () => void;
   uploadImage?: UploadImage;
 }) {
   if (isGroup(control)) return null;
-  const value = readControl(block, control);
+  const value = readControl(block, control, device);
+  // Only style controls have a wider device to inherit from; a heading's text
+  // is the same words at every width.
+  const responsive = scopeOf(control) === "style" && device !== "desktop";
+  const set = responsive && hasOverride(block, device, control.key.split(".")[0] as keyof BlockStyle);
   const label = (
     <span className="flex items-baseline justify-between gap-2 text-xs font-medium">
-      {control.label}
+      <span className="flex items-center gap-1.5">
+        {control.label}
+        {set && (
+          <button
+            type="button"
+            onClick={onClear}
+            title={`Set for ${device}. Click to use the ${device === "mobile" ? "tablet" : "desktop"} value again.`}
+            className="rounded-full bg-primary/15 px-1.5 text-[0.6rem] font-medium text-primary hover:bg-primary/25"
+          >
+            {device} ✕
+          </button>
+        )}
+      </span>
       {control.hint && <span className="text-[0.66rem] font-normal text-muted">{control.hint}</span>}
     </span>
   );

@@ -1,6 +1,8 @@
 import { Blocks, type CtaRender } from "@/components/page/blocks";
 import { blocksForSection } from "@/lib/section-to-blocks";
 import { buildSectionView, type SectionRow, type SectionView } from "@/lib/page-sections";
+import type { Device } from "@/lib/blocks";
+import type { PageSettings } from "@/lib/pages";
 
 // The page, assembled from blocks.
 //
@@ -50,12 +52,15 @@ export function SectionBand({
   cta,
   /** Editor only: show the band even when it has nothing in it yet. */
   preview,
+  /** Editor only: render as this width sees it, rather than as the window does. */
+  at,
 }: {
   row: SectionRow;
   money: PageMoney;
   /** The real buy control. Layout is the section's; the money path is not. */
   cta?: CtaRender;
   preview?: boolean;
+  at?: Device;
 }) {
   const view = buildSectionView(row);
   if (!view) return null;
@@ -65,7 +70,7 @@ export function SectionBand({
   if (blocks.length === 0 && !preview) return null;
   return (
     <Band view={view}>
-      <Blocks blocks={blocks} theme={view.theme} money={money} cta={cta} />
+      <Blocks blocks={blocks} theme={view.theme} money={money} cta={cta} at={at} />
     </Band>
   );
 }
@@ -74,17 +79,27 @@ export function SalesPage({
   rows,
   money,
   cta,
+  settings,
 }: {
   rows: SectionRow[];
   money: PageMoney;
   cta?: CtaRender;
+  /** Page-level custom code, from the editor's Page settings panel. */
+  settings?: PageSettings;
 }) {
   const ordered = [...rows].sort((a, b) => a.position - b.position);
+  const css = settings?.customCss.trim();
+  const js = settings?.customJs.trim();
   return (
     <div>
+      {css && <style dangerouslySetInnerHTML={{ __html: css.replace(/<\//g, "") }} />}
       {ordered.map((row) => (
         <SectionBand key={row.sectionKey} row={row} money={money} cta={cta} />
       ))}
+      {/* Last, so it runs against a page that exists. `</` is stripped because
+          a closing tag inside the source would end the element early and spill
+          the rest of the script onto the page as text. */}
+      {js && <script dangerouslySetInnerHTML={{ __html: js.replace(/<\//g, "<\\/") }} />}
     </div>
   );
 }

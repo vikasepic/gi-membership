@@ -80,9 +80,52 @@ export type BlockStyle = {
   radius: number;
   cssId: string;
   cssClass: string;
+  /** Hand-written CSS for this block. `selector` stands for the block itself. */
+  customCss: string;
   hideDesktop: boolean;
   hideTablet: boolean;
   hideMobile: boolean;
+};
+
+/**
+ * The three widths a page is edited at.
+ *
+ * They are the widths the page already responds at — tablet is below `lg`
+ * (1024px) and mobile below `md` (768px) — so a value set here lands on the
+ * same boundary the layout was built around. A fourth breakpoint would be a
+ * fourth thing to keep in sync with Tailwind for no gain.
+ */
+export const DEVICES = ["desktop", "tablet", "mobile"] as const;
+export type Device = (typeof DEVICES)[number];
+
+/** Widest viewport each device stands for. Desktop has no ceiling. */
+export const DEVICE_MAX: Record<Device, number | null> = {
+  desktop: null,
+  tablet: 1023,
+  mobile: 767,
+};
+
+/** How wide the editor canvas renders each device. */
+export const DEVICE_CANVAS: Record<Device, number | null> = {
+  desktop: null,
+  tablet: 834,
+  mobile: 390,
+};
+
+/**
+ * What a device changes about a block, relative to the one above it.
+ *
+ * Desktop IS `style`; these are sparse patches on top, and sparse is the whole
+ * point. A tablet that stored a full copy of the style would go on rendering
+ * last week's colour after the desktop colour changed — the override has to
+ * remember only what someone actually set on that device.
+ *
+ * Mobile layers on tablet, not on desktop, matching the CSS the renderer emits:
+ * a narrower screen is also a tablet screen.
+ */
+export type ResponsiveStyle = {
+  tablet: Partial<BlockStyle>;
+  mobile: Partial<BlockStyle>;
 };
 
 export type Block = {
@@ -90,6 +133,8 @@ export type Block = {
   type: BlockType;
   props: Record<string, unknown>;
   style: BlockStyle;
+  /** Per-device overrides. Absent means the block looks the same everywhere. */
+  responsive?: ResponsiveStyle;
   /** Rows only: one array of blocks per column. */
   columns?: Block[][];
 };
@@ -135,6 +180,7 @@ export const baseStyle = (over: Partial<BlockStyle> = {}): BlockStyle => ({
   radius: 0,
   cssId: "",
   cssClass: "",
+  customCss: "",
   hideDesktop: false,
   hideTablet: false,
   hideMobile: false,
@@ -278,10 +324,84 @@ function normalizeStyle(v: unknown): BlockStyle {
     radius: num(v.radius, d.radius),
     cssId: str(v.cssId).trim(),
     cssClass: str(v.cssClass).trim(),
+    customCss: str(v.customCss),
     hideDesktop: v.hideDesktop === true,
     hideTablet: v.hideTablet === true,
     hideMobile: v.hideMobile === true,
   };
+}
+
+/** Every key of a style, so a sparse override can be checked against them. */
+export const STYLE_KEYS = Object.keys(baseStyle()) as (keyof BlockStyle)[];
+
+/**
+ * A device override: only the keys someone actually set, each validated.
+ *
+ * Runs the full-style normalizer over `{...desktop, ...patch}` and then keeps
+ * only the keys the patch mentioned. That way validation lives in one place —
+ * a second, looser normalizer for overrides is how a value that desktop would
+ * have rejected gets in through the tablet door.
+ */
+function normalizeOverride(v: unknown, desktop: BlockStyle): Partial<BlockStyle> {
+  if (!isRecord(v)) return {};
+  const keys = STYLE_KEYS.filter((k) => k in v);
+  if (keys.length === 0) return {};
+  const full = normalizeStyle({ ...desktop, ...v });
+  const out: Partial<BlockStyle> = {};
+  for (const k of keys) (out as Record<string, unknown>)[k] = full[k];
+  return out;
+}
+
+function normalizeResponsive(v: unknown, desktop: BlockStyle): ResponsiveStyle | undefined {
+  if (!isRecord(v)) return undefined;
+  const tablet = normalizeOverride(v.tablet, desktop);
+  const mobile = normalizeOverride(v.mobile, desktop);
+  // No override is stored as no key at all, so a block that was never touched
+  // on tablet does not carry an empty object into the database forever.
+  if (Object.keys(tablet).length === 0 && Object.keys(mobile).length === 0) return undefined;
+  return { tablet, mobile };
+}
+
+/** The style a block has at a given width, after the overrides are layered. */
+export function styleFor(block: Block, device: Device): BlockStyle {
+  const r = block.responsive;
+  if (!r || device === "desktop") return block.style;
+  const tablet = { ...block.style, ...r.tablet };
+  return device === "tablet" ? tablet : { ...tablet, ...r.mobile };
+}
+
+/** Whether this exact device sets this key itself, rather than inheriting it. */
+export function hasOverride(block: Block, device: Device, key: keyof BlockStyle): boolean {
+  if (device === "desktop") return false;
+  return !!block.responsive && key in block.responsive[device];
+}
+
+const emptyResponsive = (): ResponsiveStyle => ({ tablet: {}, mobile: {} });
+
+/** Write one or more style values at one device, leaving the others alone. */
+export function setStyleAt(block: Block, device: Device, patch: Partial<BlockStyle>): Block {
+  if (device === "desktop") return { ...block, style: { ...block.style, ...patch } };
+  const r = block.responsive ?? emptyResponsive();
+  return { ...block, responsive: { ...r, [device]: { ...r[device], ...patch } } };
+}
+
+/**
+ * Drop an override so the value falls back to the wider device again.
+ *
+ * The reason this exists as its own operation: setting tablet back to the
+ * desktop value LOOKS the same and is not — it pins the value, so the next
+ * desktop edit silently stops reaching tablet.
+ */
+export function clearStyleAt(block: Block, device: Device, key: keyof BlockStyle): Block {
+  if (device === "desktop" || !block.responsive) return block;
+  const next = { ...block.responsive[device] };
+  delete next[key];
+  const responsive = { ...block.responsive, [device]: next };
+  const bare = Object.keys(responsive.tablet).length === 0 && Object.keys(responsive.mobile).length === 0;
+  const out = { ...block };
+  if (bare) delete out.responsive;
+  else out.responsive = responsive;
+  return out;
 }
 
 /**
@@ -313,6 +433,8 @@ export function normalizeBlocks(value: unknown, depth = 0): Block[] {
       props: { ...DEFAULT_PROPS[t], ...(isRecord(raw.props) ? raw.props : {}) },
       style: normalizeStyle(raw.style),
     };
+    const responsive = normalizeResponsive(raw.responsive, block.style);
+    if (responsive) block.responsive = responsive;
     if (t === "row") {
       const structure = oneOf(
         block.props.structure,
@@ -455,6 +577,11 @@ function reid(b: Block): Block {
     id: newId(),
     props: { ...b.props },
     style: { ...b.style, margin: { ...b.style.margin }, padding: { ...b.style.padding }, background: { ...b.style.background } },
+    // A copy that shared its overrides would follow the original around: edit
+    // the duplicate on mobile and the block you copied it from changes too.
+    ...(b.responsive
+      ? { responsive: { tablet: { ...b.responsive.tablet }, mobile: { ...b.responsive.mobile } } }
+      : {}),
     ...(b.columns ? { columns: b.columns.map((col) => col.map(reid)) } : {}),
   };
 }

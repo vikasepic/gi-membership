@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getProductById } from "@/lib/admin";
-import { getPageSections } from "@/lib/pages";
+import { getPageSections, getPageSettings } from "@/lib/pages";
 import { PageEditor } from "@/components/admin/page-editor";
+import { PageSettings } from "@/components/admin/page-settings";
 import { money } from "@/lib/money";
 import { siteUrl } from "@/lib/env";
 import { CopyLink } from "@/components/admin/copy-link";
@@ -16,7 +17,10 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
   const product = await getProductById(id);
   if (!product) notFound();
 
-  const rows = await getPageSections("product", id);
+  const [rows, settings] = await Promise.all([
+    getPageSections("product", id),
+    getPageSettings("product", id),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -41,6 +45,13 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
         url={`${siteUrl()}/p/${product.slug}`}
         label="Public link"
         note="Live as soon as you save any section. Before that this address shows the short product page."
+      />
+
+      <PageSettings
+        ownerType="product"
+        ownerId={id}
+        customCss={settings.customCss}
+        customJs={settings.customJs}
       />
 
       <PageEditor

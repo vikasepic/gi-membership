@@ -1,5 +1,14 @@
-import { ROW_STRUCTURES, blockRendersNothing, type Block, type RowStructure } from "@/lib/blocks";
-import { blockColors, blockWrapperCss, hiddenClasses, softAccent, typographyCss } from "@/lib/block-style";
+import { ROW_STRUCTURES, blockRendersNothing, styleFor, type Block, type Device, type RowStructure } from "@/lib/blocks";
+import {
+  blockClass,
+  blockColors,
+  blockCssAt,
+  blockRules,
+  headingTag,
+  hiddenClasses,
+  softAccent,
+  typographyCss,
+} from "@/lib/block-style";
 import { imageSrc, type BandTheme } from "@/lib/page-sections";
 import { videoEmbed, type VideoSource } from "@/lib/video-embed";
 import { readableInk as readableOn } from "@/lib/color";
@@ -19,21 +28,6 @@ const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : 
 const num = (v: unknown, fallback: number): number =>
   typeof v === "number" && Number.isFinite(v) ? v : fallback;
 const bool = (v: unknown): boolean => v === true;
-
-const HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"] as const;
-type HeadingTag = (typeof HEADING_TAGS)[number];
-const headingTag = (v: unknown): HeadingTag =>
-  HEADING_TAGS.includes(v as HeadingTag) ? (v as HeadingTag) : "h2";
-
-/** Sizes for a heading level, used only when the block sets none of its own. */
-const HEADING_SIZE: Record<HeadingTag, string> = {
-  h1: "clamp(2.3rem,5.6vw,4.2rem)",
-  h2: "clamp(1.7rem,3.4vw,2.4rem)",
-  h3: "1.12rem",
-  h4: "1.02rem",
-  h5: "0.94rem",
-  h6: "0.84rem",
-};
 
 /**
  * What a price card is allowed to say.
@@ -64,15 +58,22 @@ export function Blocks({
   theme,
   money,
   cta,
+  at,
 }: {
   blocks: Block[];
   theme: BandTheme;
   money?: BlockMoney;
   cta?: CtaRender;
+  /**
+   * Render as this device would see it, rather than letting the viewport
+   * decide. For a preview pane narrower than the window, where the real media
+   * queries would not fire. Unset on the live page, which has a real viewport.
+   */
+  at?: Device;
 }) {
   const showing = blocks.filter((b) => !blockRendersNothing(b));
   if (showing.length === 0) return null;
-  return <div className="mt-7 flex flex-col">{flow(showing, theme, money, cta)}</div>;
+  return <div className="mt-7 flex flex-col">{flow(showing, theme, money, cta, at)}</div>;
 }
 
 /**
@@ -83,7 +84,7 @@ export function Blocks({
  * each is still selected, dragged and styled on its own; only the rendering
  * puts a run of them on one row.
  */
-function flow(blocks: Block[], theme: BandTheme, money?: BlockMoney, cta?: CtaRender): React.ReactNode[] {
+function flow(blocks: Block[], theme: BandTheme, money?: BlockMoney, cta?: CtaRender, at?: Device): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   for (let i = 0; i < blocks.length; ) {
     if (blocks[i].type === "button" && blocks[i + 1]?.type === "button") {
@@ -92,35 +93,61 @@ function flow(blocks: Block[], theme: BandTheme, money?: BlockMoney, cta?: CtaRe
       out.push(
         <div key={blocks[i].id} className="flex flex-wrap items-center gap-3">
           {blocks.slice(i, j).map((b) => (
-            <BlockNode key={b.id} block={b} theme={theme} money={money} cta={cta} />
+            <BlockNode key={b.id} block={b} theme={theme} money={money} cta={cta} at={at} />
           ))}
         </div>,
       );
       i = j;
     } else {
-      out.push(<BlockNode key={blocks[i].id} block={blocks[i]} theme={theme} money={money} cta={cta} />);
+      out.push(<BlockNode key={blocks[i].id} block={blocks[i]} theme={theme} money={money} cta={cta} at={at} />);
       i++;
     }
   }
   return out;
 }
 
-function BlockNode({ block, theme, money, cta }: { block: Block; theme: BandTheme; money?: BlockMoney; cta?: CtaRender }) {
+function BlockNode({
+  block,
+  theme,
+  money,
+  cta,
+  at,
+}: {
+  block: Block;
+  theme: BandTheme;
+  money?: BlockMoney;
+  cta?: CtaRender;
+  at?: Device;
+}) {
   // An unfilled block would otherwise emit a wrapper carrying its padding and
   // margin — a gap on the page that nobody placed.
   if (blockRendersNothing(block)) return null;
-  const s = block.style;
-  const wrapper = blockWrapperCss(block, theme);
-  const hidden = hiddenClasses(s);
+  const s = styleFor(block, at ?? "desktop");
+  // On a real viewport the look is emitted as rules, not a style attribute: a
+  // media query cannot live in an attribute, and an attribute would outrank the
+  // media query anyway. Pinned to a device, it is the attribute — see `at`.
+  const rules = at ? "" : blockRules(block, theme);
   return (
-    <div
-      id={s.cssId || undefined}
-      className={[hidden, s.cssClass].filter(Boolean).join(" ") || undefined}
-      style={wrapper}
-    >
-      <Inner block={block} theme={theme} money={money} cta={cta} />
-    </div>
+    <>
+      {rules && <style dangerouslySetInnerHTML={{ __html: rules }} />}
+      <div
+        id={s.cssId || undefined}
+        className={[at ? "" : blockClass(block), at ? "" : hiddenClasses(block), s.cssClass]
+          .filter(Boolean)
+          .join(" ")}
+        style={at ? blockCssAt(block, theme, at) : undefined}
+        hidden={at ? hiddenAt(block, at) : undefined}
+      >
+        <Inner block={block} theme={theme} money={money} cta={cta} at={at} />
+      </div>
+    </>
   );
+}
+
+/** Whether this block is switched off at the width being previewed. */
+function hiddenAt(block: Block, at: Device): boolean {
+  const s = styleFor(block, at);
+  return at === "mobile" ? s.hideMobile : at === "tablet" ? s.hideTablet : s.hideDesktop;
 }
 
 /**
@@ -131,27 +158,36 @@ function BlockNode({ block, theme, money, cta }: { block: Block; theme: BandThem
  * chrome and drop zones, but what is inside is this — one implementation, so a
  * preview cannot drift from the page a buyer gets.
  */
-export function BlockBody({ block, theme }: { block: Block; theme: BandTheme }) {
-  return <Inner block={block} theme={theme} />;
+export function BlockBody({ block, theme, at }: { block: Block; theme: BandTheme; at?: Device }) {
+  return <Inner block={block} theme={theme} at={at} />;
 }
 
-function Inner({ block, theme, money, cta }: { block: Block; theme: BandTheme; money?: BlockMoney; cta?: CtaRender }) {
-  const s = block.style;
+function Inner({
+  block,
+  theme,
+  money,
+  cta,
+  at,
+}: {
+  block: Block;
+  theme: BandTheme;
+  money?: BlockMoney;
+  cta?: CtaRender;
+  at?: Device;
+}) {
+  const s = styleFor(block, at ?? "desktop");
   const p = block.props;
-  const c = blockColors(block, theme);
+  const c = blockColors(block, theme, s);
   const type = typographyCss(s);
 
   switch (block.type) {
     case "heading": {
       const Tag = headingTag(p.tag);
       return (
-        <Tag
-          className="font-display font-semibold leading-[1.15] tracking-[-0.015em] text-balance"
-          // A size the block did not set falls back to the tag's own scale, so
-          // changing h2 to h3 changes the look. In the prototype the size was
-          // hard-set, which is why the tag control appeared to do nothing.
-          style={{ color: c.fg, fontSize: HEADING_SIZE[Tag], ...type }}
-        >
+        // Size, weight, line height, tracking and colour all arrive from the
+        // block's own rule — including the per-tag default — so that a value
+        // set on mobile is not outranked by a utility class here.
+        <Tag className="font-display text-balance">
           {str(p.text)}
         </Tag>
       );
@@ -160,8 +196,7 @@ function Inner({ block, theme, money, cta }: { block: Block; theme: BandTheme; m
     case "text":
       return (
         <div
-          className="leading-relaxed [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_h3]:mb-1 [&_h3]:mt-4 [&_h3]:font-display [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-6"
-          style={{ color: c.fg, ...type }}
+          className="[&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_h3]:mb-1 [&_h3]:mt-4 [&_h3]:font-display [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-6"
           dangerouslySetInnerHTML={{ __html: str(p.html) }}
         />
       );

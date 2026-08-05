@@ -5,7 +5,7 @@ import { ownedProductIdsForViewer, accessHrefForProduct } from "@/lib/library";
 import { productDisplay, type CourseType } from "@/lib/courses";
 import { publicCoverUrl } from "@/lib/media";
 import { money } from "@/lib/money";
-import { hasPageSections, getPageSections } from "@/lib/pages";
+import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
 import { SalesPage } from "@/components/page/sales-page";
 
 const TYPE_LABEL: Record<CourseType, string> = {
@@ -40,7 +40,10 @@ export default async function ProductPage({
   // to be looking — whoever just wrote the page and owns a copy — was the one
   // who never saw it. Owning it changes the button, not the page.
   if (await hasPageSections("product", product.id)) {
-    const rows = await getPageSections("product", product.id);
+    const [rows, settings] = await Promise.all([
+      getPageSections("product", product.id),
+      getPageSettings("product", product.id),
+    ]);
     return (
       // Full-bleed: the bands run edge to edge, which the padded store shell
       // would otherwise inset. -mx cancels the shell's own gutter.
@@ -52,6 +55,7 @@ export default async function ProductPage({
       <div className="mx-[calc(50%-50vw)] w-screen overflow-x-clip">
         <SalesPage
           rows={rows}
+          settings={settings}
           money={{ priceLabel: money(product.priceCents, product.currency), termsLabel: null }}
           cta={(label) => (
             <Link

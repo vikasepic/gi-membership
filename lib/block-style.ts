@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { readableInk, tint } from "@/lib/color";
 import type { BandTheme } from "@/lib/page-sections";
-import type { Background, Block, BlockStyle, Dim } from "@/lib/blocks";
+import { DEVICE_MAX, styleFor, type Background, type Block, type BlockStyle, type Device, type Dim } from "@/lib/blocks";
 
 // Turning a block's stored style into CSS.
 //
@@ -74,8 +74,8 @@ export type BlockColors = {
 export const hexOrNull = (v: unknown): string | null =>
   typeof v === "string" && /^#[0-9a-f]{3,8}$/i.test(v.trim()) ? v.trim() : null;
 
-export function blockColors(block: Block, theme: BandTheme): BlockColors {
-  const s = block.style;
+export function blockColors(block: Block, theme: BandTheme, at: BlockStyle = block.style): BlockColors {
+  const s = at;
   switch (block.type) {
     case "button": {
       const fill = s.background.color ?? theme.accent;
@@ -140,7 +140,10 @@ export function typographyCss(s: BlockStyle): CSSProperties {
 
 /** The wrapper style: box model, alignment, background, corner. */
 export function blockWrapperCss(block: Block, theme: BandTheme): CSSProperties {
-  const s = block.style;
+  return wrapperCssFrom(block, block.style, theme);
+}
+
+function wrapperCssFrom(block: Block, s: BlockStyle, theme: BandTheme): CSSProperties {
   const css: CSSProperties = {
     margin: dimCss(s.margin),
     padding: dimCss(s.padding),
@@ -167,14 +170,181 @@ export function blockWrapperCss(block: Block, theme: BandTheme): CSSProperties {
  * expressed in a style attribute, and this is the one part of a block's look
  * that depends on the viewport rather than on the band.
  */
-export function hiddenClasses(s: BlockStyle): string {
+export function hiddenClasses(block: Block): string {
+  // Each flag is read at its own device, so switching to Mobile and unticking
+  // "show this block" hides it on the phone — the device you were looking at —
+  // rather than wherever the desktop copy of the flag happened to point.
   return [
-    s.hideMobile ? "max-md:hidden" : "",
-    s.hideTablet ? "max-lg:md:hidden" : "",
-    s.hideDesktop ? "lg:hidden" : "",
+    styleFor(block, "mobile").hideMobile ? "max-md:hidden" : "",
+    styleFor(block, "tablet").hideTablet ? "max-lg:md:hidden" : "",
+    block.style.hideDesktop ? "lg:hidden" : "",
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+// ---------------------------------------------------------------------------
+// Per-device CSS
+// ---------------------------------------------------------------------------
+
+/**
+ * The class the emitted rules hang off. Derived from the block id so it is
+ * stable across renders and unique on the page without a counter.
+ */
+export const blockClass = (block: Block) => `bk-${block.id.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+
+/** camelCase React property -> the CSS property it stands for. */
+function cssProp(key: string): string {
+  return key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+}
+
+/**
+ * Declarations as CSS text.
+ *
+ * Numbers are left bare. Every length in this file is already a string with a
+ * unit; the only bare numbers are line-height and font-weight, which are
+ * unitless by definition — so appending "px" here would be wrong every time.
+ */
+function declarations(css: CSSProperties): string {
+  return Object.entries(css)
+    .filter(([, v]) => v !== undefined && v !== null && v !== "")
+    // Semicolons and braces would end the declaration and open a new rule. The
+    // values reaching here are validated, but this is the boundary where a
+    // string becomes a stylesheet, so it is checked at the boundary.
+    .map(([k, v]) => `${cssProp(k)}:${String(v).replace(/[;{}]/g, "")}`)
+    .join(";");
+}
+
+const HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"] as const;
+export type HeadingTag = (typeof HEADING_TAGS)[number];
+export const headingTag = (v: unknown): HeadingTag =>
+  HEADING_TAGS.includes(v as HeadingTag) ? (v as HeadingTag) : "h2";
+
+/** Sizes for a heading level, used only when the block sets none of its own. */
+export const HEADING_SIZE: Record<HeadingTag, string> = {
+  h1: "clamp(2.3rem,5.6vw,4.2rem)",
+  h2: "clamp(1.7rem,3.4vw,2.4rem)",
+  h3: "1.12rem",
+  h4: "1.02rem",
+  h5: "0.94rem",
+  h6: "0.84rem",
+};
+
+/**
+ * What a block type looks like before anyone styles it.
+ *
+ * These used to be Tailwind classes on the element itself, which was fine while
+ * the user's own values were inline — an attribute beats a class. Now that the
+ * user's values are rules too, a class would beat them: `leading-[1.15]` on the
+ * heading would quietly win over a line height set on mobile. So the defaults
+ * are declarations in the same rule, ahead of the user's, where the cascade
+ * settles it correctly.
+ */
+function typeDefaultCss(block: Block): CSSProperties {
+  switch (block.type) {
+    case "heading":
+      return {
+        fontSize: HEADING_SIZE[headingTag(block.props.tag)],
+        fontWeight: 600,
+        lineHeight: 1.15,
+        letterSpacing: "-0.015em",
+      };
+    case "text":
+      return { lineHeight: 1.625 };
+    default:
+      return {};
+  }
+}
+
+/**
+ * Everything a block's look is, at one device, as a style object.
+ *
+ * The live page turns this into rules so media queries can carry it. An editor
+ * canvas has to apply it directly — it is 390px wide inside a 1900px window, so
+ * a `max-width: 767px` query would not match and the phone view would silently
+ * show the desktop styling.
+ */
+export function blockCssAt(block: Block, theme: BandTheme, device: Device = "desktop"): CSSProperties {
+  return deviceCss(block, theme, styleFor(block, device));
+}
+
+/** The style a block has at a device, ready to be written as a rule. */
+function deviceCss(block: Block, theme: BandTheme, s: BlockStyle): CSSProperties {
+  return {
+    ...wrapperCssFrom(block, s, theme),
+    ...typeDefaultCss(block),
+    ...typographyCss(s),
+    color: blockColors(block, theme, s).fg,
+  };
+}
+
+/**
+ * Everything a block's look needs, as one stylesheet.
+ *
+ * Emitted as rules rather than a `style` attribute because that is the only
+ * form a media query can take — and because rules lose to a `style` attribute,
+ * mixing the two would mean every responsive value fighting its own desktop
+ * value with `!important`.
+ *
+ * Tablet is written before mobile so a phone gets both: an override set on
+ * tablet and not on mobile applies at 390px too, which is what "mobile
+ * inherits tablet" means once it is CSS.
+ */
+export function blockRules(block: Block, theme: BandTheme): string {
+  const sel = `.${blockClass(block)}`;
+  const out: string[] = [];
+  const desktop = declarations(deviceCss(block, theme, block.style));
+  if (desktop) out.push(`${sel}{${desktop}}`);
+
+  const r = block.responsive;
+  if (r) {
+    for (const device of ["tablet", "mobile"] as const) {
+      if (Object.keys(r[device]).length === 0) continue;
+      const s = styleFor(block, device);
+      // Only the properties this device actually changes. Re-stating the whole
+      // style would bake the desktop values into the media query, and the next
+      // desktop edit would stop reaching the phone.
+      const full = deviceCss(block, theme, s);
+      const base = deviceCss(block, theme, styleFor(block, device === "mobile" ? "tablet" : "desktop"));
+      const diff: CSSProperties = {};
+      for (const [k, v] of Object.entries(full)) {
+        if (v !== base[k as keyof CSSProperties]) (diff as Record<string, unknown>)[k] = v;
+      }
+      // A property the wider device sets and this one does not must be undone,
+      // not left standing — "no padding on mobile" is a real thing to say.
+      for (const k of Object.keys(base)) {
+        if (!(k in full)) (diff as Record<string, unknown>)[k] = "revert";
+      }
+      const decls = declarations(diff);
+      if (decls) out.push(`@media (max-width:${DEVICE_MAX[device]}px){${sel}{${decls}}}`);
+    }
+  }
+
+  const custom = customCss(block.style.customCss, sel);
+  if (custom) out.push(custom);
+  return out.join("");
+}
+
+/**
+ * Hand-written CSS, kept inside the thing it was written for.
+ *
+ * `selector` stands for the block, the way Elementor's does. Bare declarations
+ * — no braces at all — are wrapped in it, because "font-size: 20px" is what
+ * most people type first and it should mean what it looks like it means.
+ *
+ * The scoping is not a security boundary; the author is an admin who could
+ * write the same rule at page level. It is there so a stray selector cannot
+ * repaint the rest of the page from inside one block, which is a debugging
+ * nightmare rather than an attack.
+ */
+export function customCss(code: string, selector: string): string {
+  const src = code.trim();
+  if (!src) return "";
+  // A closing brace inside a value would end the rule early and let whatever
+  // follows apply to the whole page.
+  const safe = src.includes("</") ? src.replace(/<\//g, "") : src;
+  if (!safe.includes("{")) return `${selector}{${safe.replace(/[{}]/g, "")}}`;
+  return safe.replace(/\bselector\b/g, selector);
 }
 
 /** A tinted version of the band accent, for soft fills inside a block. */

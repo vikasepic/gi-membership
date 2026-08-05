@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
-import { saveSection, seedPage, type OwnerType } from "@/lib/pages";
+import { savePageSettings, saveSection, seedPage, type OwnerType } from "@/lib/pages";
 import { sectionDef } from "@/lib/page-sections";
 import { uploadPageImage, validateUpload } from "@/lib/media";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
@@ -91,5 +91,37 @@ export async function uploadSectionImageAction(formData: FormData): Promise<Imag
     return { ok: true, path: await uploadPageImage(owner, ownerId, file) };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Upload failed." };
+  }
+}
+
+export type PageSettingsState = { error?: string; saved?: boolean };
+
+/**
+ * Save a page's custom CSS and JS.
+ *
+ * Its own action rather than part of saveSectionAction: page-level code is not
+ * a section, and folding it in would mean every section save rewriting the
+ * script that runs on a page that takes payment.
+ */
+export async function savePageSettingsAction(
+  _prev: PageSettingsState,
+  formData: FormData,
+): Promise<PageSettingsState> {
+  await requireAdmin();
+
+  const owner = String(formData.get("ownerType") ?? "") as OwnerType;
+  const ownerId = String(formData.get("ownerId") ?? "");
+  if (owner !== "product" && owner !== "offer") return { error: "Bad owner." };
+  if (!ownerId) return { error: "Unknown page." };
+
+  try {
+    await savePageSettings(owner, ownerId, {
+      customCss: String(formData.get("customCss") ?? ""),
+      customJs: String(formData.get("customJs") ?? ""),
+    });
+    revalidatePath(`/admin/${owner === "product" ? "products" : "offers"}/${ownerId}/page-editor`);
+    return { saved: true };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not save." };
   }
 }

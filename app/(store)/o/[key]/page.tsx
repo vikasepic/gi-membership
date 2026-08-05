@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getOfferByKey } from "@/lib/store";
 import { ownershipFor } from "@/lib/checkout";
 import { isOfferEligible } from "@/lib/offers";
-import { hasPageSections, getPageSections } from "@/lib/pages";
+import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
 import { SalesPage } from "@/components/page/sales-page";
 import { money } from "@/lib/money";
 import { buildBumpView } from "@/lib/bump";
@@ -25,7 +25,10 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
   if (!offer || !offer.active) notFound();
   if (!(await hasPageSections("offer", offer.id))) notFound();
 
-  const rows = await getPageSections("offer", offer.id);
+  const [rows, settings] = await Promise.all([
+    getPageSections("offer", offer.id),
+    getPageSettings("offer", offer.id),
+  ]);
   const view = buildBumpView(offer);
 
   // Someone who already has it gets the truth rather than a buy button they
@@ -44,6 +47,7 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
     <div className="mx-[calc(50%-50vw)] w-screen overflow-x-clip">
       <SalesPage
         rows={rows}
+        settings={settings}
         money={{
           // The headline price, not the charge today. During a trial those
           // differ, and the card says "After the trial" above it.

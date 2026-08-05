@@ -182,12 +182,13 @@ describe("blockWrapperCss", () => {
 
 describe("hiddenClasses", () => {
   it("is empty when the block shows everywhere", () => {
-    expect(hiddenClasses(newBlock("text").style)).toBe("");
+    expect(hiddenClasses(newBlock("text"))).toBe("");
   });
 
   it("emits a class per hidden breakpoint", () => {
-    const s = { ...newBlock("text").style, hideMobile: true, hideDesktop: true };
-    expect(hiddenClasses(s).split(" ").sort()).toEqual(["lg:hidden", "max-md:hidden"]);
+    const b = newBlock("text");
+    const hidden = { ...b, style: { ...b.style, hideMobile: true, hideDesktop: true } };
+    expect(hiddenClasses(hidden).split(" ").sort()).toEqual(["lg:hidden", "max-md:hidden"]);
   });
 });
 

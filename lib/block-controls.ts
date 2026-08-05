@@ -1,4 +1,14 @@
-import { BLOCK_TYPES, ROW_STRUCTURES, type Block, type BlockType } from "@/lib/blocks";
+import {
+  BLOCK_TYPES,
+  ROW_STRUCTURES,
+  clearStyleAt,
+  setStyleAt,
+  styleFor,
+  type Block,
+  type BlockStyle,
+  type BlockType,
+  type Device,
+} from "@/lib/blocks";
 
 // What the inspector shows for each block.
 //
@@ -374,6 +384,16 @@ export const ADVANCED_CONTROLS: Control[] = [
   group("Attributes"),
   style({ kind: "text", key: "cssId", label: "CSS id", placeholder: "pricing" }),
   style({ kind: "text", key: "cssClass", label: "CSS class", placeholder: "promo highlight" }),
+
+  group("Custom CSS"),
+  style({
+    kind: "textarea",
+    key: "customCss",
+    label: "CSS",
+    rows: 6,
+    mono: true,
+    hint: "`selector` = this block",
+  }),
 ];
 
 /** The three tabs for one block, with controls that do not apply left out. */
@@ -388,9 +408,12 @@ export function controlsFor(block: Block): { content: Control[]; style: Control[
 }
 
 /** Read a control's current value, following a dotted key such as background.color. */
-export function readControl(block: Block, c: Control): unknown {
+export function readControl(block: Block, c: Control, device: Device = "desktop"): unknown {
   if (isGroup(c)) return undefined;
-  const root: Record<string, unknown> = scopeOf(c) === "style" ? (block.style as unknown as Record<string, unknown>) : block.props;
+  const root: Record<string, unknown> =
+    scopeOf(c) === "style"
+      ? (styleFor(block, device) as unknown as Record<string, unknown>)
+      : block.props;
   return c.key.split(".").reduce<unknown>((acc, part) => {
     if (acc === null || acc === undefined || typeof acc !== "object") return undefined;
     return (acc as Record<string, unknown>)[part];
@@ -403,15 +426,30 @@ export function readControl(block: Block, c: Control): unknown {
  * Immutable all the way down the dotted path, because the editor holds this in
  * React state — writing through the path in place would not re-render.
  */
-export function writeControl(block: Block, c: Control, value: unknown): Block {
+export function writeControl(block: Block, c: Control, value: unknown, device: Device = "desktop"): Block {
   if (isGroup(c)) return block;
   const path = c.key.split(".");
-  const scope = scopeOf(c);
-  const root = scope === "style" ? (block.style as unknown as Record<string, unknown>) : block.props;
-  const next = setIn(root, path, value);
-  return scope === "style"
-    ? { ...block, style: next as unknown as Block["style"] }
-    : { ...block, props: next };
+  if (scopeOf(c) !== "style") return { ...block, props: setIn(block.props, path, value) };
+
+  // Style controls write at the device being edited. A dotted key still lands
+  // as one top-level override — `background.color` on mobile stores the whole
+  // background, because a Partial<BlockStyle> has no room for half of one, and
+  // half a background is not a thing CSS can express either.
+  const at = styleFor(block, device) as unknown as Record<string, unknown>;
+  const next = setIn(at, path, value) as unknown as BlockStyle;
+  const key = path[0] as keyof BlockStyle;
+  return setStyleAt(block, device, { [key]: next[key] } as Partial<BlockStyle>);
+}
+
+/**
+ * Give a control back to the wider device.
+ *
+ * Only meaningful on a style control away from desktop — everything else has
+ * nowhere to fall back to.
+ */
+export function clearControl(block: Block, c: Control, device: Device): Block {
+  if (isGroup(c) || scopeOf(c) !== "style" || device === "desktop") return block;
+  return clearStyleAt(block, device, c.key.split(".")[0] as keyof BlockStyle);
 }
 
 function setIn(obj: Record<string, unknown>, path: string[], value: unknown): Record<string, unknown> {
