@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import type { CourseItem, CurriculumNode } from "@/lib/curriculum";
@@ -42,12 +42,23 @@ const REAL: CurriculumNode[] = [
   chapter({ id: "c3", title: "New Chapter", isPublished: false, children: [] }),
 ];
 
+// Torn down after every test. A root left mounted keeps React scheduling, and
+// work that lands after the environment is gone throws on `window`.
+let mounted: { unmount: () => void } | null = null;
+afterEach(() => {
+  const root = mounted;
+  mounted = null;
+  if (root) act(() => root.unmount());
+});
+
 function mount(nodes: CurriculumNode[]) {
   document.body.innerHTML = "";
   const host = document.createElement("div");
   document.body.appendChild(host);
+  const root = createRoot(host);
+  mounted = root;
   act(() => {
-    createRoot(host).render(
+    root.render(
       <Curriculum courseId="course-1" nodes={nodes} chapterLabel="Chapter" lessonLabel="Lesson" />,
     );
   });

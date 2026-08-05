@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { BlockEditor } from "@/components/admin/block-editor";
@@ -8,10 +8,20 @@ import { newBlock, type Block } from "@/lib/blocks";
 
 const theme = bandTheme("navy");
 
+// See curriculum.test.tsx: an unmounted root keeps React scheduling past the
+// end of the file, and the environment is not there when it runs.
+let mounted: { unmount: () => void } | null = null;
+afterEach(() => {
+  const root = mounted;
+  mounted = null;
+  if (root) act(() => root.unmount());
+});
+
 function mount(initial: Block[]) {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
+  mounted = root;
   let blocks = initial;
   const render = () =>
     act(() => {
