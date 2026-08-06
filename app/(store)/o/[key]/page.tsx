@@ -7,6 +7,7 @@ import { isOfferEligible } from "@/lib/offers";
 import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
 import { SalesPage } from "@/components/page/sales-page";
 import { money } from "@/lib/money";
+import { TrackView } from "@/components/track-view";
 import { buildBumpView } from "@/lib/bump";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { altSaving } from "@/lib/offers";
@@ -57,6 +58,11 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
     // rather than as a page. overflow-x-clip guards the scrollbar gap that
     // 100vw leaves behind.
     <div className="mx-[calc(50%-50vw)] w-screen overflow-x-clip">
+      <TrackView
+        event="ViewContent"
+        stableKey={offer.key}
+        params={{ content_ids: [offer.key], content_type: "product", content_name: offer.name }}
+      />
       <SalesPage
         rows={rows}
         settings={settings}

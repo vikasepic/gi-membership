@@ -71,3 +71,22 @@ export function otoSigningSecret(): string {
 export function siteUrl(): string {
   return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://grow.greaterinside.com").replace(/\/$/, "");
 }
+
+/**
+ * Ad-platform ids that reach the BROWSER.
+ *
+ * Public by nature — a pixel id is visible in the page source of every site
+ * that uses one. The secrets that go with them (the CAPI token, the GA4 API
+ * secret) are read server-side only and never appear here.
+ */
+export function publicAnalyticsIds() {
+  return {
+    metaPixelId: process.env.NEXT_PUBLIC_META_PIXEL_ID || null,
+    ga4MeasurementId: process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID || null,
+    googleAdsId: process.env.NEXT_PUBLIC_GOOGLE_ADS_ID || null,
+  };
+}
+
+/** The Google Ads conversion action for a purchase, e.g. "AW-123/AbCdEf". */
+export const googleAdsPurchaseLabel = () =>
+  process.env.NEXT_PUBLIC_GOOGLE_ADS_PURCHASE_LABEL || null;

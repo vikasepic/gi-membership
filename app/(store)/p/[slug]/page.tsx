@@ -5,6 +5,7 @@ import { ownedProductIdsForViewer, accessHrefForProduct } from "@/lib/library";
 import { productDisplay, type CourseType } from "@/lib/courses";
 import { publicCoverUrl } from "@/lib/media";
 import { money } from "@/lib/money";
+import { TrackView } from "@/components/track-view";
 import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
 import { SalesPage } from "@/components/page/sales-page";
 
@@ -53,6 +54,11 @@ export default async function ProductPage({
       // rather than as a page. overflow-x-clip guards the scrollbar gap that
       // 100vw leaves behind.
       <div className="mx-[calc(50%-50vw)] w-screen overflow-x-clip">
+        <TrackView
+          event="ViewContent"
+          stableKey={product.slug}
+          params={{ content_ids: [product.slug], content_type: "product", content_name: product.title }}
+        />
         <SalesPage
           rows={rows}
           settings={settings}

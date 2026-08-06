@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { confirmCheckout } from "@/app/(store)/checkout/actions";
+import { TrackPurchase } from "@/components/track-purchase";
+import { purchaseForTracking } from "@/lib/tracking-receipt";
+import { googleAdsPurchaseLabel } from "@/lib/env";
 import { NOINDEX } from "@/lib/seo";
 
 export const metadata = NOINDEX;
@@ -55,6 +58,14 @@ export default async function ThankYouPage({
     await confirmCheckout(payment_intent);
   }
 
+  // What was actually bought, read back rather than passed through the URL:
+  // a value in a query string is a value a buyer can edit, and an edited one
+  // would land in Meta as real revenue.
+  const receipt =
+    payment_intent && redirect_status === "succeeded"
+      ? await purchaseForTracking(payment_intent)
+      : null;
+
   // Arriving with an oto result means the purchase already completed on the
   // previous page — the upsell is only ever reached after a successful payment.
   const paid = redirect_status === "succeeded" || Boolean(oto);
@@ -66,6 +77,16 @@ export default async function ThankYouPage({
 
   return (
     <div className="mx-auto flex max-w-lg flex-col items-center gap-6 py-16 text-center">
+      {receipt && (
+        <TrackPurchase
+          orderId={receipt.orderId}
+          valueCents={receipt.valueCents}
+          currency={receipt.currency}
+          trialCents={receipt.trialCents}
+          email={receipt.email}
+          adsLabel={googleAdsPurchaseLabel()}
+        />
+      )}
       {paid ? (
         <>
           <h1 className="text-3xl">You&rsquo;re in.</h1>

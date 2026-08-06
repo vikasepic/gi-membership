@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { startCheckout, previewCoupon, captureAbandonedCart } from "@/app/(store)/checkout/actions";
 import { OrderBump } from "@/components/checkout/order-bump";
+import { track } from "@/components/analytics";
+import { eventIdFor } from "@/lib/analytics/events";
 import { bumpNeedsAnswer, type BumpChoice } from "@/lib/bump";
 import type { BumpView } from "@/lib/bump";
 
@@ -124,6 +126,24 @@ function Inner({
   // Which address we have already reported, so re-focusing the field or
   // tabbing back through the form does not fire again for the same person.
   const capturedEmail = useRef<string | null>(null);
+  const startedCheckout = useRef(false);
+
+  // The moment the checkout is on screen with a price on it. Once per mount:
+  // a re-render that reported again would halve every conversion rate built
+  // on top of it.
+  useEffect(() => {
+    if (startedCheckout.current) return;
+    startedCheckout.current = true;
+    track(
+      "InitiateCheckout",
+      {
+        value: product.priceCents / 100,
+        currency: product.currency.toUpperCase(),
+        content_ids: [product.slug],
+      },
+      eventIdFor("InitiateCheckout"),
+    );
+  }, [product.slug, product.priceCents, product.currency]);
   const [emailHint, setEmailHint] = useState<string | null>(null);
 
   function captureEmail() {
@@ -131,6 +151,9 @@ function Inner({
     setEmailHint(suggestEmail(value));
     if (!value || !value.includes("@") || capturedEmail.current === value) return;
     capturedEmail.current = value;
+    // An address on a checkout is a lead whether or not they go on to buy —
+    // and it is the last thing many of them do.
+    track("Lead", { content_ids: [product.slug] }, eventIdFor("Lead", value));
     // Not awaited: this only buffers the address for an abandoned-cart email.
     // The buyer must never wait on it or see it fail.
     void captureAbandonedCart(product.slug, value, fullName.trim() || undefined);
@@ -173,6 +196,13 @@ function Inner({
       return;
     }
     if (!stripe || !elements) return;
+    // They have a card in the form and have pressed pay. Reported before the
+    // charge, because this is the step Meta optimises on — not the outcome.
+    track(
+      "AddPaymentInfo",
+      { value: totalNow / 100, currency: product.currency.toUpperCase() },
+      eventIdFor("AddPaymentInfo"),
+    );
     setBusy(true);
 
     const { error: submitError } = await elements.submit();

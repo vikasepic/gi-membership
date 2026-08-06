@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { pushOwnershipStateToApps } from "@/lib/app-sync";
 import { sendCrmEvent } from "@/lib/crm";
 import { stripe } from "@/lib/stripe";
+import { reportTrialConverted } from "@/lib/tracking-receipt";
 import { tagLifecycle, untagRevoked } from "@/lib/ac-tags";
 
 // Subscription lifecycle -> ownership state. This is what keeps a cancelled or
@@ -88,6 +89,21 @@ export async function syncSubscriptionOwnership(
     }
   } catch (e) {
     console.error("[syncSubscriptionOwnership] lifecycle tags failed:", e);
+  }
+
+  // A trial converting is the event that says the acquisition was worth
+  // anything. Nobody is present for it — it happens seven days later from a
+  // Stripe webhook — so it is the clearest case for server-side tracking, and
+  // without it Meta optimises for people who collect free trials.
+  if (status === "active") {
+    for (const row of changed) {
+      if (row.status !== "trialing") continue;
+      try {
+        await reportTrialConverted(stripeSubscriptionId, row.user_id as string);
+      } catch (e) {
+        console.error("[syncSubscriptionOwnership] conversion tracking failed:", e);
+      }
+    }
   }
 
   const crmType =

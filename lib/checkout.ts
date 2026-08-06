@@ -7,7 +7,9 @@ import type { BumpChoice } from "@/lib/bump";
 import { offerAsSoldTo, recordTrialStart } from "@/lib/trial-history";
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
 import { notifyAppEntitlement } from "@/lib/apps";
-import { trackPurchase } from "@/lib/tracking";
+import { trackPurchase, trackServerEvent } from "@/lib/tracking";
+import { eventIdFor } from "@/lib/analytics/events";
+import { trialWorthFor } from "@/lib/tracking-receipt";
 import { sendEmail, buildWelcomeEmail, buildReceiptEmail } from "@/lib/email";
 import {
   TAX_ENABLED,
@@ -686,7 +688,7 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
       ? await db.from("visitors").select("click_ids").eq("id", order.visitor_id).maybeSingle()
       : { data: null };
     await trackPurchase({
-      eventId: paymentIntentId,
+      eventId: eventIdFor("Purchase", order.id as string),
       eventName: "Purchase",
       email: order.email as string,
       valueCents: pi.amount,
@@ -695,6 +697,24 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
       clickIds: (visitor?.click_ids as Record<string, string>) ?? {},
       occurredAt: Math.floor(Date.now() / 1000),
     });
+
+    // A trial started on this order. Reported as its own event with the
+    // recurring price as its worth: the $0 taken today would tell Meta the
+    // trial was worthless, and counting the price as revenue would say money
+    // moved when none did.
+    const trialCents = await trialWorthFor(order.id as string);
+    if (trialCents > 0) {
+      await trackServerEvent({
+        eventId: eventIdFor("StartTrial", order.id as string),
+        eventName: "StartTrial",
+        email: order.email as string,
+        valueCents: trialCents,
+        currency: pi.currency,
+        orderId: order.id as string,
+        clickIds: (visitor?.click_ids as Record<string, string>) ?? {},
+        occurredAt: Math.floor(Date.now() / 1000),
+      });
+    }
   } catch (e) {
     console.error("[finalizeOrder] tracking failed (order is still complete):", e);
   }

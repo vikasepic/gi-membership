@@ -1,5 +1,6 @@
 import "server-only";
 import { createHash } from "node:crypto";
+import { GA4_NAME, NO_VALUE, type EventName } from "@/lib/analytics/events";
 
 // Server-side ad tracking. Events are sent from the server (not the browser) so
 // ad blockers and ITP cannot silence conversions, and so the day-7 trial
@@ -11,7 +12,7 @@ import { createHash } from "node:crypto";
 
 export type PurchaseEvent = {
   eventId: string; // shared with the browser pixel for deduplication
-  eventName: "Purchase" | "StartTrial" | "Subscribe";
+  eventName: EventName;
   email: string;
   valueCents: number;
   currency: string;
@@ -60,26 +61,34 @@ export function buildMetaEvent(e: PurchaseEvent) {
           client_ip_address: e.clientIp,
           client_user_agent: e.userAgent,
         },
-        custom_data: {
-          value: major(e.valueCents),
-          currency: e.currency.toUpperCase(),
-          order_id: e.orderId,
-        },
+        // A value on an event that has none invents revenue, and invented
+        // revenue is what an algorithm then optimises towards.
+        custom_data: NO_VALUE.includes(e.eventName)
+          ? { order_id: e.orderId }
+          : {
+              value: major(e.valueCents),
+              currency: e.currency.toUpperCase(),
+              order_id: e.orderId,
+            },
       },
     ],
   };
 }
 
 export function buildGa4Event(e: PurchaseEvent) {
+  const money = NO_VALUE.includes(e.eventName)
+    ? {}
+    : { value: major(e.valueCents), currency: e.currency.toUpperCase() };
   return {
     client_id: e.orderId, // no browser client id server-side; order id is stable
     events: [
       {
-        name: "purchase",
+        // GA4's own vocabulary. A custom event named after Meta's would sit in
+        // its reports as a stranger none of the built-in funnels understand.
+        name: GA4_NAME[e.eventName],
         params: {
           transaction_id: e.orderId, // GA4 dedupes replays on this
-          value: major(e.valueCents),
-          currency: e.currency.toUpperCase(),
+          ...money,
         },
       },
     ],
@@ -97,6 +106,17 @@ function trackingEnv(): TrackingEnv {
 
 // Fire-and-forget. A tracking failure must NEVER surface to the buyer or roll
 // back a purchase, so every error is swallowed after being logged server-side.
+/**
+ * Any event, from the server.
+ *
+ * trackPurchase was this function under a narrower name. Everything it does —
+ * hashing, click ids, dedup — applies to every event, and having a second
+ * function for the rest is how half of them end up not sending click ids.
+ */
+export async function trackServerEvent(e: PurchaseEvent): Promise<void> {
+  return trackPurchase(e);
+}
+
 export async function trackPurchase(e: PurchaseEvent): Promise<void> {
   const env = trackingEnv();
   const providers = enabledProviders(env);
