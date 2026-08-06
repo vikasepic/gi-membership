@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { saveSectionAction } from "@/app/admin/pages/actions";
 import { SectionBand, type PageMoney } from "@/components/page/sales-page";
 import {
@@ -94,27 +94,9 @@ export function PageEditor({
     setSavedAt(Date.now());
   }
 
-  // Bring an opened section's header to the top.
-  //
-  // Opening one closes another, so a section below the one that just collapsed
-  // jumps upward and you land somewhere in the middle of it. The scroll runs in
-  // an effect rather than in the click handler because the collapse has to be
-  // laid out first, otherwise it scrolls to where the row used to be.
-  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const mounted = useRef(false);
-  useEffect(() => {
-    // Skip the first pass: the hero opens by default, and scrolling to it on
-    // arrival would move a page the reader has not asked to move.
-    if (!mounted.current) {
-      mounted.current = true;
-      return;
-    }
-    if (!openKey) return;
-    const el = rowRefs.current[openKey];
-    if (!el) return;
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    el.scrollIntoView({ block: "start", behavior: still ? "auto" : "smooth" });
-  }, [openKey]);
+  // The scroll-into-view that used to run here is gone with the accordion:
+  // opening a section no longer collapses another, so nothing jumps and there
+  // is nothing to scroll back to.
 
   const patch = (key: string, next: Partial<SectionRow>) => {
     setRows((rs) => rs.map((r) => (r.sectionKey === key ? { ...r, ...next } : r)));
@@ -147,6 +129,8 @@ export function PageEditor({
   // missing. Computed from what is on screen, so it clears the moment you fix
   // it rather than after a save.
   const notBuyable = warnNotBuyable(rows);
+  const openRow = rows.find((r) => r.sectionKey === openKey) ?? null;
+  const openDef = openRow ? sectionDef(openRow.sectionKey) : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -161,29 +145,29 @@ export function PageEditor({
           </p>
         </div>
       )}
-      <div className="sticky top-2 z-30 flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-surface/95 px-4 py-3 backdrop-blur">
+      <div className="sticky top-2 z-30 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface/95 px-3 py-2 backdrop-blur">
         <button
           type="button"
           onClick={saveAll}
           disabled={saving || dirtyKeys.length === 0}
-          className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
+          className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
         >
           {saving ? "Saving…" : dirtyKeys.length ? `Save ${dirtyKeys.length} change${dirtyKeys.length > 1 ? "s" : ""}` : "Saved"}
         </button>
-        <span className="text-sm text-muted" aria-live="polite">
+        <span className="text-xs text-muted" aria-live="polite">
           {saveError
             ? saveError
             : dirtyKeys.length
-              ? "Unsaved changes"
+              ? "Unsaved changes — kept as you type"
               : savedAt
                 ? "All changes saved."
-                : `${rows.length} sections. Open one to edit it.`}
+                : `${rows.length} sections`}
         </span>
         {pageIsBlank && (
           <button
             type="button"
             onClick={fillFromStarter}
-            className="rounded-full border border-border px-4 py-2 text-sm hover:border-fg"
+            className="rounded-lg border border-border px-3 py-1.5 text-xs hover:border-fg"
             title="Fills every band with the layout and copy we built against the reference page. Nothing is saved until you press Save."
           >
             Start from the template
@@ -194,76 +178,134 @@ export function PageEditor({
           href={liveHref}
           target="_blank"
           rel="noreferrer"
-          className="rounded-full border border-border px-4 py-1.5 text-sm transition-colors hover:border-fg"
+          className="rounded-lg border border-border px-3 py-1.5 text-xs transition-colors hover:border-fg"
         >
           Preview whole page ↗
         </a>
       </div>
 
-      {/* No overflow-hidden here: it disables position:sticky in every
-          descendant, which is why the preview scrolled away. The corners are
-          rounded on the first and last rows instead. */}
-      <div className="rounded-2xl border border-border bg-surface">
-        {rows.map((row) => {
-          const def = sectionDef(row.sectionKey);
-          if (!def) return null;
-          const open = openKey === row.sectionKey;
-          const isDirty = dirty[row.sectionKey];
-          const justSaved = savedAt !== null && !isDirty;
+      {/* The spine: every section at once on the left, the selected one filling
+          the rest. The accordion showed one band and hid eleven, so where you
+          were in the page was something you had to remember. */}
+      <div className="grid grid-cols-1 overflow-hidden rounded-2xl border border-border bg-surface lg:grid-cols-[13.5rem_minmax(0,1fr)]">
+        <SectionRail
+          rows={rows}
+          openKey={openKey}
+          dirty={dirty}
+          savedAt={savedAt}
+          onSelect={setOpenKey}
+          onToggle={(key, enabled) => patch(key, { enabled })}
+        />
 
-          return (
-            <div
-              key={row.sectionKey}
-              ref={(el) => {
-                rowRefs.current[row.sectionKey] = el;
-              }}
-              // Clears the admin's sticky top bar, which would otherwise sit
-              // over the header we just scrolled to.
-              className="scroll-mt-20 border-b border-border first:rounded-t-2xl last:border-b-0 last:rounded-b-2xl"
-            >
-              <button
-                type="button"
-                onClick={() => setOpenKey(open ? null : row.sectionKey)}
-                className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2 group-first:rounded-t-2xl ${
-                  open ? "bg-surface-2" : ""
-                }`}
-              >
-                <span className="w-10 shrink-0 font-mono text-xs text-muted">{def.n}</span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-sm font-medium">{def.title}</span>
-                  <span className="truncate text-xs text-muted">{def.shape}</span>
-                </span>
-                <span
-                  className="size-4 shrink-0 rounded"
-                  style={{
-                    background: BAND_STYLES[(row.style as BandStyleKey) ?? "paper"]?.bg,
-                    boxShadow: "inset 0 0 0 1px rgba(0,0,0,.16)",
-                  }}
-                  aria-hidden
-                />
-                {!row.enabled ? (
-                  <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[0.68rem] text-muted">Off</span>
-                ) : isDirty ? (
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.68rem] text-primary">Unsaved</span>
-                ) : justSaved ? (
-                  <span className="rounded-full bg-navy/10 px-2 py-0.5 text-[0.68rem] text-navy">Saved</span>
-                ) : null}
-                <span className={`text-xs text-muted transition-transform ${open ? "rotate-90" : ""}`}>▸</span>
-              </button>
-
-              {open && (
-                <SectionPanel
-                  row={row}
-                  money={money}
-                  onChange={(next) => patch(row.sectionKey, next)}
-                  device={device}
-                />
-              )}
-            </div>
-          );
-        })}
+        {openRow && openDef ? (
+          <SectionPanel
+            row={openRow}
+            money={money}
+            onChange={(next) => patch(openRow.sectionKey, next)}
+            device={device}
+          />
+        ) : (
+          <p className="p-6 text-sm text-muted">Pick a section on the left.</p>
+        )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Every section, always on screen.
+ *
+ * Twelve rows of name, band colour, state and a switch — in the height the
+ * accordion spent on two. The number counts from one in the order they appear:
+ * the stored numbering describes the framework these sections came from, and
+ * on screen "1 + 2, 3 … 9, 9, +, 10, +" reads as a bug.
+ */
+function SectionRail({
+  rows,
+  openKey,
+  dirty,
+  savedAt,
+  onSelect,
+  onToggle,
+}: {
+  rows: SectionRow[];
+  openKey: string | null;
+  dirty: Record<string, boolean>;
+  savedAt: number | null;
+  onSelect: (key: string) => void;
+  onToggle: (key: string, enabled: boolean) => void;
+}) {
+  return (
+    <nav className="flex flex-col border-b border-border lg:border-b-0 lg:border-r" aria-label="Sections">
+      {rows.map((row, i) => {
+        const def = sectionDef(row.sectionKey);
+        if (!def) return null;
+        const on = openKey === row.sectionKey;
+        const isDirty = dirty[row.sectionKey];
+        const view = buildSectionView(row);
+        const empty = !view || blocksForSection(view).length === 0;
+
+        return (
+          <div
+            key={row.sectionKey}
+            className={`flex items-center gap-2 border-b border-border/60 px-2.5 py-1.5 text-sm last:border-b-0 ${
+              on ? "bg-surface-2 shadow-[inset_2px_0_0_var(--primary)]" : "hover:bg-surface-2"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => onSelect(row.sectionKey)}
+              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            >
+              <span className="w-4 shrink-0 font-mono text-[0.62rem] text-muted">{i + 1}</span>
+              <span
+                aria-hidden
+                className="size-3 shrink-0 rounded-sm"
+                style={{
+                  background: BAND_STYLES[(row.style as BandStyleKey) ?? "paper"]?.bg,
+                  boxShadow: "inset 0 0 0 1px rgba(0,0,0,.16)",
+                }}
+              />
+              <span
+                className={`min-w-0 flex-1 truncate ${
+                  on ? "font-medium text-primary" : row.enabled ? "" : "text-muted line-through"
+                }`}
+              >
+                {def.title}
+              </span>
+              {isDirty ? (
+                <span className="size-1.5 shrink-0 rounded-full bg-primary" title="Unsaved" />
+              ) : savedAt !== null ? (
+                <span className="size-1.5 shrink-0 rounded-full bg-navy/40" title="Saved" />
+              ) : empty ? (
+                <span className="shrink-0 text-[0.6rem] text-muted" title="Empty — it will not render">
+                  Empty
+                </span>
+              ) : null}
+            </button>
+
+            {/* A switch, not an unlabelled checkbox. It decides whether a whole
+                band appears on the live page. */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={row.enabled}
+              aria-label={`Show ${def.title}`}
+              onClick={() => onToggle(row.sectionKey, !row.enabled)}
+              className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
+                row.enabled ? "bg-primary" : "bg-border"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 size-3 rounded-full bg-white shadow transition-transform ${
+                  row.enabled ? "translate-x-3.5" : "translate-x-0.5"
+                }`}
+              />
+            </button>
+          </div>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -290,15 +332,21 @@ function SectionPanel({
   return (
     // Not a form any more: one save at the top collects every dirty section, so
     // there is nothing here to submit.
-    <div className="grid grid-cols-1 gap-0 border-t border-border lg:grid-cols-[minmax(360px,420px)_minmax(0,1fr)]">
-
-      {/* Each pane pins and scrolls independently at lg and up, so the short
-          one stays in view while the long one moves — whichever way round they
-          happen to be. Below lg they stack and the page scrolls normally. */}
-      <div className="flex flex-col gap-4 p-5 lg:sticky lg:top-4 lg:max-h-[calc(100vh-5rem)] lg:self-start lg:overflow-y-auto">
-        <p className="rounded-xl bg-surface-2 px-3 py-2 text-xs leading-relaxed text-muted">
+    <div className="flex min-w-0 flex-col">
+      {/* One bar: what this section is for, and the way in. The old panel spent
+          a 420px column on a purpose sentence, a block count, a hint about
+          dragging, a note that changes are kept as you type, and one button. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2">
+        <b className="text-sm">{def.title}</b>
+        {/* Which step of the framework this band is. It is real information and
+            it does not belong on twelve rows — "1 + 2, 3 … 9, 9, +, 10, +"
+            reads as a bug in a numbered list. Here it is context. */}
+        <span className="font-mono text-[0.6rem] text-muted" title="Step in the sales-page framework">
+          step {def.n}
+        </span>
+        <span className="min-w-0 flex-1 truncate text-xs text-muted" title={def.purpose}>
           {def.purpose}
-        </p>
+        </span>
 
         {/* One editor. The typed fields were a form; this is the editor. A
             section that has never been opened here converts its stored fields
@@ -306,7 +354,7 @@ function SectionPanel({
             sectionToBlocks. Nothing is written until Save. */}
         <BlockCanvasField
           row={row}
-          title={`${def.n} · ${def.title}`}
+          title={`${def.title}`}
           section={{
             style: row.style ?? null,
             accent: row.accent ?? null,
@@ -318,20 +366,12 @@ function SectionPanel({
           onChange={(next) => setField("blocks", next)}
         />
 
-        {/* Band colour, accent, layout and whether it shows all moved INSIDE the
-            builder, where the thing they change is on screen. Judging a band
-            colour from a form behind the editor meant closing the only view of
-            what it applies to. */}
-        <p className="pt-1 text-xs text-muted">
-          Changes are kept as you type — use <strong className="text-fg">Save</strong> at the top of
-          the page.
-        </p>
       </div>
 
-      {/* ---- preview ---- */}
-      {/* Sticky: the fields column is long, and a preview that scrolls away is
-          a preview you stop looking at. */}
-      <div className="border-t border-border bg-bg p-5 lg:sticky lg:top-4 lg:max-h-[calc(100vh-5rem)] lg:self-start lg:overflow-y-auto lg:border-l lg:border-t-0">
+      {/* The whole width for the preview now that the fields column is a bar.
+          The hero goes side-by-side at 768px, so anything narrower previewed
+          every section as its phone layout. */}
+      <div className="bg-bg p-4">
         <div className="flex flex-col gap-2">
           <span className="kicker text-muted">
             Preview — this section only
