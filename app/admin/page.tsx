@@ -4,6 +4,10 @@ import { productCourseIds } from "@/lib/courses";
 
 import { money } from "@/lib/money";
 import { storeTake } from "@/lib/admin-nav";
+import { hasPageSections } from "@/lib/pages";
+import { wiringOf } from "@/lib/catalogue-view";
+import { CatalogueThumb } from "@/components/admin/catalogue-thumb";
+import { productDisplay } from "@/lib/courses";
 
 export default async function AdminProductsPage() {
   const [products, take] = await Promise.all([listAllProducts(), storeTake()]);
@@ -18,6 +22,26 @@ export default async function AdminProductsPage() {
   // in that state predates the check and has to be surfaced, not assumed fixed.
   const courseIdsByProduct = await productCourseIds(products.map((p) => p.id));
   const courseCount = (id: string) => courseIdsByProduct.get(id)?.length ?? 0;
+
+  // Own image wins, else the attached course's — the same precedence the
+  // storefront card uses, so this is the picture a buyer sees.
+  const display = await productDisplay(products.map((p) => p.id));
+  const coverOf = (p: (typeof products)[number]) =>
+    p.coverPath ?? display.get(p.id)?.coverPath ?? null;
+
+  // Whether each one can actually be bought. A published product with no sales
+  // page renders perfectly and converts nobody.
+  const pages = new Map(
+    await Promise.all(
+      products.map(async (p) => [p.id, await hasPageSections("product", p.id)] as const),
+    ),
+  );
+  const wiring = new Map(
+    products.map((p) => [
+      p.id,
+      wiringOf(p, { hasPage: pages.get(p.id) ?? false, courses: courseCount(p.id) }),
+    ]),
+  );
   const undeliverable = products.filter(
     (p) => p.status === "published" && courseCount(p.id) === 0,
   );
@@ -93,7 +117,9 @@ export default async function AdminProductsPage() {
               <th className="px-4 py-3 font-medium">Delivers</th>
               <th className="px-4 py-3 font-medium">Price</th>
               <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Offers</th>
+              {/* Sales page, bump and OTO — the three things that decide
+                  whether a product can be bought at all. */}
+              <th className="px-4 py-3 font-medium">Funnel</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
@@ -101,12 +127,22 @@ export default async function AdminProductsPage() {
             {products.map((p) => (
               <tr key={p.id} className="border-b border-border last:border-0">
                 <td className="px-4 py-3">
-                  {p.title}
-                  {p.isPlaceholder && (
-                    <span className="ml-2 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted">
-                      placeholder
+                  <span className="flex items-center gap-2.5">
+                    <CatalogueThumb coverPath={coverOf(p)} />
+                    <span className="flex min-w-0 flex-col">
+                      <span className="flex items-center gap-2">
+                        {p.title}
+                        {p.isPlaceholder && (
+                          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px] text-muted">
+                            placeholder
+                          </span>
+                        )}
+                      </span>
+                      {/* The URL you paste into an email. Finding it used to
+                          mean opening the product. */}
+                      <span className="text-xs text-muted">/p/{p.slug}</span>
                     </span>
-                  )}
+                  </span>
                 </td>
                 <td className="px-4 py-3 text-muted">
                   {courseCount(p.id) > 0
@@ -129,8 +165,12 @@ export default async function AdminProductsPage() {
                     </span>
                   </span>
                 </td>
-                <td className="px-4 py-3 text-muted">
-                  {[p.bumpOfferId && "bump", p.upsellOfferId && "OTO"].filter(Boolean).join(" · ") || "—"}
+                <td className="px-4 py-3">
+                  {wiring.get(p.id)?.needsWiring ? (
+                    <span className="text-primary">{wiring.get(p.id)?.label}</span>
+                  ) : (
+                    <span className="text-muted">{wiring.get(p.id)?.label}</span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <Link href={`/admin/products/${p.id}`} className="text-primary hover:underline">

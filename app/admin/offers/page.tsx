@@ -1,10 +1,29 @@
 import Link from "next/link";
-import { listOffers } from "@/lib/admin";
+import { listOffers, listAllProducts } from "@/lib/admin";
+import { productDisplay } from "@/lib/courses";
+import { usesOf, termsOf } from "@/lib/catalogue-view";
+import { CatalogueThumb } from "@/components/admin/catalogue-thumb";
 
 import { money } from "@/lib/money";
 
 export default async function AdminOffersPage() {
-  const offers = await listOffers();
+  const [offers, products] = await Promise.all([listOffers(), listAllProducts()]);
+
+  // Where each offer is attached. Offers are the only shared records in the
+  // store — everything else belongs to one thing, an offer is deliberately
+  // reused — and reuse without visibility is how a price changes somewhere
+  // nobody was looking.
+  const uses = new Map(offers.map((o) => [o.id, usesOf(o, products)]));
+
+  // An offer that grants a product borrows that product's artwork; one that
+  // grants an app has none of its own.
+  const granted = products.filter((p) => offers.some((o) => o.grantProductId === p.id));
+  const display = await productDisplay(granted.map((p) => p.id));
+  const coverFor = (productId: string | null) => {
+    if (!productId) return null;
+    const p = products.find((x) => x.id === productId);
+    return p?.coverPath ?? display.get(productId)?.coverPath ?? null;
+  };
 
   return (
     <div className="flex flex-col gap-8">
@@ -27,29 +46,46 @@ export default async function AdminOffersPage() {
         <table className="w-full min-w-[620px] text-left text-sm">
           <thead className="border-b border-border text-muted">
             <tr>
-              <th className="px-4 py-3 font-medium">Name</th>
+              <th className="px-4 py-3 font-medium">Offer</th>
               <th className="px-4 py-3 font-medium">Grants</th>
-              <th className="px-4 py-3 font-medium">Billing</th>
+              <th className="px-4 py-3 font-medium">Terms</th>
               <th className="px-4 py-3 font-medium">Price</th>
-              <th className="px-4 py-3 font-medium">Active</th>
+              {/* The question this page could not answer: changing a price here
+                  changes it everywhere it is attached. */}
+              <th className="px-4 py-3 font-medium">Used by</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
             {offers.map((o) => (
               <tr key={o.id} className="border-b border-border last:border-0">
-                <td className="px-4 py-3">{o.name}</td>
+                <td className="px-4 py-3">
+                  <span className="flex items-center gap-2.5">
+                    <CatalogueThumb coverPath={coverFor(o.grantProductId)} />
+                    <span className="flex min-w-0 flex-col">
+                      <span>{o.name}</span>
+                      {!o.active && <span className="text-xs text-primary">inactive</span>}
+                    </span>
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-muted">
                   {o.grantType === "subscription" ? "App subscription" : "Product"}
                 </td>
-                <td className="px-4 py-3 text-muted">
-                  {o.billingType === "recurring"
-                    ? `${o.trialDays ? `${o.trialDays}d trial · ` : ""}per ${o.interval}`
-                    : "one-time"}
-                </td>
+                <td className="px-4 py-3 text-muted">{termsOf(o)}</td>
                 <td className="px-4 py-3">{money(o.priceCents)}</td>
-                <td className="px-4 py-3">
-                  <span className={o.active ? "text-navy" : "text-muted"}>{o.active ? "yes" : "no"}</span>
+                <td className="px-4 py-3 text-sm">
+                  {(uses.get(o.id) ?? []).length === 0 ? (
+                    // Either a draft or a mistake, and both are worth seeing.
+                    <span className="text-primary">Not attached to anything</span>
+                  ) : (
+                    <span className="flex flex-col gap-0.5 text-muted">
+                      {(uses.get(o.id) ?? []).map((u, i) => (
+                        <span key={i}>
+                          {u.productTitle} <b className="font-medium text-fg">{u.slot}</b>
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <Link href={`/admin/offers/${o.id}`} className="text-primary hover:underline">
