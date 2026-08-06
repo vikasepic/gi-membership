@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { saveOffer, removeOffer, type SaveState } from "@/app/admin/offers/actions";
 import { inputClass as input, Field, Section } from "@/components/admin/form-controls";
+import { EditorTabs, TabPanel } from "@/components/admin/editor-tabs";
 import type { Offer } from "@/lib/types";
 import type { ProductOption, AppOption, OfferOption } from "@/lib/admin";
 import { money } from "@/lib/money";
@@ -30,10 +31,50 @@ export function OfferForm({
   // trial means to the list, and it is needed while deciding to have one.
   const [trialDays, setTrialDays] = useState(String(offer?.trialDays ?? ""));
   const hasTrial = Number(trialDays) > 0;
+  const [dirty, setDirty] = useState(false);
+  const [active, setActive] = useState(offer ? offer.active : true);
 
   return (
-    <form action={action} className="flex flex-col gap-6">
+    <form action={action} onInput={() => setDirty(true)} className="flex flex-col gap-5">
       {offer && <input type="hidden" name="id" value={offer.id} />}
+
+      {/* The same bar the product editor carries, for the same reason: Save was
+          at the bottom of everything. */}
+      <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-3 border-b border-border bg-bg/95 px-1 py-2.5 backdrop-blur">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="active"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
+            className="size-4 accent-[var(--primary)]"
+          />
+          Active
+          <span className="text-muted">— available to attach</span>
+        </label>
+        <span className="ml-auto flex items-center gap-3">
+          {dirty && <span className="text-xs text-primary">Unsaved</span>}
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-60"
+          >
+            {pending ? "Saving…" : offer ? "Save" : "Create offer"}
+          </button>
+        </span>
+      </div>
+
+      <EditorTabs
+        tabs={[
+          { key: "basics", label: "Basics" },
+          { key: "grants", label: "Grants" },
+          { key: "pricing", label: "Pricing" },
+          { key: "copy", label: "Copy & pages" },
+          { key: "marketing", label: "Marketing" },
+        ]}
+      >
+
+      <TabPanel tab="basics">
 
       <Section title="What this offer is" hint="Internal naming — buyers never see these.">
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -47,6 +88,9 @@ export function OfferForm({
       </Section>
 
       {/* Grant — what the offer gives. */}
+      </TabPanel>
+
+      <TabPanel tab="grants">
       <Section title="What the buyer gets" hint="Either a product they own outright, or access to a connected app.">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
           <Field label="Grant type" required>
@@ -78,6 +122,9 @@ export function OfferForm({
       </Section>
 
       {/* Billing. */}
+      </TabPanel>
+
+      <TabPanel tab="pricing">
       <Section title="How it bills" hint="One-time is charged once. Recurring bills on a schedule — add trial days for a free period first.">
         <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
           <Field label="Billing type" required>
@@ -128,6 +175,9 @@ export function OfferForm({
       {/* Each block below is named for the SURFACE it appears on. The old
           single "What the buyer sees" section edited five surfaces at once and
           said so nowhere. */}
+      </TabPanel>
+
+      <TabPanel tab="copy">
       <Section
         title="How this offer reads"
         hint="Used by the storefront section, the library offer, and the standalone offer checkout. The sales page and the checkout bump have their own editors — the links are at the top of this page."
@@ -246,6 +296,14 @@ export function OfferForm({
           </select>
         </Field>
 
+      </Section>
+      </TabPanel>
+
+      <TabPanel tab="marketing">
+      <Section
+        title="ActiveCampaign"
+        hint="Tags applied as someone moves through this offer. All take the numeric id, not the tag name."
+      >
         {/* The offer's own tag IS the buyer tag. It is only during a trial
             that "granted" and "paid for" differ, and that is what the trial tag
             is for — a separate access field just got the same id typed twice. */}
@@ -297,11 +355,9 @@ export function OfferForm({
           />
         </Field>
       </Section>
+      </TabPanel>
 
-      <label className="flex items-center gap-2.5 text-sm">
-        <input type="checkbox" name="active" defaultChecked={offer ? offer.active : true} className="size-4 accent-[var(--primary)]" />
-        Active (available to attach)
-      </label>
+      </EditorTabs>
 
       {state.error && (
         <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">
@@ -309,14 +365,8 @@ export function OfferForm({
         </p>
       )}
 
-      <div className="flex items-center justify-between gap-4">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-60"
-        >
-          {pending ? "Saving…" : offer ? "Save changes" : "Create offer"}
-        </button>
+      {/* Away from Save, deliberately. */}
+      <div className="flex items-center justify-end gap-4 border-t border-border pt-4">
         {offer && (
           <button type="submit" formAction={removeOffer} className="text-sm text-muted hover:text-primary">
             Delete

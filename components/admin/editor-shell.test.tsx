@@ -126,3 +126,36 @@ describe("the product form uses the shell", () => {
     expect(del).toBeGreaterThan(save);
   });
 });
+
+describe("the offer form uses the same shell", () => {
+  const src = readFileSync("components/admin/offer-form.tsx", "utf8");
+
+  it("is the same five-tab shape", () => {
+    // One component, two things to edit — not two similar forms.
+    expect(src).toContain("EditorTabs");
+    expect(src).toContain('key: "basics"');
+    expect(src).toContain('key: "pricing"');
+    expect(src).toContain('key: "marketing"');
+  });
+
+  it("saves from the top, like the product editor", () => {
+    expect(src).toContain("sticky top-0");
+    expect(src).toContain("Unsaved");
+  });
+
+  it("keeps Active where it can be seen", () => {
+    // It decides whether the offer can be attached at all, and it used to be a
+    // lone checkbox below every section.
+    const bar = src.indexOf("sticky top-0");
+    const activeBox = src.indexOf('name="active"');
+    expect(activeBox).toBeGreaterThan(bar);
+    expect(activeBox - bar).toBeLessThan(900);
+  });
+
+  it("keeps every field mounted across the tabs", () => {
+    // The same trap: a form posts what is mounted, and an offer has fields on
+    // five tabs.
+    expect(src).toContain("TabPanel");
+    expect(src).not.toContain("{active === ");
+  });
+});
