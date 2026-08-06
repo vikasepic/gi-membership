@@ -32,7 +32,7 @@ export function CheckoutPanel({
 }) {
   return (
     <aside
-      className="relative flex flex-col gap-7 border-b border-border px-6 py-8 md:px-8 lg:min-h-dvh lg:border-b-0 lg:border-r lg:py-14"
+      className="relative flex flex-col gap-6 border-b border-border px-6 py-8 md:px-8 lg:min-h-dvh lg:border-b-0 lg:border-r lg:py-10"
       style={{
         // A light ground with a warm cast, so the two halves read as one page
         // seen from two angles rather than two sites bolted together.
@@ -57,7 +57,10 @@ export function CheckoutPanel({
         </span>
       </div>
 
-      <div className="mx-auto flex w-full max-w-[30rem] flex-col gap-6 lg:my-auto lg:ml-auto lg:mr-0 lg:pr-4">
+      {/* Starts at the top, beside the form, rather than floating in the middle
+          of a full-height column. Centring it piled all the empty space above
+          the cover and left the two halves starting in different places. */}
+      <div className="mx-auto flex w-full max-w-[30rem] flex-col gap-6 lg:ml-auto lg:mr-0 lg:pr-4">
         {coverUrl ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
