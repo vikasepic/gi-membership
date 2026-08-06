@@ -77,6 +77,15 @@ export type BlockMoney = {
  */
 export type CtaRender = (label: string, theme: BandTheme) => React.ReactNode;
 
+/**
+ * A button's fixed part: padding and family only.
+ *
+ * `w-fit` and `font-semibold` used to live here and were quietly overruling two
+ * controls the editor offers. Anything the editor can set now comes through the
+ * block's own style, where it can actually win.
+ */
+const BUTTON_CLASS = "px-7 py-3 font-display text-[0.95rem]";
+
 export function Blocks({
   blocks,
   theme,
@@ -315,17 +324,26 @@ function Inner({
     }
 
     case "button": {
+      // No w-fit, and no font-semibold: both were fighting settings the editor
+      // offers. Size and weight arrive inline from the block's own style.
       const label = str(p.text);
       if (!label) return null;
       // An outline button carries the band's text colour on the band itself,
       // so it reads as the quieter of the two without needing its own palette.
       const outline = str(p.variant) === "outline";
+      const full = bool(p.fullWidth);
       const style: React.CSSProperties = {
         background: outline ? "transparent" : c.fill,
         color: outline ? theme.fg : c.fg,
         border: outline ? `1px solid ${theme.rule}` : undefined,
         borderRadius: `${s.radius || 999}px`,
-        display: bool(p.fullWidth) ? "block" : "inline-block",
+        // Full width has to set the WIDTH. It used to set display:block next to
+        // a w-fit class that pinned the width to fit-content, so the button
+        // became block-level and stayed exactly as wide as its label — and a
+        // block-level box ignores the wrapper's text-align, which is why Align
+        // did nothing either. Inline-block is what lets Align work at all.
+        display: full ? "block" : "inline-block",
+        width: full ? "100%" : undefined,
         textAlign: "center",
         ...type,
       };
@@ -334,11 +352,11 @@ function Inner({
       if (str(p.action, "link") === "buy" && cta) return <>{cta(label, theme)}</>;
       const link = str(p.link);
       return link ? (
-        <a href={link} className="w-fit px-7 py-3 font-display text-[0.95rem] font-semibold" style={style}>
+        <a href={link} className={BUTTON_CLASS} style={style}>
           {label}
         </a>
       ) : (
-        <span className="w-fit px-7 py-3 font-display text-[0.95rem] font-semibold" style={style}>
+        <span className={BUTTON_CLASS} style={style}>
           {label}
         </span>
       );

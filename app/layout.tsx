@@ -4,11 +4,16 @@ import "./globals.css";
 import { Providers } from "./providers";
 import { themeInitScript } from "@/components/theme-toggle";
 
-const inter = Inter({ variable: "--font-inter", subsets: ["latin"], weight: ["600"] });
+// Inter as its variable font — every weight from one file. Pinned to 600 it
+// had exactly one, so the page builder's Weight control changed a number and
+// nothing on screen: Regular, Semibold and Bold all rendered as 600 because
+// that was the only weight the browser had been given.
+const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const poppins = Poppins({
   variable: "--font-poppins",
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
+  // 700 for the same reason — the control offers Bold, so Bold has to exist.
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {

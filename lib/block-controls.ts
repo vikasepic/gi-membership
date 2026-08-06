@@ -168,6 +168,17 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "toggle", key: "fullWidth", label: "Full width" },
     ],
     style: [
+      group("Layout"),
+      // The same style.align the Advanced tab writes. Duplicated on purpose:
+      // nobody looks under Advanced to centre a button, and a control nobody
+      // finds is a control that does not exist.
+      style({
+        kind: "select",
+        key: "align",
+        label: "Align",
+        options: [["left", "Left"], ["center", "Centre"], ["right", "Right"]],
+        when: (b) => !b.props.fullWidth,
+      }),
       group("Colour"),
       style({ kind: "color", key: "background.color", label: "Background", hint: "Unset uses the band's accent. The label recolours itself to stay readable." }),
       style({ kind: "color", key: "color", label: "Label" }),
