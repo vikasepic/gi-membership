@@ -33,6 +33,14 @@ describe("the media window", () => {
     expect(open()).toContain("Close");
   });
 
+  it("shows no file details until one is chosen", () => {
+    // The stepper, the URL and the alt field all belong to a selected file.
+    // Rendering their chrome against nothing would be furniture.
+    const out = open();
+    expect(out).not.toContain("Next file");
+    expect(out).not.toContain("File URL");
+  });
+
   it("renders nothing at all when closed", () => {
     const shut = renderToStaticMarkup(
       <MediaModal kind="image" open={false} onClose={() => {}} onPick={() => {}} />,

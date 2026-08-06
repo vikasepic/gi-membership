@@ -14,6 +14,7 @@ export type PickedMedia = {
   width: number | null;
   height: number | null;
   url: string | null;
+  createdAt?: string;
 };
 
 /**
@@ -94,7 +95,7 @@ export function MediaModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex h-[min(85vh,720px)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
+      <div className="flex h-[min(90vh,860px)] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl">
         <header className="flex items-center justify-between gap-4 border-b border-border px-5 py-3">
           <div className="flex gap-1">
             {TABS.map((t) => (
@@ -157,6 +158,13 @@ export function MediaModal({
 
           <Details
             item={selected}
+            neighbours={items ?? []}
+            onMove={(step) => {
+              const list = items ?? [];
+              const at = list.findIndex((i) => i.id === selected?.id);
+              const next = list[at + step];
+              if (next) setSelected(next);
+            }}
             onSaved={(patched) => {
               setSelected(patched);
               setItems((old) => old?.map((i) => (i.id === patched.id ? patched : i)) ?? null);
@@ -204,6 +212,9 @@ function Grid({
           >
             <Thumb item={item} />
             <span className="truncate text-xs">{item.name}</span>
+            <span className="truncate text-[11px] text-muted">
+              {item.width && item.height ? `${item.width} × ${item.height}` : item.mime}
+            </span>
           </button>
         </li>
       ))}
@@ -220,10 +231,14 @@ function Grid({
  */
 function Details({
   item,
+  neighbours,
+  onMove,
   onSaved,
   onUse,
 }: {
   item: PickedMedia | null;
+  neighbours: PickedMedia[];
+  onMove: (step: -1 | 1) => void;
   onSaved: (item: PickedMedia) => void;
   onUse: () => void;
 }) {
@@ -240,13 +255,14 @@ function Details({
 
   if (!item) {
     return (
-      <aside className="hidden w-72 shrink-0 border-l border-border p-5 text-sm text-muted lg:block">
+      <aside className="hidden w-80 shrink-0 border-l border-border p-5 text-sm text-muted lg:block">
         Pick a file to see its details.
       </aside>
     );
   }
 
   const isImage = item.mime.startsWith("image/");
+  const index = neighbours.findIndex((i) => i.id === item.id);
 
   async function save() {
     if (!item) return;
@@ -264,27 +280,37 @@ function Details({
   }
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col gap-3 overflow-y-auto border-l border-border p-5">
+    <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-border p-5">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">File details</span>
+        {/* Stepping through them beats going back to the grid: the question is
+            almost always "is that the one I meant, or the next one". */}
+        <span className="flex gap-1">
+          <Step label="Previous file" disabled={index <= 0} onClick={() => onMove(-1)}>
+            ‹
+          </Step>
+          <Step
+            label="Next file"
+            disabled={index < 0 || index >= neighbours.length - 1}
+            onClick={() => onMove(1)}
+          >
+            ›
+          </Step>
+        </span>
+      </div>
       <Thumb item={item} />
-      <dl className="text-xs text-muted">
-        <div className="flex justify-between gap-2">
-          <dt>Type</dt>
-          <dd className="truncate">{item.mime}</dd>
-        </div>
-        {item.width && item.height && (
-          <div className="flex justify-between gap-2">
-            <dt>Size</dt>
-            <dd>
-              {item.width} × {item.height}
-            </dd>
-          </div>
-        )}
-        {item.size > 0 && (
-          <div className="flex justify-between gap-2">
-            <dt>Weight</dt>
-            <dd>{Math.max(1, Math.round(item.size / 1024))}KB</dd>
-          </div>
-        )}
+      <dl className="flex flex-col gap-0.5 text-xs text-muted">
+        <Fact label="File" value={item.path.split("/").pop() ?? item.path} />
+        <Fact label="Type" value={item.mime} />
+        {item.width && item.height ? (
+          <Fact label="Dimensions" value={`${item.width} × ${item.height}`} />
+        ) : null}
+        {item.size > 0 ? (
+          <Fact label="Weight" value={`${Math.max(1, Math.round(item.size / 1024))}KB`} />
+        ) : null}
+        {item.createdAt ? (
+          <Fact label="Added" value={new Date(item.createdAt).toLocaleDateString()} />
+        ) : null}
       </dl>
 
       <label className="flex flex-col gap-1 text-xs text-muted">
@@ -317,6 +343,18 @@ function Details({
         </label>
       )}
 
+      {item.url && (
+        <label className="flex flex-col gap-1 text-xs text-muted">
+          File URL
+          <input
+            readOnly
+            value={item.url}
+            onFocus={(e) => e.currentTarget.select()}
+            className="rounded-lg border border-border bg-surface-2 px-2 py-1.5 text-[11px] text-fg"
+          />
+        </label>
+      )}
+
       <div className="mt-auto flex flex-col gap-2 pt-2">
         <button
           type="button"
@@ -335,6 +373,39 @@ function Details({
         </button>
       </div>
     </aside>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="shrink-0">{label}</dt>
+      <dd className="truncate text-fg">{value}</dd>
+    </div>
+  );
+}
+
+function Step({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="h-6 w-6 rounded border border-border text-xs text-muted hover:text-fg disabled:opacity-40"
+    >
+      {children}
+    </button>
   );
 }
 
