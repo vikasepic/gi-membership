@@ -47,7 +47,15 @@ export type Control =
   | (Base & { kind: "richtext" })
   | (Base & { kind: "image" })
   | (Base & { kind: "select"; options: [string, string][] })
-  | (Base & { kind: "toggle" })
+  /**
+   * `invert` shows the opposite of what is stored.
+   *
+   * `hideMobile` is true when a block is hidden, so a switch on it is on when
+   * the block is gone. A switch whose "on" means "off" cannot be coloured
+   * honestly and cannot be read at a glance — so the label says "Show on
+   * mobile" and the value is flipped on the way in and out.
+   */
+  | (Base & { kind: "toggle"; invert?: boolean })
   | (Base & { kind: "number"; min: number; max: number; step: number; unit?: string })
   | (Base & { kind: "color" })
   | (Base & { kind: "dim" })
@@ -416,7 +424,13 @@ const bgIs = (t: string) => (b: Block) => b.style.background.type === t;
  */
 export const COLUMN_CONTROLS: Control[] = [
   group("Background"),
-  style({ kind: "select", key: "background.type", label: "Type", options: [["none", "None"], ["classic", "Classic"], ["gradient", "Gradient"]] }),
+  style({
+    kind: "select",
+    key: "background.type",
+    label: "Type",
+    hint: "Classic is a colour, an image, or both. Gradient is two colours.",
+    options: [["none", "None"], ["classic", "Classic"], ["gradient", "Gradient"]],
+  }),
   style({ kind: "color", key: "background.color", label: "Colour", when: bgIs("classic") }),
   style({ kind: "image", key: "background.image", label: "Image", when: bgIs("classic") }),
   style({ kind: "select", key: "background.size", label: "Size", options: [["cover", "Cover"], ["contain", "Contain"], ["auto", "Auto"]], when: bgIs("classic") }),
@@ -443,7 +457,15 @@ export const ADVANCED_CONTROLS: Control[] = [
   style({ kind: "select", key: "align", label: "Align", options: [["left", "Left"], ["center", "Centre"], ["right", "Right"]] }),
 
   group("Background"),
-  style({ kind: "select", key: "background.type", label: "Type", options: [["none", "None"], ["classic", "Classic"], ["gradient", "Gradient"]] }),
+  style({
+    kind: "select",
+    key: "background.type",
+    label: "Type",
+    // Every colour and image field below is hidden until this says Classic, so
+    // a block showing "None" looks like a block with no image option at all.
+    hint: "Classic is a colour, an image, or both. Gradient is two colours.",
+    options: [["none", "None"], ["classic", "Classic"], ["gradient", "Gradient"]],
+  }),
   style({ kind: "color", key: "background.color", label: "Colour", when: bgIs("classic") }),
   style({ kind: "image", key: "background.image", label: "Image", when: bgIs("classic") }),
   style({ kind: "select", key: "background.size", label: "Size", options: [["cover", "Cover"], ["contain", "Contain"], ["auto", "Auto"]], when: bgIs("classic") }),
@@ -467,9 +489,9 @@ export const ADVANCED_CONTROLS: Control[] = [
   style({ kind: "number", key: "radius", label: "Corner", min: 0, max: 80, step: 2, unit: "px", when: (b) => b.style.background.type !== "none" }),
 
   group("Visibility"),
-  style({ kind: "toggle", key: "hideDesktop", label: "Hide on desktop" }),
-  style({ kind: "toggle", key: "hideTablet", label: "Hide on tablet" }),
-  style({ kind: "toggle", key: "hideMobile", label: "Hide on mobile" }),
+  style({ kind: "toggle", key: "hideDesktop", label: "Show on desktop", invert: true }),
+  style({ kind: "toggle", key: "hideTablet", label: "Show on tablet", invert: true }),
+  style({ kind: "toggle", key: "hideMobile", label: "Show on mobile", invert: true }),
 
   group("Attributes"),
   style({ kind: "text", key: "cssId", label: "CSS id", placeholder: "pricing" }),

@@ -127,13 +127,13 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
               aria-checked={section.enabled}
               aria-label="Show this section"
               onClick={() => section.onChange({ enabled: !section.enabled })}
-              className={`relative h-5 w-9 shrink-0 justify-self-start rounded-full transition-colors ${
-                section.enabled ? "bg-primary" : "bg-border"
+              className={`relative h-[18px] w-8 shrink-0 justify-self-start rounded-full transition-colors ${
+                section.enabled ? "bg-[#3f9b6d]" : "bg-border"
               }`}
             >
               <span
-                className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${
-                  section.enabled ? "translate-x-[1.125rem]" : "translate-x-0.5"
+                className={`absolute left-0.5 top-0.5 size-3.5 rounded-full bg-white shadow-sm transition-transform ${
+                  section.enabled ? "translate-x-3.5" : "translate-x-0"
                 }`}
               />
             </button>

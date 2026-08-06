@@ -1170,25 +1170,31 @@ function ControlField({
       );
     }
 
-    case "toggle":
+    case "toggle": {
+      // `hideMobile` is true when a block is GONE, so a switch reading it
+      // directly is on when the thing is off. Inverted controls show and write
+      // the opposite, which is what lets every switch mean the same thing.
+      const stored = value === true;
+      const shown = control.invert ? !stored : stored;
       return row(
         <button
           type="button"
           role="switch"
-          aria-checked={value === true}
+          aria-checked={shown}
           aria-label={control.label}
-          onClick={() => onChange(value !== true)}
-          className={`relative h-5 w-9 shrink-0 justify-self-start rounded-full transition-colors ${
-            value === true ? "bg-primary" : "bg-border"
+          onClick={() => onChange(control.invert ? shown : !stored)}
+          className={`relative h-[18px] w-8 shrink-0 justify-self-start rounded-full transition-colors ${
+            shown ? "bg-[#3f9b6d]" : "bg-border"
           }`}
         >
           <span
-            className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${
-              value === true ? "translate-x-[1.125rem]" : "translate-x-0.5"
+            className={`absolute left-0.5 top-0.5 size-3.5 rounded-full bg-white shadow-sm transition-transform ${
+              shown ? "translate-x-3.5" : "translate-x-0"
             }`}
           />
         </button>,
       );
+    }
 
     case "columns": {
       const count = block.columns?.length ?? 0;
