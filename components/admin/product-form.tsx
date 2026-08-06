@@ -3,6 +3,8 @@
 import { useActionState, useState } from "react";
 import { saveProduct, removeProduct, type SaveState } from "@/app/admin/actions";
 import { inputClass, Field, Section } from "@/components/admin/form-controls";
+import { EditorTabs, TabPanel } from "@/components/admin/editor-tabs";
+import { StorefrontPreview, BumpPreview, Readiness } from "@/components/admin/editor-preview";
 import { slugify } from "@/lib/slug";
 import type { Product } from "@/lib/types";
 import type { OfferOption } from "@/lib/admin";
@@ -34,6 +36,8 @@ export function ProductForm({
   offers,
   allCourses,
   assignedCourseIds = [],
+  coverUrl = null,
+  hasSalesPage = false,
 }: {
   product?: Product;
   offers: OfferOption[];
@@ -44,6 +48,10 @@ export function ProductForm({
   // compiler should refuse a page that forgets this list.
   allCourses: Course[];
   assignedCourseIds?: string[];
+  /** For the preview — the picture a buyer will see. */
+  coverUrl?: string | null;
+  /** Whether a sales page has actually been built for this product. */
+  hasSalesPage?: boolean;
 }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveProduct, {});
   const [courseIds, setCourseIds] = useState<string[]>(assignedCourseIds);
@@ -62,6 +70,13 @@ export function ProductForm({
   const [upsellOfferId, setUpsellOfferId] = useState(product?.upsellOfferId ?? "");
   const [upsellAltOfferId, setUpsellAltOfferId] = useState(product?.upsellAltOfferId ?? "");
   const [clientErr, setClientErr] = useState<Record<string, string>>({});
+  // For the preview. Uncontrolled elsewhere, but the point of the preview is
+  // that it moves as you type.
+  const [tagline, setTagline] = useState(product?.tagline ?? "");
+  const [status, setStatus] = useState(product?.status ?? "draft");
+  // Whether there is anything to save. A save button that looks the same before
+  // and after a change is a save button you press to find out.
+  const [dirty, setDirty] = useState(false);
 
   // A field's own client error wins; otherwise fall back to the server's.
   // Editing clears the client error to "", so this must be `||` not `??` —
@@ -98,13 +113,71 @@ export function ProductForm({
     }
   }
 
+  const checks = [
+    { ok: courseIds.length > 0, label: "Course attached", detail: "The library delivers courses — without one a buyer gets nothing." },
+    { ok: price.trim() !== "" && Number(price) >= 0, label: "Price set" },
+    { ok: Boolean(coverUrl), label: "Cover image", detail: "The catalog card shows a plain gradient without one." },
+    { ok: hasSalesPage, label: "Sales page built", detail: "Buyers land on the plain product page instead." },
+    { ok: title.trim().length > 0 && slug.trim().length > 0, label: "Named and addressable" },
+  ];
+  const notReady = checks.filter((c) => !c.ok).length;
+  // The offer that will actually be shown on the checkout, so the preview moves
+  // when the bump is changed rather than describing the one saved last time.
+  const bumpOffer = offers.find((o) => o.id === bumpOfferId) ?? null;
+
   return (
-    <form action={action} onSubmit={onSubmit} className="flex flex-col gap-6" noValidate>
+    <form
+      action={action}
+      onSubmit={onSubmit}
+      onInput={() => setDirty(true)}
+      className="flex flex-col gap-5"
+      noValidate
+    >
       {product && <input type="hidden" name="id" value={product.id} />}
       {courseIds.map((id) => (
         <input key={id} type="hidden" name="courseIds" value={id} />
       ))}
 
+      {/* Sticky, because the save button used to be two thousand pixels below
+          the field you had just changed. */}
+      <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-3 border-b border-border bg-bg/95 px-1 py-2.5 backdrop-blur">
+        <span className="flex items-center gap-2">
+          <span
+            aria-hidden
+            className={`size-1.5 rounded-full ${status === "published" ? "bg-[#3f9b6d]" : "bg-border"}`}
+          />
+          <span className="text-sm text-muted">{status === "published" ? "Published" : "Draft"}</span>
+        </span>
+        {notReady > 0 && (
+          <span className="text-xs text-primary">
+            {notReady} thing{notReady === 1 ? "" : "s"} to sort out
+          </span>
+        )}
+        <span className="ml-auto flex items-center gap-3">
+          {dirty && <span className="text-xs text-primary">Unsaved</span>}
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-60"
+          >
+            {pending ? "Saving…" : product ? "Save" : "Create product"}
+          </button>
+        </span>
+      </div>
+
+      <EditorTabs
+        tabs={[
+          { key: "basics", label: "Basics" },
+          { key: "content", label: "Content", attention: courseIds.length === 0 },
+          { key: "pricing", label: "Pricing" },
+          { key: "funnel", label: "Funnel", attention: !hasSalesPage },
+          { key: "marketing", label: "Marketing" },
+        ]}
+      >
+
+      <TabPanel tab="basics">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_15rem]">
+      <div className="flex flex-col gap-6">
       <Section title="What you're selling" hint="How this appears on the storefront.">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label="Title" required error={err("title")}>
@@ -125,7 +198,12 @@ export function ProductForm({
           </Field>
         </div>
         <Field label="Tagline" hint="one line under the title">
-          <input name="tagline" defaultValue={product?.tagline ?? ""} className={inputClass} />
+          <input
+            name="tagline"
+            value={tagline}
+            onChange={(e) => setTagline(e.target.value)}
+            className={inputClass}
+          />
         </Field>
         <Field label="Description">
           <textarea name="description" defaultValue={product?.description ?? ""} rows={4} className={inputClass} />
@@ -133,13 +211,46 @@ export function ProductForm({
         {/* No type here — the storefront badge comes from the course this
             product grants. Type is a property of the content, not the price. */}
         <Field label="Status" required error={err("status")}>
-          <select name="status" defaultValue={product?.status ?? "draft"} className={inputClass}>
+          <select
+            name="status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as typeof status)}
+            className={inputClass}
+          >
             <option value="draft">Draft — hidden from the store</option>
             <option value="published">Published</option>
           </select>
         </Field>
       </Section>
+      </div>
 
+      {/* The thing being written, where it will be read. A tagline is written to
+          sit under a title in a card; writing it in a bare input is writing
+          blind. */}
+      <aside className="flex flex-col gap-5 lg:sticky lg:top-16 lg:self-start">
+        <StorefrontPreview
+          title={title}
+          tagline={tagline}
+          price={price}
+          currency={product?.currency ?? "usd"}
+          coverUrl={coverUrl}
+        />
+        {bumpOffer && (
+          <BumpPreview
+            headline={`Add ${bumpOffer.name}`}
+            terms={
+              bumpOffer.interval
+                ? `${bumpOffer.trialDays ? `${bumpOffer.trialDays} days free, then ` : ""}${money(bumpOffer.priceCents, bumpOffer.currency)}/${bumpOffer.interval}`
+                : money(bumpOffer.priceCents, bumpOffer.currency)
+            }
+          />
+        )}
+        <Readiness checks={checks} />
+      </aside>
+      </div>
+      </TabPanel>
+
+      <TabPanel tab="pricing">
       <Section
         title="Pricing"
         hint="One-time price for this product. Subscriptions live in Offers, not here."
@@ -165,7 +276,9 @@ export function ProductForm({
           </Field>
         </div>
       </Section>
+      </TabPanel>
 
+      <TabPanel tab="content">
       <Section
         title="Content"
         hint="Which courses this unlocks. Tick several to sell a bundle. A published product needs at least one — the library delivers courses."
@@ -223,7 +336,9 @@ export function ProductForm({
         )}
         {err("courseIds") && <p className="text-sm text-primary">{err("courseIds")}</p>}
       </Section>
+      </TabPanel>
 
+      <TabPanel tab="funnel">
       <Section
         title="Upsells"
         hint="The bump shows on checkout. If it's declined, the upsell shows once, right after."
@@ -262,7 +377,9 @@ export function ProductForm({
           />
         </div>
       </Section>
+      </TabPanel>
 
+      <TabPanel tab="marketing">
       <Section
         title="ActiveCampaign"
         hint="Buyers of this product are added to ActiveCampaign (or updated if they're already there) and given this tag."
@@ -300,6 +417,9 @@ export function ProductForm({
           then read the id from the URL when editing a tag. Leave either empty for no tag.
         </p>
       </Section>
+      </TabPanel>
+
+      </EditorTabs>
 
       {state.errors?._form && (
         <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">
@@ -307,15 +427,9 @@ export function ProductForm({
         </p>
       )}
 
-      <div className="flex items-center justify-between gap-4">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-60"
-        >
-          {pending ? "Saving…" : product ? "Save product" : "Create product"}
-        </button>
-
+      {/* Delete stays at the foot, deliberately far from Save: they are not
+          peers and should not be adjacent. */}
+      <div className="flex items-center justify-end gap-4 border-t border-border pt-4">
         {product && !product.isPlaceholder && (
           <button
             type="submit"

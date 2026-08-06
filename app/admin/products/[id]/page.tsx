@@ -7,16 +7,23 @@ import { AssetUpload } from "@/components/admin/asset-upload";
 import { getProductById, listOfferOptions } from "@/lib/admin";
 import { listCourses, coursesForProduct } from "@/lib/courses";
 import { ViewLive } from "@/components/admin/view-live";
+import { hasPageSections } from "@/lib/pages";
 
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [product, offers, allCourses, assigned] = await Promise.all([
+  const [product, offers, allCourses, assigned, hasSalesPage] = await Promise.all([
     getProductById(id),
     listOfferOptions(),
     listCourses(),
     coursesForProduct(id),
+    hasPageSections("product", id),
   ]);
   if (!product) notFound();
+
+  // The picture a buyer sees: this product's own, else the attached course's.
+  const coverUrl = publicCoverUrl(
+    product.coverPath ?? assigned.find((c) => c.coverPath)?.coverPath ?? null,
+  );
 
   return (
     <div className="flex flex-col gap-8">
@@ -54,6 +61,8 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         offers={offers}
         allCourses={allCourses}
         assignedCourseIds={assigned.map((c) => c.id)}
+        coverUrl={coverUrl}
+        hasSalesPage={hasSalesPage}
       />
 
       {/* Legacy single-file delivery, only for a product with no course yet.

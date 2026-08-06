@@ -28,6 +28,8 @@ export type OfferOption = {
   priceCents: number;
   currency: string;
   interval: string | null;
+  /** So a bump can be described the way the buyer will read it: "$0 today". */
+  trialDays: number | null;
   billingType: "one_time" | "recurring";
   active: boolean;
 };
@@ -84,7 +86,7 @@ export async function listOfferOptions(includeDrafts = false): Promise<OfferOpti
   const q = db
     .from("offers")
     .select(
-      "id, name, grant_type, grant_app_id, grant_entitlement_key, price_cents, currency, interval, billing_type, active",
+      "id, name, grant_type, grant_app_id, grant_entitlement_key, price_cents, currency, interval, trial_days, billing_type, active",
     )
     .eq("store_id", await getStoreId());
   const { data, error } = await (includeDrafts ? q : q.eq("active", true)).order("created_at", {
