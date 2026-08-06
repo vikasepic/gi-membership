@@ -108,14 +108,30 @@ describe("readiness", () => {
 
 describe("the product form uses the shell", () => {
   const src = readFileSync("components/admin/product-form.tsx", "utf8");
+  const header = readFileSync("components/admin/editor-header.tsx", "utf8");
 
   it("puts save where the work is", () => {
-    expect(src).toContain("sticky top-0");
-    expect(src).toContain("Unsaved");
+    // In the header row now, which is one component both editors use.
+    expect(src).toContain("<EditorHeader");
+    expect(header).toContain("sticky top-0");
+    expect(header).toContain("Unsaved");
   });
 
   it("says when something is not ready, from any tab", () => {
-    expect(src).toContain("thing{notReady === 1");
+    expect(src).toContain("{notReady} to sort out");
+  });
+
+  it("carries the cover with the form rather than uploading on its own", () => {
+    // It was its own <form>, which is why it needed a card outside the tabs and
+    // could never be one save with everything else.
+    expect(src).toContain('name="mediaId"');
+    expect(src).toContain('name="clearCover"');
+  });
+
+  it("no longer wraps every group in a card", () => {
+    // A border around a group of fields separates it from a group of fields.
+    expect(src).not.toContain("<Section");
+    expect(src).toContain("<Group");
   });
 
   it("keeps Delete away from Save", () => {

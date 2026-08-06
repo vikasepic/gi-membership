@@ -33,10 +33,11 @@ describe("the link to the live page", () => {
 });
 
 describe("where it appears", () => {
-  it("sits beside Edit sales page on a product", () => {
+  it("sits in the product editor's header", () => {
+    // The header row absorbed the heading block, the two link buttons and the
+    // cover card. ViewLive itself still guards the offer editor.
     const src = readFileSync("app/admin/products/[id]/page.tsx", "utf8");
-    expect(src).toContain("ViewLive");
-    expect(src).toContain("`/p/${product.slug}`");
+    expect(src).toContain("liveHref=");
     expect(src).toContain('product.status === "published"');
   });
 

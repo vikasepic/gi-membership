@@ -31,10 +31,20 @@ export async function saveProduct(_prev: SaveState, formData: FormData): Promise
     return { errors: { courseIds: PUBLISH_WITHOUT_COURSE_ERROR } };
   }
 
+  // The cover posts with everything else now. It used to be its own form,
+  // uploading the moment a file was chosen, which is why it needed a card of
+  // its own and could not sit inside the tabs. A picked file already exists in
+  // the library, so there is nothing to upload here — only a path to record.
+  const chosen = await pickedFile(formData, "cover");
+  if (!chosen.ok) return { errors: { cover: chosen.error } };
+  const clearCover = String(formData.get("clearCover") ?? "") === "1";
+
   let productId: string;
   try {
     productId = id ? (await updateProduct(id, input), id) : await createProduct(input);
     await setProductCourses(productId, courseIds);
+    if (clearCover) await clearProductCover(productId);
+    else if (chosen.picked) await setProductCover(productId, chosen.picked.path);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Save failed";
     // A duplicate slug is a unique-constraint violation (Postgres 23505). Point
@@ -88,49 +98,3 @@ export async function removeProduct(formData: FormData): Promise<void> {
 export type CoverState = { error?: string; ok?: boolean };
 
 // Storefront image for one product. Optional: without it the product shows its
-// course's cover, which is the right default for a single-course product. A
-// bundle, or a listing that wants its own artwork, sets one here.
-export async function uploadProductCoverAction(
-  _prev: CoverState,
-  formData: FormData,
-): Promise<CoverState> {
-  await requireAdmin();
-  const productId = String(formData.get("productId") ?? "");
-  if (!productId) return { error: "Missing product." };
-
-  // Already in the library: no second copy of the same photo under a second
-  // name, which is the whole reason the library exists.
-  const chosen = await pickedFile(formData, "cover");
-  if (!chosen.ok) return { error: chosen.error };
-
-  const file = formData.get("file");
-  if (!chosen.picked && (!(file instanceof File) || file.size === 0)) {
-    return { error: "Choose an image." };
-  }
-  if (!chosen.picked) {
-    const f = file as File;
-    const check = validateUpload({ type: f.type, size: f.size }, "cover");
-    if (!check.ok) return { error: check.error };
-  }
-  try {
-    const path = chosen.picked
-      ? chosen.picked.path
-      : await uploadProductCover(productId, file as File);
-    await setProductCover(productId, path);
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Upload failed" };
-  }
-  revalidatePath("/");
-  revalidatePath(`/admin/products/${productId}`);
-  return { ok: true };
-}
-
-export async function clearProductCoverAction(formData: FormData): Promise<void> {
-  await requireAdmin();
-  const productId = String(formData.get("productId") ?? "");
-  if (productId) {
-    await clearProductCover(productId);
-    revalidatePath("/");
-    revalidatePath(`/admin/products/${productId}`);
-  }
-}

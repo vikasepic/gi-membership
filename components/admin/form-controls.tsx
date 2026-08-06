@@ -51,3 +51,31 @@ export function Section({
     </section>
   );
 }
+
+/**
+ * A group of fields, without a card around it.
+ *
+ * `Section` draws a bordered white box with a heading and a paragraph of hint —
+ * about 90px of chrome before a field. Five of them stacked is most of a screen
+ * spent on separating fields from fields. This is the same job in a hairline and
+ * a small label, for the forms where density is the point.
+ */
+export function Group({
+  label,
+  children,
+  hint,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+}) {
+  return (
+    <div className="border-b border-border/60 py-4 last:border-b-0 first:pt-1">
+      <span className="mb-2.5 block text-[0.6rem] font-medium uppercase tracking-[0.15em] text-muted">
+        {label}
+      </span>
+      {hint && <p className="-mt-1.5 mb-2.5 text-xs text-muted">{hint}</p>}
+      <div className="flex flex-col gap-3">{children}</div>
+    </div>
+  );
+}

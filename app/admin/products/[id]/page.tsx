@@ -1,12 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProductForm } from "@/components/admin/product-form";
-import { ProductCover } from "@/components/admin/product-cover";
 import { publicCoverUrl } from "@/lib/media";
 import { AssetUpload } from "@/components/admin/asset-upload";
 import { getProductById, listOfferOptions } from "@/lib/admin";
 import { listCourses, coursesForProduct } from "@/lib/courses";
-import { ViewLive } from "@/components/admin/view-live";
 import { hasPageSections } from "@/lib/pages";
 
 export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
@@ -20,49 +17,21 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   ]);
   if (!product) notFound();
 
-  // The picture a buyer sees: this product's own, else the attached course's.
-  const coverUrl = publicCoverUrl(
-    product.coverPath ?? assigned.find((c) => c.coverPath)?.coverPath ?? null,
-  );
-
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-2">
-        <Link href="/admin" className="kicker w-fit text-muted hover:text-fg">&larr; Products</Link>
-        <h1 className="text-2xl">{product.title}</h1>
-        <p className="text-sm text-muted">
-          A product is what you sell. Its content lives in{" "}
-          <Link href="/admin/courses" className="underline">courses</Link> — assign one or more below,
-          or attach a single file for a simple one-file sale.
-        </p>
-        <div className="mt-1 flex flex-wrap gap-2">
-          <Link
-            href={`/admin/products/${id}/page-editor`}
-            className="w-fit rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-fg"
-          >
-            Edit sales page →
-          </Link>
-          <ViewLive
-            href={`/p/${product.slug}`}
-            // The storefront hides a draft, so the link would land on a 404.
-            unavailable={product.status === "published" ? null : "published products only"}
-          />
-        </div>
-      </div>
-
-      <ProductCover
-        productId={product.id}
-        coverUrl={publicCoverUrl(product.coverPath)}
-        inheritedUrl={publicCoverUrl(assigned.find((c) => c.coverPath)?.coverPath ?? null)}
-      />
-
+    <div className="flex flex-col gap-5">
+      {/* No heading block and no cover card. Both are in the form's own header
+          row now — the heading was a sentence read once on the first day, and
+          the cover card was five hundred pixels for one picture. */}
       <ProductForm
         product={product}
         offers={offers}
         allCourses={allCourses}
         assignedCourseIds={assigned.map((c) => c.id)}
-        coverUrl={coverUrl}
+        coverUrl={publicCoverUrl(product.coverPath)}
+        inheritedCoverUrl={publicCoverUrl(assigned.find((c) => c.coverPath)?.coverPath ?? null)}
         hasSalesPage={hasSalesPage}
+        salesPageHref={`/admin/products/${id}/page-editor`}
+        liveHref={product.status === "published" ? `/p/${product.slug}` : undefined}
       />
 
       {/* Legacy single-file delivery, only for a product with no course yet.

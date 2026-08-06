@@ -57,7 +57,9 @@ describe("every surface draws a cover the same shape", () => {
     "app/(store)/p/[slug]/page.tsx",
     "app/(store)/page.tsx",
     "components/library/course-overview.tsx",
-    "components/admin/product-cover.tsx",
+    // The product's cover is drawn by the editor's preview now — the separate
+    // upload card it used to live in is gone.
+    "components/admin/editor-preview.tsx",
     "components/admin/course-content.tsx",
   ];
 

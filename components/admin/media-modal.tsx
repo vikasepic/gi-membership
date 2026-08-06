@@ -507,10 +507,13 @@ export function MediaButton({
   kind,
   onPick,
   label,
+  bare = false,
 }: {
   kind: MediaKind;
   onPick: (item: PickedMedia) => void;
-  label: string;
+  label: React.ReactNode;
+  /** No pill around it — for when the label IS the control, like a thumbnail. */
+  bare?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -518,7 +521,11 @@ export function MediaButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-fit rounded-full border border-border bg-surface px-4 py-2 text-sm transition-colors hover:border-primary"
+        className={
+          bare
+            ? "shrink-0"
+            : "w-fit rounded-full border border-border bg-surface px-4 py-2 text-sm transition-colors hover:border-primary"
+        }
       >
         {label}
       </button>

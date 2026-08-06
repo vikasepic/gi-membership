@@ -2,8 +2,11 @@
 
 import { useActionState, useState } from "react";
 import { saveProduct, removeProduct, type SaveState } from "@/app/admin/actions";
-import { inputClass, Field, Section } from "@/components/admin/form-controls";
+import { inputClass, Field, Group } from "@/components/admin/form-controls";
 import { EditorTabs, TabPanel } from "@/components/admin/editor-tabs";
+import { EditorHeader } from "@/components/admin/editor-header";
+import { publicCoverUrl } from "@/lib/media-url";
+import { MediaButton, type PickedMedia } from "@/components/admin/media-modal";
 import { StorefrontPreview, BumpPreview, Readiness } from "@/components/admin/editor-preview";
 import { slugify } from "@/lib/slug";
 import type { Product } from "@/lib/types";
@@ -37,7 +40,10 @@ export function ProductForm({
   allCourses,
   assignedCourseIds = [],
   coverUrl = null,
+  inheritedCoverUrl = null,
   hasSalesPage = false,
+  salesPageHref,
+  liveHref,
 }: {
   product?: Product;
   offers: OfferOption[];
@@ -50,6 +56,10 @@ export function ProductForm({
   assignedCourseIds?: string[];
   /** For the preview — the picture a buyer will see. */
   coverUrl?: string | null;
+  /** The attached course's, used when this product has none of its own. */
+  inheritedCoverUrl?: string | null;
+  salesPageHref?: string;
+  liveHref?: string;
   /** Whether a sales page has actually been built for this product. */
   hasSalesPage?: boolean;
 }) {
@@ -77,6 +87,14 @@ export function ProductForm({
   // Whether there is anything to save. A save button that looks the same before
   // and after a change is a save button you press to find out.
   const [dirty, setDirty] = useState(false);
+  // The cover posts with the form now rather than uploading on its own. Null
+  // means untouched; a picked file replaces it, and "clear" falls back to the
+  // attached course's picture.
+  const [cover, setCover] = useState<PickedMedia | null>(null);
+  const [coverCleared, setCoverCleared] = useState(false);
+  const shownCover = coverCleared
+    ? inheritedCoverUrl
+    : (cover ? publicCoverUrl(cover.path) : coverUrl);
 
   // A field's own client error wins; otherwise fall back to the server's.
   // Editing clears the client error to "", so this must be `||` not `??` —
@@ -116,7 +134,7 @@ export function ProductForm({
   const checks = [
     { ok: courseIds.length > 0, label: "Course attached", detail: "The library delivers courses — without one a buyer gets nothing." },
     { ok: price.trim() !== "" && Number(price) >= 0, label: "Price set" },
-    { ok: Boolean(coverUrl), label: "Cover image", detail: "The catalog card shows a plain gradient without one." },
+    { ok: Boolean(shownCover), label: "Cover image", detail: "The catalog card shows a plain gradient without one." },
     { ok: hasSalesPage, label: "Sales page built", detail: "Buyers land on the plain product page instead." },
     { ok: title.trim().length > 0 && slug.trim().length > 0, label: "Named and addressable" },
   ];
@@ -138,32 +156,49 @@ export function ProductForm({
         <input key={id} type="hidden" name="courseIds" value={id} />
       ))}
 
-      {/* Sticky, because the save button used to be two thousand pixels below
-          the field you had just changed. */}
-      <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-3 border-b border-border bg-bg/95 px-1 py-2.5 backdrop-blur">
-        <span className="flex items-center gap-2">
-          <span
-            aria-hidden
-            className={`size-1.5 rounded-full ${status === "published" ? "bg-[#3f9b6d]" : "bg-border"}`}
-          />
-          <span className="text-sm text-muted">{status === "published" ? "Published" : "Draft"}</span>
-        </span>
-        {notReady > 0 && (
-          <span className="text-xs text-primary">
-            {notReady} thing{notReady === 1 ? "" : "s"} to sort out
-          </span>
-        )}
-        <span className="ml-auto flex items-center gap-3">
-          {dirty && <span className="text-xs text-primary">Unsaved</span>}
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-60"
-          >
-            {pending ? "Saving…" : product ? "Save" : "Create product"}
-          </button>
-        </span>
-      </div>
+      {cover && <input type="hidden" name="mediaId" value={cover.id} />}
+      {coverCleared && <input type="hidden" name="clearCover" value="1" />}
+
+      <EditorHeader
+        backHref="/admin"
+        backLabel="Products"
+        title={title || "New product"}
+        meta={[slug && `/p/${slug}`, price && `$${price}`].filter(Boolean).join(" · ")}
+        status={{ live: status === "published", label: status === "published" ? "Published" : "Draft" }}
+        coverUrl={shownCover}
+        onPickCover={(item) => {
+          setCover(item);
+          setCoverCleared(false);
+          setDirty(true);
+        }}
+        links={
+          <>
+            {notReady > 0 && (
+              <span className="text-xs text-primary">
+                {notReady} to sort out
+              </span>
+            )}
+            {salesPageHref && (
+              <a href={salesPageHref} className="rounded px-2 py-1 text-xs text-muted hover:text-fg">
+                Edit sales page →
+              </a>
+            )}
+            {liveHref && (
+              <a
+                href={liveHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded px-2 py-1 text-xs text-muted hover:text-fg"
+              >
+                View live ↗
+              </a>
+            )}
+          </>
+        }
+        dirty={dirty}
+        pending={pending}
+        saveLabel={product ? "Save" : "Create product"}
+      />
 
       <EditorTabs
         tabs={[
@@ -178,7 +213,7 @@ export function ProductForm({
       <TabPanel tab="basics">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_15rem]">
       <div className="flex flex-col gap-6">
-      <Section title="What you're selling" hint="How this appears on the storefront.">
+      <Group label="What you're selling" hint="How this appears on the storefront.">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label="Title" required error={err("title")}>
             <input
@@ -210,6 +245,47 @@ export function ProductForm({
         </Field>
         {/* No type here — the storefront badge comes from the course this
             product grants. Type is a property of the content, not the price. */}
+        {/* One line, not a card. The picture is in the header; this is the
+            detail you only need while thinking about it. */}
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs">
+          <span className="size-8 shrink-0 overflow-hidden rounded border border-border bg-surface">
+            {shownCover && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={shownCover} alt="" className="size-full object-cover" />
+            )}
+          </span>
+          <span className="text-muted">
+            {coverCleared || (!cover && !coverUrl)
+              ? "Using the attached course's picture."
+              : "This product's own picture."}{" "}
+            Best at 16:10 — 1600 × 1000.
+          </span>
+          <span className="ml-auto flex items-center gap-3">
+            <MediaButton
+              kind="image"
+              label="Replace"
+              onPick={(item) => {
+                setCover(item);
+                setCoverCleared(false);
+                setDirty(true);
+              }}
+            />
+            {(cover || coverUrl) && !coverCleared && (
+              <button
+                type="button"
+                onClick={() => {
+                  setCover(null);
+                  setCoverCleared(true);
+                  setDirty(true);
+                }}
+                className="text-muted hover:text-primary"
+              >
+                Use the course&rsquo;s
+              </button>
+            )}
+          </span>
+        </div>
+
         <Field label="Status" required error={err("status")}>
           <select
             name="status"
@@ -221,7 +297,7 @@ export function ProductForm({
             <option value="published">Published</option>
           </select>
         </Field>
-      </Section>
+      </Group>
       </div>
 
       {/* The thing being written, where it will be read. A tagline is written to
@@ -251,8 +327,7 @@ export function ProductForm({
       </TabPanel>
 
       <TabPanel tab="pricing">
-      <Section
-        title="Pricing"
+      <Group label="Pricing"
         hint="One-time price for this product. Subscriptions live in Offers, not here."
       >
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -275,12 +350,11 @@ export function ProductForm({
             />
           </Field>
         </div>
-      </Section>
+      </Group>
       </TabPanel>
 
       <TabPanel tab="content">
-      <Section
-        title="Content"
+      <Group label="Content"
         hint="Which courses this unlocks. Tick several to sell a bundle. A published product needs at least one — the library delivers courses."
       >
         {/* There is deliberately no image field on a product. The storefront
@@ -335,12 +409,11 @@ export function ProductForm({
           </div>
         )}
         {err("courseIds") && <p className="text-sm text-primary">{err("courseIds")}</p>}
-      </Section>
+      </Group>
       </TabPanel>
 
       <TabPanel tab="funnel">
-      <Section
-        title="Upsells"
+      <Group label="Upsells"
         hint="The bump shows on checkout. If it's declined, the upsell shows once, right after."
       >
         {/* Two selects per placement rather than one. A single select where
@@ -376,12 +449,11 @@ export function ProductForm({
             both="Two buttons side by side, one click each."
           />
         </div>
-      </Section>
+      </Group>
       </TabPanel>
 
       <TabPanel tab="marketing">
-      <Section
-        title="ActiveCampaign"
+      <Group label="ActiveCampaign"
         hint="Buyers of this product are added to ActiveCampaign (or updated if they're already there) and given this tag."
       >
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -416,7 +488,7 @@ export function ProductForm({
           Both take the <strong>numeric id</strong>, not the tag name — Contacts &rarr; Manage Tags,
           then read the id from the URL when editing a tag. Leave either empty for no tag.
         </p>
-      </Section>
+      </Group>
       </TabPanel>
 
       </EditorTabs>
