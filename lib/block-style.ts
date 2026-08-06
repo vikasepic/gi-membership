@@ -36,10 +36,16 @@ export function backgroundCss(bg: Background, theme: BandTheme): CSSProperties {
       // Quotes and backslashes are stripped rather than escaped: this value
       // lands inside url('…'), and the only safe answer to a quote here is
       // that there isn't one.
-      css.backgroundImage = `url('${bg.image.replace(/['"\\]/g, "")}')`;
-      css.backgroundSize = bg.size;
-      css.backgroundPosition = bg.position;
-      css.backgroundRepeat = bg.repeat;
+      const url = `url('${bg.image.replace(/['"\\]/g, "")}')`;
+      const wash = Math.max(0, Math.min(90, bg.overlay ?? 0));
+      // The wash rides in FRONT of the image as a flat gradient, so one
+      // property carries both and nothing needs an extra element to sit in.
+      css.backgroundImage = wash
+        ? `linear-gradient(rgba(0,0,0,${wash / 100}), rgba(0,0,0,${wash / 100})), ${url}`
+        : url;
+      css.backgroundSize = wash ? `auto, ${bg.size}` : bg.size;
+      css.backgroundPosition = wash ? `center, ${bg.position}` : bg.position;
+      css.backgroundRepeat = wash ? `no-repeat, ${bg.repeat}` : bg.repeat;
     }
     return css;
   }
@@ -239,6 +245,25 @@ export function effectiveWidths(block: Block, device: Device): number[] {
   return stacksAt(block, device)
     ? Array.from({ length: count }, () => 100)
     : columnWidths(p, count);
+}
+
+/**
+ * What one column looks like, beyond how wide it is.
+ *
+ * Returned separately from the width because the width is arithmetic the row
+ * owns and this is a decision someone made about that column.
+ */
+export function columnCss(block: Block, index: number, theme: BandTheme): CSSProperties {
+  const s = block.columnStyles?.[index];
+  if (!s) return {};
+  const css: CSSProperties = { ...backgroundCss(s.background, theme) };
+  const pad = dimCss(s.padding);
+  if (pad !== "0px 0px 0px 0px") css.padding = pad;
+  if (s.radius) css.borderRadius = `${s.radius}px`;
+  // Only where a background was actually set: a corner on a transparent column
+  // rounds nothing, and clipping content that overflows would be a surprise.
+  if (s.background.type !== "none" && s.radius) css.overflow = "hidden";
+  return css;
 }
 
 export function rowLayout(block: Block, device: Device): RowLayout {

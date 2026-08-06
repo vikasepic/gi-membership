@@ -9,6 +9,7 @@ import { RichText } from "@/components/editor/rich-text";
 import {
   BLOCK_LABEL,
   BLOCK_ICON,
+  COLUMN_CONTROLS,
   groupedPalette,
   clearControl,
   controlsFor,
@@ -35,6 +36,9 @@ import {
   updateBlock,
   evenWidths,
   hasOverride,
+  columnAsBlock,
+  setColumnStyle,
+  splitColumnId,
   setColumnWidth,
   DEVICE_CANVAS,
   type Block,
@@ -54,7 +58,7 @@ import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/li
  * except to hand it on.
  */
 const CanvasDevice = createContext<Device>("desktop");
-import { blockCssAt, effectiveWidths, rowLayout, stacksAt } from "@/lib/block-style";
+import { blockCssAt, columnCss, effectiveWidths, rowLayout, stacksAt } from "@/lib/block-style";
 import { imageSrc } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
 
@@ -136,9 +140,31 @@ export function BlockEditor({
     onChange(step.value);
   }
 
+  /**
+   * A selected column, if that is what is selected.
+   *
+   * Its id is "rowId#2". Resolved before the block lookup, because findBlock
+   * would search for that id and find nothing — a column is not a block and
+   * has no id of its own.
+   */
+  const column = useMemo(() => {
+    const parts = selectedId ? splitColumnId(selectedId) : null;
+    if (!parts) return null;
+    const row = findBlock(blocks, parts.rowId)?.block;
+    if (!row?.columns || parts.index >= row.columns.length) return null;
+    return { row, index: parts.index };
+  }, [blocks, selectedId]);
+
   const selected = useMemo(
-    () => (selectedId ? findBlock(blocks, selectedId)?.block ?? null : null),
-    [blocks, selectedId],
+    () =>
+      column
+        ? // The column's style, wearing a block so every existing control can
+          // read and write it without knowing what it is.
+          columnAsBlock(column.row, column.index)
+        : selectedId
+          ? (findBlock(blocks, selectedId)?.block ?? null)
+          : null,
+    [blocks, selectedId, column],
   );
 
   function patch(id: string, next: Block, key?: string) {
@@ -175,7 +201,22 @@ export function BlockEditor({
     setTab("content");
   }
 
-  const tabs = selected ? controlsFor(selected) : null;
+  const tabs = column
+    ? { content: [], style: COLUMN_CONTROLS, advanced: [] }
+    : selected
+      ? controlsFor(selected)
+      : null;
+
+  /**
+   * One writer for both.
+   *
+   * A column's edit has to be unwrapped back onto its row; a block's is written
+   * as it is. Keeping that in one place is what stops the two paths drifting.
+   */
+  function applyEdit(next: Block, key?: string) {
+    if (column) patch(column.row.id, setColumnStyle(column.row, column.index, next.style), key);
+    else if (selected) patch(selected.id, next, key);
+  }
 
   // Escape closes it. A full-screen editor with only one way out is a trap the
   // first time a click misses. Cmd/Ctrl+Z is the other reflex — and the one
@@ -271,7 +312,9 @@ export function BlockEditor({
               device={device}
               onSelect={(id) => {
                 setSelectedId(id);
-                setTab("content");
+                // A column has only a Style tab; landing on Content would show
+                // an empty panel and read as nothing having happened.
+                setTab(splitColumnId(id) ? "style" : "content");
               }}
             />
           ) : (
@@ -373,8 +416,23 @@ export function BlockEditor({
           ) : (
             <>
               <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-                <strong className="font-display text-sm">{BLOCK_LABEL[selected.type]}</strong>
+                <strong className="font-display text-sm">
+                  {column ? `Column ${column.index + 1}` : BLOCK_LABEL[selected.type]}
+                </strong>
                 <div className="ml-auto flex gap-1">
+                  {column ? (
+                    // A column cannot be duplicated or deleted on its own — its
+                    // count belongs to the row. Offering the buttons and having
+                    // them do nothing would be worse than not offering them.
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(column.row.id)}
+                      className="rounded px-2 text-[0.68rem] text-muted hover:text-fg"
+                    >
+                      Edit the row
+                    </button>
+                  ) : (
+                  <>
                   <IconBtn label="Duplicate" onClick={() => commit(duplicateBlock(blocks, selected.id))}>
                     ⧉
                   </IconBtn>
@@ -387,10 +445,12 @@ export function BlockEditor({
                   >
                     ✕
                   </IconBtn>
+                  </>
+                  )}
                 </div>
               </div>
               <div className="flex border-b border-border">
-                {(["content", "style", "advanced"] as Tab[]).map((t) => (
+                {(column ? (["style"] as Tab[]) : (["content", "style", "advanced"] as Tab[])).map((t) => (
                   <button
                     key={t}
                     type="button"
@@ -442,15 +502,18 @@ export function BlockEditor({
                           (selected.props as Record<string, unknown>).alt ?? "",
                         ).trim();
                         if (altControl && !isGroup(altControl) && !current) {
-                          patch(selected.id, writeControl(selected, altControl, alt, device));
+                          applyEdit(writeControl(selected, altControl, alt, device));
                         }
                       }}
                       // Keyed per control, so dragging one slider is one undo
                       // step but moving to the next control starts another.
                       onChange={(v) =>
-                        patch(selected.id, writeControl(selected, c, v, device), `set:${selected.id}:${c.key}`)
+                        applyEdit(
+                          writeControl(selected, c, v, column ? "desktop" : device),
+                          `set:${selected.id}:${c.key}`,
+                        )
                       }
-                      onClear={() => patch(selected.id, clearControl(selected, c, device))}
+                      onClear={() => applyEdit(clearControl(selected, c, device))}
                     />
                   ),
                 )}
@@ -831,8 +894,29 @@ function RowColumns({
   const columns = block.columns ?? [];
   return (
     <div style={layout.container}>
-      {columns.map((col, c) => (
-        <div key={c} style={{ borderColor: theme.rule, ...layout.columns[c] }}>
+      {columns.map((col, c) => {
+        const colId = `${block.id}#${c}`;
+        return (
+        <div
+          key={c}
+          onClick={(e) => {
+            // Only when the click was not on a block inside it. A column is the
+            // thing behind its contents, so it is what a click on the space
+            // around them means.
+            e.stopPropagation();
+            onSelect(colId);
+          }}
+          className={
+            selectedId === colId
+              ? "outline outline-2 outline-offset-1 outline-[var(--primary)]"
+              : "hover:outline hover:outline-1 hover:outline-offset-1 hover:outline-[var(--border)]"
+          }
+          style={{
+            borderColor: theme.rule,
+            ...layout.columns[c],
+            ...columnCss(block, c, theme),
+          }}
+        >
           <Zone
             emptyLabel="Drop here"
             className="flex min-h-[64px] flex-col rounded border border-dashed p-1.5"
@@ -850,7 +934,8 @@ function RowColumns({
             target={(index) => ({ zone: "column", rowId: block.id, column: c, index })}
           />
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

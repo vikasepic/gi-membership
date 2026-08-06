@@ -4,6 +4,7 @@ import {
   blockColors,
   blockCssAt,
   blockRules,
+  columnCss,
   rowLayout,
   headingTag,
   hiddenClasses,
@@ -834,7 +835,11 @@ function Inner({
       return (
         <div data-row style={layout?.container}>
           {columns.map((col, i) => (
-            <div key={i} className="flex flex-col" style={layout?.columns[i]}>
+            <div
+              key={i}
+              className="flex flex-col"
+              style={{ ...layout?.columns[i], ...columnCss(block, i, theme) }}
+            >
               {flow(col.filter((child) => !blockRendersNothing(child)), theme, money, cta, at)}
             </div>
           ))}

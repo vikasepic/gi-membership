@@ -44,6 +44,14 @@ export type Dim = { t: number; r: number; b: number; l: number; u: Unit; link: b
 
 export type BackgroundType = "none" | "classic" | "gradient";
 export type Background = {
+  /**
+   * A dark wash over the image, 0–90.
+   *
+   * Words on a photograph are readable or they are not, and the answer changes
+   * with the photograph. Editing the picture to fix it means a second copy of
+   * the file that only works on one background.
+   */
+  overlay: number;
   type: BackgroundType;
   color: string | null;
   image: string;
@@ -147,6 +155,16 @@ export type Block = {
   responsive?: ResponsiveStyle;
   /** Rows only: one array of blocks per column. */
   columns?: Block[][];
+  /**
+   * Rows only: one style per column, for the columns that have been given one.
+   *
+   * A column was a bare array with nowhere to put anything, so a column could
+   * not have a background, a padding or a corner — the three things people
+   * reach for the moment they put two columns side by side. It is a sparse
+   * array on purpose: a row nobody has styled stores nothing, and an old row
+   * reads back exactly as it did.
+   */
+  columnStyles?: (BlockStyle | null)[];
 };
 
 /** Where a block is being put. */
@@ -173,6 +191,7 @@ export const emptyBackground = (): Background => ({
   toAt: 100,
   shape: "linear",
   angle: 135,
+  overlay: 0,
 });
 
 export const baseStyle = (over: Partial<BlockStyle> = {}): BlockStyle => ({
@@ -326,6 +345,9 @@ function normalizeBackground(v: unknown): Background {
     toAt: num(v.toAt, d.toAt),
     shape: oneOf(v.shape, ["linear", "radial"] as const, d.shape),
     angle: num(v.angle, d.angle),
+    // Clamped rather than trusted: 100 would black the picture out entirely,
+    // which is a way to lose an image without noticing you have.
+    overlay: Math.max(0, Math.min(90, num(v.overlay, 0))),
   };
 }
 
@@ -538,6 +560,39 @@ export function columnWidths(props: Record<string, unknown>, count: number): num
  * 40/30/30 rather than 40/20/20 with a gap on the end. Widths that do not add
  * up to 100 are not a thing the renderer can draw.
  */
+/**
+ * The style of one column, as a block the ordinary control machinery can read.
+ *
+ * A synthetic block rather than a second set of readers and writers: every
+ * control already knows how to read and write `.style`, and teaching them about
+ * columns as well is how the two drift apart.
+ */
+export function columnAsBlock(row: Block, index: number): Block {
+  return {
+    id: `${row.id}#${index}`,
+    type: "row",
+    props: {},
+    style: row.columnStyles?.[index] ?? baseStyle(),
+  };
+}
+
+/** Write a column's style back onto its row. */
+export function setColumnStyle(row: Block, index: number, style: BlockStyle): Block {
+  const count = row.columns?.length ?? 0;
+  const next = Array.from({ length: count }, (_, i) =>
+    i === index ? style : (row.columnStyles?.[i] ?? null),
+  );
+  return { ...row, columnStyles: next };
+}
+
+/** "rowId#2" — the id a selected column carries. */
+export function splitColumnId(id: string): { rowId: string; index: number } | null {
+  const at = id.lastIndexOf("#");
+  if (at < 0) return null;
+  const index = Number(id.slice(at + 1));
+  return Number.isInteger(index) && index >= 0 ? { rowId: id.slice(0, at), index } : null;
+}
+
 export function setColumnWidth(widths: number[], index: number, value: number): number[] {
   const n = widths.length;
   if (n <= 1) return [100];
@@ -633,6 +688,14 @@ export function normalizeBlocks(value: unknown, depth = 0): Block[] {
         ),
       );
       block.columns = Array.from({ length: want }, (_, i) => normalizeBlocks(stored[i], depth + 1));
+      // Only kept where something was actually set: an array of defaults would
+      // double the size of every row on every page for nothing.
+      const rawStyles = Array.isArray(raw.columnStyles) ? raw.columnStyles : [];
+      if (rawStyles.some(isRecord)) {
+        block.columnStyles = Array.from({ length: want }, (_, i) =>
+          isRecord(rawStyles[i]) ? normalizeStyle(rawStyles[i]) : null,
+        );
+      }
       // Anything the stored columns hold beyond `want` would otherwise vanish.
       if (stored.length > want) {
         const spill = stored.slice(want).flatMap((c) => normalizeBlocks(c, depth + 1));

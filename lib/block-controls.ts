@@ -406,6 +406,35 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
 
 const bgIs = (t: string) => (b: Block) => b.style.background.type === t;
 
+/**
+ * What a column can be given.
+ *
+ * The same background machinery every block already has, plus the two things a
+ * column is for: room around its contents, and a corner. Deliberately not the
+ * whole Advanced tab — a column has no typography of its own, and offering it
+ * would suggest otherwise.
+ */
+export const COLUMN_CONTROLS: Control[] = [
+  group("Background"),
+  style({ kind: "select", key: "background.type", label: "Type", options: [["none", "None"], ["classic", "Classic"], ["gradient", "Gradient"]] }),
+  style({ kind: "color", key: "background.color", label: "Colour", when: bgIs("classic") }),
+  style({ kind: "image", key: "background.image", label: "Image", when: bgIs("classic") }),
+  style({ kind: "select", key: "background.size", label: "Size", options: [["cover", "Cover"], ["contain", "Contain"], ["auto", "Auto"]], when: bgIs("classic") }),
+  style({ kind: "select", key: "background.position", label: "Position", options: [["center", "Centre"], ["top", "Top"], ["bottom", "Bottom"]], when: bgIs("classic") }),
+  style({ kind: "select", key: "background.repeat", label: "Repeat", options: [["no-repeat", "No"], ["repeat", "Tile"]], when: bgIs("classic") }),
+  style({ kind: "number", key: "background.overlay", label: "Darken", min: 0, max: 90, step: 5, unit: "%", when: bgIs("classic") }),
+  style({ kind: "color", key: "background.from", label: "Colour one", when: bgIs("gradient") }),
+  style({ kind: "color", key: "background.to", label: "Colour two", when: bgIs("gradient") }),
+  style({ kind: "number", key: "background.angle", label: "Angle", min: 0, max: 360, step: 15, unit: "°", when: bgIs("gradient") }),
+  // An image behind words needs the words to stay readable, and a wash is how
+  // that is done without editing the picture.
+  style({ kind: "number", key: "background.overlay", label: "Darken", min: 0, max: 90, step: 5, unit: "%", when: bgIs("classic") }),
+
+  group("Spacing"),
+  style({ kind: "dim", key: "padding", label: "Padding" }),
+  style({ kind: "number", key: "radius", label: "Corner", min: 0, max: 60, step: 2, unit: "px" }),
+];
+
 export const ADVANCED_CONTROLS: Control[] = [
   group("Layout"),
   style({ kind: "dim", key: "margin", label: "Margin" }),
