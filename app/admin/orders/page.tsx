@@ -1,117 +1,208 @@
+import Link from "next/link";
 import { listOrders } from "@/lib/orders";
-import { RefundButton } from "@/components/admin/refund-button";
-
 import { money } from "@/lib/money";
+import { OrderRowView } from "@/components/admin/order-row";
+import {
+  applyFilter,
+  chipCounts,
+  filterFrom,
+  filterHref,
+  totalsFor,
+  type OrderFilter,
+} from "@/lib/order-view";
 
-const when = (iso: string) =>
-  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(
-    new Date(iso),
-  );
+const CHIPS: { key: OrderFilter["status"]; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "paid", label: "Paid" },
+  { key: "refunded", label: "Refunded" },
+  { key: "pending", label: "Pending" },
+  { key: "failed", label: "Failed" },
+  { key: "subscriptions", label: "Subscriptions" },
+];
 
-const STATUS_STYLE: Record<string, string> = {
-  paid: "text-navy",
-  refunded: "text-primary",
-  pending: "text-muted",
-  failed: "text-primary",
-};
+const RANGES: { key: OrderFilter["range"]; label: string }[] = [
+  { key: "all", label: "All time" },
+  { key: "7", label: "Last 7 days" },
+  { key: "30", label: "Last 30 days" },
+  { key: "90", label: "Last 90 days" },
+];
 
-export default async function AdminOrdersPage() {
-  const orders = await listOrders();
-  // Refunded orders shouldn't inflate the revenue figure.
-  const paid = orders.filter((o) => o.status === "paid");
-  const gross = paid.reduce((n, o) => n + o.totalCents, 0);
-  const refunded = orders.filter((o) => o.status === "refunded").length;
-  const currency = orders[0]?.currency ?? "usd";
+const SORTS: { key: OrderFilter["sort"]; label: string }[] = [
+  { key: "newest", label: "Newest first" },
+  { key: "oldest", label: "Oldest first" },
+  { key: "largest", label: "Largest first" },
+];
+
+/**
+ * Orders, as something you can work.
+ *
+ * The filter lives in the URL rather than in component state, so a view is a
+ * link — "the refunds from last month" can be sent to someone or kept in a tab,
+ * and the back button means what it looks like it means.
+ */
+export default async function AdminOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const filter = filterFrom(await searchParams);
+  const all = await listOrders();
+  const shown = applyFilter(all, filter);
+  const totals = totalsFor(shown, all[0]?.currency ?? "usd");
+  const counts = chipCounts(all, filter);
+  const narrowed = shown.length !== all.length;
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
         <h1 className="text-2xl">Orders</h1>
         <p className="max-w-2xl text-sm text-muted">
-          Every transaction, newest first. Refunding here also removes the buyer&rsquo;s access and
-          cancels any subscription the order started.
+          Refunding here also removes the buyer&rsquo;s access and cancels any subscription the order
+          started.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <Kpi label="Orders" value={String(orders.length)} />
-        <Kpi label="Paid" value={money(gross, currency)} hint={`${paid.length} orders`} />
-        <Kpi label="Refunded" value={String(refunded)} />
+      {/* Computed from what is on screen, not from everything. Three numbers
+          that do not move when you filter are decoration. */}
+      <div className="flex flex-wrap items-end gap-x-8 gap-y-4 border-b border-border pb-4">
+        <Figure label={narrowed ? "Showing" : "Orders"} value={String(totals.shown)} hint={narrowed ? `of ${all.length}` : undefined} />
+        <Figure
+          label="Taken"
+          value={money(totals.paidCents, totals.currency)}
+          hint={`${totals.paidCount} paid`}
+        />
+        <Figure
+          label="Refunded"
+          value={String(totals.refundedCount)}
+          hint={totals.refundedCents ? money(totals.refundedCents, totals.currency) : undefined}
+        />
+        <Figure label="Average" value={money(totals.averageCents, totals.currency)} />
       </div>
 
-      {orders.length === 0 ? (
+      <div className="flex flex-wrap items-center gap-2">
+        {CHIPS.map((c) => (
+          <Link
+            key={c.key}
+            href={filterHref(filter, { status: c.key })}
+            aria-current={filter.status === c.key ? "page" : undefined}
+            className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${
+              filter.status === c.key
+                ? "border-primary bg-primary/10 font-medium text-primary"
+                : "border-border text-muted hover:border-fg hover:text-fg"
+            }`}
+          >
+            {c.label}
+            <span className="tabular-nums opacity-70">{counts[c.key]}</span>
+          </Link>
+        ))}
+
+        {/* A GET form: typing a search and pressing enter is a navigation, so
+            the result is a link like every other view here. */}
+        <form action="/admin/orders" className="ml-auto flex flex-wrap items-center gap-2">
+          {filter.status !== "all" && <input type="hidden" name="status" value={filter.status} />}
+          {filter.range !== "all" && <input type="hidden" name="range" value={filter.range} />}
+          {filter.sort !== "newest" && <input type="hidden" name="sort" value={filter.sort} />}
+          <input
+            name="q"
+            defaultValue={filter.q}
+            placeholder="Email, product or payment id"
+            aria-label="Search orders"
+            className="w-56 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs outline-none focus:border-primary"
+          />
+          <Picker name="range" value={filter.range} options={RANGES} label="Date range" />
+          <Picker name="sort" value={filter.sort} options={SORTS} label="Sort" />
+          <button
+            type="submit"
+            className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:border-primary hover:text-fg"
+          >
+            Apply
+          </button>
+          {(filter.q || filter.range !== "all" || filter.sort !== "newest" || filter.status !== "all") && (
+            <Link href="/admin/orders" className="text-xs text-muted underline-offset-4 hover:underline">
+              Clear
+            </Link>
+          )}
+        </form>
+      </div>
+
+      {shown.length === 0 ? (
         <p className="rounded-2xl border border-border bg-surface px-5 py-10 text-center text-muted">
-          No orders yet. They appear here the moment someone buys.
+          {all.length === 0
+            ? "No orders yet. They appear here the moment someone buys."
+            : "Nothing matches that. Widen the date range, or clear the filters."}
         </p>
       ) : (
-        <div className="flex flex-col gap-3">
-          {orders.map((o) => (
-            <div
-              key={o.id}
-              className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5"
-            >
-              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <span className="font-medium">{o.email}</span>
-                <span className="font-display text-lg">{money(o.totalCents, o.currency)}</span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
-                <span>{when(o.createdAt)}</span>
-                <span className={STATUS_STYLE[o.status] ?? "text-muted"}>{o.status}</span>
-                {o.buyerCountry && <span>{o.buyerCountry}</span>}
-                {o.taxCents ? <span>incl. {money(o.taxCents, o.currency)} tax</span> : null}
-              </div>
-
-              {/* What they actually got. A bump or upsell is a separate line,
-                  because it was a separate charge — never merged into one. */}
-              {o.items.length > 0 && (
-                <ul className="flex flex-col gap-1 border-t border-border pt-3 text-sm">
-                  {o.items.map((i, idx) => (
-                    <li key={idx} className="flex justify-between gap-4">
-                      <span className="text-muted">
-                        {i.description}
-                        {i.kind !== "product" && (
-                          <span className="ml-2 rounded-full bg-surface-2 px-2 py-0.5 text-[11px] uppercase">
-                            {i.kind}
-                          </span>
-                        )}
-                        {i.stripeSubscriptionId && (
-                          <span className="ml-2 text-[11px] text-muted">subscription</span>
-                        )}
-                      </span>
-                      <span>{money(i.amountCents, o.currency)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <div className="flex items-center justify-end border-t border-border pt-3">
-                {o.status === "paid" ? (
-                  <RefundButton
-                    orderId={o.id}
-                    email={o.email}
-                    amount={money(o.totalCents, o.currency)}
-                  />
-                ) : (
-                  <span className="text-sm text-muted">
-                    {o.status === "refunded" ? "Refunded" : "Nothing to refund"}
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
+        <div className="overflow-x-auto rounded-2xl border border-border bg-surface">
+          <table className="w-full min-w-[46rem] border-collapse">
+            <thead>
+              <tr className="border-b border-border bg-surface-2">
+                <Th>Date</Th>
+                <Th>Buyer</Th>
+                <Th>What they bought</Th>
+                <Th>Status</Th>
+                <Th right>Total</Th>
+                <Th />
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((o) => (
+                <OrderRowView key={o.id} order={o} />
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
   );
 }
 
-function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Figure({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="flex flex-col gap-1 rounded-2xl border border-border bg-surface p-5">
+    <div className="flex flex-col">
       <span className="kicker text-muted">{label}</span>
-      <span className="font-display text-3xl">{value}</span>
-      {hint && <span className="text-xs text-muted">{hint}</span>}
+      <span className="font-display text-xl tabular-nums">
+        {value}
+        {hint && <span className="ml-1.5 text-xs font-normal text-muted">{hint}</span>}
+      </span>
     </div>
+  );
+}
+
+function Th({ children, right }: { children?: React.ReactNode; right?: boolean }) {
+  return (
+    <th
+      className={`px-3 py-2 text-[0.62rem] font-medium uppercase tracking-[0.12em] text-muted ${
+        right ? "text-right" : "text-left"
+      }`}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Picker<T extends string>({
+  name,
+  value,
+  options,
+  label,
+}: {
+  name: string;
+  value: T;
+  options: { key: T; label: string }[];
+  label: string;
+}) {
+  return (
+    <select
+      name={name}
+      defaultValue={value}
+      aria-label={label}
+      className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-primary"
+    >
+      {options.map((o) => (
+        <option key={o.key} value={o.key}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }
