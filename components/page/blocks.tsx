@@ -86,6 +86,24 @@ export type CtaRender = (label: string, theme: BandTheme) => React.ReactNode;
  */
 const BUTTON_CLASS = "px-7 py-3 font-display text-[0.95rem]";
 
+/**
+ * Text where the line breaks someone typed are the line breaks they get.
+ *
+ * A heading was rendered as a plain child, so HTML collapsed every newline into
+ * a space — pressing Enter did nothing. Typing <br> did not work either,
+ * because a plain child is escaped: what appeared on the page was the four
+ * characters, which reads as the editor being broken rather than strict.
+ *
+ * So both are honoured: a typed <br> becomes a real break, and the result is
+ * rendered with `pre-line` so the Enter key works on its own. Still text and
+ * still escaped — a heading that ran arbitrary HTML would be a way to put a
+ * script on a sales page.
+ */
+const BREAK = /<br\s*\/?>/gi;
+export function withLineBreaks(value: string): string {
+  return value.replace(BREAK, "\n");
+}
+
 export function Blocks({
   blocks,
   theme,
@@ -220,8 +238,8 @@ function Inner({
         // Size, weight, line height, tracking and colour all arrive from the
         // block's own rule — including the per-tag default — so that a value
         // set on mobile is not outranked by a utility class here.
-        <Tag className="font-display text-balance">
-          {str(p.text)}
+        <Tag className="font-display text-balance" style={{ whiteSpace: "pre-line" }}>
+          {withLineBreaks(str(p.text))}
         </Tag>
       );
     }
@@ -402,7 +420,9 @@ function Inner({
               }}
             >
               <p className="m-0" style={type}>
-                &ldquo;{str(item.quote)}&rdquo;
+                <span style={{ whiteSpace: "pre-line" }}>
+                  &ldquo;{withLineBreaks(str(item.quote))}&rdquo;
+                </span>
               </p>
               {(str(item.name) || str(item.role)) && (
                 <span className="mt-2 block text-[0.8rem] opacity-70">
@@ -609,7 +629,11 @@ function Inner({
             <div key={i} className="py-4" style={i ? { borderTop: `1px solid ${c.rule}` } : undefined}>
               <div className="text-[0.66rem] uppercase tracking-[0.13em]" style={{ color: theme.muted }}>{str(it.label)}</div>
               <div className="mt-1 font-display text-[1.3rem] font-bold" style={{ color: c.fg, ...type }}>{str(it.value)}</div>
-              {str(it.detail) && <div className="mt-1 text-[0.8rem] leading-snug" style={{ color: theme.muted }}>{str(it.detail)}</div>}
+              {str(it.detail) && (
+                <div className="mt-1 text-[0.8rem] leading-snug" style={{ color: theme.muted, whiteSpace: "pre-line" }}>
+                  {withLineBreaks(str(it.detail))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -625,7 +649,11 @@ function Inner({
             >
               <div className="font-display text-[1.15rem] font-bold" style={{ color: c.fg, ...type }}>{str(it.value)}</div>
               <div className="mt-0.5 text-[0.78rem]" style={{ color: theme.muted }}>{str(it.label)}</div>
-              {str(it.detail) && <div className="mt-0.5 text-[0.74rem]" style={{ color: theme.muted }}>{str(it.detail)}</div>}
+              {str(it.detail) && (
+                <div className="mt-0.5 text-[0.74rem]" style={{ color: theme.muted, whiteSpace: "pre-line" }}>
+                  {withLineBreaks(str(it.detail))}
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -9,6 +9,7 @@ import {
 import type { Attachment } from "@/lib/curriculum";
 import { RichText } from "@/components/editor/rich-text";
 import { inputClass as input, Field, Section } from "@/components/admin/form-controls";
+import { MediaButton, type PickedMedia } from "@/components/admin/media-modal";
 import type { CourseItem, ItemType } from "@/lib/curriculum";
 
 // The part of the lesson editor that the Type dropdown controls.
@@ -254,27 +255,21 @@ function MediaFiles({
         </ul>
       )}
 
-      <label className="w-fit cursor-pointer rounded-full border border-dashed border-border px-3 py-1 text-xs text-muted transition-colors hover:border-fg hover:text-fg">
-        {busy ? "Working…" : `+ ${addLabel}`}
-        <input
-          type="file"
-          accept={accept}
-          className="sr-only"
-          disabled={busy}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = "";
-            if (!file) return;
-            run(async () => {
-              const fd = new FormData();
-              fd.append("courseId", item.courseId);
-              fd.append("itemId", item.id);
-              fd.append("file", file);
-              return uploadItemFileAction(fd);
-            });
-          }}
-        />
-      </label>
+      {/* The same window as everywhere else, offering only what this lesson
+          type can use — an audio lesson is never shown a PDF. */}
+      <MediaButton
+        kind={accept.startsWith("audio") ? "audio" : "document"}
+        label={busy ? "Working…" : addLabel}
+        onPick={(picked: PickedMedia) =>
+          run(async () => {
+            const fd = new FormData();
+            fd.append("courseId", item.courseId);
+            fd.append("itemId", item.id);
+            fd.append("mediaId", picked.id);
+            return uploadItemFileAction(fd);
+          })
+        }
+      />
       {error && <span className="text-sm text-primary">{error}</span>}
       <span className="text-xs text-muted">
         Uploads are private — only people who own this course can open them.

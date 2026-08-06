@@ -73,7 +73,7 @@ describe("weight", () => {
     // The real cause: Inter was loaded pinned to 600, so Regular, Semibold and
     // Bold all rendered as 600 — the control changed a number and nothing else.
     const layout = readFileSync("app/layout.tsx", "utf8");
-    expect(layout).not.toMatch(/Inter\(\{[^}]*weight:/s);
+    expect(layout).not.toMatch(/Inter\(\{[^}]*weight:/);
     expect(layout).toMatch(/Poppins\(\{[\s\S]*?"700"/);
   });
 });

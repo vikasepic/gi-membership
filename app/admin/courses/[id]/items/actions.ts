@@ -16,7 +16,7 @@ import {
   setItemTitle,
   updateItem,
 } from "@/lib/curriculum-admin";
-import { validateUpload, uploadAttachment, uploadCover } from "@/lib/media";
+import { validateUpload, uploadAttachment, uploadCover, pickedFile } from "@/lib/media";
 import type { ItemType } from "@/lib/curriculum";
 
 const ITEM_TYPES: ItemType[] = ["video", "audio", "pdf", "text"];
@@ -103,13 +103,18 @@ export async function uploadCoverAction(formData: FormData) {
   const courseId = String(formData.get("courseId"));
   const itemId = String(formData.get("itemId"));
   const base = `/admin/courses/${courseId}/items/${itemId}`;
+  const chosen = await pickedFile(formData, "cover");
+  if (!chosen.ok) redirect(`${base}?error=${encodeURIComponent(chosen.error)}`);
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
+  if (!chosen.picked && (!(file instanceof File) || file.size === 0)) {
     redirect(`${base}?error=${encodeURIComponent("Choose a file")}`);
   }
-  const check = validateUpload({ type: file.type, size: file.size }, "cover");
-  if (!check.ok) redirect(`${base}?error=${encodeURIComponent(check.error)}`);
-  await setCover(itemId, await uploadCover(itemId, file));
+  if (!chosen.picked) {
+    const f = file as File;
+    const check = validateUpload({ type: f.type, size: f.size }, "cover");
+    if (!check.ok) redirect(`${base}?error=${encodeURIComponent(check.error)}`);
+  }
+  await setCover(itemId, chosen.picked ? chosen.picked.path : await uploadCover(itemId, file as File));
   revalidatePath(base);
 }
 
@@ -118,13 +123,18 @@ export async function uploadAttachmentAction(formData: FormData) {
   const courseId = String(formData.get("courseId"));
   const itemId = String(formData.get("itemId"));
   const base = `/admin/courses/${courseId}/items/${itemId}`;
+  const chosen = await pickedFile(formData, "attachment");
+  if (!chosen.ok) redirect(`${base}?error=${encodeURIComponent(chosen.error)}`);
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
+  if (!chosen.picked && (!(file instanceof File) || file.size === 0)) {
     redirect(`${base}?error=${encodeURIComponent("Choose a file")}`);
   }
-  const check = validateUpload({ type: file.type, size: file.size }, "attachment");
-  if (!check.ok) redirect(`${base}?error=${encodeURIComponent(check.error)}`);
-  await addAttachment(itemId, await uploadAttachment(itemId, file));
+  if (!chosen.picked) {
+    const f = file as File;
+    const check = validateUpload({ type: f.type, size: f.size }, "attachment");
+    if (!check.ok) redirect(`${base}?error=${encodeURIComponent(check.error)}`);
+  }
+  await addAttachment(itemId, chosen.picked ?? (await uploadAttachment(itemId, file as File)));
   revalidatePath(base);
 }
 
@@ -152,14 +162,21 @@ export async function uploadItemFileAction(formData: FormData): Promise<ItemUplo
   const courseId = String(formData.get("courseId") ?? "");
   if (!itemId || !courseId) return { error: "Missing lesson." };
 
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "Choose a file." };
+  const chosen = await pickedFile(formData, "attachment");
+  if (!chosen.ok) return { error: chosen.error };
 
-  const check = validateUpload({ type: file.type, size: file.size }, "attachment");
-  if (!check.ok) return { error: check.error };
+  const file = formData.get("file");
+  if (!chosen.picked && (!(file instanceof File) || file.size === 0)) {
+    return { error: "Choose a file." };
+  }
+  if (!chosen.picked) {
+    const f = file as File;
+    const check = validateUpload({ type: f.type, size: f.size }, "attachment");
+    if (!check.ok) return { error: check.error };
+  }
 
   try {
-    await addAttachment(itemId, await uploadAttachment(itemId, file));
+    await addAttachment(itemId, chosen.picked ?? (await uploadAttachment(itemId, file as File)));
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Upload failed." };
   }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DeleteItemButton } from "@/components/admin/delete-item-button";
 import { LessonTypeFields } from "@/components/admin/lesson-type-fields";
 import { Section } from "@/components/admin/form-controls";
+import { ItemCoverPick, ItemFilePick } from "@/components/admin/item-media";
 import { publicCoverUrl } from "@/lib/media";
 import type { CourseItem } from "@/lib/curriculum";
 import {
@@ -76,16 +77,22 @@ export function ItemEditor({
         <form action={uploadCoverAction} className="flex flex-col gap-3">
           <input type="hidden" name="courseId" value={courseId} />
           <input type="hidden" name="itemId" value={item.id} />
-          <input type="file" name="file" accept="image/*" className="text-sm" />
-          <button className="w-fit rounded-full border border-border px-5 py-2 text-sm hover:border-primary">
-            Upload cover
-          </button>
+          <ItemCoverPick hasCover={Boolean(cover)} />
         </form>
       </Section>
 
+      {/* Only where the lesson's own panel does not already own files.
+          An audio lesson and a PDF lesson each have their uploader in the
+          panel for that type, beside the links they belong with — and having a
+          second, untyped Files box under both of them was the thing that made
+          it unclear which one to use.
+
+          A video or a written lesson has no such panel, and a worksheet
+          attached to one is a real thing to want, so this is what it is for. */}
+      {(item.itemType === "video" || item.itemType === "text") && (
       <Section
-        title="Files"
-        hint="Audio, PDFs and downloads. Private — only people who own this can reach them."
+        title="Downloads"
+        hint="A worksheet or a PDF to go with this lesson. Private — only people who own this can reach them."
       >
         {item.attachments.length === 0 && <p className="text-sm text-muted">No files yet.</p>}
         <ul className="flex flex-col gap-2">
@@ -104,15 +111,13 @@ export function ItemEditor({
             </li>
           ))}
         </ul>
-        <form action={uploadAttachmentAction} className="flex flex-col gap-3">
+        <form action={uploadAttachmentAction}>
           <input type="hidden" name="courseId" value={courseId} />
           <input type="hidden" name="itemId" value={item.id} />
-          <input type="file" name="file" className="text-sm" />
-          <button className="w-fit rounded-full border border-border px-5 py-2 text-sm hover:border-primary">
-            Add file
-          </button>
+          <ItemFilePick />
         </form>
       </Section>
+      )}
 
       <div className="border-t border-border pt-6">
         <DeleteItemButton
