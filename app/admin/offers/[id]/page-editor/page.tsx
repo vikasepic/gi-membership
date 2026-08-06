@@ -27,16 +27,18 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <Link href={`/admin/offers/${id}`} className="kicker w-fit text-muted hover:text-fg">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <Link href={`/admin/offers/${id}`} className="kicker text-muted hover:text-fg">
           &larr; {offer.name}
         </Link>
-        <h1 className="text-2xl">Sales page</h1>
-        <p className="max-w-[70ch] text-muted">
-          The ten sections, in order. Used in two places: the upsell page after someone declines the
-          order bump — set this offer&rsquo;s layout to <strong>Ten sections</strong> to switch that
-          on — and the public page below.
-        </p>
+        <h1 className="text-xl">Sales page</h1>
+        {/* Kept, because it is the one thing here that is not obvious: these
+            same sections are also the upsell page, but only when the offer's
+            layout says so. */}
+        <span className="text-sm text-muted">
+          also the upsell page, when this offer&rsquo;s layout is{" "}
+          <strong className="font-medium text-fg">Ten sections</strong>
+        </span>
       </div>
 
       {/* Full-bleed out of the admin's 1024px column. The preview needs real
@@ -45,18 +47,28 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
           overflow-x-clip guards the scrollbar gap 100vw leaves behind. */}
       <div className="mx-[calc(50%-50vw+var(--admin-nav)/2)] w-[calc(100vw-var(--admin-nav))] overflow-x-clip px-5 md:px-8">
         <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-4">
-      <CopyLink
-        url={`${siteUrl()}/o/${offer.key}`}
-        label="Public link"
-        note="The same nine sections at an address you can paste into an ad or an email. Live once you save a section; buying goes through the normal checkout."
-      />
-
-      <PageSettings
-        ownerType="offer"
-        ownerId={id}
-        customCss={settings.customCss}
-        customJs={settings.customJs}
-      />
+      <details className="rounded-xl border border-border bg-surface">
+        <summary className="cursor-pointer list-none px-3 py-2 text-xs text-muted [&::-webkit-details-marker]:hidden">
+          Public link &amp; custom code
+          <span className="ml-2 text-[0.68rem]">
+            /o/{offer.key}
+            {settings.customCss || settings.customJs ? " · code set" : ""}
+          </span>
+        </summary>
+        <div className="flex flex-col gap-3 border-t border-border p-3">
+          <CopyLink
+            url={`${siteUrl()}/o/${offer.key}`}
+            label="Public link"
+            note="The same nine sections at an address you can paste into an ad or an email. Live once you save a section; buying goes through the normal checkout."
+          />
+          <PageSettings
+            ownerType="offer"
+            ownerId={id}
+            customCss={settings.customCss}
+            customJs={settings.customJs}
+          />
+        </div>
+      </details>
 
       <PageEditor
         ownerType="offer"

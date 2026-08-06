@@ -248,23 +248,23 @@ function SectionRail({
         return (
           <div
             key={row.sectionKey}
-            className={`flex items-center gap-2 border-b border-border/60 px-2.5 py-1.5 text-sm last:border-b-0 ${
+            className={`flex items-center gap-2.5 border-b border-border/60 px-3 py-2.5 text-sm last:border-b-0 ${
               on ? "bg-surface-2 shadow-[inset_2px_0_0_var(--primary)]" : "hover:bg-surface-2"
             }`}
           >
             <button
               type="button"
               onClick={() => onSelect(row.sectionKey)}
-              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
             >
-              <span className="w-4 shrink-0 font-mono text-[0.62rem] text-muted">{i + 1}</span>
+              <span className="w-4 shrink-0 font-mono text-[0.65rem] text-muted">{i + 1}</span>
+              {/* Ringed, or a white band reads as an empty checkbox — which is
+                  what it looked like next to a name. */}
               <span
                 aria-hidden
-                className="size-3 shrink-0 rounded-sm"
-                style={{
-                  background: BAND_STYLES[(row.style as BandStyleKey) ?? "paper"]?.bg,
-                  boxShadow: "inset 0 0 0 1px rgba(0,0,0,.16)",
-                }}
+                title={`Band: ${row.style ?? "paper"}`}
+                className="size-3 shrink-0 rounded-full ring-1 ring-inset ring-black/20"
+                style={{ background: BAND_STYLES[(row.style as BandStyleKey) ?? "paper"]?.bg }}
               />
               <span
                 className={`min-w-0 flex-1 truncate ${
@@ -275,30 +275,32 @@ function SectionRail({
               </span>
               {isDirty ? (
                 <span className="size-1.5 shrink-0 rounded-full bg-primary" title="Unsaved" />
-              ) : savedAt !== null ? (
-                <span className="size-1.5 shrink-0 rounded-full bg-navy/40" title="Saved" />
               ) : empty ? (
-                <span className="shrink-0 text-[0.6rem] text-muted" title="Empty — it will not render">
+                <span className="shrink-0 text-[0.62rem] text-muted" title="Empty — it will not render">
                   Empty
                 </span>
+              ) : savedAt !== null ? (
+                <span className="size-1.5 shrink-0 rounded-full bg-navy/30" title="Saved" />
               ) : null}
             </button>
 
-            {/* A switch, not an unlabelled checkbox. It decides whether a whole
-                band appears on the live page. */}
+            {/* Green for shown, grey for hidden — the brand colour is what
+                actions are, and this is a state. The knob used to sit exactly
+                on the track's right edge and spill out of it. */}
             <button
               type="button"
               role="switch"
               aria-checked={row.enabled}
               aria-label={`Show ${def.title}`}
+              title={row.enabled ? "Shown on the page" : "Hidden from the page"}
               onClick={() => onToggle(row.sectionKey, !row.enabled)}
-              className={`relative h-4 w-7 shrink-0 rounded-full transition-colors ${
-                row.enabled ? "bg-primary" : "bg-border"
+              className={`relative h-[18px] w-8 shrink-0 rounded-full transition-colors ${
+                row.enabled ? "bg-[#3f9b6d]" : "bg-border"
               }`}
             >
               <span
-                className={`absolute top-0.5 size-3 rounded-full bg-white shadow transition-transform ${
-                  row.enabled ? "translate-x-3.5" : "translate-x-0.5"
+                className={`absolute left-0.5 top-0.5 size-3.5 rounded-full bg-white shadow-sm transition-transform ${
+                  row.enabled ? "translate-x-3.5" : "translate-x-0"
                 }`}
               />
             </button>
@@ -336,7 +338,7 @@ function SectionPanel({
       {/* One bar: what this section is for, and the way in. The old panel spent
           a 420px column on a purpose sentence, a block count, a hint about
           dragging, a note that changes are kept as you type, and one button. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-surface-2 px-4 py-2.5">
         <b className="text-sm">{def.title}</b>
         {/* Which step of the framework this band is. It is real information and
             it does not belong on twelve rows — "1 + 2, 3 … 9, 9, +, 10, +"
@@ -347,6 +349,7 @@ function SectionPanel({
         <span className="min-w-0 flex-1 truncate text-xs text-muted" title={def.purpose}>
           {def.purpose}
         </span>
+        {/* Everything that acts on this section, together on the right. */}
 
         {/* One editor. The typed fields were a form; this is the editor. A
             section that has never been opened here converts its stored fields
@@ -424,25 +427,24 @@ function BlockCanvasField({
   const converted = view ? isUnconverted(view) : false;
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <span className="flex items-baseline justify-between gap-2 text-sm font-medium">
-        Content
-        <span className="text-xs font-normal text-muted">
-          {blocks.length === 0 ? "Empty" : `${blocks.length} block${blocks.length === 1 ? "" : "s"}`}
+    <>
+      {/* The button alone. Its heading, block count and hint all repeated what
+          the section bar beside it already says. */}
+      <span className="flex items-center gap-2.5">
+        <span className="text-xs text-muted">
+          {blocks.length === 0
+            ? "No blocks yet"
+            : `${blocks.length} block${blocks.length === 1 ? "" : "s"}`}
+          {converted && blocks.length > 0 && " · from what it already had"}
         </span>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+        >
+          {blocks.length === 0 ? "Start building" : "Edit blocks"}
+        </button>
       </span>
-      <p className="text-xs leading-relaxed text-muted">
-        {converted && blocks.length > 0
-          ? "Built from what this section already had. Nothing is changed until you save."
-          : "Everything in this band, as blocks — drag, duplicate and restyle any of it."}
-      </p>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="w-fit rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg hover:bg-primary-hover"
-      >
-        {blocks.length === 0 ? "Start building" : "Edit this section"}
-      </button>
       {open && view && (
         <BlockEditor
           blocks={blocks}
@@ -453,6 +455,6 @@ function BlockCanvasField({
           onClose={() => setOpen(false)}
         />
       )}
-    </div>
+    </>
   );
 }

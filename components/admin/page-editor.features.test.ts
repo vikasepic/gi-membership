@@ -175,3 +175,65 @@ describe("what the redesign added", () => {
     expect(editor).toContain("Empty");
   });
 });
+
+describe("the switch works and reads as a switch", () => {
+  it("is green when the section is shown, grey when it is not", () => {
+    // The brand colour is what actions are; this is a state. A rust pill next
+    // to a rust Save button says the same thing about two different kinds of
+    // thing.
+    expect(editor).toContain('row.enabled ? "bg-[#3f9b6d]" : "bg-border"');
+  });
+
+  it("keeps its knob inside the track", () => {
+    // w-7 with a 12px knob and translate-x-3.5 put the knob's right edge
+    // exactly on the track's, so it spilled out and read as broken.
+    expect(editor).toContain("w-8");
+    expect(editor).toContain("size-3.5");
+    expect(editor).toContain('row.enabled ? "translate-x-3.5" : "translate-x-0"');
+  });
+
+  it("says which state it is in on hover", () => {
+    expect(editor).toContain("Shown on the page");
+  });
+});
+
+describe("the band swatch is not mistaken for a checkbox", () => {
+  it("is a ringed circle rather than a bare square", () => {
+    // The paper band is #ffffff, so an unringed square beside a name is
+    // indistinguishable from an empty checkbox.
+    expect(editor).toContain("rounded-full ring-1 ring-inset");
+  });
+});
+
+describe("the section bar says one thing once", () => {
+  it("does not repeat the heading beside itself", () => {
+    // BlockCanvasField used to render "Content", a block count and a paragraph
+    // about dragging, directly beside a bar naming the same section.
+    expect(editor).not.toContain(">\n        Content\n");
+    expect(editor).toContain("Edit blocks");
+  });
+});
+
+describe("the page above the sections", () => {
+  const productRoute = readFileSync("app/admin/products/[id]/page-editor/page.tsx", "utf8");
+  const offerRoute = readFileSync("app/admin/offers/[id]/page-editor/page.tsx", "utf8");
+
+  it.each([
+    ["product", productRoute],
+    ["offer", offerRoute],
+  ])("folds the link and the code away on the %s editor", (_which, src) => {
+    // A heading, a paragraph explaining what a sales page is, a card for a URL
+    // and a card for code that is empty — five hundred pixels before section
+    // one.
+    expect(src).toContain("Public link &amp; custom code");
+    expect(src).toContain("<details");
+  });
+
+  it.each([
+    ["product", productRoute],
+    ["offer", offerRoute],
+  ])("keeps both of them reachable on the %s editor", (_which, src) => {
+    expect(src).toContain("CopyLink");
+    expect(src).toContain("PageSettings");
+  });
+});
