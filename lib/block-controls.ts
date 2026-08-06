@@ -82,6 +82,19 @@ const TYPOGRAPHY: Control[] = [
 
 const RATIOS: [string, string][] = [["16/9", "16:9"], ["4/3", "4:3"], ["1/1", "1:1"], ["3/4", "3:4"], ["21/9", "21:9"]];
 
+/**
+ * Every ratio in that list crops. This one does not.
+ *
+ * A screenshot, a mockup, a chart — anything where the edges are the content —
+ * has no correct entry in a list of fixed shapes, and picking the nearest one
+ * quietly cuts something off. First in the list because it is the honest
+ * default for an image nobody has thought about yet.
+ *
+ * Only offered for an image. A video needs a box before it loads, so an embed
+ * with no ratio would collapse to nothing and then jump.
+ */
+const IMAGE_RATIOS: [string, string][] = [["auto", "Original — no crop"], ...RATIOS];
+
 export type BlockControls = { content: Control[]; style: Control[] };
 
 export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
@@ -112,7 +125,7 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "text", key: "link", label: "Links to", placeholder: "https://…" },
     ],
     style: [
-      { kind: "select", key: "ratio", label: "Ratio", options: RATIOS },
+      { kind: "select", key: "ratio", label: "Ratio", options: IMAGE_RATIOS },
       { kind: "number", key: "maxWidth", label: "Max width", min: 10, max: 100, step: 5, unit: "%" },
       style({ kind: "number", key: "radius", label: "Corner", min: 0, max: 60, step: 2, unit: "px" }),
     ],

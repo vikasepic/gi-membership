@@ -228,6 +228,10 @@ function Inner({
     case "image": {
       const src = imageSrc(str(p.url));
       if (!src) return null;
+      // "auto" means show the whole picture. Without dropping objectFit as
+      // well, the image would keep being cropped to a box it no longer has.
+      const ratio = str(p.ratio, "16/9");
+      const whole = ratio === "auto";
       const img = (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -236,9 +240,10 @@ function Inner({
           style={{
             display: "block",
             width: "100%",
+            height: whole ? "auto" : undefined,
             maxWidth: `${num(p.maxWidth, 100)}%`,
-            aspectRatio: str(p.ratio, "16/9"),
-            objectFit: "cover",
+            aspectRatio: whole ? undefined : ratio,
+            objectFit: whole ? undefined : "cover",
             borderRadius: s.radius ? `${s.radius}px` : undefined,
           }}
         />
