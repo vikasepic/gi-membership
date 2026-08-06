@@ -215,16 +215,28 @@ export type RowLayout = {
  * `G × (100−W)/100` off each column makes any subset that adds to 100 come out
  * at exactly 100% — including a single 100% column, which loses nothing.
  */
+/**
+ * Whether this row is stacked at this width, so its columns are each full width.
+ *
+ * Worth asking out loud: the panel showing "100" and "100" for a two-column row
+ * is correct on a phone and looks exactly like a bug, because nothing on screen
+ * says the columns are no longer side by side.
+ */
+export function stacksAt(block: Block, device: Device): boolean {
+  const p = propsFor(block, device);
+  const stack = String(p.stack ?? "mobile");
+  const stacksHere =
+    (device === "mobile" && stack !== "none") || (device === "tablet" && stack === "tablet");
+  return stacksHere && !hasOverride(block, device, "widths", "props");
+}
+
 export function effectiveWidths(block: Block, device: Device): number[] {
   const p = propsFor(block, device);
   const count = block.columns?.length ?? 0;
   // Stacking is a default, not a lock: an explicit width for this device wins.
   // Without it every row would keep its desktop columns on a 390px phone, which
   // is exactly what people complain about.
-  const stack = String(p.stack ?? "mobile");
-  const stacksHere =
-    (device === "mobile" && stack !== "none") || (device === "tablet" && stack === "tablet");
-  return stacksHere && !hasOverride(block, device, "widths", "props")
+  return stacksAt(block, device)
     ? Array.from({ length: count }, () => 100)
     : columnWidths(p, count);
 }

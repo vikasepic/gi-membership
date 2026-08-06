@@ -54,7 +54,7 @@ import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/li
  * except to hand it on.
  */
 const CanvasDevice = createContext<Device>("desktop");
-import { blockCssAt, effectiveWidths, rowLayout } from "@/lib/block-style";
+import { blockCssAt, effectiveWidths, rowLayout, stacksAt } from "@/lib/block-style";
 import { imageSrc } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
 
@@ -242,7 +242,7 @@ export function BlockEditor({
         </button>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-[190px_1fr_270px]">
+      <div className="grid min-h-0 flex-1 grid-cols-[190px_1fr_300px]">
         {/* Palette */}
         <aside className="flex flex-col overflow-y-auto border-r border-border bg-surface">
           {/* Two ways of looking at the same page: what you can add, and what
@@ -934,8 +934,10 @@ function ControlField({
   // width being edited. A control that does not say so is one you will change
   // on desktop and wonder why nothing moved.
   const label = (
-    <span className="flex min-w-0 items-center gap-1.5 text-xs text-fg">
-      <span className="truncate">{control.label}</span>
+    <span className="flex min-w-0 items-start gap-1.5 text-xs text-fg">
+      {/* Wrapping, not truncating. "Stack into one" became "Stack into o…",
+          which is a label that has stopped being one. */}
+      <span className="leading-tight">{control.label}</span>
       {set && (
         <button
           type="button"
@@ -964,7 +966,7 @@ function ControlField({
         className={
           opts.stack
             ? "flex flex-col gap-1.5"
-            : "grid grid-cols-[80px_minmax(0,1fr)] items-center gap-2.5"
+            : "grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5"
         }
       >
         <span className="flex items-center justify-between gap-1.5">
@@ -1035,7 +1037,7 @@ function ControlField({
                 aria-label={l}
                 aria-pressed={current === v}
                 onClick={() => onChange(coerce(v))}
-                className={`flex flex-1 items-center justify-center border-r border-border px-1 py-1.5 text-[0.68rem] last:border-r-0 ${
+                className={`flex min-w-0 flex-1 items-center justify-center truncate border-r border-border px-1 py-1.5 text-[0.68rem] last:border-r-0 ${
                   current === v ? "bg-primary/12 text-primary" : "text-muted hover:bg-surface-2 hover:text-fg"
                 }`}
               >
@@ -1146,13 +1148,23 @@ function ControlField({
               </label>
             ))}
           </div>
-          <button
-            type="button"
-            onClick={() => onChange(evenWidths(count))}
-            className="w-fit rounded px-1 text-[0.66rem] text-muted hover:text-fg"
-          >
-            Even
-          </button>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => onChange(evenWidths(count))}
+              className="rounded-full border border-border px-2 py-0.5 text-[0.62rem] text-muted transition-colors hover:border-primary hover:text-fg"
+            >
+              Even
+            </button>
+            {/* 100 and 100 for a two-column row is correct on a phone and looks
+                exactly like a bug, because nothing else on screen says the
+                columns have stopped being side by side. */}
+            {stacksAt(block, at) && (
+              <span className="text-[0.62rem] leading-tight text-muted">
+                Stacked here — each is full width. Type one to override.
+              </span>
+            )}
+          </div>
         </div>
       );
     }

@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BlockTree } from "@/components/admin/block-tree";
-import { newBlock, setColumnWidth } from "@/lib/blocks";
-import { sections, asSegment, groupedPalette, PALETTE, BLOCK_ICON } from "@/lib/block-controls";
+import { newBlock, setColumnWidth, setPropsAt } from "@/lib/blocks";
+import { sections, asSegment, groupedPalette, PALETTE, BLOCK_ICON, SEGMENT_ICONS } from "@/lib/block-controls";
+import { stacksAt } from "@/lib/block-style";
 import { BLOCK_TYPES } from "@/lib/blocks";
 import { controlsFor } from "@/lib/block-controls";
 
@@ -135,5 +136,62 @@ describe("the caret rule stays where it belongs", () => {
     const css = await import("node:fs").then((fs) => fs.readFileSync("app/globals.css", "utf8"));
     expect(css).not.toMatch(/^details\s*>\s*summary/m);
     expect(css).toContain(".insp-section > summary");
+  });
+});
+
+describe("a segment only where the words fit", () => {
+  const opt = (labels: string[]) =>
+    ({ kind: "select", key: "x", label: "X", options: labels.map((l) => [l.toLowerCase(), l]) }) as never;
+
+  it("keeps a dropdown for long options", () => {
+    // "Never — keep them side by side" as a button wrapped to four lines and
+    // made the control taller than the rest of the panel.
+    expect(asSegment(opt(["On mobile", "On tablet and mobile", "Never — keep them side by side"]))).toBe(false);
+  });
+
+  it("keeps a dropdown for four medium ones", () => {
+    // Stretch / Top / Middle / Bottom fitted the option count and not the panel:
+    // Bottom rendered as "Bottc".
+    expect(asSegment(opt(["Stretch", "Top", "Middle", "Bottom"]))).toBe(false);
+  });
+
+  it("still uses buttons for short ones", () => {
+    expect(asSegment(opt(["Solid", "Outline"]))).toBe(true);
+  });
+
+  it("always uses buttons where there are icons", () => {
+    // A glyph is a glyph however long its name is.
+    const align = { kind: "select", key: "align", label: "Align", options: [["left", "Left"], ["center", "Centre"], ["right", "Right"]] } as never;
+    expect(asSegment(align)).toBe(true);
+  });
+
+  it("checks every real control against the same rule", () => {
+    // A long label in a button is the failure mode; nothing in the schema
+    // should be able to reach one.
+    for (const t of BLOCK_TYPES) {
+      const b = newBlock(t);
+      for (const tab of ["content", "style", "advanced"] as const) {
+        for (const c of controlsFor(b)[tab]) {
+          if (!("kind" in c) || c.kind !== "select" || !asSegment(c)) continue;
+          if (SEGMENT_ICONS[c.key.split(".").pop() ?? ""]) continue;
+          for (const [, l] of c.options) expect(l.length, `${t}/${c.key}/${l}`).toBeLessThanOrEqual(8);
+        }
+      }
+    }
+  });
+});
+
+describe("stacked columns explain themselves", () => {
+  it("knows a row is stacked on a phone", () => {
+    const row = newBlock("row");
+    row.columns = [[], []];
+    expect(stacksAt(row, "mobile")).toBe(true);
+    expect(stacksAt(row, "desktop")).toBe(false);
+  });
+
+  it("stops saying so once a width is set for that width", () => {
+    const row = setPropsAt(newBlock("row"), "mobile", { widths: [70, 30] });
+    row.columns = [[], []];
+    expect(stacksAt(row, "mobile")).toBe(false);
   });
 });

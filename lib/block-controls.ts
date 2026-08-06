@@ -580,12 +580,6 @@ export const PALETTE: { type: BlockType; label: string; props?: Record<string, u
  * fit as buttons, and two of them — alignment and case — are faster still as
  * pictures, because you stop reading once you have learnt the shapes.
  */
-export const SEGMENT_MAX = 4;
-
-export function asSegment(c: Control): boolean {
-  return !isGroup(c) && c.kind === "select" && c.options.length <= SEGMENT_MAX;
-}
-
 /** Icons for the two where a picture beats a word. Keyed on the control's key. */
 export const SEGMENT_ICONS: Record<string, Record<string, string>> = {
   align: {
@@ -594,6 +588,35 @@ export const SEGMENT_ICONS: Record<string, Record<string, string>> = {
     right: "M3 5h18v2H3V5Zm6 4h12v2H9V9Zm-6 4h18v2H3v-2Zm6 4h12v2H9v-2Z",
   },
 };
+
+export const SEGMENT_MAX = 4;
+
+/**
+ * A row of buttons only where the words actually fit in one.
+ *
+ * Counting options was not enough. "On tablet and mobile" and "Never — keep
+ * them side by side" are three options and became a four-line block of wrapped
+ * text taller than the rest of the panel put together; "Stretch / Top / Middle
+ * / Bottom" is four short ones and still ran out of room, so Bottom rendered as
+ * "Bottc". A dropdown holds any length, which is the whole reason to keep it
+ * for the long ones.
+ *
+ * Icons are exempt: a glyph is a glyph however long its name is.
+ */
+const SEGMENT_LABEL_MAX = 8;
+const SEGMENT_TOTAL_MAX = 20;
+
+export function asSegment(c: Control): boolean {
+  if (isGroup(c) || c.kind !== "select") return false;
+  if (SEGMENT_ICONS[c.key.split(".").pop() ?? ""]) return true;
+  if (c.options.length > SEGMENT_MAX) return false;
+  const labels = c.options.map(([, l]) => l);
+  return (
+    labels.every((l) => l.length <= SEGMENT_LABEL_MAX) &&
+    labels.reduce((n, l) => n + l.length, 0) <= SEGMENT_TOTAL_MAX
+  );
+}
+
 
 /**
  * The controls of one tab, split into the sections its group markers describe.
