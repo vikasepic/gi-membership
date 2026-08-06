@@ -62,19 +62,31 @@ describe("the boundary between the two buckets", () => {
 });
 
 describe("every form that takes a file", () => {
-  const FORMS = [
-    "app/admin/actions.ts",
-    "app/admin/courses/[id]/content/actions.ts",
-    "app/admin/pages/actions.ts",
-  ];
+  const FORMS = ["app/admin/actions.ts", "app/admin/courses/[id]/content/actions.ts"];
 
   it.each(FORMS)("%s accepts one from the library", (file) => {
     expect(readFileSync(file, "utf8")).toContain("pickedFile(formData");
   });
 
-  it.each(FORMS)("%s still accepts a new upload", (file) => {
-    // The picker sits next to the file input, never in place of it: a new file
-    // is still the common case.
+  it.each(FORMS)("%s still accepts a posted file", (file) => {
+    // The window is how anyone chooses one now, but the action must not depend
+    // on that: it is the only thing standing between a form post and storage.
     expect(readFileSync(file, "utf8")).toContain("instanceof File");
+  });
+
+  it("gives the page builder the same window", () => {
+    // Its images used to go through their own upload action into their own
+    // folder, which is exactly how the same picture ended up stored three times.
+    const src = readFileSync("components/admin/block-editor.tsx", "utf8");
+    expect(src).toContain("MediaButton");
+    expect(src).not.toContain("uploadSectionImageAction");
+  });
+
+  it("uploads from inside the window", () => {
+    // Otherwise choosing a picture that is not there yet means closing the
+    // window, finding an upload box, and coming back to look for it.
+    expect(readFileSync("app/api/media/library/route.ts", "utf8")).toContain(
+      "export async function POST",
+    );
   });
 });

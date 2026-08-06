@@ -1,7 +1,7 @@
 "use client";
 
 import { COVER_ASPECT } from "@/lib/cover";
-import { CoverHint, CoverLibrary, CoverPreview, useCoverPick } from "@/components/admin/cover-pick";
+import { CoverPick, useCoverPick } from "@/components/admin/cover-pick";
 import { useActionState } from "react";
 import { uploadProductCoverAction, clearProductCoverAction, type CoverState } from "@/app/admin/actions";
 import { Section } from "@/components/admin/form-controls";
@@ -22,7 +22,7 @@ export function ProductCover({
   inheritedUrl: string | null;
 }) {
   const [state, action, pending] = useActionState<CoverState, FormData>(uploadProductCoverAction, {});
-  const { tooBig, notes, preview, picked, onPick, onPickExisting } = useCoverPick();
+  const { picked, notes, onPickExisting } = useCoverPick();
   const shown = coverUrl ?? inheritedUrl;
 
   return (
@@ -54,31 +54,25 @@ export function ProductCover({
 
         <form
           action={action}
-          onSubmit={(e) => { if (tooBig) e.preventDefault(); }}
           className="flex flex-col gap-3"
         >
           <input type="hidden" name="productId" value={productId} />
-          <input
-            type="file"
-            name="file"
-            accept="image/*"
-            onChange={onPick}
-            className="text-sm file:mr-3 file:rounded-full file:border-0 file:bg-surface file:px-4 file:py-2 file:text-sm file:text-fg"
+          <CoverPick
+            picked={picked}
+            notes={notes}
+            onPickExisting={onPickExisting}
+            hasCover={Boolean(coverUrl)}
           />
-          <CoverHint />
-          <CoverLibrary onPickExisting={onPickExisting} />
-          <CoverPreview preview={preview} notes={notes} picked={picked} />
-          {tooBig && <p className="text-sm text-primary">{tooBig}</p>}
           {state.error && <p className="text-sm text-primary">{state.error}</p>}
           {state.ok && <p className="text-sm text-navy">Image updated.</p>}
 
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="submit"
-              disabled={pending || Boolean(tooBig)}
+              disabled={pending || !picked}
               className="w-fit rounded-full border border-border bg-surface px-5 py-2 text-sm font-medium transition-colors hover:border-primary disabled:opacity-60"
             >
-              {pending ? "Uploading…" : coverUrl ? "Replace image" : "Upload image"}
+              {pending ? "Saving…" : "Save image"}
             </button>
             {coverUrl && (
               <button

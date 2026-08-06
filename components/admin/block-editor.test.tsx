@@ -161,7 +161,7 @@ describe("dragging a block that is already on the canvas", () => {
   });
 });
 
-describe("the image control keeps upload alive", () => {
+describe("the image control keeps a way to get a picture in", () => {
   // Removing the typed form would otherwise have taken image upload with it —
   // the only way to get a file onto a page.
   const render1 = (props: Partial<React.ComponentProps<typeof ImageControl>> = {}) =>
@@ -169,19 +169,19 @@ describe("the image control keeps upload alive", () => {
       <ImageControl label={<span>Image</span>} value="" onChange={() => {}} {...props} />,
     );
 
-  it("offers an upload when an uploader is wired", () => {
-    const out = render1({ uploadImage: async () => ({ path: "x" }) });
-    expect(out).toContain('type="file"');
-    expect(out).toContain('accept="image/*"');
+  it("opens the media window", () => {
+    // Upload used to be a file input here and a library button beside it. Both
+    // are inside the window now, so this is the one control.
+    expect(render1()).toContain("Select image");
   });
 
-  it("takes a pasted URL either way", () => {
+  it("says replace once there is something to replace", () => {
+    expect(render1({ value: "https://x.test/a.jpg" })).toContain("Replace image");
+  });
+
+  it("still takes a pasted URL", () => {
+    // An image hosted somewhere else never goes through the library at all.
     expect(render1()).toContain("…or paste a URL");
-    expect(render1({ uploadImage: async () => ({ path: "x" }) })).toContain("…or paste a URL");
-  });
-
-  it("hides the upload button when there is nowhere to upload to", () => {
-    expect(render1()).not.toContain('type="file"');
   });
 
   it("previews what is already set", () => {

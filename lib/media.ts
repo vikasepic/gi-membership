@@ -39,6 +39,41 @@ export function validateUpload(
 }
 
 /**
+ * Upload straight into the library, belonging to nothing yet.
+ *
+ * Every other upload here is filed under whatever it was for — items/<id>,
+ * products/<id> — which made sense when a file WAS a property of that thing.
+ * A file chosen from a modal is not for anything in particular at the moment
+ * it arrives, and may end up used in three places, so it is filed under
+ * library/ and pointed at.
+ */
+export async function uploadToLibrary(
+  file: File,
+  kind: "cover" | "attachment",
+): Promise<Attachment> {
+  const stamped = `library/${Date.now()}-${safeName(file.name)}`;
+  if (kind === "cover") {
+    const { finalPath, error } = await putImage(stamped, file, PAGE_WIDTH);
+    if (error) throw new Error(`uploadToLibrary: ${error.message}`);
+    return { path: finalPath, name: file.name, size: file.size, mime: "image/webp" };
+  }
+  const db = createServiceClient();
+  const { error } = await db.storage.from("paid-assets").upload(stamped, file, {
+    contentType: file.type,
+    upsert: false,
+  });
+  if (error) throw new Error(`uploadToLibrary: ${error.message}`);
+  await recordMedia({
+    bucket: "paid-assets",
+    path: stamped,
+    filename: file.name,
+    mime: file.type,
+    size: file.size,
+  });
+  return { path: stamped, name: file.name, size: file.size, mime: file.type };
+}
+
+/**
  * A file the person chose from the library instead of uploading.
  *
  * Returns null when they uploaded one, which is still the common case — the
@@ -208,27 +243,6 @@ export async function uploadProductCover(productId: string, file: File): Promise
   return finalPath;
 }
 
-/**
- * An image for a sales-page section.
- *
- * Public bucket, like every other cover: this is marketing artwork shown to
- * anyone who loads the page. Paid assets stay in the private bucket and are
- * only ever served through an ownership-checked signed URL.
- */
-export async function uploadPageImage(
-  owner: "product" | "offer",
-  ownerId: string,
-  file: File,
-): Promise<string> {
-  // Wider than a cover: this one can run full-bleed across a large screen.
-  const { finalPath, error } = await putImage(
-    `pages/${owner}/${ownerId}/${Date.now()}-${safeName(file.name)}`,
-    file,
-    PAGE_WIDTH,
-  );
-  if (error) throw new Error(`uploadPageImage: ${error.message}`);
-  return finalPath;
-}
 
 export async function uploadCourseAttachment(courseId: string, file: File): Promise<Attachment> {
   const db = createServiceClient();

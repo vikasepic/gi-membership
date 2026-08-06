@@ -1,7 +1,8 @@
 "use client";
 
-import { COVER_ASPECT, COVER_MAX, mb } from "@/lib/cover";
-import { CoverHint, CoverLibrary, CoverPreview, useCoverPick } from "@/components/admin/cover-pick";
+import { COVER_ASPECT, mb } from "@/lib/cover";
+import { CoverPick, useCoverPick } from "@/components/admin/cover-pick";
+import { MediaButton, type PickedMedia } from "@/components/admin/media-modal";
 import { useActionState, useState } from "react";
 import {
   uploadCourseCoverAction,
@@ -56,14 +57,10 @@ export function CourseContent({
 
 function CoverBlock({ courseId, coverUrl }: { courseId: string; coverUrl: string | null }) {
   const [state, action, pending] = useActionState<ContentState, FormData>(uploadCourseCoverAction, {});
-  const { tooBig, notes, preview, picked, onPick, onPickExisting } = useCoverPick();
+  const { picked, notes, onPickExisting } = useCoverPick();
 
   return (
-    <form
-      action={action}
-      onSubmit={(e) => { if (tooBig) e.preventDefault(); }}
-      className="flex flex-col gap-3 rounded-xl border border-border bg-surface-2 p-4"
-    >
+    <form action={action} className="flex flex-col gap-3 rounded-xl border border-border bg-surface-2 p-4">
       <input type="hidden" name="courseId" value={courseId} />
       <span className="text-sm font-medium">Cover image</span>
       {coverUrl && (
@@ -79,23 +76,20 @@ function CoverBlock({ courseId, coverUrl }: { courseId: string; coverUrl: string
           className={`${COVER_ASPECT} w-full max-w-56 self-start rounded-lg border border-border object-cover`}
         />
       )}
-      <FilePick
-        accept="image/*"
-        label={coverUrl ? "Choose a replacement" : "Choose an image"}
-        onChange={onPick}
+      <CoverPick
+        picked={picked}
+        notes={notes}
+        onPickExisting={onPickExisting}
+        hasCover={Boolean(coverUrl)}
       />
-      <CoverHint />
-      <CoverLibrary onPickExisting={onPickExisting} />
-      <CoverPreview preview={preview} notes={notes} picked={picked} />
-      {tooBig && <p className="text-sm text-primary">{tooBig}</p>}
       {state.error && <p className="text-sm text-primary">{state.error}</p>}
       {state.ok && <p className="text-sm text-navy">Cover updated.</p>}
       <button
         type="submit"
-        disabled={pending || Boolean(tooBig)}
+        disabled={pending || !picked}
         className="w-fit rounded-full border border-border bg-surface px-5 py-2 text-sm font-medium transition-colors hover:border-primary disabled:opacity-60"
       >
-        {pending ? "Uploading…" : coverUrl ? "Replace cover" : "Upload cover"}
+        {pending ? "Saving…" : "Save cover"}
       </button>
     </form>
   );
@@ -109,7 +103,7 @@ function FileBlock({
   attachments: Course["attachments"];
 }) {
   const [state, action, pending] = useActionState<ContentState, FormData>(uploadCourseFileAction, {});
-  const [tooBig, setTooBig] = useState<string | null>(null);
+  const [picked, setPicked] = useState<PickedMedia | null>(null);
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-2 p-4">
       <span className="text-sm font-medium">Downloadable file</span>
@@ -132,30 +126,21 @@ function FileBlock({
         </ul>
       )}
 
-      <form
-        action={action}
-        onSubmit={(e) => { if (tooBig) e.preventDefault(); }}
-        className="flex flex-col gap-3"
-      >
+      <form action={action} className="flex flex-col gap-3">
         <input type="hidden" name="courseId" value={courseId} />
-        <FilePick
-          accept="application/pdf,audio/*"
-          hint={`PDF or audio, up to ${mb(ATTACH_MAX)}.`}
-          label="Choose a file"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            setTooBig(f && f.size > ATTACH_MAX ? `That file is ${mb(f.size)}. The limit is ${mb(ATTACH_MAX)}.` : null);
-          }}
-        />
-        {tooBig && <p className="text-sm text-primary">{tooBig}</p>}
+        {picked && <input type="hidden" name="mediaId" value={picked.id} />}
+        <MediaButton kind="document" onPick={setPicked} label="Select a file" />
+        <span className="text-xs text-muted">
+          PDF or audio, up to {mb(ATTACH_MAX)}. {picked ? `Chosen: ${picked.name}.` : ""}
+        </span>
         {state.error && <p className="text-sm text-primary">{state.error}</p>}
-        {state.ok && <p className="text-sm text-navy">Uploaded.</p>}
+        {state.ok && <p className="text-sm text-navy">Added.</p>}
         <button
           type="submit"
-          disabled={pending || Boolean(tooBig)}
+          disabled={pending || !picked}
           className="w-fit rounded-full border border-border bg-surface px-5 py-2 text-sm font-medium transition-colors hover:border-primary disabled:opacity-60"
         >
-          {pending ? "Uploading…" : "Upload file"}
+          {pending ? "Saving…" : "Add file"}
         </button>
       </form>
     </div>
@@ -187,46 +172,3 @@ function VideoBlock({ courseId, current }: { courseId: string; current: string |
   );
 }
 
-/**
- * Pick a file without the browser's own control.
- *
- * A visible <input type="file"> renders the platform's button plus the words
- * "No file chosen", which cannot be styled and reads as unfinished next to
- * everything around it. The input still does the work; a label drives it and
- * the chosen name is shown here instead.
- */
-function FilePick({
-  accept,
-  hint,
-  label,
-  onChange,
-}: {
-  accept: string;
-  /** Optional: a cover states its own rules through <CoverHint />. */
-  hint?: string;
-  label: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}) {
-  const [name, setName] = useState<string | null>(null);
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-2.5">
-        <label className="w-fit cursor-pointer rounded-full border border-border bg-surface px-4 py-2 text-sm transition-colors hover:border-fg">
-          {label}
-          <input
-            type="file"
-            name="file"
-            accept={accept}
-            className="sr-only"
-            onChange={(e) => {
-              setName(e.target.files?.[0]?.name ?? null);
-              onChange(e);
-            }}
-          />
-        </label>
-        <span className="min-w-0 truncate text-sm text-muted">{name ?? "Nothing chosen yet"}</span>
-      </div>
-      {hint && <span className="text-xs text-muted">{hint}</span>}
-    </div>
-  );
-}

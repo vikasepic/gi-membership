@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { saveSectionAction, uploadSectionImageAction } from "@/app/admin/pages/actions";
+import { saveSectionAction } from "@/app/admin/pages/actions";
 import { SectionBand, type PageMoney } from "@/components/page/sales-page";
 import {
   BAND_STYLES,
@@ -485,13 +485,6 @@ function BlockCanvasField({
           title={title}
           onChange={onChange}
           onClose={() => setOpen(false)}
-          uploadImage={async (file) => {
-            const fd = new FormData();
-            fd.append("ownerType", ownerType);
-            fd.append("ownerId", ownerId);
-            fd.append("file", file);
-            return uploadSectionImageAction(fd);
-          }}
         />
       )}
     </div>
