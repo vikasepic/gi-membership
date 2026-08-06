@@ -96,8 +96,23 @@ export type BlockColors = {
 export const hexOrNull = (v: unknown): string | null =>
   typeof v === "string" && /^#[0-9a-f]{3,8}$/i.test(v.trim()) ? v.trim() : null;
 
+/**
+ * Whether the block is already standing on a picture of its own.
+ *
+ * The wrapper paints the background; several blocks then paint a panel inside
+ * it. With no image that panel IS the block's surface and is right. With one,
+ * it is an opaque sheet laid over the picture someone just chose — the setting
+ * appears to do nothing, and the default colour appears not to have gone.
+ */
+function ownBackdrop(s: BlockStyle): boolean {
+  return s.background.type === "classic" && Boolean(s.background.image);
+}
+
 export function blockColors(block: Block, theme: BandTheme, at: BlockStyle = block.style): BlockColors {
   const s = at;
+  // A panel of the theme's default over the author's own picture is the picture
+  // not appearing. The wrapper is already drawing it.
+  const panel = ownBackdrop(s) ? "transparent" : theme.panel;
   switch (block.type) {
     case "button": {
       const fill = s.background.color ?? theme.accent;
@@ -115,17 +130,17 @@ export function blockColors(block: Block, theme: BandTheme, at: BlockStyle = blo
     case "slides":
       return {
         fg: s.color ?? theme.fg,
-        fill: s.background.color ?? theme.panel,
+        fill: s.background.color ?? panel,
         onFill: readableInk(s.background.color ?? theme.panel),
         accent: theme.accent,
         rule: theme.rule,
       };
     case "divider":
-      return { fg: s.color ?? theme.rule, fill: theme.panel, onFill: theme.fg, accent: theme.accent, rule: s.color ?? theme.rule };
+      return { fg: s.color ?? theme.rule, fill: panel, onFill: theme.fg, accent: theme.accent, rule: s.color ?? theme.rule };
     case "iconlist":
       return {
         fg: s.color ?? theme.fg,
-        fill: theme.panel,
+        fill: panel,
         onFill: theme.fg,
         accent: hexOrNull(block.props.iconColor) ?? theme.accent,
         rule: theme.rule,
@@ -133,7 +148,9 @@ export function blockColors(block: Block, theme: BandTheme, at: BlockStyle = blo
     default:
       return {
         fg: s.color ?? theme.fg,
-        fill: s.background.color ?? theme.panel,
+        // An explicit colour still wins: someone who set both a colour and an
+        // image asked for the colour, and the wrapper draws them together.
+        fill: s.background.color ?? panel,
         onFill: readableInk(s.background.color ?? theme.panel),
         accent: theme.accent,
         rule: theme.rule,

@@ -568,6 +568,13 @@ export type SectionRow = {
   accent: string | null;
   variant: string | null;
   content: unknown;
+  /**
+   * A picture or a wash over the band's colour. Null means the preset alone.
+   *
+   * The preset still decides the ink. That is what keeps the words readable
+   * when an image is slow, fails, or turns out lighter than it looked.
+   */
+  background?: unknown;
 };
 
 export type SectionView = {

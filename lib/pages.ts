@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { camelize } from "@/lib/case";
 import { normalizeHex } from "@/lib/color";
+import { normalizeBackground, type Background } from "@/lib/blocks";
 import {
   SECTIONS,
   SECTION_KEYS,
@@ -25,7 +26,7 @@ export async function getPageSections(owner: OwnerType, ownerId: string): Promis
   const db = createServiceClient();
   const { data, error } = await db
     .from("page_sections")
-    .select("section_key, position, enabled, style, accent, variant, content")
+    .select("section_key, position, enabled, style, accent, variant, content, background")
     .eq("owner_type", owner)
     .eq("owner_id", ownerId)
     .order("position");
@@ -57,6 +58,13 @@ export type SectionInput = {
   accent: string | null;
   variant: string | null;
   content: Record<string, unknown>;
+  /**
+   * A picture or a wash over the band's own colour. Null means the preset alone.
+   *
+   * The band still decides the ink, so the words stay readable when the image
+   * is slow, fails, or turns out lighter than it looked in the picker.
+   */
+  background?: Background | null;
 };
 
 /**
@@ -93,6 +101,12 @@ export async function saveSection(
       accent: input.accent ? normalizeHex(input.accent, def.defaultStyle) : null,
       variant,
       content: input.content,
+      // Normalised through the same reader a block's background uses — one
+      // shape, one set of rules, one renderer.
+      background:
+        input.background && input.background.type !== "none"
+          ? normalizeBackground(input.background)
+          : null,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "owner_type,owner_id,section_key" },

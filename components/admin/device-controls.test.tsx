@@ -308,7 +308,9 @@ describe("undo and redo", () => {
   it("takes back a deleted block, which is the one that matters", () => {
     const editor = mount([newBlock("heading"), newBlock("text")]);
     click(document.querySelector("[data-block]"));
-    click(button("Delete"));
+    // Two clicks now: the first arms it, the second does it.
+    click(document.querySelector('[aria-label="Delete"]'));
+    click([...document.querySelectorAll("button")].find((x) => x.textContent === "Delete it"));
     expect(editor.blocks).toHaveLength(1);
     press("z", { meta: true });
     expect(editor.blocks).toHaveLength(2);

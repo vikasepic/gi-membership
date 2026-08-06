@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { saveOffer, removeOffer, type SaveState } from "@/app/admin/offers/actions";
 import { inputClass as input, Field, Section } from "@/components/admin/form-controls";
 import { EditorTabs, TabPanel } from "@/components/admin/editor-tabs";
+import { ConfirmSubmit } from "@/components/admin/confirm-submit";
 import type { Offer } from "@/lib/types";
 import type { ProductOption, AppOption, OfferOption } from "@/lib/admin";
 import { money } from "@/lib/money";
@@ -368,9 +369,11 @@ export function OfferForm({
       {/* Away from Save, deliberately. */}
       <div className="flex items-center justify-end gap-4 border-t border-border pt-4">
         {offer && (
-          <button type="submit" formAction={removeOffer} className="text-sm text-muted hover:text-primary">
-            Delete
-          </button>
+          <ConfirmSubmit
+            label="Delete this offer"
+            confirmLabel="Delete it, wherever it is attached"
+            formAction={removeOffer}
+          />
         )}
       </div>
     </form>

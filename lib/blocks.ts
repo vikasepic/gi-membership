@@ -329,7 +329,7 @@ function normalizeDim(v: unknown, fallback: Dim): Dim {
   };
 }
 
-function normalizeBackground(v: unknown): Background {
+export function normalizeBackground(v: unknown): Background {
   const d = emptyBackground();
   if (!isRecord(v)) return d;
   return {

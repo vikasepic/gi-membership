@@ -117,8 +117,10 @@ describe("the structure tree", () => {
     expect(tree([newBlock("heading", { props: { text: "", tag: "h2" } })])).toContain("empty");
   });
 
-  it("says so when the page is empty", () => {
-    expect(tree([])).toContain("Nothing on the page yet");
+  it("says so when the section is empty", () => {
+    // "the page" was wrong: this tree is one section's blocks, and the page has
+    // twelve of them.
+    expect(tree([])).toContain("Nothing in this section yet");
   });
 });
 

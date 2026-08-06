@@ -5,6 +5,7 @@ import { saveProduct, removeProduct, type SaveState } from "@/app/admin/actions"
 import { inputClass, Field, Group } from "@/components/admin/form-controls";
 import { EditorTabs, TabPanel } from "@/components/admin/editor-tabs";
 import { EditorHeader } from "@/components/admin/editor-header";
+import { ConfirmSubmit } from "@/components/admin/confirm-submit";
 import { publicCoverUrl } from "@/lib/media-url";
 import { MediaButton, type PickedMedia } from "@/components/admin/media-modal";
 import { StorefrontPreview, BumpPreview, Readiness } from "@/components/admin/editor-preview";
@@ -503,14 +504,11 @@ export function ProductForm({
           peers and should not be adjacent. */}
       <div className="flex items-center justify-end gap-4 border-t border-border pt-4">
         {product && !product.isPlaceholder && (
-          <button
-            type="submit"
+          <ConfirmSubmit
+            label="Delete this product"
+            confirmLabel="Delete it, and everything it sells"
             formAction={removeProduct}
-            data-action="delete"
-            className="text-sm text-muted hover:text-fg"
-          >
-            Delete
-          </button>
+          />
         )}
       </div>
     </form>

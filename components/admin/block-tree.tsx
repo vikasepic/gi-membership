@@ -25,17 +25,41 @@ export function BlockTree({
   selectedId,
   device,
   onSelect,
+  onSelectSection,
 }: {
   blocks: Block[];
   selectedId: string | null;
   device: Device;
   onSelect: (id: string) => void;
+  /** Deselect, which is how the band's own settings are reached. */
+  onSelectSection?: () => void;
 }) {
-  if (blocks.length === 0) {
-    return <p className="px-3 py-2 text-xs text-muted">Nothing on the page yet.</p>;
-  }
   return (
     <ul className="flex flex-col">
+      {/* The band everything stands on. Its settings are what the panel shows
+          when nothing is selected — which is unreachable from a tree of blocks
+          unless the tree says so. */}
+      {onSelectSection && (
+        <li>
+          <button
+            type="button"
+            onClick={onSelectSection}
+            className={`flex w-full items-center gap-2 border-b border-border px-2.5 py-1.5 text-left text-xs ${
+              selectedId === null ? "bg-primary/12 text-primary" : "text-fg hover:bg-surface-2"
+            }`}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden className="size-3.5 shrink-0 fill-current opacity-60">
+              <path d="M3 5h18v14H3V5Zm2 2v10h14V7H5Z" />
+            </svg>
+            <span>Section</span>
+            <span className="ml-auto text-[0.6rem] text-muted">band, colour, visibility</span>
+          </button>
+        </li>
+      )}
+
+      {blocks.length === 0 && (
+        <li className="px-3 py-2 text-xs text-muted">Nothing in this section yet.</li>
+      )}
       {blocks.map((b) => (
         <Row key={b.id} block={b} depth={0} selectedId={selectedId} device={device} onSelect={onSelect} />
       ))}

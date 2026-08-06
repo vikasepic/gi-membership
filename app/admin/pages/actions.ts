@@ -11,6 +11,24 @@ import { realPriceLabel } from "@/lib/page-money";
 export type SectionSaveState = { error?: string; savedKey?: string };
 
 /**
+ * The band's background, off the form.
+ *
+ * Empty means the preset alone. Anything that is not readable JSON is treated
+ * the same way: a background nobody can parse is a background nobody asked for,
+ * and refusing the whole save over it would lose the section's copy with it.
+ */
+function parseBackground(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null ? (parsed as never) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Save one section of one page.
  *
  * The whole form posts, but only the named section is written — which is the
@@ -55,6 +73,8 @@ export async function saveSectionAction(
       // Sanitize on the way in, so what is stored is always safe to render
       // regardless of what the editor or a paste produced.
       content: sanitizeSectionContent(content),
+    // Empty means the band's preset alone.
+    background: parseBackground(formData.get("background")),
     });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not save." };

@@ -1,12 +1,17 @@
 "use client";
 
 import { BAND_STYLES, BAND_STYLE_KEYS, type BandStyleKey } from "@/lib/page-sections";
+import { emptyBackground, type Background } from "@/lib/blocks";
+import { MediaButton } from "@/components/admin/media-modal";
+import { publicCoverUrl } from "@/lib/media-url";
 
 export type SectionEdit = {
   style: string | null;
   accent: string | null;
   variant: string | null;
   enabled: boolean;
+  /** A picture or a wash over the band's colour. */
+  background?: Background | null;
   variants?: { key: string; label: string }[];
   onChange: (patch: Record<string, unknown>) => void;
 };
@@ -21,6 +26,11 @@ export type SectionEdit = {
  */
 export function SectionSettings({ section }: { section: SectionEdit }) {
   const band = (section.style as BandStyleKey) ?? "paper";
+  const bg = section.background ?? emptyBackground();
+  // One patch shape, so a change to any part of the background writes the
+  // whole object — a sparse patch would leave half a background behind.
+  const setBg = (patch: Partial<Background>) =>
+    section.onChange({ background: { ...bg, ...patch } });
   return (
     <div className="flex flex-col">
       <div className="border-b border-border px-3 py-2">
@@ -111,6 +121,87 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
             The accent marks small things — buttons, numbers, ticks. The band decides the ground and
             the ink together, so words stay readable on it.
           </p>
+        </div>
+      </details>
+
+      <details open className="insp-section border-b border-border">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-[0.7rem] font-semibold text-fg [&::-webkit-details-marker]:hidden">
+          <span className="text-[0.55rem] text-muted">▶</span> Background
+        </summary>
+        <div className="flex flex-col gap-3 px-3 pb-3 pt-1">
+          <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
+            <span className="text-xs text-fg">Image</span>
+            <div className="flex flex-col gap-1.5">
+              {bg.image ? (
+                <span className="flex items-center gap-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={publicCoverUrl(bg.image) ?? ""}
+                    alt=""
+                    className="h-9 w-14 shrink-0 rounded border border-border object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setBg({ image: "", type: "none" })}
+                    className="text-[0.66rem] text-muted hover:text-primary"
+                  >
+                    Remove
+                  </button>
+                </span>
+              ) : null}
+              <MediaButton
+                kind="image"
+                label={bg.image ? "Replace" : "Choose an image"}
+                onPick={(item) => setBg({ image: item.path, type: "classic" })}
+              />
+            </div>
+          </div>
+
+          {bg.image && (
+            <>
+              <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
+                <span className="text-xs text-fg">Fit</span>
+                <div className="flex overflow-hidden rounded-lg border border-border">
+                  {(["cover", "contain", "auto"] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      aria-pressed={bg.size === v}
+                      onClick={() => setBg({ size: v })}
+                      className={`flex-1 border-r border-border px-1 py-1 text-[0.66rem] capitalize last:border-r-0 ${
+                        bg.size === v ? "bg-primary/12 text-primary" : "text-muted hover:text-fg"
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
+                <span className="text-xs text-fg">Darken</span>
+                <span className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min={0}
+                    max={90}
+                    step={5}
+                    value={bg.overlay ?? 0}
+                    aria-label="Darken the image"
+                    onChange={(e) => setBg({ overlay: Number(e.target.value) })}
+                    className="min-w-0 flex-1 accent-[var(--primary)]"
+                  />
+                  <span className="w-8 text-right text-[0.66rem] tabular-nums text-muted">
+                    {bg.overlay ?? 0}%
+                  </span>
+                </span>
+              </div>
+              <p className="text-[0.66rem] leading-snug text-muted">
+                The band still decides the ink, so words stay readable if the picture is slow, fails
+                to load, or turns out lighter than it looked. Darken it until they are.
+              </p>
+            </>
+          )}
         </div>
       </details>
 

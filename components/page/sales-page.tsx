@@ -1,7 +1,8 @@
 import { Blocks, type CtaRender } from "@/components/page/blocks";
 import { blocksForSection } from "@/lib/section-to-blocks";
 import { buildSectionView, type SectionRow, type SectionView } from "@/lib/page-sections";
-import type { Device } from "@/lib/blocks";
+import { normalizeBackground, type Device } from "@/lib/blocks";
+import { backgroundCss } from "@/lib/block-style";
 import type { PageSettings } from "@/lib/pages";
 
 // The page, assembled from blocks.
@@ -39,11 +40,23 @@ export type PageMoney = {
 
 export type { CtaRender } from "@/components/page/blocks";
 
-function Band({ view, children }: { view: SectionView; children: React.ReactNode }) {
+function Band({
+  view,
+  background,
+  children,
+}: {
+  view: SectionView;
+  background?: unknown;
+  children: React.ReactNode;
+}) {
+  // Over the band's own colour, not instead of it: an image that has not
+  // arrived yet leaves the preset showing rather than a white void.
+  const bg = background ? normalizeBackground(background) : null;
+  const painted = bg && bg.type !== "none" ? backgroundCss(bg, view.theme) : null;
   return (
     <section
       className="@container px-6 py-12 md:py-16"
-      style={{ background: view.theme.bg, color: view.theme.fg }}
+      style={{ background: view.theme.bg, color: view.theme.fg, ...painted }}
     >
       <div className="mx-auto w-full max-w-[1040px]">{children}</div>
     </section>
@@ -74,7 +87,7 @@ export function SectionBand({
   // that is where you go to fill it in.
   if (blocks.length === 0 && !preview) return null;
   return (
-    <Band view={view}>
+    <Band view={view} background={row.background}>
       <Blocks blocks={blocks} theme={view.theme} money={money} cta={cta} at={at} />
     </Band>
   );

@@ -115,6 +115,13 @@ export function BlockEditor({
   const drag = useRef<DragPayload | null>(null);
   const [search, setSearch] = useState("");
   const [left, setLeft] = useState<"add" | "structure">("add");
+  // Reset whenever the selection changes, so a pending "Delete it" never lands
+  // on a block someone has since moved to.
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // Disarmed whenever the selection moves, from any of the several places it
+  // can move from — the canvas, the tree, a drop. One effect covers them all;
+  // a reset in each handler covers whichever ones somebody remembered.
+  useEffect(() => setConfirmDelete(false), [selectedId]);
   // What is being dragged, in words. The tile that follows the cursor needs it,
   // and so does the gap that opens where it will land.
   const [dragging, setDragging] = useState<{ label: string | null; type: BlockType | null }>({
@@ -320,6 +327,7 @@ export function BlockEditor({
               blocks={blocks}
               selectedId={selectedId}
               device={device}
+              onSelectSection={section ? () => setSelectedId(null) : undefined}
               onSelect={(id) => {
                 setSelectedId(id);
                 // A column has only a Style tab; landing on Content would show
@@ -452,15 +460,26 @@ export function BlockEditor({
                   <IconBtn label="Duplicate" onClick={() => commit(duplicateBlock(blocks, selected.id))}>
                     ⧉
                   </IconBtn>
-                  <IconBtn
-                    label="Delete"
-                    onClick={() => {
-                      commit(removeBlock(blocks, selected.id));
-                      setSelectedId(null);
-                    }}
-                  >
-                    ✕
-                  </IconBtn>
+                  {/* Two clicks, like every other delete here. Undo exists,
+                      but a block removed by a mis-aimed click on a 24px target
+                      is one you have to notice before you can undo it. */}
+                  {confirmDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        commit(removeBlock(blocks, selected.id));
+                        setSelectedId(null);
+                        setConfirmDelete(false);
+                      }}
+                      className="rounded-md bg-primary px-2 py-1 text-[0.68rem] font-medium text-primary-fg"
+                    >
+                      Delete it
+                    </button>
+                  ) : (
+                    <IconBtn label="Delete" onClick={() => setConfirmDelete(true)}>
+                      ✕
+                    </IconBtn>
+                  )}
                   </>
                   )}
                 </div>

@@ -108,13 +108,35 @@ describe("editing in the canvas", () => {
     expect(state.blocks[0].props.text).toBe("New");
   });
 
-  it("deleting a block removes it", () => {
+  it("deleting a block takes two clicks, and removes it on the second", () => {
+    // Undo exists, but a block removed by a mis-aimed click on a 24px target is
+    // one you have to notice before you can undo it.
     document.body.innerHTML = "";
     const b = { ...newBlock("heading"), props: { text: "Bye", tag: "h2" } };
     const state = mount([b]);
     click([...document.querySelectorAll("h2")].find((x) => x.textContent === "Bye")!);
+
     click(document.querySelector('[aria-label="Delete"]')!);
+    expect(state.blocks, "still there after the first click").toHaveLength(1);
+
+    click([...document.querySelectorAll("button")].find((x) => x.textContent === "Delete it")!);
     expect(state.blocks).toHaveLength(0);
+  });
+
+  it("goes back to asking once a different block is selected", () => {
+    // A pending "Delete it" must never land on a block you have since clicked.
+    document.body.innerHTML = "";
+    const state = mount([
+      { ...newBlock("heading"), id: "a", props: { text: "One", tag: "h2" } },
+      { ...newBlock("heading"), id: "b", props: { text: "Two", tag: "h2" } },
+    ]);
+    click([...document.querySelectorAll("h2")].find((x) => x.textContent === "One")!);
+    click(document.querySelector('[aria-label="Delete"]')!);
+    click([...document.querySelectorAll("h2")].find((x) => x.textContent === "Two")!);
+    expect([...document.querySelectorAll("button")].some((x) => x.textContent === "Delete it")).toBe(
+      false,
+    );
+    expect(state.blocks).toHaveLength(2);
   });
 
   it("clicking a palette item adds that block", () => {
