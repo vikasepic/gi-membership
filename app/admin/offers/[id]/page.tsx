@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { OfferForm } from "@/components/admin/offer-form";
 import { getOfferById, listProductOptions, listAppOptions, listOfferOptions } from "@/lib/admin";
 import { hasCustomOtoPage } from "@/components/oto/registry";
+import { hasPageSections } from "@/lib/pages";
+import { ViewLive } from "@/components/admin/view-live";
 
 export default async function EditOfferPage({
   params,
@@ -18,6 +20,15 @@ export default async function EditOfferPage({
     listOfferOptions(true),
   ]);
   if (!offer) notFound();
+
+  // The offer's own sales page needs both: the offer live, and a page actually
+  // built. Either missing and /o/<key> is a 404.
+  const built = await hasPageSections("offer", offer.id);
+  const liveReason = !offer.active
+    ? "the offer is switched off"
+    : !built
+      ? "no sales page built yet"
+      : null;
 
   // Two editors can write an upsell page and only one of them is live at a
   // time. Without saying which, it is possible to spend an afternoon editing a
@@ -80,6 +91,25 @@ export default async function EditOfferPage({
             live
             hint="How this offer looks on a checkout"
           />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <ViewLive
+            href={`/o/${offer.key}`}
+            unavailable={liveReason}
+            label="View the sales page"
+          />
+          {/* The upsell is only ever reached mid-checkout with a signed token,
+              so there is no public URL to open — this is the preview that
+              renders it with the same code the buyer gets. */}
+          <a
+            href={`/oto-preview/${offer.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-fit rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-fg"
+          >
+            Preview the upsell ↗
+          </a>
         </div>
       </div>
       <OfferForm offer={offer} products={products} apps={apps} offers={offers} />
