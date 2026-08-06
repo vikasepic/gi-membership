@@ -5,13 +5,13 @@ import { saveSectionAction } from "@/app/admin/pages/actions";
 import { SectionBand, type PageMoney } from "@/components/page/sales-page";
 import {
   BAND_STYLES,
-  BAND_STYLE_KEYS,
   sectionDef,
   type SectionRow,
   buildSectionView,
   type BandStyleKey,
 } from "@/lib/page-sections";
 import { BlockEditor } from "@/components/admin/block-editor";
+import type { SectionEdit } from "@/components/admin/section-settings";
 import { DeviceSwitch } from "@/components/admin/device-switch";
 import { blocksForSection, isUnconverted } from "@/lib/section-to-blocks";
 import { starterBlocks } from "@/lib/page-starter";
@@ -307,86 +307,21 @@ function SectionPanel({
         <BlockCanvasField
           row={row}
           title={`${def.n} · ${def.title}`}
+          section={{
+            style: row.style ?? null,
+            accent: row.accent ?? null,
+            variant: row.variant ?? null,
+            enabled: row.enabled,
+            variants: def.variants,
+            onChange,
+          }}
           onChange={(next) => setField("blocks", next)}
         />
 
-        {def.variants && (
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">Layout</span>
-            <div className="flex flex-wrap gap-2">
-              {def.variants.map((v) => (
-                <button
-                  key={v.key}
-                  type="button"
-                  onClick={() => onChange({ variant: v.key })}
-                  className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                    row.variant === v.key
-                      ? "border-navy bg-navy/10 text-navy"
-                      : "border-border text-muted hover:border-fg"
-                  }`}
-                >
-                  {v.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium">Band colour</span>
-          <div className="flex flex-wrap items-center gap-2">
-            {BAND_STYLE_KEYS.map((k) => (
-              <button
-                key={k}
-                type="button"
-                title={BAND_STYLES[k].label}
-                aria-label={BAND_STYLES[k].label}
-                aria-pressed={row.style === k}
-                onClick={() => onChange({ style: k })}
-                className={`size-8 rounded-lg border-2 transition-colors ${
-                  row.style === k ? "border-fg" : "border-transparent"
-                }`}
-                style={{ background: BAND_STYLES[k].bg, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.16)" }}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium">
-            Accent <span className="ml-1 font-normal text-muted">buttons, numbers, ticks</span>
-          </span>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={row.accent ?? BAND_STYLES[(row.style as BandStyleKey) ?? "paper"].accent}
-              onChange={(e) => onChange({ accent: e.target.value })}
-              aria-label="Accent colour"
-              className="size-9 cursor-pointer rounded-lg border border-border bg-surface p-1"
-            />
-            {row.accent && (
-              <button
-                type="button"
-                onClick={() => onChange({ accent: null })}
-                className="text-xs text-muted underline-offset-4 hover:text-fg hover:underline"
-              >
-                Use the band&rsquo;s own
-              </button>
-            )}
-          </div>
-        </div>
-
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={row.enabled}
-            onChange={(e) => onChange({ enabled: e.target.checked })}
-            className="size-4 accent-[var(--primary)]"
-          />
-          <span>Show this section</span>
-          <span className="text-muted">— switching it off keeps the copy</span>
-        </label>
-
+        {/* Band colour, accent, layout and whether it shows all moved INSIDE the
+            builder, where the thing they change is on screen. Judging a band
+            colour from a form behind the editor meant closing the only view of
+            what it applies to. */}
         <p className="pt-1 text-xs text-muted">
           Changes are kept as you type — use <strong className="text-fg">Save</strong> at the top of
           the page.
@@ -433,10 +368,12 @@ function SectionPanel({
 function BlockCanvasField({
   row,
   title,
+  section,
   onChange,
 }: {
   row: SectionRow;
   title: string;
+  section: SectionEdit;
   onChange: (next: Block[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -471,6 +408,7 @@ function BlockCanvasField({
           blocks={blocks}
           theme={view.theme}
           title={title}
+          section={section}
           onChange={onChange}
           onClose={() => setOpen(false)}
         />

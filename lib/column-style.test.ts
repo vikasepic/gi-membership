@@ -148,3 +148,30 @@ describe("stored rows", () => {
     expect(back[0].columnStyles).toHaveLength(1);
   });
 });
+
+describe("a background image chosen from the library", () => {
+  const withImage = (image: string) =>
+    String(backgroundCss({ ...emptyBackground(), type: "classic", image }, theme).backgroundImage);
+
+  it("becomes a real URL, not a relative path", () => {
+    // Stored as "library/1786….webp". Put straight into url() it is relative to
+    // whatever page is being viewed, so it 404s and the background silently
+    // does not appear — which is exactly what it looks like from the editor.
+    const out = withImage("library/1786001442778-photo.webp");
+    expect(out).toContain("/storage/v1/object/public/public-media/");
+    expect(out).toContain("library/1786001442778-photo.webp");
+  });
+
+  it("leaves an image hosted elsewhere alone", () => {
+    expect(withImage("https://cdn.test/a.png")).toContain("https://cdn.test/a.png");
+  });
+
+  it("still refuses a quote", () => {
+    // The value lands inside url('…') and the only safe answer to a quote is
+    // that there isn't one.
+    // Two quotes exactly — the pair url() itself needs. A third would end the
+    // value early and let whatever follows be read as more CSS.
+    const out = withImage("https://x.test/a'; background:url(evil)");
+    expect((out.match(/'/g) ?? [])).toHaveLength(2);
+  });
+});

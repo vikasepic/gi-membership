@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { BlockTree } from "@/components/admin/block-tree";
+import { SectionSettings } from "@/components/admin/section-settings";
+import { readFileSync } from "node:fs";
 import { newBlock, setColumnWidth, setPropsAt } from "@/lib/blocks";
 import { sections, asSegment, groupedPalette, PALETTE, BLOCK_ICON, SEGMENT_ICONS } from "@/lib/block-controls";
 import { stacksAt } from "@/lib/block-style";
@@ -193,5 +195,45 @@ describe("stacked columns explain themselves", () => {
     const row = setPropsAt(newBlock("row"), "mobile", { widths: [70, 30] });
     row.columns = [[], []];
     expect(stacksAt(row, "mobile")).toBe(false);
+  });
+});
+
+describe("the band is edited where you can see it", () => {
+  const section = {
+    style: "paper",
+    accent: null,
+    variant: null,
+    enabled: true,
+    variants: [{ key: "wide", label: "Wide" }],
+    onChange: () => {},
+  };
+  const panel = () =>
+    renderToStaticMarkup(<SectionSettings section={section} />);
+
+  it("offers the band colour, the accent and whether it shows", () => {
+    const out = panel();
+    expect(out).toContain("Colour");
+    expect(out).toContain("Accent");
+    expect(out).toContain("Show this section");
+  });
+
+  it("says why the panel is showing this rather than a block", () => {
+    // An empty panel reads as a broken one.
+    expect(panel()).toContain("Nothing selected");
+  });
+
+  it("no longer sits in the form behind the editor", () => {
+    // Judging a band colour from there meant closing the only view of what it
+    // applies to.
+    // On the controls, not the words — a comment explaining the move mentions
+    // them, and matching prose would fail on the explanation instead of the code.
+    const form = readFileSync("components/admin/page-editor.tsx", "utf8");
+    expect(form).not.toContain("BAND_STYLE_KEYS");
+    expect(form).not.toContain('onChange({ enabled:');
+    expect(form).not.toContain('onChange({ accent:');
+  });
+
+  it("is handed to the editor by the page builder", () => {
+    expect(readFileSync("components/admin/page-editor.tsx", "utf8")).toContain("section={section}");
   });
 });

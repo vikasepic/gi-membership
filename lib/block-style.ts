@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { readableInk, tint } from "@/lib/color";
-import type { BandTheme } from "@/lib/page-sections";
+import { imageSrc, type BandTheme } from "@/lib/page-sections";
 import {
   DEVICE_MAX,
   columnWidths,
@@ -36,7 +36,12 @@ export function backgroundCss(bg: Background, theme: BandTheme): CSSProperties {
       // Quotes and backslashes are stripped rather than escaped: this value
       // lands inside url('…'), and the only safe answer to a quote here is
       // that there isn't one.
-      const url = `url('${bg.image.replace(/['"\\]/g, "")}')`;
+      // Through imageSrc, like every other image on a page. A file chosen from
+      // the library is stored as a path — "library/1786…webp" — and putting
+      // that straight into url() makes it relative to whatever page is being
+      // viewed, so it 404s and the background silently does not appear.
+      const src = imageSrc(bg.image) ?? "";
+      const url = `url('${src.replace(/['"\\]/g, "")}')`;
       const wash = Math.max(0, Math.min(90, bg.overlay ?? 0));
       // The wash rides in FRONT of the image as a flat gradient, so one
       // property carries both and nothing needs an extra element to sit in.

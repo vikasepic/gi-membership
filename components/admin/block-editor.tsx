@@ -48,6 +48,7 @@ import {
 } from "@/lib/blocks";
 import { DeviceSwitch } from "@/components/admin/device-switch";
 import { BlockTree } from "@/components/admin/block-tree";
+import { SectionSettings, type SectionEdit } from "@/components/admin/section-settings";
 import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/lib/undo";
 
 /**
@@ -86,15 +87,24 @@ export function BlockEditor({
   blocks,
   theme,
   title,
+  section,
   onChange,
   onClose,
 }: {
   blocks: Block[];
   theme: BandTheme;
   title: string;
+  /**
+   * The band this content stands on.
+   *
+   * Optional so the editor still renders anywhere it is used without one, but
+   * the page builder always passes it: changing a band colour used to mean
+   * closing the editor to reach the form behind it, which is closing the only
+   * thing you were judging the colour against.
+   */
+  section?: SectionEdit;
   onChange: (next: Block[]) => void;
   onClose: () => void;
-  /** Without this an image block can only take a pasted URL. */
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("content");
@@ -412,7 +422,13 @@ export function BlockEditor({
         {/* Inspector */}
         <aside className="flex min-h-0 flex-col overflow-hidden border-l border-border bg-surface">
           {!selected || !tabs ? (
-            <p className="p-4 text-sm text-muted">Select a block to edit it.</p>
+            // Nothing selected is not nothing to edit — it is the band. Which is
+            // also what clicking away from a block already means.
+            section ? (
+              <SectionSettings section={section} />
+            ) : (
+              <p className="p-4 text-sm text-muted">Select a block to edit it.</p>
+            )
           ) : (
             <>
               <div className="flex items-center gap-2 border-b border-border px-3 py-2">

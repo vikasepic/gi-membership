@@ -117,7 +117,11 @@ export default async function CheckoutPage({
         hasTrial={Boolean(bumpAsSold?.trialDays || altOffer?.trialDays)}
       />
 
-      <div className="flex flex-col gap-7 px-6 py-8 md:px-10 lg:py-12">
+      {/* The ground bleeds to the window edge; the content does not. A form
+          stretched across half a large monitor turns every field into a
+          900px-wide box, which is what made this look like a page with the
+          zoom stuck on. */}
+      <div className="mx-auto flex w-full max-w-[30rem] flex-col gap-7 px-6 py-8 md:px-8 lg:mx-0 lg:ml-0 lg:mr-auto lg:py-14 lg:pl-10">
         <h2 className="font-display text-xl">Checkout</h2>
         <CheckoutForm
         product={{

@@ -32,7 +32,7 @@ export function CheckoutPanel({
 }) {
   return (
     <aside
-      className="relative flex flex-col gap-7 border-b border-border px-6 py-8 md:px-10 lg:min-h-dvh lg:border-b-0 lg:border-r lg:py-12"
+      className="relative flex flex-col gap-7 border-b border-border px-6 py-8 md:px-8 lg:min-h-dvh lg:border-b-0 lg:border-r lg:py-14"
       style={{
         // A light ground with a warm cast, so the two halves read as one page
         // seen from two angles rather than two sites bolted together.
@@ -40,7 +40,10 @@ export function CheckoutPanel({
           "linear-gradient(165deg, color-mix(in srgb, var(--primary) 9%, var(--surface)) 0%, var(--surface-2) 55%, var(--surface-2) 100%)",
       }}
     >
-      <div className="flex items-center justify-between gap-4">
+      {/* Matched to the form's width on the other side, and pushed toward it,
+          so the two halves read as one page rather than two columns that happen
+          to be adjacent. */}
+      <div className="mx-auto flex w-full max-w-[30rem] items-center justify-between gap-4 lg:ml-auto lg:mr-0 lg:pr-4">
         <Link href={backHref} className="kicker text-muted transition-colors hover:text-fg">
           &larr; Back
         </Link>
@@ -54,7 +57,7 @@ export function CheckoutPanel({
         </span>
       </div>
 
-      <div className="flex flex-col gap-6 lg:my-auto lg:max-w-md">
+      <div className="mx-auto flex w-full max-w-[30rem] flex-col gap-6 lg:my-auto lg:ml-auto lg:mr-0 lg:pr-4">
         {coverUrl ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
