@@ -1,3 +1,4 @@
+import { COVER_ASPECT } from "@/lib/cover";
 import Link from "next/link";
 import { money } from "@/lib/money";
 import { TYPE_META, FALLBACK_META, type BadgeType } from "@/components/course-type";
@@ -31,7 +32,7 @@ export function ProductCard({ item, index = 0 }: { item: CatalogItem; index?: nu
       style={{ animationDelay: `${120 + index * 70}ms` }}
     >
       <div
-        className="relative aspect-[16/10] w-full overflow-hidden"
+        className={`relative ${COVER_ASPECT} w-full overflow-hidden`}
         style={{ background: `linear-gradient(145deg, ${meta.wash}, var(--surface-2))` }}
       >
         {item.coverUrl && (

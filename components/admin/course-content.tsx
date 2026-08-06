@@ -1,5 +1,7 @@
 "use client";
 
+import { COVER_ASPECT, COVER_MAX, mb } from "@/lib/cover";
+import { CoverHint, CoverPreview, useCoverPick } from "@/components/admin/cover-pick";
 import { useActionState, useState } from "react";
 import {
   uploadCourseCoverAction,
@@ -11,12 +13,11 @@ import {
 import { Section, inputClass } from "@/components/admin/form-controls";
 import type { Course } from "@/lib/courses";
 
-// Mirrors lib/media.ts. Checked here too so an oversized file is refused
-// instantly and visibly, rather than being swallowed by a request-size limit
-// somewhere between the browser and the action.
-const COVER_MAX = 5 * 1024 * 1024;
+// Mirrors lib/media.ts. Checked in the browser too so an oversized file is
+// refused instantly and visibly, rather than being swallowed by a request-size
+// limit somewhere between here and the action. (COVER_MAX lives in lib/cover.ts
+// with the rest of what a cover has to be.)
 const ATTACH_MAX = 100 * 1024 * 1024;
-const mb = (n: number) => `${Math.round(n / 1024 / 1024)}MB`;
 
 // The "simple course" editor: everything a course needs when it has no chapters
 // — a cover image, the file people download (or a video URL), and that's it.
@@ -55,12 +56,7 @@ export function CourseContent({
 
 function CoverBlock({ courseId, coverUrl }: { courseId: string; coverUrl: string | null }) {
   const [state, action, pending] = useActionState<ContentState, FormData>(uploadCourseCoverAction, {});
-  const [tooBig, setTooBig] = useState<string | null>(null);
-
-  function check(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    setTooBig(f && f.size > COVER_MAX ? `That image is ${mb(f.size)}. Covers must be under ${mb(COVER_MAX)}.` : null);
-  }
+  const { tooBig, notes, preview, onPick } = useCoverPick();
 
   return (
     <form
@@ -80,15 +76,16 @@ function CoverBlock({ courseId, coverUrl }: { courseId: string; coverUrl: string
         <img
           src={coverUrl}
           alt=""
-          className="aspect-[16/10] w-full max-w-56 self-start rounded-lg border border-border object-cover"
+          className={`${COVER_ASPECT} w-full max-w-56 self-start rounded-lg border border-border object-cover`}
         />
       )}
       <FilePick
         accept="image/*"
-        hint={`JPG or PNG, up to ${mb(COVER_MAX)}.`}
         label={coverUrl ? "Choose a replacement" : "Choose an image"}
-        onChange={check}
+        onChange={onPick}
       />
+      <CoverHint />
+      <CoverPreview preview={preview} notes={notes} />
       {tooBig && <p className="text-sm text-primary">{tooBig}</p>}
       {state.error && <p className="text-sm text-primary">{state.error}</p>}
       {state.ok && <p className="text-sm text-navy">Cover updated.</p>}
@@ -204,7 +201,8 @@ function FilePick({
   onChange,
 }: {
   accept: string;
-  hint: string;
+  /** Optional: a cover states its own rules through <CoverHint />. */
+  hint?: string;
   label: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
@@ -227,7 +225,7 @@ function FilePick({
         </label>
         <span className="min-w-0 truncate text-sm text-muted">{name ?? "Nothing chosen yet"}</span>
       </div>
-      <span className="text-xs text-muted">{hint}</span>
+      {hint && <span className="text-xs text-muted">{hint}</span>}
     </div>
   );
 }

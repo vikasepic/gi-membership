@@ -1,3 +1,4 @@
+import { COVER_ASPECT } from "@/lib/cover";
 import Link from "next/link";
 import { BuyLink } from "@/components/buy-link";
 import { offerHref } from "@/lib/offer-link";
@@ -137,7 +138,7 @@ export default async function Home() {
                 src={featuredCover}
                 alt=""
                 decoding="async"
-                className="mt-5 aspect-[16/10] w-full rounded-2xl border border-border object-cover"
+                className={`mt-5 ${COVER_ASPECT} w-full rounded-2xl border border-border object-cover`}
               />
             )}
             <div className="flex flex-col gap-2 pt-6">

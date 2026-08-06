@@ -1,11 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { COVER_ASPECT } from "@/lib/cover";
+import { CoverHint, CoverPreview, useCoverPick } from "@/components/admin/cover-pick";
+import { useActionState } from "react";
 import { uploadProductCoverAction, clearProductCoverAction, type CoverState } from "@/app/admin/actions";
 import { Section } from "@/components/admin/form-controls";
-
-const COVER_MAX = 5 * 1024 * 1024; // mirrors lib/media.ts
-const mb = (n: number) => `${Math.round(n / 1024 / 1024)}MB`;
 
 // Optional per-product storefront image. Separate from the product form on
 // purpose: it uploads immediately rather than waiting for a save, so it can't be
@@ -23,7 +22,7 @@ export function ProductCover({
   inheritedUrl: string | null;
 }) {
   const [state, action, pending] = useActionState<CoverState, FormData>(uploadProductCoverAction, {});
-  const [tooBig, setTooBig] = useState<string | null>(null);
+  const { tooBig, notes, preview, onPick } = useCoverPick();
   const shown = coverUrl ?? inheritedUrl;
 
   return (
@@ -40,7 +39,7 @@ export function ProductCover({
             <img
               src={shown}
               alt=""
-              className="aspect-[16/10] w-full max-w-56 self-start rounded-lg border border-border object-cover"
+              className={`${COVER_ASPECT} w-full max-w-56 self-start rounded-lg border border-border object-cover`}
             />
             <span className="text-xs text-muted">
               {coverUrl ? "This product's own image." : "Inherited from the attached course."}
@@ -63,17 +62,11 @@ export function ProductCover({
             type="file"
             name="file"
             accept="image/*"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              setTooBig(
-                f && f.size > COVER_MAX
-                  ? `That image is ${mb(f.size)}. Covers must be under ${mb(COVER_MAX)}.`
-                  : null,
-              );
-            }}
+            onChange={onPick}
             className="text-sm file:mr-3 file:rounded-full file:border-0 file:bg-surface file:px-4 file:py-2 file:text-sm file:text-fg"
           />
-          <span className="text-xs text-muted">JPG or PNG, up to {mb(COVER_MAX)}. Landscape (16:10) crops best.</span>
+          <CoverHint />
+          <CoverPreview preview={preview} notes={notes} />
           {tooBig && <p className="text-sm text-primary">{tooBig}</p>}
           {state.error && <p className="text-sm text-primary">{state.error}</p>}
           {state.ok && <p className="text-sm text-navy">Image updated.</p>}

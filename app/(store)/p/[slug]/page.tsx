@@ -1,3 +1,4 @@
+import { COVER_ASPECT } from "@/lib/cover";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getProductBySlug } from "@/lib/store";
@@ -90,7 +91,7 @@ export default async function ProductPage({
         {/* Media / cover. The gradient remains as the fallback, so a product
             whose course has no cover looks exactly as it did before. */}
         <div
-          className="rise relative aspect-[16/10] w-full overflow-hidden rounded-3xl border border-border md:col-span-7"
+          className={`rise relative ${COVER_ASPECT} w-full overflow-hidden rounded-3xl border border-border md:col-span-7`}
           style={{
             background:
               "linear-gradient(150deg, color-mix(in srgb, var(--primary) 14%, var(--surface)), var(--surface-2))",

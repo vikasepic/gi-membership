@@ -1,3 +1,4 @@
+import { COVER_ASPECT } from "@/lib/cover";
 import Link from "next/link";
 import { rollupProgress, flattenPlayable, firstIncomplete } from "@/lib/curriculum-student";
 import { publicCoverUrl } from "@/lib/media";
@@ -57,7 +58,7 @@ export function CourseOverview({
             <img
               src={coverUrl}
               alt=""
-              className="aspect-[4/5] w-full self-start rounded-2xl border border-border object-cover md:sticky md:top-24"
+              className={`${COVER_ASPECT} w-full self-start rounded-2xl border border-border object-cover md:sticky md:top-24`}
             />
           </aside>
         )}
