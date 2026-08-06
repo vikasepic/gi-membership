@@ -13,6 +13,7 @@ const guard = readFileSync("lib/admin-guard.ts", "utf8");
 const mw = readFileSync("middleware.ts", "utf8");
 const actions = readFileSync("app/admin/members/actions.ts", "utf8");
 const page = readFileSync("app/admin/members/page.tsx", "utf8");
+const row = readFileSync("components/admin/member-row.tsx", "utf8");
 
 describe("admin access", () => {
   it("checks the env list first, then the database flag", () => {
@@ -35,8 +36,16 @@ describe("admin access", () => {
   });
 
   it("shows env admins as permanent rather than toggleable", () => {
-    expect(page).toMatch(/isAdminEmail\(m\.email\) \?/);
-    expect(page).toContain("Owner");
+    // The page decides who is one; the row refuses to offer a toggle for them.
+    // A toggle there would claim to remove access it cannot remove — the guard
+    // reads the environment first and would let them straight back in.
+    expect(page).toContain("isOwner={isAdminEmail(m.email)}");
+    expect(row).toMatch(/isOwner \?[\s\S]{0,400}Admin through the environment/);
+    expect(row).toMatch(/isOwner \?[\s\S]{0,600}toggleAdminAction/);
+  });
+
+  it("labels an environment admin distinctly in the list", () => {
+    expect(row).toContain('isOwner ? "owner" : "admin"');
   });
 
   it("re-checks admin on every mutating action", () => {

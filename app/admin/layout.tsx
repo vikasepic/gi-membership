@@ -2,6 +2,7 @@ import { AdminSidebar } from "@/components/admin/sidebar";
 import { NOINDEX } from "@/lib/seo";
 import { navCounts } from "@/lib/admin-nav";
 import { stripeMode } from "@/lib/stripe";
+import { needsYou } from "@/lib/needs-you";
 
 // Admin — always dynamic (server data uses runtime-only env, never prerender).
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const counts = await navCounts();
   return (
     <div className="admin-shell flex min-h-dvh flex-col lg:flex-row">
-      <AdminSidebar counts={counts} live={stripeMode() === "live"} />
+      <AdminSidebar counts={counts} live={stripeMode() === "live"} nudges={needsYou(counts)} />
       {/* The width is the point of the change. A table with six columns and a
           curriculum with nested rows were both being asked to live in half a
           screen while the other half stayed empty. */}

@@ -16,6 +16,14 @@ export type MemberRow = {
   isAdmin: boolean;
   createdAt: string;
   orders: number;
+  /**
+   * Orders that were refunded.
+   *
+   * Kept apart from `orders` so a member with three refunded orders stops
+   * reading as "0 orders" — arithmetically right and a plainly untrue thing to
+   * say about a person who bought three times.
+   */
+  refundedOrders: number;
   spentCents: number;
   courses: number;
   subscriptions: { appName: string; status: string; subscriptionId: string | null }[];
@@ -51,6 +59,8 @@ export async function listMembers(): Promise<MemberRow[]> {
       isAdmin: Boolean(u.is_admin),
       createdAt: u.created_at as string,
       orders: paid.length,
+      refundedOrders: (orders ?? []).filter((o) => o.user_id === uid && o.status === "refunded")
+        .length,
       spentCents: paid.reduce((n, o) => n + ((o.total_cents as number) ?? 0), 0),
       courses: mine.filter((o) => o.product_id).length,
       subscriptions: mine
@@ -283,9 +293,16 @@ export async function setMemberAdmin(userId: string, isAdmin: boolean): Promise<
 }
 
 /** What a member currently holds, for the admin row. */
-export async function accessForMember(
-  userId: string,
-): Promise<{ id: string; label: string; kind: "product" | "app"; status: string; granted: boolean }[]> {
+/** One thing a member holds, and whether it was granted by hand. */
+export type AccessRow = {
+  id: string;
+  label: string;
+  kind: "product" | "app";
+  status: string;
+  granted: boolean;
+};
+
+export async function accessForMember(userId: string): Promise<AccessRow[]> {
   const db = createServiceClient();
   const { data: rows } = await db
     .from("ownership")

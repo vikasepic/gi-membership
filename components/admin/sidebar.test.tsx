@@ -108,3 +108,44 @@ describe("the admin sidebar", () => {
     expect(out).toContain('aria-expanded="false"');
   });
 });
+
+describe("the working rail", () => {
+  it("shows what needs doing, when there is any", () => {
+    // Every line is a fact the admin already held and mentioned nowhere anyone
+    // looks. Absent when there is nothing, so it is believed when it appears.
+    const out = renderToStaticMarkup(
+      <AdminSidebar
+        counts={REAL}
+        live
+        nudges={[{ label: "Legal details unset — registered address", href: "/admin/settings" }]}
+      />,
+    );
+    expect(out).toContain("1 needs you");
+    expect(out).toContain("registered address");
+  });
+
+  it("shows nothing at all when nothing is wrong", () => {
+    const out = renderToStaticMarkup(<AdminSidebar counts={REAL} live nudges={[]} />);
+    expect(out).not.toContain("need you");
+    expect(out).not.toContain("needs you");
+  });
+
+  it("does not bury the rest of the rail under a long list", () => {
+    // Four things needing you is a page to visit, not a panel to read.
+    const many = Array.from({ length: 6 }, (_, i) => ({ label: `Thing ${i}`, href: "/admin" }));
+    const out = renderToStaticMarkup(<AdminSidebar counts={REAL} live nudges={many} />);
+    expect(out).toContain("6 need you");
+    expect(out).toContain("Thing 2");
+    expect(out).not.toContain("Thing 3");
+  });
+
+  it("gives every destination a shape as well as a word", () => {
+    // So navigating becomes recognising rather than reading nine labels.
+    const out = renderToStaticMarkup(<AdminSidebar counts={REAL} live />);
+    expect((out.match(/<svg/g) ?? []).length).toBeGreaterThanOrEqual(9);
+  });
+
+  it("offers a way to give the space back", () => {
+    expect(renderToStaticMarkup(<AdminSidebar counts={REAL} live />)).toContain("Collapse");
+  });
+});
