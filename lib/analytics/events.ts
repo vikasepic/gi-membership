@@ -72,6 +72,16 @@ export const META_BOTH_SIDES: EventName[] = [
 /** Events only the server can know about — no browser is present. */
 export const SERVER_ONLY: EventName[] = ["Subscribe"];
 
+/**
+ * Events Meta has no standard name for.
+ *
+ * fbq('track', …) only accepts Meta's own vocabulary; anything else is dropped
+ * with a console warning nobody reads, and the event simply never arrives.
+ * These go through fbq('trackCustom', …) instead, which is what a custom event
+ * has always needed.
+ */
+export const META_CUSTOM: EventName[] = ["LessonStarted", "LessonCompleted"];
+
 /** Events with no money on them; sending a value would invent revenue. */
 export const NO_VALUE: EventName[] = [
   "PageView",

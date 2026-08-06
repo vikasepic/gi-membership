@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CompletionControls } from "@/components/library/completion-controls";
 import { AudioPlayer } from "@/components/library/audio-player";
+import { TrackView } from "@/components/track-view";
 import type { Course } from "@/lib/courses";
 import type { CourseItem } from "@/lib/curriculum";
 
@@ -54,6 +55,16 @@ export function LessonView({
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 py-4">
+      {/* Gated on `interactive` for the same reason the completion control is:
+          previewing a lesson is not a student studying it, and counting it as
+          one would put the admin's own reading in the course numbers. */}
+      {interactive && (
+        <TrackView
+          event="LessonStarted"
+          params={{ content_name: item.title, content_ids: [item.id], course: course.title }}
+          stableKey={item.id}
+        />
+      )}
       {backHref && (
         <Link href={backHref.href} className="kicker w-fit text-muted hover:text-fg">
           &larr; {backHref.label}

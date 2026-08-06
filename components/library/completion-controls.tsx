@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { track } from "@/components/analytics";
+import { eventIdFor } from "@/lib/analytics/events";
 
 const DWELL_MS = 5 * 60 * 1000; // 5 minutes of VISIBLE time
 
@@ -33,7 +35,20 @@ export function CompletionControls({
       const data = await res.json();
       // Trust the server's answer, not our optimistic guess: manual_override
       // may have silently refused this write, and the DB is the source of truth.
-      setIsDone(Boolean(data.completed));
+      const nowDone = Boolean(data.completed);
+      // Reported from here rather than from the button, because a lesson can be
+      // finished four ways — the button, watching half the video, opening the
+      // download, or five minutes of visible dwell — and all four arrive here.
+      // Only on the transition INTO complete, and only if the server agreed:
+      // un-marking is not a completion, and neither is a write it refused.
+      if (nowDone && !isDone) {
+        track(
+          "LessonCompleted",
+          { content_ids: [itemId], method: source },
+          eventIdFor("LessonCompleted", `${itemId}.${productId}`),
+        );
+      }
+      setIsDone(nowDone);
     } catch {
       return;
     }

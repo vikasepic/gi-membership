@@ -3,7 +3,7 @@
 import Script from "next/script";
 import { useEffect, useState } from "react";
 import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
-import { GA4_NAME, type EventName } from "@/lib/analytics/events";
+import { GA4_NAME, META_CUSTOM, type EventName } from "@/lib/analytics/events";
 
 // The browser half of tracking.
 //
@@ -38,8 +38,10 @@ export function track(
   eventId?: string,
 ): void {
   if (typeof window === "undefined") return;
-  // Meta: the event id is what pairs this with the server's copy.
-  window.fbq?.("track", name, params, eventId ? { eventID: eventId } : undefined);
+  // Meta: the event id is what pairs this with the server's copy. A course
+  // event is not in Meta's vocabulary, so it has to be sent as a custom one.
+  const verb = META_CUSTOM.includes(name) ? "trackCustom" : "track";
+  window.fbq?.(verb, name, params, eventId ? { eventID: eventId } : undefined);
   // GA4: only the events that carry no money. Revenue is the server's job, and
   // a purchase reported from here as well would be counted twice.
   if (!isCommerce(name)) window.gtag?.("event", GA4_NAME[name], params);
