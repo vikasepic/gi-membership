@@ -124,3 +124,25 @@ describe("a block standing on its own picture", () => {
     );
   });
 });
+
+describe("the builder's canvas is the band", () => {
+  it("paints the section's background, not just its colour", () => {
+    // The canvas IS the band. Painting only theme.bg meant choosing a picture
+    // for the section changed the panel and nothing you were looking at.
+    const src = readFileSync("components/admin/block-editor.tsx", "utf8");
+    expect(src).toContain("sectionBackdrop");
+    expect(src).toContain("background: theme.bg, ...sectionBackdrop");
+  });
+
+  it("uses the same function the live band uses", () => {
+    // Two drawing paths is how a canvas comes to show one thing and the page
+    // another.
+    const src = readFileSync("components/admin/block-editor.tsx", "utf8");
+    expect(src).toContain("backgroundCss(normalizeBackground(bg), theme)");
+  });
+
+  it("reaches the canvas from the panel that sets it", () => {
+    const editor = readFileSync("components/admin/page-editor.tsx", "utf8");
+    expect(editor).toContain("background: (row.background as never) ?? null");
+  });
+});

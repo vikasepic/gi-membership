@@ -36,6 +36,7 @@ import {
   updateBlock,
   evenWidths,
   hasOverride,
+  normalizeBackground,
   columnAsBlock,
   setColumnStyle,
   splitColumnId,
@@ -59,7 +60,7 @@ import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/li
  * except to hand it on.
  */
 const CanvasDevice = createContext<Device>("desktop");
-import { blockCssAt, columnCss, effectiveWidths, rowLayout, stacksAt } from "@/lib/block-style";
+import { backgroundCss, blockCssAt, columnCss, effectiveWidths, rowLayout, stacksAt } from "@/lib/block-style";
 import { imageSrc } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
 
@@ -118,6 +119,12 @@ export function BlockEditor({
   // Reset whenever the selection changes, so a pending "Delete it" never lands
   // on a block someone has since moved to.
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Drawn with the same function the live band uses, so the canvas cannot show
+  // one thing and the page another.
+  const sectionBackdrop = useMemo(() => {
+    const bg = section?.background;
+    return bg && bg.type !== "none" ? backgroundCss(normalizeBackground(bg), theme) : undefined;
+  }, [section?.background, theme]);
   // Disarmed whenever the selection moves, from any of the several places it
   // can move from — the canvas, the tree, a drop. One effect covers them all;
   // a reset in each handler covers whichever ones somebody remembered.
@@ -391,8 +398,14 @@ export function BlockEditor({
           )}
         </aside>
 
-        {/* Canvas */}
-        <div className="min-w-0 overflow-y-auto p-6" style={{ background: theme.bg }}>
+        {/* Canvas.
+            The band's own background belongs here too, or choosing a picture
+            for the section changes the panel and nothing you are looking at —
+            the canvas IS the band, and it was painting only its colour. */}
+        <div
+          className="min-w-0 overflow-y-auto p-6"
+          style={{ background: theme.bg, ...sectionBackdrop }}
+        >
           <div
             className="mx-auto w-full transition-[max-width] duration-200"
             style={{ maxWidth: DEVICE_CANVAS[device] ?? 900 }}
