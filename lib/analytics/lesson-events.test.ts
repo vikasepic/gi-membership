@@ -72,7 +72,7 @@ describe("what a course event carries", () => {
 
   it("reaches GA4 — it carries no money, so it is not held back as commerce", () => {
     const src = readFileSync("components/analytics.tsx", "utf8");
-    const commerce = src.match(/const isCommerce[^;]+;/s)?.[0] ?? "";
+    const commerce = src.match(/const isCommerce[^;]+;/)?.[0] ?? "";
     expect(commerce).not.toContain("Lesson");
   });
 });

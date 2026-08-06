@@ -26,6 +26,7 @@ export const COVER_WIDTH = 1600;
 export const COVER_HEIGHT = 1000;
 
 /** "1600 × 1000" — for telling someone what to make. */
+export const COVER_RATIO_LABEL = "16:10";
 export const COVER_SIZE_LABEL = `${COVER_WIDTH} × ${COVER_HEIGHT}`;
 
 /**

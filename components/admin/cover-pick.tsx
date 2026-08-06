@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { COVER_ASPECT, COVER_MAX, COVER_SIZE_LABEL, coverWarnings, mb } from "@/lib/cover";
+import { COVER_ASPECT, COVER_MAX, COVER_RATIO_LABEL, COVER_SIZE_LABEL, coverWarnings, mb } from "@/lib/cover";
 
 /**
  * Choosing a cover, with the answer to "what size should this be?" on screen.
@@ -43,9 +43,10 @@ export function useCoverPick() {
 export function CoverHint() {
   return (
     <span className="text-xs text-muted">
-      JPG or PNG, up to {mb(COVER_MAX)}. Best at{" "}
-      <b className="font-medium text-fg">{COVER_SIZE_LABEL} pixels</b> — anything a different shape
-      is cropped from the centre to fit.
+      Best at <b className="font-medium text-fg">{COVER_RATIO_LABEL}</b> — {COVER_SIZE_LABEL} pixels,
+      or any size in that shape. Anything a different shape is cropped from the centre to fit. JPG,
+      PNG or WebP up to {mb(COVER_MAX)}; it is resized for the web on upload, so a large photo is
+      fine.
     </span>
   );
 }

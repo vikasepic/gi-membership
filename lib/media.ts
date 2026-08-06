@@ -2,6 +2,8 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { publicEnv } from "@/lib/env";
 import type { Attachment } from "@/lib/curriculum";
+import sharp from "sharp";
+import { COVER_WIDTH, COVER_HEIGHT } from "@/lib/cover";
 
 // Covers are marketing imagery shown before purchase -> PUBLIC bucket.
 // Attachments and inline lesson images are paid content -> PRIVATE bucket,
@@ -37,20 +39,73 @@ export function validateUpload(
 
 const safeName = (n: string) => n.replace(/[^a-zA-Z0-9._-]/g, "_");
 
+/** How wide a sales-page image can usefully be — full-bleed on a large screen. */
+const PAGE_WIDTH = 2000;
+
+/**
+ * Shrink an image to the largest size anything actually displays it at.
+ *
+ * The upload limit was 5MB, and whatever was uploaded is what every visitor
+ * downloaded — a 4MB phone photo behind a card 400px wide, on a phone, on
+ * mobile data. Doing it here rather than in the browser means it applies to
+ * every route that takes an image, including the ones added later, and the
+ * limit stops mattering: bring a 5MB photo and 200KB gets stored.
+ *
+ * Never enlarged, so a small image is left exactly as it is rather than being
+ * blown up into something blurrier than what arrived. WebP because it is a
+ * third of the size of the same JPEG and every browser has read it for years —
+ * and unlike JPEG it keeps transparency, so a logo with a cut-out background
+ * does not gain a black one.
+ */
+async function shrink(
+  file: File,
+  maxWidth: number,
+  maxHeight?: number,
+): Promise<{ body: Buffer; contentType: string; ext: string } | null> {
+  try {
+    const out = await sharp(Buffer.from(await file.arrayBuffer()))
+      .rotate() // honour the EXIF orientation before it is stripped, or a photo taken sideways stays sideways
+      .resize({ width: maxWidth, height: maxHeight, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 82 })
+      .toBuffer();
+    return { body: out, contentType: "image/webp", ext: "webp" };
+  } catch (e) {
+    // An image sharp cannot read — an exotic format, or something claiming to
+    // be an image and not being one. Storing the original is the same behaviour
+    // as before this existed; refusing the upload over it is not.
+    console.error("[shrink] leaving the original as it is:", e);
+    return null;
+  }
+}
+
+/** Upload an image to the public bucket, shrunk to what is actually displayed. */
+async function putImage(path: string, file: File, maxWidth: number, maxHeight?: number) {
+  const db = createServiceClient();
+  const small = await shrink(file, maxWidth, maxHeight);
+  const finalPath = small ? `${path}.${small.ext}` : path;
+  const { error } = await db.storage
+    .from("public-media")
+    .upload(finalPath, small ? small.body : file, {
+      contentType: small ? small.contentType : file.type,
+      upsert: false,
+    });
+  return { finalPath, error };
+}
+
 export function publicCoverUrl(coverPath: string | null): string | null {
   if (!coverPath) return null;
   return `${publicEnv().NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/public-media/${coverPath}`;
 }
 
 export async function uploadCover(itemId: string, file: File): Promise<string> {
-  const db = createServiceClient();
-  const path = `items/${itemId}/${Date.now()}-${safeName(file.name)}`;
-  const { error } = await db.storage.from("public-media").upload(path, file, {
-    contentType: file.type,
-    upsert: false,
-  });
+  const { finalPath, error } = await putImage(
+    `items/${itemId}/${Date.now()}-${safeName(file.name)}`,
+    file,
+    COVER_WIDTH,
+    COVER_HEIGHT,
+  );
   if (error) throw new Error(`uploadCover: ${error.message}`);
-  return path;
+  return finalPath;
 }
 
 export async function uploadAttachment(itemId: string, file: File): Promise<Attachment> {
@@ -74,25 +129,25 @@ export async function signedItemAsset(path: string, ttl = 60): Promise<string | 
 // chapters). Same buckets and rules as the item versions — cover is public,
 // the file is a paid asset — just filed under courses/ instead of items/.
 export async function uploadCourseCover(courseId: string, file: File): Promise<string> {
-  const db = createServiceClient();
-  const path = `courses/${courseId}/${Date.now()}-${safeName(file.name)}`;
-  const { error } = await db.storage.from("public-media").upload(path, file, {
-    contentType: file.type,
-    upsert: false,
-  });
+  const { finalPath, error } = await putImage(
+    `courses/${courseId}/${Date.now()}-${safeName(file.name)}`,
+    file,
+    COVER_WIDTH,
+    COVER_HEIGHT,
+  );
   if (error) throw new Error(`uploadCourseCover: ${error.message}`);
-  return path;
+  return finalPath;
 }
 
 export async function uploadProductCover(productId: string, file: File): Promise<string> {
-  const db = createServiceClient();
-  const path = `products/${productId}/${Date.now()}-${safeName(file.name)}`;
-  const { error } = await db.storage.from("public-media").upload(path, file, {
-    contentType: file.type,
-    upsert: false,
-  });
+  const { finalPath, error } = await putImage(
+    `products/${productId}/${Date.now()}-${safeName(file.name)}`,
+    file,
+    COVER_WIDTH,
+    COVER_HEIGHT,
+  );
   if (error) throw new Error(`uploadProductCover: ${error.message}`);
-  return path;
+  return finalPath;
 }
 
 /**
@@ -107,14 +162,14 @@ export async function uploadPageImage(
   ownerId: string,
   file: File,
 ): Promise<string> {
-  const db = createServiceClient();
-  const path = `pages/${owner}/${ownerId}/${Date.now()}-${safeName(file.name)}`;
-  const { error } = await db.storage.from("public-media").upload(path, file, {
-    contentType: file.type,
-    upsert: false,
-  });
+  // Wider than a cover: this one can run full-bleed across a large screen.
+  const { finalPath, error } = await putImage(
+    `pages/${owner}/${ownerId}/${Date.now()}-${safeName(file.name)}`,
+    file,
+    PAGE_WIDTH,
+  );
   if (error) throw new Error(`uploadPageImage: ${error.message}`);
-  return path;
+  return finalPath;
 }
 
 export async function uploadCourseAttachment(courseId: string, file: File): Promise<Attachment> {
