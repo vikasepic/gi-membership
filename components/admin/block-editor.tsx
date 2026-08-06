@@ -8,7 +8,8 @@ import { BlockBody } from "@/components/page/blocks";
 import { RichText } from "@/components/editor/rich-text";
 import {
   BLOCK_LABEL,
-  PALETTE,
+  BLOCK_ICON,
+  groupedPalette,
   clearControl,
   controlsFor,
   deviceOf,
@@ -16,6 +17,9 @@ import {
   readControl,
   scopeOf,
   writeControl,
+  asSegment,
+  sections,
+  SEGMENT_ICONS,
   type Control,
 } from "@/lib/block-controls";
 import {
@@ -39,6 +43,7 @@ import {
   type DropTarget,
 } from "@/lib/blocks";
 import { DeviceSwitch } from "@/components/admin/device-switch";
+import { BlockTree } from "@/components/admin/block-tree";
 import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/lib/undo";
 
 /**
@@ -94,6 +99,14 @@ export function BlockEditor({
   // edits mobile while the canvas shows desktop is a panel you cannot trust.
   const [device, setDevice] = useState<Device>("desktop");
   const drag = useRef<DragPayload | null>(null);
+  const [search, setSearch] = useState("");
+  const [left, setLeft] = useState<"add" | "structure">("add");
+  // What is being dragged, in words. The tile that follows the cursor needs it,
+  // and so does the gap that opens where it will land.
+  const [dragging, setDragging] = useState<{ label: string | null; type: BlockType | null }>({
+    label: null,
+    type: null,
+  });
   const [dropAt, setDropAt] = useState<string | null>(null);
   const [history, setHistory] = useState<History<Block[]>>(() => emptyHistory<Block[]>());
 
@@ -192,6 +205,8 @@ export function BlockEditor({
 
   const overlay = (
     <CanvasDevice.Provider value={device}>
+    <Dragging.Provider value={dragging}>
+    {dragging.label && <DragTile label={dragging.label} type={dragging.type} />}
     <div className="fixed inset-0 z-[100] flex flex-col bg-surface-2">
       <header className="flex items-center gap-3 border-b border-border bg-surface px-4 py-2.5">
         <strong className="font-display text-sm">Builder</strong>
@@ -229,32 +244,90 @@ export function BlockEditor({
 
       <div className="grid min-h-0 flex-1 grid-cols-[190px_1fr_270px]">
         {/* Palette */}
-        <aside className="flex flex-col gap-2 overflow-y-auto border-r border-border bg-surface p-3">
-          <span className="text-[0.68rem] font-semibold uppercase tracking-[0.1em] text-muted">
-            Drag or click to add
-          </span>
-          <div className="grid grid-cols-2 gap-1.5">
-            {PALETTE.map((p) => (
+        <aside className="flex flex-col overflow-y-auto border-r border-border bg-surface">
+          {/* Two ways of looking at the same page: what you can add, and what
+              is already there. A tab rather than a floating window, because the
+              editor is already an overlay and a window inside an overlay is a
+              thing to move out of the way. */}
+          <div className="sticky top-0 z-10 flex border-b border-border bg-surface">
+            {(["add", "structure"] as const).map((v) => (
               <button
-                key={p.type}
+                key={v}
                 type="button"
-                draggable
-                onDragStart={(e) => {
-                  drag.current = { kind: "new", type: p.type, props: p.props };
-                  e.dataTransfer.effectAllowed = "copy";
-                  e.dataTransfer.setData("text/plain", p.type);
-                }}
-                onDragEnd={() => {
-                  drag.current = null;
-                  setDropAt(null);
-                }}
-                onClick={() => add(p.type, p.props)}
-                className="cursor-grab rounded-lg border border-border bg-surface-2 px-2 py-2.5 text-xs hover:border-fg"
+                onClick={() => setLeft(v)}
+                className={`flex-1 px-2 py-2 text-[0.68rem] capitalize ${
+                  left === v ? "border-b-2 border-primary font-medium text-fg" : "text-muted"
+                }`}
               >
-                {p.label}
+                {v === "add" ? "Add" : "Structure"}
               </button>
             ))}
           </div>
+
+          {left === "structure" ? (
+            <BlockTree
+              blocks={blocks}
+              selectedId={selectedId}
+              device={device}
+              onSelect={(id) => {
+                setSelectedId(id);
+                setTab("content");
+              }}
+            />
+          ) : (
+            <>
+          <div className="sticky top-[33px] z-10 border-b border-border bg-surface p-2.5">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search blocks"
+              aria-label="Search blocks"
+              className="w-full rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs outline-none focus:border-primary"
+            />
+          </div>
+          {groupedPalette(search).map((g) => (
+            <div key={g.title} className="flex flex-col gap-1.5 px-2.5 pb-3 pt-2.5">
+              <span className="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-muted">
+                {g.title}
+              </span>
+              <div className="grid grid-cols-2 gap-1.5">
+                {g.items.map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    draggable
+                    onDragStart={(e) => {
+                      drag.current = { kind: "new", type: p.type, props: p.props };
+                      setDragging({ label: p.label, type: p.type });
+                      e.dataTransfer.effectAllowed = "copy";
+                      e.dataTransfer.setData("text/plain", p.type);
+                      // The browser's own drag image is a screenshot of the
+                      // button. A tile that names what you picked up is the
+                      // whole point, and it cannot be drawn over that one.
+                      hideDragImage(e.dataTransfer);
+                    }}
+                    onDragEnd={() => {
+                      drag.current = null;
+                      setDragging({ label: null, type: null });
+                      setDropAt(null);
+                    }}
+                    onClick={() => add(p.type, p.props)}
+                    className="flex cursor-grab flex-col items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-1 py-2.5 text-[0.68rem] leading-tight transition-colors hover:border-primary hover:text-primary"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden className="size-4 fill-current text-muted">
+                      <path d={BLOCK_ICON[p.type]} />
+                    </svg>
+                    <span className="text-center">{p.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          {groupedPalette(search).length === 0 && (
+            <p className="px-3 py-2 text-xs text-muted">Nothing called that.</p>
+          )}
+            </>
+          )}
         </aside>
 
         {/* Canvas */}
@@ -275,7 +348,13 @@ export function BlockEditor({
                 setTab("content");
               }}
               onDrop={drop}
-              onDragStart={(id) => (drag.current = { kind: "move", id })}
+              onDragEnd={() => setDragging({ label: null, type: null })}
+              onDragStart={(id) => {
+                drag.current = { kind: "move", id };
+                const found = findBlock(blocks, id);
+                const type = found?.block.type ?? null;
+                setDragging({ label: type ? BLOCK_LABEL[type] : null, type });
+              }}
               onPatch={patch}
               target={(index) => ({ zone: "root", index })}
             />
@@ -324,13 +403,25 @@ export function BlockEditor({
                   </button>
                 ))}
               </div>
-              <div className="flex flex-col gap-3 overflow-y-auto p-3">
-                {(tab === "content" ? tabs.content : tab === "style" ? tabs.style : tabs.advanced).map((c, i) =>
-                  isGroup(c) ? (
-                    <div key={`g${i}`} className="mt-1 text-[0.66rem] font-semibold uppercase tracking-[0.1em] text-muted">
-                      {c.label}
-                    </div>
-                  ) : (
+              <div className="flex flex-col overflow-y-auto">
+                {sections(
+                  tab === "content" ? tabs.content : tab === "style" ? tabs.style : tabs.advanced,
+                ).map((section, si) => (
+                  /* Open by default, and each remembers itself while the block
+                     stays selected. A block with twenty settings was a wall;
+                     this makes it a panel. */
+                  <details key={section.title ?? `s${si}`} open className="insp-section border-b border-border">
+                    {section.title ? (
+                      <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-[0.7rem] font-semibold text-fg [&::-webkit-details-marker]:hidden">
+                        <span className="text-[0.55rem] text-muted transition-transform">▶</span>
+                        {section.title}
+                      </summary>
+                    ) : (
+                      <summary className="hidden" />
+                    )}
+                    <div className="flex flex-col gap-2.5 px-3 pb-3 pt-1">
+                {section.controls.map((c) =>
+                  isGroup(c) ? null : (
                     <ControlField
                       key={`${c.kind}:${c.key}`}
                       control={c}
@@ -363,8 +454,11 @@ export function BlockEditor({
                     />
                   ),
                 )}
+                    </div>
+                  </details>
+                ))}
                 {tab === "style" && tabs.style.length === 0 && (
-                  <p className="text-xs text-muted">
+                  <p className="p-3 text-xs text-muted">
                     Nothing to style here — spacing and background are under Advanced.
                   </p>
                 )}
@@ -374,6 +468,7 @@ export function BlockEditor({
         </aside>
       </div>
     </div>
+    </Dragging.Provider>
     </CanvasDevice.Provider>
   );
 
@@ -383,6 +478,30 @@ export function BlockEditor({
   // that; it has to leave the subtree.
   return typeof document === "undefined" ? overlay : createPortal(overlay, document.body);
 }
+
+/**
+ * Suppress the browser's own drag image so ours is the only one.
+ *
+ * A screenshot of whatever was grabbed — a palette tile, or a 20px handle — says
+ * nothing about what is being moved once the cursor is elsewhere. Optional call
+ * because not every DataTransfer has it, and losing a drag over a missing
+ * decoration would be a poor trade.
+ */
+function hideDragImage(dt: DataTransfer) {
+  try {
+    const blank = new Image();
+    blank.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    dt.setDragImage?.(blank, 0, 0);
+  } catch {
+    // Nothing to do — the drag still works, it just carries the default image.
+  }
+}
+
+/** What is being dragged, for the tile and for the gap's label. */
+const Dragging = createContext<{ label: string | null; type: BlockType | null }>({
+  label: null,
+  type: null,
+});
 
 function IconBtn({
   label,
@@ -420,6 +539,7 @@ function Zone({
   onSelect,
   onDrop,
   onDragStart,
+  onDragEnd,
   onPatch,
   target,
   emptyLabel,
@@ -434,18 +554,32 @@ function Zone({
   onSelect: (id: string) => void;
   onDrop: (t: DropTarget) => void;
   onDragStart: (id: string) => void;
+  onDragEnd: () => void;
   onPatch: (id: string, next: Block) => void;
   target: (index: number) => DropTarget;
   /** Shown when the zone is empty. Never a drop target of its own — see below. */
   emptyLabel?: string;
   className?: string;
 }) {
-  const active = dropAt === `${zoneId}:${blocks.length}`;
+  // The whole container outlines while the cursor is anywhere inside it — not
+  // only over the strip at the end. This is the signal that answers "inside
+  // this column, or beside it", which a gap between two blocks cannot.
+  const armed = dropAt?.startsWith(`${zoneId}:`) ?? false;
+  const { label: dragLabel } = useContext(Dragging);
   return (
     <div
       data-zone={zoneId}
       className={className ?? "flex min-h-[40px] flex-col"}
-      style={active ? { outline: "2px solid var(--primary)", outlineOffset: -2 } : undefined}
+      style={
+        armed
+          ? {
+              outline: "2px dashed var(--primary)",
+              outlineOffset: -2,
+              background: "color-mix(in srgb, var(--primary) 5%, transparent)",
+              borderRadius: 8,
+            }
+          : undefined
+      }
       onDragOver={(e) => {
         // Anything reaching here is not over a block: every block stops the
         // event itself and decides above-or-below. Testing currentTarget ===
@@ -477,14 +611,22 @@ function Zone({
           onSelect={onSelect}
           onDrop={onDrop}
           onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
           onPatch={onPatch}
           target={target}
         />
       ))}
-      {blocks.length === 0 && emptyLabel && (
-        // pointer-events-none so the label cannot become the drop target and
-        // swallow the event before the zone sees it.
-        <p className="pointer-events-none py-3 text-center text-[0.68rem] opacity-70">{emptyLabel}</p>
+      {blocks.length === 0 && (
+        // An empty column is invisible until something is dragged near it,
+        // which is exactly when it needs to exist. pointer-events-none so the
+        // words cannot become the drop target and swallow the event before the
+        // zone sees it.
+        <p
+          className="pointer-events-none py-3 text-center text-[0.68rem]"
+          style={{ opacity: armed ? 1 : 0.7, color: armed ? "var(--primary)" : undefined }}
+        >
+          {armed ? `Drop ${dragLabel ?? "it"} here` : emptyLabel}
+        </p>
       )}
     </div>
   );
@@ -501,6 +643,7 @@ function CanvasBlock({
   onSelect,
   onDrop,
   onDragStart,
+  onDragEnd,
   onPatch,
   target,
 }: {
@@ -515,9 +658,11 @@ function CanvasBlock({
   onDrop: (t: DropTarget) => void;
   onDragStart: (id: string) => void;
   onPatch: (id: string, next: Block) => void;
+  onDragEnd: () => void;
   target: (index: number) => DropTarget;
 }) {
   const device = useContext(CanvasDevice);
+  const { label: dragLabel } = useContext(Dragging);
   const selected = selectedId === block.id;
   const empty = blockRendersNothing(block);
 
@@ -546,7 +691,7 @@ function CanvasBlock({
         onSelect(block.id);
       }}
     >
-      {dropAt === `${zoneId}:${index}` && <DropLine />}
+      {dropAt === `${zoneId}:${index}` && <DropLine label={dragLabel} />}
 
       <div
         className={`relative rounded-sm ${selected ? "outline outline-2 outline-offset-2 outline-[var(--primary)]" : "hover:outline hover:outline-1 hover:outline-offset-2 hover:outline-[var(--border)]"}`}
@@ -560,8 +705,13 @@ function CanvasBlock({
             onDragStart(block.id);
             e.dataTransfer.effectAllowed = "move";
             e.dataTransfer.setData("text/plain", block.id);
+            // The browser would otherwise drag a screenshot of this 20px chip.
+            hideDragImage(e.dataTransfer);
           }}
-          onDragEnd={() => setDropAt(null)}
+          onDragEnd={() => {
+            setDropAt(null);
+            onDragEnd();
+          }}
           title={`Move ${BLOCK_LABEL[block.type]}`}
           className={`absolute -left-2 -top-2 z-10 cursor-grab rounded bg-primary px-1.5 text-[0.6rem] leading-4 text-primary-fg ${
             selected ? "" : "opacity-0 group-hover:opacity-100"
@@ -581,6 +731,7 @@ function CanvasBlock({
               onSelect={onSelect}
               onDrop={onDrop}
               onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
               onPatch={onPatch}
             />
           ) : empty ? (
@@ -593,7 +744,7 @@ function CanvasBlock({
         </div>
       </div>
 
-      {dropAt === `${zoneId}:${index + 1}` && <DropLine />}
+      {dropAt === `${zoneId}:${index + 1}` && <DropLine label={dragLabel} />}
     </div>
   );
 }
@@ -657,6 +808,7 @@ function RowColumns({
   onSelect,
   onDrop,
   onDragStart,
+  onDragEnd,
   onPatch,
 }: {
   block: Block;
@@ -667,6 +819,7 @@ function RowColumns({
   onSelect: (id: string) => void;
   onDrop: (t: DropTarget) => void;
   onDragStart: (id: string) => void;
+  onDragEnd: () => void;
   onPatch: (id: string, next: Block) => void;
 }) {
   const device = useContext(CanvasDevice);
@@ -692,6 +845,7 @@ function RowColumns({
             onSelect={onSelect}
             onDrop={onDrop}
             onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
             onPatch={onPatch}
             target={(index) => ({ zone: "column", rowId: block.id, column: c, index })}
           />
@@ -701,8 +855,56 @@ function RowColumns({
   );
 }
 
-function DropLine() {
-  return <div data-dropline className="my-0.5 h-0.5 rounded bg-primary" />;
+/**
+ * Where it will land — a gap that opens, not a line to interpret.
+ *
+ * A line has to be read: which side of it, and at which nesting level. The gap
+ * IS the answer, drawn at the size the block will occupy, and the label removes
+ * the last of the guessing inside nested columns.
+ */
+function DropLine({ label }: { label?: string | null }) {
+  return (
+    <div
+      data-dropline
+      className="my-1 flex h-9 items-center justify-center rounded-lg border-2 border-dashed border-[var(--primary)] bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-[0.62rem] text-primary"
+    >
+      {label ? `Drop ${label} here` : "Drop here"}
+    </div>
+  );
+}
+
+/**
+ * The block travelling with the cursor.
+ *
+ * The browser's own drag image is a screenshot of whatever was grabbed, which
+ * for a palette tile is a tile and for a block handle is a 20px chip. Neither
+ * says what is being moved once the cursor is somewhere else, so both are
+ * suppressed and this is drawn instead.
+ */
+function DragTile({ label, type }: { label: string; type: BlockType | null }) {
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    // dragover rather than mousemove: during an HTML5 drag no mouse events
+    // fire at all, so a tile bound to those would sit still.
+    const move = (e: DragEvent) => setAt({ x: e.clientX, y: e.clientY });
+    window.addEventListener("dragover", move);
+    return () => window.removeEventListener("dragover", move);
+  }, []);
+  if (!at) return null;
+  return createPortal(
+    <div
+      className="pointer-events-none fixed z-[100] flex min-w-[5.5rem] flex-col items-center gap-1.5 rounded-lg border border-border bg-surface px-4 py-2.5 text-[0.68rem] shadow-[0_18px_38px_-14px_rgba(0,0,0,.45)]"
+      style={{ left: at.x + 16, top: at.y - 16 }}
+    >
+      {type && (
+        <svg viewBox="0 0 24 24" aria-hidden className="size-5 fill-current text-muted">
+          <path d={BLOCK_ICON[type]} />
+        </svg>
+      )}
+      <span>{label}</span>
+    </div>,
+    document.body,
+  );
 }
 
 // --- one control ------------------------------------------------------------
@@ -728,42 +930,63 @@ function ControlField({
   // is the same words at every width.
   const at = deviceOf(control, device);
   const set = at !== "desktop" && hasOverride(block, at, control.key.split(".")[0], scopeOf(control));
-  // One label builder for every control kind. The device badge has to appear on
-  // all of them — a slider that does not say it is holding a tablet-only value
-  // is a slider you will change on desktop and wonder why nothing moved.
-  const head = (right?: React.ReactNode) => (
-    <span className="flex items-baseline justify-between gap-2 text-xs font-medium">
-      <span className="flex items-center gap-1.5">
-        {control.label}
-        {set && (
-          <button
-            type="button"
-            onClick={onClear}
-            title={`Set for ${at}. Click to use the ${at === "mobile" ? "tablet" : "desktop"} value again.`}
-            className="rounded-full bg-primary/15 px-1.5 text-[0.6rem] font-medium text-primary hover:bg-primary/25"
-          >
-            {at} ✕
-          </button>
-        )}
-      </span>
-      {right ??
-        (control.hint && <span className="text-[0.66rem] font-normal text-muted">{control.hint}</span>)}
+  // The label, and the marker saying this control is holding a value for the
+  // width being edited. A control that does not say so is one you will change
+  // on desktop and wonder why nothing moved.
+  const label = (
+    <span className="flex min-w-0 items-center gap-1.5 text-xs text-fg">
+      <span className="truncate">{control.label}</span>
+      {set && (
+        <button
+          type="button"
+          onClick={onClear}
+          title={`Set for ${at}. Click to use the ${at === "mobile" ? "tablet" : "desktop"} value again.`}
+          className="shrink-0 rounded-full bg-primary/15 px-1.5 text-[0.58rem] leading-4 text-primary hover:bg-primary/25"
+          aria-label={`Reset ${control.label} for ${at}`}
+        >
+          {at} ✕
+        </button>
+      )}
     </span>
   );
-  const label = head();
+
+  /**
+   * One control, one row: name on the left, the thing you change on the right.
+   *
+   * Every control used to be a full-width stack — label, an explaining
+   * paragraph, then the field — so four of them filled the panel and everything
+   * else was scrolling. `stack` is for the ones that are genuinely typed rather
+   * than nudged: a body of text in a 190px column is worse than no layout.
+   */
+  const row = (field: React.ReactNode, opts: { stack?: boolean; value?: React.ReactNode } = {}) => (
+    <div className="flex flex-col gap-1">
+      <div
+        className={
+          opts.stack
+            ? "flex flex-col gap-1.5"
+            : "grid grid-cols-[80px_minmax(0,1fr)] items-center gap-2.5"
+        }
+      >
+        <span className="flex items-center justify-between gap-1.5">
+          {label}
+          {opts.value && <span className="text-[0.62rem] tabular-nums text-muted">{opts.value}</span>}
+        </span>
+        {field}
+      </div>
+      {control.hint && <p className="text-[0.66rem] leading-snug text-muted">{control.hint}</p>}
+    </div>
+  );
 
   switch (control.kind) {
     case "text":
-      return (
-        <label className="flex flex-col gap-1">
-          {label}
-          <input
-            className={input}
-            value={typeof value === "string" ? value : ""}
-            placeholder={control.placeholder}
-            onChange={(e) => onChange(e.target.value)}
-          />
-        </label>
+      return row(
+        <input
+          className={input}
+          value={typeof value === "string" ? value : ""}
+          placeholder={control.placeholder}
+          aria-label={control.label}
+          onChange={(e) => onChange(e.target.value)}
+        />,
       );
 
     case "image":
@@ -777,58 +1000,98 @@ function ControlField({
       );
 
     case "textarea":
-      return (
-        <label className="flex flex-col gap-1">
-          {label}
-          <textarea
-            className={`${input} ${control.mono ? "font-mono text-[0.72rem]" : ""}`}
-            rows={control.rows ?? 3}
-            value={typeof value === "string" ? value : ""}
-            onChange={(e) => onChange(e.target.value)}
-          />
-        </label>
+      // Stacked: prose is typed, and typing it in a narrow right-hand column
+      // makes the one thing people actually write the hardest thing to write.
+      return row(
+        <textarea
+          className={`${input} ${control.mono ? "font-mono text-[0.72rem]" : ""}`}
+          rows={control.rows ?? 3}
+          value={typeof value === "string" ? value : ""}
+          aria-label={control.label}
+          onChange={(e) => onChange(e.target.value)}
+        />,
+        { stack: true },
       );
 
     case "richtext":
-      return (
-        <div className="flex flex-col gap-1">
-          {label}
-          <RichText value={typeof value === "string" ? value : ""} onChange={onChange} />
-        </div>
-      );
+      return row(<RichText value={typeof value === "string" ? value : ""} onChange={onChange} />, {
+        stack: true,
+      });
 
-    case "select":
-      return (
-        <label className="flex flex-col gap-1">
-          {label}
-          <select className={input} value={String(value ?? "")} onChange={(e) => onChange(coerce(e.target.value))}>
+    case "select": {
+      const current = String(value ?? "");
+      // Few enough options to show them all: a dropdown hides its choices until
+      // opened, which turns picking one of three alignments into two clicks and
+      // a read.
+      if (asSegment(control)) {
+        const icons = SEGMENT_ICONS[control.key.split(".").pop() ?? ""];
+        return row(
+          <div className="flex overflow-hidden rounded-lg border border-border" role="group" aria-label={control.label}>
             {control.options.map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
+              <button
+                key={v}
+                type="button"
+                title={l}
+                aria-label={l}
+                aria-pressed={current === v}
+                onClick={() => onChange(coerce(v))}
+                className={`flex flex-1 items-center justify-center border-r border-border px-1 py-1.5 text-[0.68rem] last:border-r-0 ${
+                  current === v ? "bg-primary/12 text-primary" : "text-muted hover:bg-surface-2 hover:text-fg"
+                }`}
+              >
+                {icons?.[v] ? (
+                  <svg viewBox="0 0 24 24" aria-hidden className="size-3.5 fill-current">
+                    <path d={icons[v]} />
+                  </svg>
+                ) : (
+                  l
+                )}
+              </button>
             ))}
-          </select>
-        </label>
+          </div>,
+        );
+      }
+      return row(
+        <select
+          className={input}
+          value={current}
+          aria-label={control.label}
+          onChange={(e) => onChange(coerce(e.target.value))}
+        >
+          {control.options.map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </select>,
       );
+    }
 
     case "toggle":
-      return (
-        <label className="flex items-center gap-2 text-xs font-medium">
-          <input
-            type="checkbox"
-            checked={value === true}
-            onChange={(e) => onChange(e.target.checked)}
-            className="size-4 accent-[var(--primary)]"
+      return row(
+        <button
+          type="button"
+          role="switch"
+          aria-checked={value === true}
+          aria-label={control.label}
+          onClick={() => onChange(value !== true)}
+          className={`relative h-5 w-9 shrink-0 justify-self-start rounded-full transition-colors ${
+            value === true ? "bg-primary" : "bg-border"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${
+              value === true ? "translate-x-[1.125rem]" : "translate-x-0.5"
+            }`}
           />
-          <span className="flex-1">{head()}</span>
-        </label>
+        </button>,
       );
 
     case "columns": {
       const count = block.columns?.length ?? 0;
       return (
         <label className="flex flex-col gap-1">
-          {head(<span className="text-[0.66rem] font-normal text-muted">{count}</span>)}
+          {label}
           <select
             className={input}
             value={count}
@@ -858,7 +1121,7 @@ function ControlField({
       const widths = effectiveWidths(block, at);
       return (
         <div className="flex flex-col gap-1.5">
-          {head()}
+          {label}
           {/* One field per column, because "column width for each" is the thing
               being asked for. Setting one takes the difference from the others
               in proportion, so the row always adds up to a row. */}
@@ -868,6 +1131,11 @@ function ControlField({
                 <span className="text-[0.62rem] text-muted">Col {i + 1}</span>
                 <input
                   type="number"
+                  // Labelled, not merely captioned: the "Col 1" above it is a
+                  // sibling span, which a screen reader does not connect and a
+                  // selector cannot rely on.
+                  aria-label={`Column ${i + 1} width`}
+                  data-column-width
                   min={5}
                   max={95}
                   step={1}
@@ -890,62 +1158,69 @@ function ControlField({
     }
 
     case "number":
-      return (
-        <label className="flex flex-col gap-1">
-          {head(
-            <span className="text-[0.66rem] font-normal text-muted">
-              {value === null || value === undefined ? "theme" : `${value}${control.unit ?? ""}`}
-            </span>,
-          )}
-          <div className="flex items-center gap-1.5">
-            <input
-              type="range"
-              className="flex-1"
-              min={control.min}
-              max={control.max}
-              step={control.step}
-              value={typeof value === "number" ? value : control.min}
-              onChange={(e) => onChange(Number(e.target.value))}
-            />
-            {/* Clearing is how a value goes back to inheriting from the band,
-                so it has to be reachable — not only settable. */}
-            <button
-              type="button"
-              title="Use the theme's value"
-              onClick={() => onChange(null)}
-              className="rounded px-1 text-[0.66rem] text-muted hover:text-fg"
-            >
-              reset
-            </button>
-          </div>
-        </label>
+      // Slider AND a number you can type. A slider alone cannot reliably hit 15,
+      // and a number alone cannot be explored.
+      return row(
+        <div className="flex items-center gap-1.5">
+          <input
+            type="range"
+            className="min-w-0 flex-1 accent-[var(--primary)]"
+            aria-label={control.label}
+            min={control.min}
+            max={control.max}
+            step={control.step}
+            value={typeof value === "number" ? value : control.min}
+            onChange={(e) => onChange(Number(e.target.value))}
+          />
+          <input
+            type="number"
+            aria-label={`${control.label} value`}
+            min={control.min}
+            max={control.max}
+            step={control.step}
+            value={typeof value === "number" ? value : ""}
+            placeholder="—"
+            onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+            className="w-11 shrink-0 rounded border border-border bg-surface px-1 py-1 text-center text-[0.68rem] tabular-nums outline-none focus:border-primary"
+          />
+          {/* Clearing is how a value goes back to inheriting from the band, so
+              it has to be reachable — not only settable. */}
+          <button
+            type="button"
+            title="Use the theme's value"
+            aria-label={`Reset ${control.label}`}
+            onClick={() => onChange(null)}
+            className="shrink-0 rounded px-0.5 text-[0.62rem] text-muted hover:text-fg"
+          >
+            ✕
+          </button>
+        </div>,
+        { value: control.unit && typeof value === "number" ? control.unit : undefined },
       );
 
     case "color":
-      return (
-        <label className="flex flex-col gap-1">
-          {head(
-            <span className="text-[0.66rem] font-normal text-muted">
-              {typeof value === "string" ? value : "theme"}
-            </span>,
-          )}
-          <div className="flex items-center gap-1.5">
-            <input
-              type="color"
-              className="h-8 w-full rounded border border-border bg-surface"
-              value={typeof value === "string" ? value : "#000000"}
-              onChange={(e) => onChange(e.target.value)}
-            />
-            <button
-              type="button"
-              title="Follow the section's band"
-              onClick={() => onChange(null)}
-              className="rounded px-1 text-[0.66rem] text-muted hover:text-fg"
-            >
-              reset
-            </button>
-          </div>
-        </label>
+      return row(
+        <div className="flex items-center gap-1.5">
+          <input
+            type="color"
+            aria-label={control.label}
+            className="size-7 shrink-0 rounded border border-border bg-surface"
+            value={typeof value === "string" ? value : "#000000"}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          <span className="min-w-0 flex-1 truncate font-mono text-[0.66rem] text-muted">
+            {typeof value === "string" ? value : "theme"}
+          </span>
+          <button
+            type="button"
+            title="Follow the section's band"
+            aria-label={`Reset ${control.label}`}
+            onClick={() => onChange(null)}
+            className="shrink-0 rounded px-0.5 text-[0.62rem] text-muted hover:text-fg"
+          >
+            ✕
+          </button>
+        </div>,
       );
 
     case "dim": {

@@ -178,8 +178,10 @@ describe("managing columns", () => {
     const b = newBlock("row");
     return { ...b, props: { ...b.props, ...props }, columns: Array.from({ length: cols }, () => []) };
   };
+  // Not every number input on the panel: a slider now carries a typeable number
+  // beside it, so "any number field" stopped meaning "a column width".
   const widthFields = () =>
-    [...document.querySelectorAll<HTMLInputElement>('input[type="number"]')];
+    [...document.querySelectorAll<HTMLInputElement>("input[data-column-width]")];
   const type = (el: HTMLInputElement, to: number) => {
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
     act(() => {
@@ -254,9 +256,9 @@ describe("managing columns", () => {
   it("reverses the order for one device only", () => {
     const editor = open([rowWith({}, 2)]);
     click(tab("Mobile"));
-    const reverse = [...document.querySelectorAll("label")].find((l) =>
-      l.textContent?.includes("Reverse"),
-    )?.querySelector("input");
+    // A switch now, not a checkbox in a label — found by its accessible name,
+    // which is the part that has to keep working either way.
+    const reverse = document.querySelector('[role="switch"][aria-label="Reverse the order"]');
     click(reverse);
     expect(editor.blocks[0].props.reverse).not.toBe(true);
     expect(editor.blocks[0].responsive?.mobile.props.reverse).toBe(true);

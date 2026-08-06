@@ -195,3 +195,12 @@ h1, h2, h3, h4 {
     --admin-nav: 216px;
   }
 }
+
+/* The inspector's collapsible sections. A caret that does not turn is a caret
+   nobody reads as a caret.
+
+   Scoped to the inspector on purpose: an unscoped `details > summary` rule
+   would also have found every FAQ block on every live sales page, which is the
+   same element with entirely different intentions. */
+.insp-section > summary > span:first-child { display: inline-block; transition: transform .15s ease; }
+.insp-section[open] > summary > span:first-child { transform: rotate(90deg); }

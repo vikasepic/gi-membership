@@ -572,6 +572,103 @@ export const PALETTE: { type: BlockType; label: string; props?: Record<string, u
   { type: "html", label: "HTML" },
 ];
 
+/**
+ * Which selects are better as a row of buttons than as a dropdown.
+ *
+ * A dropdown hides its options until you open it, so choosing between three
+ * alignments means click, read three words, click again. Four or fewer options
+ * fit as buttons, and two of them — alignment and case — are faster still as
+ * pictures, because you stop reading once you have learnt the shapes.
+ */
+export const SEGMENT_MAX = 4;
+
+export function asSegment(c: Control): boolean {
+  return !isGroup(c) && c.kind === "select" && c.options.length <= SEGMENT_MAX;
+}
+
+/** Icons for the two where a picture beats a word. Keyed on the control's key. */
+export const SEGMENT_ICONS: Record<string, Record<string, string>> = {
+  align: {
+    left: "M3 5h18v2H3V5Zm0 4h12v2H3V9Zm0 4h18v2H3v-2Zm0 4h12v2H3v-2Z",
+    center: "M3 5h18v2H3V5Zm3 4h12v2H6V9Zm-3 4h18v2H3v-2Zm3 4h12v2H6v-2Z",
+    right: "M3 5h18v2H3V5Zm6 4h12v2H9V9Zm-6 4h18v2H3v-2Zm6 4h12v2H9v-2Z",
+  },
+};
+
+/**
+ * The controls of one tab, split into the sections its group markers describe.
+ *
+ * The markers were already there and rendered as a bare heading in a flat
+ * scroll. Partitioning on them is what lets a section collapse, which is the
+ * difference between a block with twenty settings being a panel and being a
+ * wall. Anything before the first marker is its own opening section.
+ */
+export function sections(controls: Control[]): { title: string | null; controls: Control[] }[] {
+  const out: { title: string | null; controls: Control[] }[] = [];
+  for (const c of controls) {
+    if (isGroup(c)) out.push({ title: c.label, controls: [] });
+    else {
+      if (out.length === 0) out.push({ title: null, controls: [] });
+      out[out.length - 1].controls.push(c);
+    }
+  }
+  // A marker with nothing under it would render as an empty box someone opens
+  // once and never again.
+  return out.filter((s) => s.controls.length > 0);
+}
+
+/**
+ * The palette, grouped.
+ *
+ * Seventeen names in one flat list is a list you read every time. Three groups
+ * and a search box means you either know where it lives or you type its name,
+ * and neither involves reading the other fourteen.
+ */
+export const PALETTE_GROUPS: { title: string; types: string[] }[] = [
+  { title: "Basic", types: ["Heading", "Text", "Image", "Video", "Buy button", "Button", "List", "Slides"] },
+  { title: "Layout", types: ["Columns", "Divider", "Spacer"] },
+  { title: "Sales", types: ["Cards", "Figures", "Price card", "Price table", "FAQ", "HTML"] },
+];
+
+/** One glyph per block type, so you learn the shapes and stop reading. */
+export const BLOCK_ICON: Record<BlockType, string> = {
+  heading: "M4 4h2v7h8V4h2v16h-2v-7H6v7H4V4Z",
+  text: "M3 5h18v2H3V5Zm0 5h18v2H3v-2Zm0 5h12v2H3v-2Z",
+  image: "M4 5h16v14H4V5Zm2 2v7l3.5-3.5L13 14l3-3 2 2V7H6Z",
+  video: "M4 5h16v14H4V5Zm6 3.5v7l6-3.5-6-3.5Z",
+  button: "M3 8h18v8H3V8Zm2 2v4h14v-4H5Z",
+  iconlist: "M4 6h2v2H4V6Zm4 0h12v2H8V6ZM4 11h2v2H4v-2Zm4 0h12v2H8v-2ZM4 16h2v2H4v-2Zm4 0h12v2H8v-2Z",
+  slides: "M3 6h18v12H3V6Zm2 2v8h5V8H5Zm7 0v8h7V8h-7Z",
+  row: "M3 5h8v14H3V5Zm10 0h8v14h-8V5Z",
+  divider: "M3 11h18v2H3v-2Z",
+  spacer: "M12 3 8 8h3v8H8l4 5 4-5h-3V8h3l-4-5Z",
+  cards: "M3 5h8v6H3V5Zm10 0h8v6h-8V5ZM3 13h8v6H3v-6Zm10 0h8v6h-8v-6Z",
+  stats: "M4 18h3V9H4v9Zm6.5 0h3V4h-3v14ZM17 18h3v-6h-3v6Z",
+  pricing: "M3 5h18v2H3V5Zm0 4h18v10H3V9Zm2 2v6h14v-6H5Z",
+  pricecard: "M4 5h16v3H4V5Zm0 5h16v9H4v-9Zm2 2v5h12v-5H6Z",
+  faq: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm1.7-6.2-.9.9c-.6.6-.8 1-.8 2.3h-2v-.5c0-1 .4-1.8 1-2.5l1.2-1.3c.4-.3.6-.8.6-1.3a2 2 0 1 0-4 0H8a4 4 0 1 1 8 0c0 .8-.3 1.6-.9 2.2Z",
+  html: "M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4Zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4Z",
+};
+
+/** The palette in groups, matched by label so the order of PALETTE still rules. */
+export function groupedPalette(query = ""): { title: string; items: typeof PALETTE }[] {
+  const q = query.trim().toLowerCase();
+  const match = (p: (typeof PALETTE)[number]) => !q || p.label.toLowerCase().includes(q);
+  const placed = new Set<string>();
+  const out = PALETTE_GROUPS.map((g) => {
+    const items = g.types
+      .map((label) => PALETTE.find((p) => p.label === label))
+      .filter((p): p is (typeof PALETTE)[number] => Boolean(p));
+    items.forEach((p) => placed.add(p.label));
+    return { title: g.title, items: items.filter(match) };
+  });
+  // Anything added to PALETTE and not to a group still has to appear, or a new
+  // block type would be invisible until someone remembered this file.
+  const rest = PALETTE.filter((p) => !placed.has(p.label)).filter(match);
+  if (rest.length > 0) out.push({ title: "More", items: rest });
+  return out.filter((g) => g.items.length > 0);
+}
+
 export const BLOCK_LABEL: Record<BlockType, string> = Object.fromEntries(
   // The LAST palette entry for a type wins, so a button reads as "Button" in
   // the inspector rather than "Buy button" whichever way it was added.
