@@ -258,9 +258,11 @@ function Inner({
   }
 
   return (
-    <form onSubmit={onSubmit} className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-12">
-      {/* Left: what we need from them. */}
-      <div className="flex flex-col gap-6 lg:col-span-7">
+    /* One column, in the order someone decides in: who am I, what else do I
+       want, how do I pay, what does it come to, pay. The half of the page that
+       keeps selling is beside this, not above it — see CheckoutPanel. */
+    <form onSubmit={onSubmit} className="flex flex-col gap-7">
+      <div className="flex flex-col gap-6">
         {signedInEmail ? (
           <div className="flex flex-col gap-2">
             <span className="kicker text-muted">Your account</span>
@@ -356,6 +358,17 @@ function Inner({
           </select>
         )}
 
+        {/* A decision, so it comes before the card fields rather than beside the
+            total. It also means the "choose one" rule is answered before anyone
+            has typed a number — being told to pick something after filling in a
+            card reads as the page changing its mind. */}
+        {bump && (
+          <div ref={bumpRef} className="flex flex-col gap-2">
+            <span className="kicker text-muted">One more thing</span>
+            <OrderBump view={bump} alt={bumpAlt} choice={bumpChoice} onChoose={setBumpChoice} />
+          </div>
+        )}
+
         <fieldset className="flex flex-col gap-3">
           <legend className="kicker mb-2 text-muted">Payment</legend>
           {/* Reported the moment they start filling the card in, not when they
@@ -367,31 +380,12 @@ function Inner({
         </fieldset>
       </div>
 
-      {/* Right: what they're buying, and what it costs. Sticky on desktop so the
-          total stays in view while they work down the form. */}
-      <aside className="flex flex-col gap-5 lg:col-span-5">
-        <div className="flex flex-col gap-5 rounded-3xl border border-border bg-surface p-6 lg:sticky lg:top-24">
+      {/* What it comes to. No longer a sticky rail — it sits directly above the
+          button that charges it, which is the only place a total has to be. The
+          cover and the description moved to the panel beside this form, so they
+          are not said twice. */}
+      <div className="flex flex-col gap-5 rounded-3xl border border-border bg-surface p-6">
           <span className="kicker text-muted">Order summary</span>
-
-          {/* Show the thing being bought, not just its name. A cover beside the
-              title is the cheapest reassurance on the page: it confirms they
-              are paying for what they clicked. */}
-          <div className="flex items-start gap-4">
-            {product.coverUrl ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={product.coverUrl}
-                alt=""
-                className="size-16 shrink-0 rounded-xl border border-border object-cover"
-              />
-            ) : (
-              <div className="size-16 shrink-0 rounded-xl border border-border bg-surface-2" />
-            )}
-            <div className="flex flex-col gap-1">
-              <span className="font-medium leading-snug">{product.title}</span>
-              {product.tagline && <span className="text-sm text-muted">{product.tagline}</span>}
-            </div>
-          </div>
 
           <div className="flex items-center justify-between gap-4 text-sm">
             <span className="text-muted">{product.title}</span>
@@ -472,12 +466,6 @@ function Inner({
             Tax is calculated at your country&rsquo;s rate and shown on your receipt.
           </p>
 
-          {bump && (
-            <div ref={bumpRef}>
-              <OrderBump view={bump} alt={bumpAlt} choice={bumpChoice} onChoose={setBumpChoice} />
-            </div>
-          )}
-
           {error && (
             <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">
               {error}
@@ -525,8 +513,7 @@ function Inner({
           </button>
 
           <TrustBlock />
-        </div>
-      </aside>
+      </div>
     </form>
   );
 }
@@ -558,6 +545,13 @@ function TrustBlock() {
 
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-4">
+      {/* Stripe is on automatic payment methods, so what a buyer is offered
+          depends on where they are — UPI in India, iDEAL in the Netherlands.
+          Saying so beats listing marks that might be wrong for them, and it
+          stays true without anyone maintaining it. */}
+      <p className="text-center text-xs text-muted">
+        Card, or whatever Stripe offers where you are — UPI, wallets, bank transfer.
+      </p>
       {/* Icon plus two or three words. The long-form reassurance that lived here
           was competing with the button it sits under: at the moment of paying,
           a paragraph is something to read rather than something that reassures. */}

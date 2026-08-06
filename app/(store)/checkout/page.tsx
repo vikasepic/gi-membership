@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getProductBySlug, getOffer } from "@/lib/store";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
@@ -12,6 +11,7 @@ import { publicCoverUrl } from "@/lib/media";
 import { productDisplay } from "@/lib/courses";
 import { rememberLead } from "@/lib/leads";
 import { NOINDEX } from "@/lib/seo";
+import { CheckoutPanel } from "@/components/checkout/checkout-panel";
 
 export const metadata = NOINDEX;
 
@@ -98,16 +98,28 @@ export default async function CheckoutPage({
   const bumpAlt: BumpSummary | null =
     altOffer && altOffer.active && shouldShowOffer(altOffer, owned) ? buildBumpView(altOffer) : null;
 
-  return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 py-4">
-      <div className="flex flex-col gap-2">
-        <Link href={`/p/${product.slug}`} className="kicker w-fit text-muted hover:text-fg">
-          &larr; Back
-        </Link>
-        <h1 className="text-2xl md:text-3xl">Checkout</h1>
-      </div>
+  const coverUrl = publicCoverUrl(
+    product.coverPath ?? (await productDisplay([product.id])).get(product.id)?.coverPath ?? null,
+  );
 
-      <CheckoutForm
+  // Two halves of one page: what they are buying and why they should trust us
+    // on the left, and nothing but the transaction on the right. The store shell
+  // is deliberately not around this — see AppShell.
+  return (
+    <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-2">
+      <CheckoutPanel
+        title={product.title}
+        tagline={product.tagline ?? null}
+        coverUrl={coverUrl}
+        backHref={`/p/${product.slug}`}
+        // Read off the offers rather than the view: the view is presentation, and
+        // whether a trial exists decides what needs reassuring.
+        hasTrial={Boolean(bumpAsSold?.trialDays || altOffer?.trialDays)}
+      />
+
+      <div className="flex flex-col gap-7 px-6 py-8 md:px-10 lg:py-12">
+        <h2 className="font-display text-xl">Checkout</h2>
+        <CheckoutForm
         product={{
           slug: product.slug,
           title: product.title,
@@ -115,18 +127,17 @@ export default async function CheckoutPage({
           priceCents: product.priceCents,
           currency: product.currency,
           // Own image wins, else the attached course's — same precedence the
-          // storefront card uses, so the thumbnail here is the image they
+          // storefront card uses, so the panel beside this shows the image they
           // clicked on to get here.
-          coverUrl: publicCoverUrl(
-            product.coverPath ?? (await productDisplay([product.id])).get(product.id)?.coverPath ?? null,
-          ),
+          coverUrl,
         }}
-        bump={bump}
-        bumpAlt={bumpAlt}
-        publishableKey={stripePublishableKey()}
-        signedInEmail={user?.email ?? null}
-        defaultCountry={defaultCountry}
-      />
+          bump={bump}
+          bumpAlt={bumpAlt}
+          publishableKey={stripePublishableKey()}
+          signedInEmail={user?.email ?? null}
+          defaultCountry={defaultCountry}
+        />
+      </div>
     </div>
   );
 }

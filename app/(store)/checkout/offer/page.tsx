@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getOffer } from "@/lib/store";
@@ -12,6 +11,9 @@ export const dynamic = "force-dynamic";
 
 import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";
+import { CheckoutPanel } from "@/components/checkout/checkout-panel";
+import { publicCoverUrl } from "@/lib/media";
+import { productDisplay } from "@/lib/courses";
 
 export const metadata = NOINDEX;
 
@@ -48,18 +50,27 @@ export default async function OfferCheckoutPage({
         }. Cancel anytime.`
       : null;
 
-  return (
-    <div className="mx-auto flex w-full max-w-lg flex-col gap-8 py-4">
-      <div className="flex flex-col gap-3">
-        <Link href="/library" className="text-sm text-muted hover:text-fg">
-          &larr; Back to your library
-        </Link>
-        <h1 className="text-3xl leading-tight">{offer.headline ?? offer.name}</h1>
-        {offer.description && <p className="text-muted">{offer.description}</p>}
-      </div>
+  // An offer has no artwork of its own — it grants something, and that thing
+  // does. Without this the panel is a headline on an empty half of the screen,
+  // which is worse than the single column it replaced.
+  const coverUrl = offer.grantProductId
+    ? publicCoverUrl((await productDisplay([offer.grantProductId])).get(offer.grantProductId)?.coverPath ?? null)
+    : null;
 
-      <OfferCheckoutForm
-        offer={{
+  return (
+    <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-2">
+      <CheckoutPanel
+        title={offer.headline ?? offer.name}
+        tagline={offer.description}
+        coverUrl={coverUrl}
+        backHref="/library"
+        hasTrial={Boolean(offer.trialDays)}
+      />
+
+      <div className="flex flex-col gap-7 px-6 py-8 md:px-10 lg:py-12">
+        <h2 className="font-display text-xl">Checkout</h2>
+        <OfferCheckoutForm
+          offer={{
           id: offer.id,
           headline: offer.headline ?? offer.name,
           description: offer.description,
@@ -68,9 +79,10 @@ export default async function OfferCheckoutPage({
           acceptLabel: offer.acceptLabel ?? "Confirm",
           currency: offer.currency,
         }}
-        email={user.email}
-        publishableKey={stripePublishableKey()}
-      />
+          email={user.email}
+          publishableKey={stripePublishableKey()}
+        />
+      </div>
     </div>
   );
 }

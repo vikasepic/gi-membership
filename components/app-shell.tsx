@@ -18,11 +18,18 @@ const NAV: Item[] = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  // The upsell is a dedicated conversion page: it carries its own logo and
-  // footer, and it needs the full viewport for its full-bleed bands. Rendering
-  // it inside the store shell capped it at max-w-5xl and wrapped it in the
-  // nav — which also hands a buyer mid-decision four ways to leave.
-  if (pathname === "/checkout/oto") return <>{children}</>;
+  // Pages that own the whole window.
+  //
+  // The upsell needed this first: it carries its own logo and footer and its
+  // bands are full-bleed, and the shell capped it at max-w-5xl. The checkouts
+  // are here for the second half of that reason — the shell hands a buyer
+  // mid-payment four ways to leave, and a split-screen checkout has nowhere to
+  // put its left half inside a centred column.
+  //
+  // Thank-you is deliberately NOT here: at that point the nav is how someone
+  // reaches the thing they just bought.
+  const OWNS_THE_WINDOW = ["/checkout", "/checkout/offer", "/checkout/oto"];
+  if (OWNS_THE_WINDOW.includes(pathname)) return <>{children}</>;
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 

@@ -253,8 +253,6 @@ export function PageEditor({
 
               {open && (
                 <SectionPanel
-                  ownerType={ownerType}
-                  ownerId={ownerId}
                   row={row}
                   money={money}
                   onChange={(next) => patch(row.sectionKey, next)}
@@ -270,15 +268,11 @@ export function PageEditor({
 }
 
 function SectionPanel({
-  ownerType,
-  ownerId,
   row,
   money,
   onChange,
   device,
 }: {
-  ownerType: OwnerType;
-  ownerId: string;
   row: SectionRow;
   money: PageMoney;
   onChange: (next: Partial<SectionRow>) => void;
@@ -314,8 +308,6 @@ function SectionPanel({
           row={row}
           title={`${def.n} · ${def.title}`}
           onChange={(next) => setField("blocks", next)}
-          ownerType={ownerType}
-          ownerId={ownerId}
         />
 
         {def.variants && (
@@ -442,14 +434,10 @@ function BlockCanvasField({
   row,
   title,
   onChange,
-  ownerType,
-  ownerId,
 }: {
   row: SectionRow;
   title: string;
   onChange: (next: Block[]) => void;
-  ownerType: OwnerType;
-  ownerId: string;
 }) {
   const [open, setOpen] = useState(false);
   const view = useMemo(() => buildSectionView(row), [row]);
