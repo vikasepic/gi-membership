@@ -1,7 +1,7 @@
 "use client";
 
 import { COVER_ASPECT } from "@/lib/cover";
-import { CoverHint, CoverPreview, useCoverPick } from "@/components/admin/cover-pick";
+import { CoverHint, CoverLibrary, CoverPreview, useCoverPick } from "@/components/admin/cover-pick";
 import { useActionState } from "react";
 import { uploadProductCoverAction, clearProductCoverAction, type CoverState } from "@/app/admin/actions";
 import { Section } from "@/components/admin/form-controls";
@@ -22,7 +22,7 @@ export function ProductCover({
   inheritedUrl: string | null;
 }) {
   const [state, action, pending] = useActionState<CoverState, FormData>(uploadProductCoverAction, {});
-  const { tooBig, notes, preview, onPick } = useCoverPick();
+  const { tooBig, notes, preview, picked, onPick, onPickExisting } = useCoverPick();
   const shown = coverUrl ?? inheritedUrl;
 
   return (
@@ -66,7 +66,8 @@ export function ProductCover({
             className="text-sm file:mr-3 file:rounded-full file:border-0 file:bg-surface file:px-4 file:py-2 file:text-sm file:text-fg"
           />
           <CoverHint />
-          <CoverPreview preview={preview} notes={notes} />
+          <CoverLibrary onPickExisting={onPickExisting} />
+          <CoverPreview preview={preview} notes={notes} picked={picked} />
           {tooBig && <p className="text-sm text-primary">{tooBig}</p>}
           {state.error && <p className="text-sm text-primary">{state.error}</p>}
           {state.ok && <p className="text-sm text-navy">Image updated.</p>}

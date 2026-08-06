@@ -9,7 +9,7 @@ import {
 import { requireAdmin } from "@/lib/admin-guard";
 import { setProductCourses } from "@/lib/courses";
 import { blocksPublish, PUBLISH_WITHOUT_COURSE_ERROR, parseProductForm } from "@/lib/product-rules";
-import { validateUpload, uploadProductCover } from "@/lib/media";
+import { validateUpload, uploadProductCover, pickedFile } from "@/lib/media";
 
 // Errors are keyed by field so the form can show each one next to its own input
 // and never reload. `_form` carries anything not tied to a single field.
@@ -96,13 +96,26 @@ export async function uploadProductCoverAction(
 ): Promise<CoverState> {
   await requireAdmin();
   const productId = String(formData.get("productId") ?? "");
-  const file = formData.get("file");
   if (!productId) return { error: "Missing product." };
-  if (!(file instanceof File) || file.size === 0) return { error: "Choose an image." };
-  const check = validateUpload({ type: file.type, size: file.size }, "cover");
-  if (!check.ok) return { error: check.error };
+
+  // Already in the library: no second copy of the same photo under a second
+  // name, which is the whole reason the library exists.
+  const chosen = await pickedFile(formData, "cover");
+  if (!chosen.ok) return { error: chosen.error };
+
+  const file = formData.get("file");
+  if (!chosen.picked && (!(file instanceof File) || file.size === 0)) {
+    return { error: "Choose an image." };
+  }
+  if (!chosen.picked) {
+    const f = file as File;
+    const check = validateUpload({ type: f.type, size: f.size }, "cover");
+    if (!check.ok) return { error: check.error };
+  }
   try {
-    const path = await uploadProductCover(productId, file);
+    const path = chosen.picked
+      ? chosen.picked.path
+      : await uploadProductCover(productId, file as File);
     await setProductCover(productId, path);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Upload failed" };

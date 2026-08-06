@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import { savePageSettings, saveSection, seedPage, type OwnerType } from "@/lib/pages";
 import { sectionDef } from "@/lib/page-sections";
-import { uploadPageImage, validateUpload } from "@/lib/media";
+import { uploadPageImage, validateUpload, pickedFile } from "@/lib/media";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
 import { priceProblems, priceProblemMessage } from "@/lib/page-price-truth";
 import { realPriceLabel } from "@/lib/page-money";
@@ -90,9 +90,14 @@ export async function uploadSectionImageAction(formData: FormData): Promise<Imag
   await requireAdmin();
   const owner = String(formData.get("ownerType") ?? "") as OwnerType;
   const ownerId = String(formData.get("ownerId") ?? "");
-  const file = formData.get("file");
   if (owner !== "product" && owner !== "offer") return { error: "Bad owner." };
   if (!ownerId) return { error: "Missing page." };
+
+  const chosen = await pickedFile(formData, "cover");
+  if (!chosen.ok) return { error: chosen.error };
+  if (chosen.picked) return { ok: true, path: chosen.picked.path };
+
+  const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose an image." };
 
   const check = validateUpload({ type: file.type, size: file.size }, "cover");

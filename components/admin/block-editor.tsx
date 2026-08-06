@@ -1,5 +1,7 @@
 "use client";
 
+import { MediaPicker } from "@/components/admin/media-picker";
+
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BlockBody } from "@/components/page/blocks";
@@ -338,6 +340,24 @@ export function BlockEditor({
                       block={selected}
                       device={device}
                       uploadImage={uploadImage}
+                      // Fills the description in from the library, but only
+                      // where there isn't one: the same photo can mean
+                      // different things on different pages, and what someone
+                      // wrote here beats what the file was called.
+                      onPickAlt={(alt) => {
+                        // Alt is a content control, which is the tab this is
+                        // rendered from — but look across all three rather than
+                        // depend on that staying true.
+                        const altControl = [...tabs.content, ...tabs.style, ...tabs.advanced].find(
+                          (x) => !isGroup(x) && x.key === "alt",
+                        );
+                        const current = String(
+                          (selected.props as Record<string, unknown>).alt ?? "",
+                        ).trim();
+                        if (altControl && !isGroup(altControl) && !current) {
+                          patch(selected.id, writeControl(selected, altControl, alt, device));
+                        }
+                      }}
                       // Keyed per control, so dragging one slider is one undo
                       // step but moving to the next control starts another.
                       onChange={(v) =>
@@ -697,6 +717,7 @@ function ControlField({
   device = "desktop",
   onChange,
   onClear,
+  onPickAlt,
   uploadImage,
 }: {
   control: Control;
@@ -704,6 +725,7 @@ function ControlField({
   device?: Device;
   onChange: (v: unknown) => void;
   onClear?: () => void;
+  onPickAlt?: (alt: string) => void;
   uploadImage?: UploadImage;
 }) {
   if (isGroup(control)) return null;
@@ -756,6 +778,7 @@ function ControlField({
           label={label}
           value={typeof value === "string" ? value : ""}
           onChange={onChange}
+          onPickAlt={onPickAlt}
           uploadImage={uploadImage}
         />
       );
@@ -1035,11 +1058,14 @@ export function ImageControl({
   label,
   value,
   onChange,
+  onPickAlt,
   uploadImage,
 }: {
   label: React.ReactNode;
   value: string;
   onChange: (v: unknown) => void;
+  /** The description this image already has, when one is chosen from the library. */
+  onPickAlt?: (alt: string) => void;
   uploadImage?: UploadImage;
 }) {
   const [busy, setBusy] = useState(false);
@@ -1063,6 +1089,16 @@ export function ImageControl({
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt="" className="aspect-[4/3] w-full rounded-lg border border-border object-cover" />
       )}
+      {/* The same image on three pages should be one file, not three uploads
+          under three names. Its description comes with it. */}
+      <MediaPicker
+        kind="image"
+        label="Choose from library"
+        onPick={(item) => {
+          onChange(item.path);
+          if (item.alt) onPickAlt?.(item.alt);
+        }}
+      />
       {uploadImage && (
         <label className="w-fit cursor-pointer rounded-full border border-border px-3 py-1 text-xs hover:border-fg">
           {busy ? "Uploading…" : src ? "Replace" : "Upload"}

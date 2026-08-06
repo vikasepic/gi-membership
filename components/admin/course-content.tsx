@@ -1,7 +1,7 @@
 "use client";
 
 import { COVER_ASPECT, COVER_MAX, mb } from "@/lib/cover";
-import { CoverHint, CoverPreview, useCoverPick } from "@/components/admin/cover-pick";
+import { CoverHint, CoverLibrary, CoverPreview, useCoverPick } from "@/components/admin/cover-pick";
 import { useActionState, useState } from "react";
 import {
   uploadCourseCoverAction,
@@ -56,7 +56,7 @@ export function CourseContent({
 
 function CoverBlock({ courseId, coverUrl }: { courseId: string; coverUrl: string | null }) {
   const [state, action, pending] = useActionState<ContentState, FormData>(uploadCourseCoverAction, {});
-  const { tooBig, notes, preview, onPick } = useCoverPick();
+  const { tooBig, notes, preview, picked, onPick, onPickExisting } = useCoverPick();
 
   return (
     <form
@@ -85,7 +85,8 @@ function CoverBlock({ courseId, coverUrl }: { courseId: string; coverUrl: string
         onChange={onPick}
       />
       <CoverHint />
-      <CoverPreview preview={preview} notes={notes} />
+      <CoverLibrary onPickExisting={onPickExisting} />
+      <CoverPreview preview={preview} notes={notes} picked={picked} />
       {tooBig && <p className="text-sm text-primary">{tooBig}</p>}
       {state.error && <p className="text-sm text-primary">{state.error}</p>}
       {state.ok && <p className="text-sm text-navy">Cover updated.</p>}

@@ -15,13 +15,14 @@ export type NavCounts = {
   offers: number;
   orders: number;
   members: number;
+  media: number;
   /** Connected out of total, because an app that is not set up sells nothing. */
   apps: { active: number; total: number };
   errors: number;
 };
 
 const ZERO: NavCounts = {
-  products: 0, courses: 0, offers: 0, orders: 0, members: 0,
+  products: 0, courses: 0, offers: 0, orders: 0, members: 0, media: 0,
   apps: { active: 0, total: 0 }, errors: 0,
 };
 
@@ -42,16 +43,16 @@ export async function navCounts(): Promise<NavCounts> {
       const { count } = scoped ? await q.eq("store_id", storeId) : await q;
       return count ?? 0;
     };
-    const [products, courses, offers, orders, members, appsTotal, appsActive, errors] =
+    const [products, courses, offers, orders, members, media, appsTotal, appsActive, errors] =
       await Promise.all([
-        n("products"), n("courses"), n("offers"), n("orders"), n("users"),
+        n("products"), n("courses"), n("offers"), n("orders"), n("users"), n("media"),
         n("apps"),
         db.from("apps").select("id", { count: "exact", head: true })
           .eq("store_id", storeId).eq("active", true).then((r) => r.count ?? 0),
         n("error_events"),
       ]);
     return {
-      products, courses, offers, orders, members,
+      products, courses, offers, orders, members, media,
       apps: { active: appsActive, total: appsTotal },
       errors,
     };

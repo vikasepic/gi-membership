@@ -4,6 +4,7 @@ import { publicEnv } from "@/lib/env";
 import type { Attachment } from "@/lib/curriculum";
 import sharp from "sharp";
 import { COVER_WIDTH, COVER_HEIGHT } from "@/lib/cover";
+import { recordMedia, getMedia } from "@/lib/media-library";
 
 // Covers are marketing imagery shown before purchase -> PUBLIC bucket.
 // Attachments and inline lesson images are paid content -> PRIVATE bucket,
@@ -37,6 +38,37 @@ export function validateUpload(
   return { ok: true };
 }
 
+/**
+ * A file the person chose from the library instead of uploading.
+ *
+ * Returns null when they uploaded one, which is still the common case — the
+ * two live side by side in every form rather than one replacing the other.
+ *
+ * The bucket check is not bookkeeping. A cover is shown to anyone who loads the
+ * page, so it can only come from the public bucket; a lesson attachment is
+ * something people paid for, so it can only come from the private one. Getting
+ * that backwards would either publish paid content or put an image on a sales
+ * page that 404s for every visitor.
+ */
+export async function pickedFile(
+  formData: FormData,
+  kind: "cover" | "attachment",
+): Promise<{ ok: true; picked: Attachment | null } | { ok: false; error: string }> {
+  const id = String(formData.get("mediaId") ?? "");
+  if (!id) return { ok: true, picked: null };
+  const row = await getMedia(id);
+  if (!row) return { ok: false, error: "That file is no longer in the library." };
+  if (kind === "cover") {
+    if (!row.mime.startsWith("image/")) return { ok: false, error: "A cover has to be an image." };
+    if (row.bucket !== "public-media") {
+      return { ok: false, error: "That file is paid content, so it cannot be a public cover." };
+    }
+  } else if (row.bucket !== "paid-assets") {
+    return { ok: false, error: "That file is public artwork, not a lesson file." };
+  }
+  return { ok: true, picked: { path: row.path, name: row.name, size: row.size, mime: row.mime } };
+}
+
 const safeName = (n: string) => n.replace(/[^a-zA-Z0-9._-]/g, "_");
 
 /** How wide a sales-page image can usefully be — full-bleed on a large screen. */
@@ -61,14 +93,22 @@ async function shrink(
   file: File,
   maxWidth: number,
   maxHeight?: number,
-): Promise<{ body: Buffer; contentType: string; ext: string } | null> {
+): Promise<{ body: Buffer; contentType: string; ext: string; width: number; height: number } | null> {
   try {
     const out = await sharp(Buffer.from(await file.arrayBuffer()))
       .rotate() // honour the EXIF orientation before it is stripped, or a photo taken sideways stays sideways
       .resize({ width: maxWidth, height: maxHeight, fit: "inside", withoutEnlargement: true })
       .webp({ quality: 82 })
-      .toBuffer();
-    return { body: out, contentType: "image/webp", ext: "webp" };
+      .toBuffer({ resolveWithObject: true });
+    return {
+      body: out.data,
+      contentType: "image/webp",
+      ext: "webp",
+      // Its real size after the resize, so the library can show it without
+      // fetching the file back to measure it.
+      width: out.info.width,
+      height: out.info.height,
+    };
   } catch (e) {
     // An image sharp cannot read — an exotic format, or something claiming to
     // be an image and not being one. Storing the original is the same behaviour
@@ -89,6 +129,17 @@ async function putImage(path: string, file: File, maxWidth: number, maxHeight?: 
       contentType: small ? small.contentType : file.type,
       upsert: false,
     });
+  if (!error) {
+    await recordMedia({
+      bucket: "public-media",
+      path: finalPath,
+      filename: file.name,
+      mime: small ? small.contentType : file.type,
+      size: small ? small.body.byteLength : file.size,
+      width: small?.width,
+      height: small?.height,
+    });
+  }
   return { finalPath, error };
 }
 
@@ -116,6 +167,13 @@ export async function uploadAttachment(itemId: string, file: File): Promise<Atta
     upsert: false,
   });
   if (error) throw new Error(`uploadAttachment: ${error.message}`);
+  await recordMedia({
+    bucket: "paid-assets",
+    path,
+    filename: file.name,
+    mime: file.type,
+    size: file.size,
+  });
   return { path, name: file.name, size: file.size, mime: file.type };
 }
 
@@ -180,5 +238,12 @@ export async function uploadCourseAttachment(courseId: string, file: File): Prom
     upsert: false,
   });
   if (error) throw new Error(`uploadCourseAttachment: ${error.message}`);
+  await recordMedia({
+    bucket: "paid-assets",
+    path,
+    filename: file.name,
+    mime: file.type,
+    size: file.size,
+  });
   return { path, name: file.name, size: file.size, mime: file.type };
 }

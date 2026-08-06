@@ -14,7 +14,7 @@ const { AdminSidebar } = await import("@/components/admin/sidebar");
 
 /** The store as it actually stands. */
 const REAL: NavCounts = {
-  products: 2, courses: 2, offers: 1, orders: 8, members: 6,
+  products: 2, courses: 2, offers: 1, orders: 8, members: 6, media: 14,
   apps: { active: 1, total: 2 }, errors: 0,
 };
 

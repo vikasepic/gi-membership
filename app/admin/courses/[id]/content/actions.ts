@@ -8,7 +8,7 @@ import {
   setCourseCover,
   setCourseVideoEmbed,
 } from "@/lib/courses";
-import { validateUpload, uploadCourseCover, uploadCourseAttachment } from "@/lib/media";
+import { validateUpload, uploadCourseCover, uploadCourseAttachment, pickedFile } from "@/lib/media";
 
 export type ContentState = { error?: string; ok?: boolean };
 
@@ -20,12 +20,20 @@ export type ContentState = { error?: string; ok?: boolean };
 export async function uploadCourseCoverAction(_prev: ContentState, formData: FormData): Promise<ContentState> {
   await requireAdmin();
   const courseId = String(formData.get("courseId"));
+  const chosen = await pickedFile(formData, "cover");
+  if (!chosen.ok) return { error: chosen.error };
+
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "Choose an image" };
-  const check = validateUpload({ type: file.type, size: file.size }, "cover");
-  if (!check.ok) return { error: check.error };
+  if (!chosen.picked && (!(file instanceof File) || file.size === 0)) {
+    return { error: "Choose an image" };
+  }
+  if (!chosen.picked) {
+    const f = file as File;
+    const check = validateUpload({ type: f.type, size: f.size }, "cover");
+    if (!check.ok) return { error: check.error };
+  }
   try {
-    const path = await uploadCourseCover(courseId, file);
+    const path = chosen.picked ? chosen.picked.path : await uploadCourseCover(courseId, file as File);
     await setCourseCover(courseId, path);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Upload failed" };
@@ -37,12 +45,20 @@ export async function uploadCourseCoverAction(_prev: ContentState, formData: For
 export async function uploadCourseFileAction(_prev: ContentState, formData: FormData): Promise<ContentState> {
   await requireAdmin();
   const courseId = String(formData.get("courseId"));
+  const chosen = await pickedFile(formData, "attachment");
+  if (!chosen.ok) return { error: chosen.error };
+
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) return { error: "Choose a file" };
-  const check = validateUpload({ type: file.type, size: file.size }, "attachment");
-  if (!check.ok) return { error: check.error };
+  if (!chosen.picked && (!(file instanceof File) || file.size === 0)) {
+    return { error: "Choose a file" };
+  }
+  if (!chosen.picked) {
+    const f = file as File;
+    const check = validateUpload({ type: f.type, size: f.size }, "attachment");
+    if (!check.ok) return { error: check.error };
+  }
   try {
-    const attachment = await uploadCourseAttachment(courseId, file);
+    const attachment = chosen.picked ?? (await uploadCourseAttachment(courseId, file as File));
     await addCourseAttachment(courseId, attachment);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Upload failed" };

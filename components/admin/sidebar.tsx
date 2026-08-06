@@ -26,6 +26,7 @@ function groups(c: NavCounts): { title: string; items: Item[] }[] {
         { href: "/admin", label: "Products", badge: n(c.products) },
         { href: "/admin/courses", label: "Courses", badge: n(c.courses) },
         { href: "/admin/offers", label: "Offers", badge: n(c.offers) },
+        { href: "/admin/media", label: "Media", badge: n(c.media) },
       ],
     },
     {
