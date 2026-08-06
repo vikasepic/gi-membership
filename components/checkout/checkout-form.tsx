@@ -127,6 +127,18 @@ function Inner({
   // tabbing back through the form does not fire again for the same person.
   const capturedEmail = useRef<string | null>(null);
   const startedCheckout = useRef(false);
+  const enteredPayment = useRef(false);
+
+  /** First interaction with the card fields, once per checkout. */
+  function notePaymentInfo() {
+    if (enteredPayment.current) return;
+    enteredPayment.current = true;
+    track(
+      "AddPaymentInfo",
+      { value: totalNowRef.current / 100, currency: product.currency.toUpperCase() },
+      eventIdFor("AddPaymentInfo"),
+    );
+  }
 
   // The moment the checkout is on screen with a price on it. Once per mount:
   // a re-render that reported again would halve every conversion rate built
@@ -167,6 +179,11 @@ function Inner({
   const bumpNow = chosenBump?.chargeNowCents ?? 0;
   const discount = coupon?.discountCents ?? 0;
   const totalNow = product.priceCents - discount + bumpNow;
+  // Held in a ref so the payment-info callback reads today's total without
+  // being rebuilt — and re-registered on the Stripe element — every time the
+  // bump or a coupon changes it.
+  const totalNowRef = useRef(totalNow);
+  totalNowRef.current = totalNow;
 
   async function applyCoupon() {
     const code = couponInput.trim();
@@ -196,13 +213,10 @@ function Inner({
       return;
     }
     if (!stripe || !elements) return;
-    // They have a card in the form and have pressed pay. Reported before the
-    // charge, because this is the step Meta optimises on — not the outcome.
-    track(
-      "AddPaymentInfo",
-      { value: totalNow / 100, currency: product.currency.toUpperCase() },
-      eventIdFor("AddPaymentInfo"),
-    );
+    // Belt and braces: a wallet (Apple Pay, Link) can complete without the
+    // card fields ever being touched, so the event would otherwise never fire
+    // for the buyers who convert best.
+    notePaymentInfo();
     setBusy(true);
 
     const { error: submitError } = await elements.submit();
@@ -344,7 +358,12 @@ function Inner({
 
         <fieldset className="flex flex-col gap-3">
           <legend className="kicker mb-2 text-muted">Payment</legend>
-          <PaymentElement />
+          {/* Reported the moment they start filling the card in, not when they
+              press pay. Meta optimises on this step, and the gap between
+              "began entering a card" and "completed a purchase" is the most
+              useful signal on the page — treating it as a submit event throws
+              away everyone who started and stopped. */}
+          <PaymentElement onChange={notePaymentInfo} />
         </fieldset>
       </div>
 

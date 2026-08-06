@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { BuyLink } from "@/components/buy-link";
+import { offerHref } from "@/lib/offer-link";
 import { ProductCard, type CatalogItem } from "@/components/product-card";
 import { listPublishedProducts, listSubscriptionOffers } from "@/lib/store";
 import { viewerOwnership, accessHrefForProduct } from "@/lib/library";
@@ -200,7 +202,11 @@ export default async function Home() {
 // A subscription told as a product: what it is, what you get, what it costs,
 // and what happens next. Deliberately not a ProductCard — a card in a grid says
 // "one of several things to browse", and this is the opposite of that.
-function SubscriptionSection({ offer, owned }: { offer: Offer; owned: boolean }) {
+async function SubscriptionSection({ offer, owned }: { offer: Offer; owned: boolean }) {
+  // Resolved here rather than in the button: the sales page is the argument
+  // for the price, and a button that skips it drops a reader onto a payment
+  // form with nothing to have convinced them.
+  const href = await offerHref(offer);
   const trial = offer.trialDays ?? 0;
   return (
     <section id={`offer-${offer.key}`} className="flex flex-col gap-7">
@@ -265,12 +271,15 @@ function SubscriptionSection({ offer, owned }: { offer: Offer; owned: boolean })
               </Link>
             </div>
           ) : (
-            <Link
-              href={`/checkout/offer?offer=${offer.id}`}
+            <BuyLink
+              href={href}
+              valueCents={offer.priceCents}
+              currency={offer.currency}
+              contentId={offer.key}
               className="w-fit rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover"
             >
               {offer.acceptLabel}
-            </Link>
+            </BuyLink>
           )}
         </div>
       </div>

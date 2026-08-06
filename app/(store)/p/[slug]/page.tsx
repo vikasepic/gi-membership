@@ -6,6 +6,7 @@ import { productDisplay, type CourseType } from "@/lib/courses";
 import { publicCoverUrl } from "@/lib/media";
 import { money } from "@/lib/money";
 import { TrackView } from "@/components/track-view";
+import { BuyLink } from "@/components/buy-link";
 import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
 import { SalesPage } from "@/components/page/sales-page";
 
@@ -64,12 +65,15 @@ export default async function ProductPage({
           settings={settings}
           money={{ priceLabel: money(product.priceCents, product.currency), termsLabel: null }}
           cta={(label) => (
-            <Link
+            <BuyLink
               href={owned ? accessHref : `/checkout?product=${product.slug}`}
+              valueCents={owned ? null : product.priceCents}
+              currency={product.currency}
+              contentId={product.slug}
               className="inline-block w-fit rounded-full bg-primary px-7 py-3 font-display text-[0.95rem] font-semibold text-primary-fg transition-colors hover:bg-primary-hover"
             >
               {owned ? "Open in your library" : label}
-            </Link>
+            </BuyLink>
           )}
         />
       </div>
@@ -135,12 +139,15 @@ export default async function ProductPage({
               <span className="text-sm text-muted">You already own this.</span>
             </div>
           ) : (
-            <Link
+            <BuyLink
               href={`/checkout?product=${product.slug}`}
+              valueCents={product.priceCents}
+              currency={product.currency}
+              contentId={product.slug}
               className="mt-2 w-fit rounded-full bg-primary px-7 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover"
             >
               Get it
-            </Link>
+            </BuyLink>
           )}
         </div>
       </div>

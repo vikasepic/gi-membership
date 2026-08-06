@@ -10,6 +10,8 @@
 export const EVENTS = [
   "PageView",
   "ViewContent",
+  /** A buy button pressed on a sales page — intent, before any form. */
+  "AddToCart",
   "Lead",
   "CompleteRegistration",
   "InitiateCheckout",
@@ -34,6 +36,7 @@ export type EventName = (typeof EVENTS)[number];
 export const GA4_NAME: Record<EventName, string> = {
   PageView: "page_view",
   ViewContent: "view_item",
+  AddToCart: "add_to_cart",
   Lead: "generate_lead",
   CompleteRegistration: "sign_up",
   InitiateCheckout: "begin_checkout",
@@ -57,6 +60,7 @@ export const GA4_NAME: Record<EventName, string> = {
  * figure nobody can reconcile afterwards.
  */
 export const META_BOTH_SIDES: EventName[] = [
+  "AddToCart",
   "Purchase",
   "StartTrial",
   "InitiateCheckout",

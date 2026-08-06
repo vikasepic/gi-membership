@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { BuyLink } from "@/components/buy-link";
+import { offerHref } from "@/lib/offer-link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getStandingOffer, listOwnedApps, hasSavedCard, ownedProductIdsForViewer } from "@/lib/library";
@@ -193,12 +195,15 @@ export default async function LibraryPage({
                 </button>
               </form>
             ) : (
-              <Link
-                href={`/checkout/offer?offer=${standing.id}`}
+              <BuyLink
+                href={await offerHref(standing)}
+                valueCents={standing.priceCents}
+                currency={standing.currency}
+                contentId={standing.key}
                 className="ml-auto rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover"
               >
                 {standing.acceptLabel}
-              </Link>
+              </BuyLink>
             )}
           </div>
         </section>

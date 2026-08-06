@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   hashEmail,
+  trackingMisconfigured,
   enabledProviders,
   buildMetaEvent,
   buildGa4Event,
@@ -96,5 +97,43 @@ describe("buildGa4Event", () => {
 
   it("reports value in major units", () => {
     expect(payload.events[0].params.value).toBe(27);
+  });
+});
+
+describe("configuration that looks set but cannot work", () => {
+  it("names a CAPI token with no pixel id", () => {
+    // Exactly what happened: the public pixel id was set and the server one
+    // was not, so the browser reported and the server silently did not.
+    const issues = trackingMisconfigured({ META_CAPI_TOKEN: "tok" });
+    expect(issues[0]).toContain("META_PIXEL_ID");
+  });
+
+  it("catches a GTM container id where a Measurement ID belongs", () => {
+    // The Measurement Protocol answers a bad id with 204 — the same empty
+    // success it gives a good event — so nothing else would ever surface it.
+    const issues = trackingMisconfigured({ GA4_MEASUREMENT_ID: "GTM-NB1234", GA4_API_SECRET: "s" });
+    expect(issues[0]).toContain("GTM-NB1234");
+    expect(issues[0]).toContain("Data Streams");
+  });
+
+  it("refuses to send GA4 events on a container id", () => {
+    expect(enabledProviders({ GA4_MEASUREMENT_ID: "GTM-NB1234", GA4_API_SECRET: "s" })).not.toContain("ga4");
+    expect(enabledProviders({ GA4_MEASUREMENT_ID: "G-ABC123", GA4_API_SECRET: "s" })).toContain("ga4");
+  });
+
+  it("says nothing when nothing is configured", () => {
+    // A store with no ad accounts is not misconfigured.
+    expect(trackingMisconfigured({})).toEqual([]);
+  });
+
+  it("says nothing when it is all correct", () => {
+    expect(
+      trackingMisconfigured({
+        META_PIXEL_ID: "1",
+        META_CAPI_TOKEN: "t",
+        GA4_MEASUREMENT_ID: "G-ABC",
+        GA4_API_SECRET: "s",
+      }),
+    ).toEqual([]);
   });
 });

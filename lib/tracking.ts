@@ -40,9 +40,39 @@ export function hashEmail(email: string): string {
 export function enabledProviders(env: TrackingEnv): ("meta" | "ga4")[] {
   const out: ("meta" | "ga4")[] = [];
   if (env.META_PIXEL_ID && env.META_CAPI_TOKEN) out.push("meta");
-  if (env.GA4_MEASUREMENT_ID && env.GA4_API_SECRET) out.push("ga4");
+  // A Measurement ID begins with G-. A GTM- value is a Tag Manager CONTAINER,
+  // which the Measurement Protocol rejects — and it rejects it with a 204, the
+  // same empty success it returns for a good event. Checking the shape here is
+  // the only way that mistake ever surfaces.
+  if (env.GA4_MEASUREMENT_ID?.startsWith("G-") && env.GA4_API_SECRET) out.push("ga4");
   return out;
 }
+
+/**
+ * Configuration that looks set but cannot work.
+ *
+ * Surfaced on the admin errors page rather than thrown: tracking must never
+ * break a purchase, and silence is exactly how "we have had no conversions for
+ * three weeks" happens.
+ */
+export function trackingMisconfigured(env: TrackingEnv): string[] {
+  const out: string[] = [];
+  if (env.META_CAPI_TOKEN && !env.META_PIXEL_ID) {
+    out.push("META_CAPI_TOKEN is set but META_PIXEL_ID is not, so no server-side Meta event is sent.");
+  }
+  if (env.GA4_MEASUREMENT_ID && !env.GA4_MEASUREMENT_ID.startsWith("G-")) {
+    out.push(
+      `GA4_MEASUREMENT_ID is "${env.GA4_MEASUREMENT_ID}" — the Measurement Protocol needs the G- Measurement ID from Admin → Data Streams, not a GTM- container id.`,
+    );
+  }
+  if (env.GA4_MEASUREMENT_ID?.startsWith("G-") && !env.GA4_API_SECRET) {
+    out.push("GA4_MEASUREMENT_ID is set but GA4_API_SECRET is not, so no server-side GA4 event is sent.");
+  }
+  return out;
+}
+
+/** The same check, against the process this store is running in. */
+export const trackingProblems = () => trackingMisconfigured(trackingEnv());
 
 const major = (cents: number) => Math.round(cents) / 100;
 

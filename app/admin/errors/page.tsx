@@ -1,6 +1,7 @@
 import { listErrorEvents, MAX_ATTEMPTS } from "@/lib/errors";
 import { retryNowAction, repairDriftAction } from "./actions";
 import { findSubscriptionDrift } from "@/lib/subscription-reconcile";
+import { trackingProblems } from "@/lib/tracking";
 
 const when = (iso: string) =>
   new Intl.DateTimeFormat("en-GB", {
@@ -19,6 +20,10 @@ const relative = (iso: string) => {
 
 export default async function AdminErrorsPage() {
   const [events, drift] = await Promise.all([listErrorEvents(), findSubscriptionDrift()]);
+  // Tracking that looks configured and cannot work. It fails silently by
+  // design — a conversion that never sends breaks nothing — so this is the
+  // only place it can be noticed before someone asks why the numbers are zero.
+  const trackingIssues = trackingProblems();
   const billedWithNoAccess = drift.filter((d) => d.losingAccess);
   const unresolved = events.filter((e) => !e.resolvedAt);
   const stuck = unresolved.filter((e) => e.jobKind && e.attempts >= MAX_ATTEMPTS);
@@ -34,6 +39,17 @@ export default async function AdminErrorsPage() {
           place to be seen.
         </p>
       </div>
+
+      {trackingIssues.length > 0 && (
+        <section className="flex flex-col gap-2 rounded-2xl border border-primary/45 bg-primary/5 px-5 py-4">
+          <h2 className="font-display text-lg">Tracking is not reporting everything</h2>
+          <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted">
+            {trackingIssues.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {drift.length > 0 && (
         <section className="flex flex-col gap-3 rounded-2xl border border-primary/45 bg-primary/5 px-5 py-4">

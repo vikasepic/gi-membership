@@ -8,6 +8,7 @@ import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
 import { SalesPage } from "@/components/page/sales-page";
 import { money } from "@/lib/money";
 import { TrackView } from "@/components/track-view";
+import { BuyLink } from "@/components/buy-link";
 import { buildBumpView } from "@/lib/bump";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { altSaving } from "@/lib/offers";
@@ -90,15 +91,21 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
             // here has a card on file yet — each goes to the same checkout
             // with a different offer.
             <span className="flex flex-wrap items-stretch gap-3">
-              <Link
+              <BuyLink
                 href={`/checkout/offer?offer=${offer.id}`}
+                valueCents={offer.priceCents}
+                currency={offer.currency}
+                contentId={offer.key}
                 className="inline-block w-fit rounded-full bg-primary px-7 py-3 font-display text-[0.95rem] font-semibold text-primary-fg transition-colors hover:bg-primary-hover"
               >
                 {label}
-              </Link>
+              </BuyLink>
               {showAlt && (
-                <Link
+                <BuyLink
                   href={`/checkout/offer?offer=${showAlt.id}`}
+                  valueCents={showAlt.priceCents}
+                  currency={showAlt.currency}
+                  contentId={showAlt.key}
                   // Ink from the band, like every other outlined control on a
                   // page whose sections each choose their own ground.
                   style={{
@@ -116,7 +123,7 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
                       {altSaving(offer, showAlt)}
                     </span>
                   )}
-                </Link>
+                </BuyLink>
               )}
             </span>
           )
