@@ -1,7 +1,11 @@
 import { listApps } from "@/lib/apps";
+import { planNameBackfill } from "@/lib/app-backfill";
+import { ResendNames } from "@/components/admin/resend-names";
 
 export default async function AdminAppsPage() {
   const apps = await listApps();
+  // Counted here so the button can state what it would do before it does it.
+  const plans = await Promise.all(apps.map((a) => planNameBackfill(a.id)));
 
   return (
     <div className="flex flex-col gap-8">
@@ -14,7 +18,7 @@ export default async function AdminAppsPage() {
       </div>
 
       <div className="flex flex-col gap-4">
-        {apps.map((a) => (
+        {apps.map((a, i) => (
           <div key={a.id} className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -31,6 +35,13 @@ export default async function AdminAppsPage() {
               <Row label="Handoff" value={a.handoffEndpoint} />
               <Row label="Shared secret" value={a.sharedSecret === "REPLACE_WITH_ENV_SECRET" ? "⚠ not set (seed placeholder)" : "•••••• (set)"} />
             </dl>
+            <ResendNames
+              appId={a.id}
+              appName={a.name}
+              total={plans[i].total}
+              named={plans[i].named}
+              active={a.active}
+            />
           </div>
         ))}
         {apps.length === 0 && <p className="text-muted">No apps registered.</p>}

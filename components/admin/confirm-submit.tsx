@@ -18,19 +18,32 @@ export function ConfirmSubmit({
   label,
   confirmLabel,
   formAction,
+  cancelLabel = "Keep it",
+  kind = "delete",
+  disabled = false,
   className = "text-sm text-muted hover:text-primary",
 }: {
   label: string;
   /** What the second click will do, said plainly. */
   confirmLabel: string;
-  formAction: (formData: FormData) => void | Promise<void>;
+  /**
+   * Omit to submit the enclosing form. A form driven by useActionState already
+   * has its action; giving the button its own would bypass that state and the
+   * result would land nowhere.
+   */
+  formAction?: (formData: FormData) => void | Promise<void>;
+  /** "Keep it" suits a delete. A send is not being kept or removed. */
+  cancelLabel?: string;
+  /** Marks what kind of thing this is, for tests and for styling hooks. */
+  kind?: string;
+  disabled?: boolean;
   className?: string;
 }) {
   const [armed, setArmed] = useState(false);
 
   if (!armed) {
     return (
-      <button type="button" onClick={() => setArmed(true)} className={className}>
+      <button type="button" onClick={() => setArmed(true)} disabled={disabled} className={className}>
         {label}
       </button>
     );
@@ -43,12 +56,13 @@ export function ConfirmSubmit({
         onClick={() => setArmed(false)}
         className="text-sm text-muted hover:text-fg"
       >
-        Keep it
+        {cancelLabel}
       </button>
       <button
         type="submit"
-        formAction={formAction}
-        data-action="delete"
+        {...(formAction ? { formAction } : {})}
+        disabled={disabled}
+        data-action={kind}
         className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover"
       >
         {confirmLabel}
