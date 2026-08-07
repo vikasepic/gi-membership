@@ -26,7 +26,7 @@ export async function getPageSections(owner: OwnerType, ownerId: string): Promis
   const db = createServiceClient();
   const { data, error } = await db
     .from("page_sections")
-    .select("section_key, position, enabled, style, accent, variant, content, background")
+    .select("section_key, position, enabled, style, accent, variant, content, background, css_id, css_class")
     .eq("owner_type", owner)
     .eq("owner_id", ownerId)
     .order("position");
@@ -65,7 +65,34 @@ export type SectionInput = {
    * is slow, fails, or turns out lighter than it looked in the picker.
    */
   background?: Background | null;
+  /** A DOM id for this band, so a button can link to #it. */
+  cssId?: string | null;
+  cssClass?: string | null;
 };
+
+/**
+ * A CSS identifier, or nothing.
+ *
+ * This lands in an id attribute and in a selector, so anything that is not a
+ * letter, a digit, a hyphen or an underscore is dropped rather than escaped —
+ * the only safe answer to a quote or a bracket here is that there isn't one. A
+ * leading digit is invalid in a selector, so it is prefixed rather than
+ * silently producing an id nothing can target.
+ */
+export function cssIdent(value: string | null | undefined): string | null {
+  const cleaned = String(value ?? "").trim().replace(/[^A-Za-z0-9_-]/g, "");
+  if (!cleaned) return null;
+  return /^[0-9-]/.test(cleaned) ? `s-${cleaned}` : cleaned;
+}
+
+/** A class list: the same rule, applied to each name. */
+export function cssClasses(value: string | null | undefined): string | null {
+  const names = String(value ?? "")
+    .split(/\s+/)
+    .map((n) => cssIdent(n))
+    .filter(Boolean);
+  return names.length > 0 ? names.join(" ") : null;
+}
 
 /**
  * Save one section.
@@ -107,6 +134,8 @@ export async function saveSection(
         input.background && input.background.type !== "none"
           ? normalizeBackground(input.background)
           : null,
+      css_id: cssIdent(input.cssId),
+      css_class: cssClasses(input.cssClass),
       updated_at: new Date().toISOString(),
     },
     { onConflict: "owner_type,owner_id,section_key" },

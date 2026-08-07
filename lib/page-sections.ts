@@ -575,6 +575,8 @@ export type SectionRow = {
    * when an image is slow, fails, or turns out lighter than it looked.
    */
   background?: unknown;
+  cssId?: string | null;
+  cssClass?: string | null;
 };
 
 export type SectionView = {

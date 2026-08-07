@@ -43,10 +43,14 @@ export type { CtaRender } from "@/components/page/blocks";
 function Band({
   view,
   background,
+  cssId,
+  cssClass,
   children,
 }: {
   view: SectionView;
   background?: unknown;
+  cssId?: string | null;
+  cssClass?: string | null;
   children: React.ReactNode;
 }) {
   // Over the band's own colour, not instead of it: an image that has not
@@ -55,7 +59,8 @@ function Band({
   const painted = bg && bg.type !== "none" ? backgroundCss(bg, view.theme) : null;
   return (
     <section
-      className="@container px-6 py-12 md:py-16"
+      id={cssId || undefined}
+      className={`@container px-6 py-12 md:py-16 ${cssClass ?? ""}`}
       style={{ background: view.theme.bg, color: view.theme.fg, ...painted }}
     >
       <div className="mx-auto w-full max-w-[1040px]">{children}</div>
@@ -87,7 +92,7 @@ export function SectionBand({
   // that is where you go to fill it in.
   if (blocks.length === 0 && !preview) return null;
   return (
-    <Band view={view} background={row.background}>
+    <Band view={view} background={row.background} cssId={row.cssId} cssClass={row.cssClass}>
       <Blocks blocks={blocks} theme={view.theme} money={money} cta={cta} at={at} />
     </Band>
   );

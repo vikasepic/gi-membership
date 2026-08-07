@@ -12,6 +12,8 @@ export type SectionEdit = {
   enabled: boolean;
   /** A picture or a wash over the band's colour. */
   background?: Background | null;
+  cssId?: string | null;
+  cssClass?: string | null;
   variants?: { key: string; label: string }[];
   onChange: (patch: Record<string, unknown>) => void;
 };
@@ -179,6 +181,31 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
               </div>
 
               <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
+                <span className="text-xs text-fg">Position</span>
+                <div className="flex overflow-hidden rounded-lg border border-border">
+                  {(
+                    [
+                      ["top", "Top"],
+                      ["center", "Centre"],
+                      ["bottom", "Bottom"],
+                    ] as const
+                  ).map(([v, label]) => (
+                    <button
+                      key={v}
+                      type="button"
+                      aria-pressed={bg.position === v}
+                      onClick={() => setBg({ position: v })}
+                      className={`flex-1 border-r border-border px-1 py-1 text-[0.66rem] last:border-r-0 ${
+                        bg.position === v ? "bg-primary/12 text-primary" : "text-muted hover:text-fg"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
                 <span className="text-xs text-fg">Darken</span>
                 <span className="flex items-center gap-2">
                   <input
@@ -231,6 +258,40 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
           </div>
           <p className="text-[0.66rem] leading-snug text-muted">
             Switching it off keeps everything in it.
+          </p>
+        </div>
+      </details>
+
+      <details className="insp-section border-b border-border">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-[0.7rem] font-semibold text-fg [&::-webkit-details-marker]:hidden">
+          <span className="text-[0.55rem] text-muted">▶</span> Attributes
+        </summary>
+        <div className="flex flex-col gap-3 px-3 pb-3 pt-1">
+          <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
+            <span className="text-xs text-fg">CSS id</span>
+            <input
+              value={section.cssId ?? ""}
+              onChange={(e) => section.onChange({ cssId: e.target.value })}
+              placeholder="pricing"
+              aria-label="CSS id for this section"
+              className="w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-primary"
+            />
+          </div>
+          <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
+            <span className="text-xs text-fg">CSS class</span>
+            <input
+              value={section.cssClass ?? ""}
+              onChange={(e) => section.onChange({ cssClass: e.target.value })}
+              placeholder="promo highlight"
+              aria-label="CSS classes for this section"
+              className="w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-primary"
+            />
+          </div>
+          <p className="text-[0.66rem] leading-snug text-muted">
+            An id makes this band linkable — a button anywhere can go to{" "}
+            <code className="font-mono">#{section.cssId?.trim() || "pricing"}</code>. Both are
+            cleaned on save: anything that is not a letter, digit, hyphen or underscore is dropped,
+            because these land in an attribute and in a selector.
           </p>
         </div>
       </details>

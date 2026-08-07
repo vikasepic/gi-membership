@@ -82,6 +82,8 @@ export function PageEditor({
       fd.append("accent", row.accent ?? "");
       fd.append("variant", row.variant ?? "");
       fd.append("background", row.background ? JSON.stringify(row.background) : "");
+      fd.append("cssId", row.cssId ?? "");
+      fd.append("cssClass", row.cssClass ?? "");
       fd.append("content", JSON.stringify({ ...def?.defaults, ...(row.content as Draft) }));
       const res = await saveSectionAction({}, fd);
       if (res.error) {
@@ -365,6 +367,8 @@ function SectionPanel({
             variant: row.variant ?? null,
             enabled: row.enabled,
             background: (row.background as never) ?? null,
+            cssId: row.cssId ?? null,
+            cssClass: row.cssClass ?? null,
             variants: def.variants,
             onChange,
           }}
