@@ -102,6 +102,7 @@ x-store-secret: <the shared secret we give you>
 
 {
   "email": "buyer@example.com",
+  "fullName": "Jane Cooper",
   "entitlementKey": "content-engine",
   "status": "active",
   "hasAccess": true,
@@ -116,6 +117,7 @@ x-store-secret: <the shared secret we give you>
 | Field | Type | Notes |
 |---|---|---|
 | `email` | string | **Already lowercased.** The shared identifier. |
+| `fullName` | string \| null | The buyer's name as they typed it at our checkout, in **one field** — we do not collect first and last separately. The key is exactly `fullName`, camelCase. **May be null**, for an account created before we collected it or one provisioned from an email alone, so treat it as optional and never key anything on it. Split on the first space if you need two fields: everything after it is the surname, which keeps "van der Berg" intact. |
 | `entitlementKey` | string \| null | Which access level to grant. Agreed with us up front. **May be null** if the offer grants generic access — decide your default and document it. |
 | `status` | string | `active` \| `trialing` \| `past_due` \| `canceled`. The current state. Apply it as given. |
 | `hasAccess` | boolean | Whether this status should permit access. Provided so you don't have to encode our semantics — see the note below. |
@@ -202,9 +204,14 @@ GET https://your-app.example.com/auth/store-handoff?token=<token>
 
 ```
 token   = base64url(payloadJson) + "." + base64url(signature)
-payload = {"email":"...","userId":"<store user id>","appId":"<your app id>","exp":<unix seconds>}
+payload = {"email":"...","fullName":"Jane Cooper","userId":"<store user id>","appId":"<your app id>","exp":<unix seconds>}
 signature = HMAC_SHA256(message = base64url(payloadJson), key = sharedSecret)
 ```
+
+`fullName` rides here as well as on the provision call, and may be null. It is
+INSIDE the signed body, so it is as trustworthy as the email beside it — but do
+NOT add it to your signature check: the HMAC stays over the whole base64url
+string exactly as sent, whatever the payload happens to contain.
 
 **Critical detail:** the HMAC is computed over the **base64url string**, not
 over the raw JSON bytes. Sign the encoded text exactly as it appears before the
@@ -248,7 +255,7 @@ function verifyHandoffToken(token, secret) {
   const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
   if (typeof payload.exp !== "number" || payload.exp < Math.floor(Date.now() / 1000)) return null;
 
-  return payload; // { email, userId, appId, exp }
+  return payload; // { email, fullName, userId, appId, exp }
 }
 ```
 

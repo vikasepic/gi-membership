@@ -248,6 +248,29 @@ are not, and one `Buyer@Example.com` row is enough to split a customer in two.
 
 ---
 
+## 5a. The name field — the exact key
+
+**`fullName`.** camelCase, exactly that. Not `name`, not `full_name`, not
+`customerName`.
+
+```json
+{ "email": "buyer@example.com", "fullName": "Jane Cooper", "entitlementKey": "funnel", "...": "..." }
+```
+
+- **One field, not two.** Our checkout asks for a single name, so we have never
+  held first and last separately. If you need two, split on the **first** space
+  and take everything after it as the surname — that keeps "Mary Anne van der
+  Berg" intact instead of losing all but one word.
+- **It may be `null`.** An account created before we collected names, or one
+  provisioned from an email alone, has none. Treat it as optional, never key
+  anything on it, and never overwrite a name you hold with a null we send.
+- **It arrives on both channels** — the provision POST body, and inside the
+  signed handoff token payload. Same key both times.
+- A member can now correct their own name in our account page, so expect an
+  updated `fullName` on a later provision call for someone you already have.
+
+---
+
 ## 5. What to build, in order
 
 1. **Answer the Stripe question** in §2. It changes the scope.
@@ -287,6 +310,7 @@ import crypto from "node:crypto";
 const secret = process.env.STORE_SHARED_SECRET;
 const payload = {
   email: "test@example.com",
+  fullName: "Jane Cooper",        // may be null — see §5a
   userId: "00000000-0000-0000-0000-000000000001",
   appId: "8ee0321c-c78b-4638-a4a6-81a70d1e37bb",
   exp: Math.floor(Date.now() / 1000) + 300,
@@ -302,7 +326,7 @@ console.log(`${body}.${sig}`);
 curl -i -X POST https://your-app.vercel.app/api/store/provision \
   -H "content-type: application/json" \
   -H "x-store-secret: $STORE_SHARED_SECRET" \
-  -d '{"email":"test@example.com","entitlementKey":"funnel","status":"trialing","hasAccess":true,"stripeCustomerId":null,"stripeSubscriptionId":null,"occurredAt":1785300000}'
+  -d '{"email":"test@example.com","fullName":"Jane Cooper","entitlementKey":"funnel","status":"trialing","hasAccess":true,"stripeCustomerId":null,"stripeSubscriptionId":null,"occurredAt":1785300000}'
 ```
 
 **Report a sale to the store.** This is the call you will make in production —
