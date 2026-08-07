@@ -7,7 +7,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 const { CheckoutPanel } = await import("@/components/checkout/checkout-panel");
-const { LEGAL } = await import("@/lib/legal");
+const { LEGAL_DEFAULTS } = await import("@/lib/legal-defaults");
 
 const panel = (over: Partial<React.ComponentProps<typeof CheckoutPanel>> = {}) =>
   renderToStaticMarkup(
@@ -40,7 +40,14 @@ describe("what the panel says", () => {
   it("takes the refund window from the policy, not from prose", () => {
     // A number typed here could drift from the one the refunds page states,
     // and the buyer would be reading a promise nobody is keeping.
-    expect(panel()).toContain(`${LEGAL.refundWindowDays} days to change your mind`);
+    expect(panel()).toContain(`${LEGAL_DEFAULTS.refundWindowDays} days to change your mind`);
+  });
+
+  it("states the window it was given, not the default", () => {
+    // The window is a setting now. If the panel ignored the prop, raising the
+    // policy to 30 days would leave the checkout promising 14 — and the
+    // checkout is the copy read with a card already out.
+    expect(panel({ refundWindowDays: 30 })).toContain("30 days to change your mind");
   });
 
   it("names the domain it is on", () => {

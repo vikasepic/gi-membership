@@ -1,12 +1,10 @@
-import { SettingsForm } from "@/components/admin/settings-form";
-import { getStoreSettings } from "@/lib/admin";
+import { SettingsScreen } from "@/components/admin/settings-screen";
+import { getSettings } from "@/lib/settings";
+import { legalPlaceholdersFrom } from "@/lib/legal";
 
 export default async function AdminSettingsPage() {
-  const settings = await getStoreSettings();
+  const settings = await getSettings();
   return (
-    <div className="flex flex-col gap-8">
-      <h1 className="text-2xl">Store settings</h1>
-      <SettingsForm settings={settings} />
-    </div>
+    <SettingsScreen settings={settings} legalPlaceholders={legalPlaceholdersFrom(settings)} />
   );
 }

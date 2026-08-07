@@ -14,7 +14,6 @@ describe("what needs you", () => {
   beforeEach(() => vi.resetModules());
 
   it("says nothing when nothing is wrong", async () => {
-    vi.doMock("@/lib/legal", () => ({ LEGAL_PLACEHOLDERS: [] }));
     vi.doMock("@/lib/tracking", () => ({ trackingProblems: () => [] }));
     const { needsYou } = await import("@/lib/needs-you");
     expect(needsYou(counts())).toEqual([]);
@@ -22,16 +21,14 @@ describe("what needs you", () => {
 
   it("names the legal fields rather than counting them", async () => {
     // "2 legal fields" says there is work; the names say what the work is.
-    vi.doMock("@/lib/legal", () => ({ LEGAL_PLACEHOLDERS: ["registered address", "governing law"] }));
     vi.doMock("@/lib/tracking", () => ({ trackingProblems: () => [] }));
     const { needsYou } = await import("@/lib/needs-you");
-    const out = needsYou(counts());
+    const out = needsYou(counts(), ["registered address", "governing law"]);
     expect(out[0].label).toContain("registered address");
     expect(out[0].href).toBe("/admin/settings");
   });
 
   it("carries a tracking misconfiguration", async () => {
-    vi.doMock("@/lib/legal", () => ({ LEGAL_PLACEHOLDERS: [] }));
     vi.doMock("@/lib/tracking", () => ({
       trackingProblems: () => ['GA4_MEASUREMENT_ID is "GTM-X" — the Measurement Protocol needs the G- id, not a container id.'],
     }));
@@ -42,7 +39,6 @@ describe("what needs you", () => {
   });
 
   it("counts unresolved errors", async () => {
-    vi.doMock("@/lib/legal", () => ({ LEGAL_PLACEHOLDERS: [] }));
     vi.doMock("@/lib/tracking", () => ({ trackingProblems: () => [] }));
     const { needsYou } = await import("@/lib/needs-you");
     expect(needsYou(counts({ errors: 1 }))[0].label).toBe("1 unresolved error");
@@ -51,7 +47,6 @@ describe("what needs you", () => {
 
   it("notices an app that is registered and switched off", async () => {
     // The failure is silent: purchases succeed and access never arrives.
-    vi.doMock("@/lib/legal", () => ({ LEGAL_PLACEHOLDERS: [] }));
     vi.doMock("@/lib/tracking", () => ({ trackingProblems: () => [] }));
     const { needsYou } = await import("@/lib/needs-you");
     const out = needsYou(counts({ apps: { active: 1, total: 2 } }));
@@ -60,17 +55,15 @@ describe("what needs you", () => {
   });
 
   it("says nothing about apps when they are all on", async () => {
-    vi.doMock("@/lib/legal", () => ({ LEGAL_PLACEHOLDERS: [] }));
     vi.doMock("@/lib/tracking", () => ({ trackingProblems: () => [] }));
     const { needsYou } = await import("@/lib/needs-you");
     expect(needsYou(counts({ apps: { active: 2, total: 2 } }))).toEqual([]);
   });
 
   it("every entry goes somewhere you can act", async () => {
-    vi.doMock("@/lib/legal", () => ({ LEGAL_PLACEHOLDERS: ["governing law"] }));
     vi.doMock("@/lib/tracking", () => ({ trackingProblems: () => ["META_PIXEL_ID is not set"] }));
     const { needsYou } = await import("@/lib/needs-you");
-    const out = needsYou(counts({ errors: 2, apps: { active: 0, total: 2 } }));
+    const out = needsYou(counts({ errors: 2, apps: { active: 0, total: 2 } }), ["governing law"]);
     expect(out.length).toBe(4);
     for (const n of out) expect(n.href.startsWith("/admin/")).toBe(true);
   });

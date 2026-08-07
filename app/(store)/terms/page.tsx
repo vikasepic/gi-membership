@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
 import { LegalPage, Clause } from "@/components/legal/legal-page";
-import { LEGAL } from "@/lib/legal";
+import { getLegal } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: "Terms of Service — Greater Inside",
   description: "The agreement between you and Greater Inside.",
 };
 
-export default function TermsPage() {
+export default async function TermsPage() {
+  const LEGAL = await getLegal();
   return (
     <LegalPage
+      legal={LEGAL}
       title="Terms of Service"
       intro={`The agreement between you and ${LEGAL.storeName} when you buy or use anything here.`}
     >

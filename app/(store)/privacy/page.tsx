@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { LegalPage, Clause } from "@/components/legal/legal-page";
-import { LEGAL, PROCESSORS } from "@/lib/legal";
+import { getLegal, PROCESSORS } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Greater Inside",
@@ -12,9 +12,11 @@ export const metadata: Metadata = {
 // middleware.ts). Change the behaviour and this page has to change with it; a
 // privacy policy that overstates or understates what happens is the one kind of
 // inaccuracy that carries legal weight.
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  const LEGAL = await getLegal();
   return (
     <LegalPage
+      legal={LEGAL}
       title="Privacy Policy"
       intro="What we collect, why we collect it, and how to get it removed."
     >

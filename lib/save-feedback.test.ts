@@ -121,7 +121,7 @@ describe("a save always ends somewhere visible", () => {
     ["product", "components/admin/product-form.tsx"],
     ["offer", "components/admin/offer-form.tsx"],
     ["course", "components/admin/course-form.tsx"],
-    ["settings", "components/admin/settings-form.tsx"],
+    ["settings", "components/admin/settings-screen.tsx"],
     ["member", "components/admin/add-member.tsx"],
   ])("%s admits when it is taking too long", (_which, file) => {
     expect(readFileSync(file, "utf8")).toContain("useSlowSave");

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/logo";
+import { publicCoverUrl } from "@/lib/media-url";
+import type { Settings } from "@/lib/settings-schema";
 
 // Mobile-first shell (Ajit's stated priority): bottom tab bar on mobile,
 // top bar on desktop. Preserves the prototype's single-column mobile feel.
@@ -15,8 +17,35 @@ const NAV: Item[] = [
   { href: "/account", label: "Account", icon: <AccountIcon /> },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  settings,
+}: {
+  children: React.ReactNode;
+  /** The store's own name, logo and links. Type-only import, so the
+      server-only module never reaches the browser. */
+  settings: Settings;
+}) {
   const pathname = usePathname();
+  const logoUrl = publicCoverUrl(settings.logoPath || null);
+
+  // The uploaded logo when there is one, the drawn mark when there is not.
+  // Sized by height so a wide wordmark and a square glyph both sit on the
+  // same baseline instead of one of them setting the bar height.
+  const Mark = ({ className }: { className: string }) =>
+    logoUrl ? (
+      /* eslint-disable-next-line @next/next/no-img-element */
+      <img src={logoUrl} alt={settings.name} className={`${className} object-contain`} />
+    ) : (
+      <Logo className={className} />
+    );
+
+  const socials = [
+    { href: settings.socialInstagram, label: "Instagram" },
+    { href: settings.socialYoutube, label: "YouTube" },
+    { href: settings.socialX, label: "X" },
+    { href: settings.socialLinkedin, label: "LinkedIn" },
+  ].filter((l) => l.href);
 
   // Pages that own the whole window.
   //
@@ -38,16 +67,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile top bar — brand only; navigation lives in the bottom tabs. */}
       <header className="sticky top-0 z-20 flex items-center justify-center border-b border-border bg-surface/85 px-5 py-3.5 backdrop-blur md:hidden"
         style={{ paddingTop: "calc(0.875rem + env(safe-area-inset-top))" }}>
-        <Link href="/" aria-label="Greater Inside">
-          <Logo className="h-7 w-auto text-fg" />
+        <Link href="/" aria-label={settings.name}>
+          <Mark className="h-7 w-auto text-fg" />
         </Link>
       </header>
 
       {/* Desktop top bar */}
       <header className="sticky top-0 z-20 hidden border-b border-border bg-surface/80 backdrop-blur md:block">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Link href="/" aria-label="Greater Inside">
-            <Logo className="h-7 w-auto text-fg" />
+          <Link href="/" aria-label={settings.name}>
+            <Mark className="h-7 w-auto text-fg" />
           </Link>
           <nav className="flex items-center gap-1">
             {NAV.map((item) => (
@@ -76,11 +105,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           page when they go looking. Bottom padding clears the mobile tab bar. */}
       <footer className="mx-auto w-full max-w-5xl px-5 pt-10 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-10">
         <div className="flex flex-col gap-4 border-t border-border pt-6 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
-          <Logo className="h-5 w-auto text-fg" />
+          <Mark className="h-5 w-auto text-fg" />
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Link href="/terms" className="hover:text-fg">Terms</Link>
             <Link href="/privacy" className="hover:text-fg">Privacy</Link>
             <Link href="/refunds" className="hover:text-fg">Refunds</Link>
+            {socials.map((l) => (
+              <a
+                key={l.label}
+                href={l.href}
+                target="_blank"
+                rel="me noopener noreferrer"
+                className="hover:text-fg"
+              >
+                {l.label}
+              </a>
+            ))}
           </div>
         </div>
       </footer>

@@ -12,6 +12,8 @@ import { productDisplay } from "@/lib/courses";
 import { rememberLead } from "@/lib/leads";
 import { NOINDEX } from "@/lib/seo";
 import { CheckoutPanel } from "@/components/checkout/checkout-panel";
+import { legalFrom } from "@/lib/legal";
+import { getSettings } from "@/lib/settings";
 
 export const metadata = NOINDEX;
 
@@ -105,6 +107,9 @@ export default async function CheckoutPage({
   // Two halves of one page: what they are buying and why they should trust us
     // on the left, and nothing but the transaction on the right. The store shell
   // is deliberately not around this — see AppShell.
+  const settings = await getSettings();
+  const legal = legalFrom(settings);
+
   return (
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-2">
       <CheckoutPanel
@@ -115,6 +120,8 @@ export default async function CheckoutPage({
         // Read off the offers rather than the view: the view is presentation, and
         // whether a trial exists decides what needs reassuring.
         hasTrial={Boolean(bumpAsSold?.trialDays || altOffer?.trialDays)}
+        refundWindowDays={legal.refundWindowDays}
+        replyTime={settings.replyTime}
       />
 
       {/* The ground bleeds to the window edge; the content does not. A form

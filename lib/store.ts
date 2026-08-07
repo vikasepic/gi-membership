@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
 import type { Product, Offer } from "@/lib/types";
@@ -15,7 +16,9 @@ const PRODUCT_COLUMNS =
 const OFFER_COLUMNS =
   "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, page_alt_offer_id, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, activecampaign_trial_tag_id, activecampaign_cancelled_tag_id, bump_headline, bump_description, bump_banner, bump_bullets, bump_note, bump_accent, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live";
 
-export async function getStoreId(): Promise<string> {
+// Memoised per request: nearly every read in the app resolves the store first,
+// so a single page render was asking for the same row a dozen times.
+export const getStoreId = cache(async (): Promise<string> => {
   const db = createServiceClient();
   const { data, error } = await db
     .from("stores")
@@ -24,6 +27,18 @@ export async function getStoreId(): Promise<string> {
     .single();
   if (error || !data) throw new Error(`store '${STORE_SLUG}' not found: ${error?.message}`);
   return data.id as string;
+});
+
+/**
+ * The trading name, for anywhere a human reads it outside our own pages —
+ * chiefly the Stripe charge description, which is what shows up on a card
+ * statement. Read rather than hardcoded so renaming the store in settings
+ * cannot leave old wording on new charges.
+ */
+export async function getStoreName(): Promise<string> {
+  const db = createServiceClient();
+  const { data } = await db.from("stores").select("name").eq("slug", STORE_SLUG).single();
+  return (data?.name as string) || "Greater Inside";
 }
 
 export async function listPublishedProducts(): Promise<Product[]> {

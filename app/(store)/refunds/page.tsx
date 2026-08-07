@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
 import { LegalPage, Clause } from "@/components/legal/legal-page";
-import { LEGAL } from "@/lib/legal";
+import { getLegal } from "@/lib/legal";
 
 export const metadata: Metadata = {
   title: "Refund Policy — Greater Inside",
   description: "When you can get your money back, and how to ask.",
 };
 
-export default function RefundsPage() {
+export default async function RefundsPage() {
+  const LEGAL = await getLegal();
   return (
     <LegalPage
+      legal={LEGAL}
       title="Refund Policy"
       intro="When you can get your money back, and how to ask for it."
     >

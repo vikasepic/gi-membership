@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getStoreId, getProductBySlug, getOffer } from "@/lib/store";
+import { getStoreId, getStoreName, getProductBySlug, getOffer } from "@/lib/store";
 import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerForChoice, type Ownership } from "@/lib/offers";
 import type { BumpChoice } from "@/lib/bump";
 import { offerAsSoldTo, recordTrialStart } from "@/lib/trial-history";
@@ -26,7 +26,6 @@ import { sendCrmEvent, type CrmItem } from "@/lib/crm";
 import { resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
 import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
 import { markLeadConverted } from "@/lib/leads";
-import { LEGAL } from "@/lib/legal";
 import type { Offer } from "@/lib/types";
 
 const OTO_TTL_SECONDS = 15 * 60; // 15 minutes
@@ -310,7 +309,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
     customer: customerId,
     setup_future_usage: "off_session",
     automatic_payment_methods: { enabled: true },
-    description: `${product.title} — ${LEGAL.storeName}`,
+    description: `${product.title} — ${await getStoreName()}`,
     metadata: {
       store_created: "true",
       storeId,
@@ -432,7 +431,7 @@ export async function fulfilOffer(args: {
         // Tag as store-created so Content Engine's webhook doesn't clobber it.
         // offerName rides along for the same reason as the base charge: Zapier
         // and the dashboard can only filter on what Stripe holds.
-        description: `${offer.name} — ${LEGAL.storeName}`,
+        description: `${offer.name} — ${await getStoreName()}`,
         metadata: {
           store_created: "true",
           orderId: order.id,
@@ -455,7 +454,7 @@ export async function fulfilOffer(args: {
       payment_method: paymentMethodId,
       off_session: true,
       confirm: true,
-      description: `${offer.name} — ${LEGAL.storeName}`,
+      description: `${offer.name} — ${await getStoreName()}`,
       metadata: {
         store_created: "true",
         orderId: order.id,

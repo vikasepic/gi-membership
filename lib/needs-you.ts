@@ -1,5 +1,4 @@
 import "server-only";
-import { LEGAL_PLACEHOLDERS } from "@/lib/legal";
 import { trackingProblems } from "@/lib/tracking";
 import type { NavCounts } from "@/lib/admin-nav";
 
@@ -19,14 +18,14 @@ import type { NavCounts } from "@/lib/admin-nav";
 
 export type Nudge = { label: string; href: string };
 
-export function needsYou(counts: NavCounts): Nudge[] {
+export function needsYou(counts: NavCounts, legalPlaceholders: readonly string[] = []): Nudge[] {
   const out: Nudge[] = [];
 
-  if (LEGAL_PLACEHOLDERS.length > 0) {
+  if (legalPlaceholders.length > 0) {
     out.push({
       // Named rather than counted: "2 legal fields" tells you there is work,
       // "registered address" tells you what the work is.
-      label: `Legal details unset — ${LEGAL_PLACEHOLDERS.join(", ")}`,
+      label: `Legal details unset — ${legalPlaceholders.join(", ")}`,
       href: "/admin/settings",
     });
   }

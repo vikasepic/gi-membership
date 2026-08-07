@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LEGAL } from "@/lib/legal";
+import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
 
 /**
  * The half of the checkout that keeps selling.
@@ -23,12 +23,27 @@ export function CheckoutPanel({
   backHref,
   /** Present when there is a trial on offer — it changes what needs reassuring. */
   hasTrial,
+  /**
+   * The window the refund policy states. Passed in so this page and that one
+   * cannot drift: a number typed here would keep promising 14 days after the
+   * policy was changed to 30, and the buyer reads this one with their card out.
+   */
+  refundWindowDays = LEGAL_DEFAULTS.refundWindowDays,
+  /**
+   * The reply-time promise, if the store makes one. Blank by default and blank
+   * unless someone types it, because "we answer within a day" is a claim a
+   * buyer can check and find false — and one they check precisely when they are
+   * already unhappy.
+   */
+  replyTime,
 }: {
   title: string;
   tagline: string | null;
   coverUrl: string | null;
   backHref: string;
   hasTrial?: boolean;
+  refundWindowDays?: number;
+  replyTime?: string;
 }) {
   return (
     <aside
@@ -82,9 +97,10 @@ export function CheckoutPanel({
             Your card details go straight to Stripe. They never reach our servers.
           </Reassurance>
           <Reassurance>
-            {LEGAL.refundWindowDays} days to change your mind, whatever the reason.
+            {refundWindowDays} days to change your mind, whatever the reason.
           </Reassurance>
           <Reassurance>Access opens the moment the payment clears — nothing to wait for.</Reassurance>
+          {replyTime && <Reassurance>{replyTime}</Reassurance>}
           {hasTrial && (
             <Reassurance>
               If you take the free trial, we email you before it ends and turns into a payment.

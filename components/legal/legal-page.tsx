@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LEGAL, LEGAL_PLACEHOLDERS } from "@/lib/legal";
+import { legalPlaceholders, type Legal } from "@/lib/legal";
 
 // Shared shell for the policy pages: one measure, one type scale, one place the
 // "still a draft" warning lives.
@@ -11,12 +11,16 @@ import { LEGAL, LEGAL_PLACEHOLDERS } from "@/lib/legal";
 export function LegalPage({
   title,
   intro,
+  legal,
   children,
 }: {
   title: string;
   intro?: string;
+  /** Passed in rather than read here — the page already had to resolve it. */
+  legal: Legal;
   children: React.ReactNode;
 }) {
+  const placeholders = legalPlaceholders(legal);
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 py-4">
       <div className="flex flex-col gap-3">
@@ -25,14 +29,14 @@ export function LegalPage({
         </Link>
         <h1 className="text-3xl leading-tight md:text-4xl">{title}</h1>
         {intro && <p className="text-lg text-muted text-pretty">{intro}</p>}
-        <p className="text-sm text-muted">Last updated {LEGAL.lastUpdated}</p>
+        <p className="text-sm text-muted">Last updated {legal.lastUpdated}</p>
       </div>
 
-      {LEGAL_PLACEHOLDERS.length > 0 && (
+      {placeholders.length > 0 && (
         <div className="flex flex-col gap-1 rounded-2xl border border-primary/40 bg-primary/5 px-5 py-4">
           <span className="font-medium text-fg">This policy is not finished</span>
           <p className="text-sm text-muted">
-            Still to be filled in by the store: {LEGAL_PLACEHOLDERS.join(", ")}. Until then, treat
+            Still to be filled in by the store: {placeholders.join(", ")}. Until then, treat
             this page as a draft rather than a binding agreement.
           </p>
         </div>

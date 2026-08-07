@@ -345,44 +345,6 @@ export async function deleteOffer(id: string): Promise<void> {
   if (error) throw new Error(`deleteOffer: ${error.message}`);
 }
 
-// ---------------------------------------------------------------------------
-// Store settings.
-// ---------------------------------------------------------------------------
-
-export type StoreSettings = {
-  name: string;
-  supportEmail: string | null;
-  currency: string;
-};
-
-export async function getStoreSettings(): Promise<StoreSettings> {
-  const db = createServiceClient();
-  const { data, error } = await db
-    .from("stores")
-    .select("name, settings")
-    .eq("id", await getStoreId())
-    .single();
-  if (error || !data) throw new Error(`getStoreSettings: ${error?.message}`);
-  const settings = (data.settings ?? {}) as Record<string, string>;
-  return {
-    name: data.name as string,
-    supportEmail: settings.support_email ?? null,
-    currency: settings.currency ?? "usd",
-  };
-}
-
-export async function updateStoreSettings(input: StoreSettings): Promise<void> {
-  const db = createServiceClient();
-  const { error } = await db
-    .from("stores")
-    .update({
-      name: input.name,
-      settings: { support_email: input.supportEmail, currency: input.currency },
-    })
-    .eq("id", await getStoreId());
-  if (error) throw new Error(`updateStoreSettings: ${error.message}`);
-}
-
 // Storefront image for a single product, overriding whatever its course provides.
 export async function setProductCover(productId: string, coverPath: string): Promise<void> {
   const db = createServiceClient();

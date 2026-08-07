@@ -12,6 +12,8 @@ export const dynamic = "force-dynamic";
 import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";
 import { CheckoutPanel } from "@/components/checkout/checkout-panel";
+import { legalFrom } from "@/lib/legal";
+import { getSettings } from "@/lib/settings";
 import { publicCoverUrl } from "@/lib/media";
 import { productDisplay } from "@/lib/courses";
 
@@ -57,6 +59,9 @@ export default async function OfferCheckoutPage({
     ? publicCoverUrl((await productDisplay([offer.grantProductId])).get(offer.grantProductId)?.coverPath ?? null)
     : null;
 
+  const settings = await getSettings();
+  const legal = legalFrom(settings);
+
   return (
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-2">
       <CheckoutPanel
@@ -65,6 +70,8 @@ export default async function OfferCheckoutPage({
         coverUrl={coverUrl}
         backHref="/library"
         hasTrial={Boolean(offer.trialDays)}
+        refundWindowDays={legal.refundWindowDays}
+        replyTime={settings.replyTime}
       />
 
       {/* The ground bleeds to the window edge; the content does not. A form
