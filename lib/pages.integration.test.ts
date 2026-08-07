@@ -7,7 +7,7 @@ import { buildSectionView } from "@/lib/page-sections";
 // Runs against the real database. The claim under test is the one the whole
 // per-section design rests on: saving one section writes one row.
 
-const canRun = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const db = () => createServiceClient();
 const OFFER = "00000000-0000-0000-0000-0000000000c1";
 const owners: string[] = [];

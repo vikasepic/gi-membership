@@ -5,7 +5,7 @@ import { shouldShowOffer } from "@/lib/offers";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 
-const canRun = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const APP_ID = "00000000-0000-0000-0000-0000000000a1";
 const createdUserIds: string[] = [];
 

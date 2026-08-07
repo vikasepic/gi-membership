@@ -2,7 +2,7 @@ import { describe, it, expect, afterAll } from "vitest";
 import { ensureUserProfile } from "@/lib/users";
 import { createServiceClient } from "@/lib/supabase/server";
 
-const canRun = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const createdIds: string[] = [];
 
 describe.skipIf(!canRun)("ensureUserProfile (integration)", () => {

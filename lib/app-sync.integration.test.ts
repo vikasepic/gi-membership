@@ -8,7 +8,7 @@ import { listApps } from "@/lib/apps";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 
-const canRun = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const emails: string[] = [];
 
 async function app() {

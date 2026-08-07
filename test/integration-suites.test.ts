@@ -31,6 +31,23 @@ describe("every integration suite skips itself without a database", () => {
     expect(src).toMatch(/describe\.skipIf\(!canRun\)/);
   });
 
+  it.each(files)("%s guards on a secret, not on a public value", (file) => {
+    // The public URL has a placeholder in vitest.setup.ts, so guarding on it
+    // means "a database exists" is true everywhere and every suite runs in CI.
+    // A service-role key and a Stripe secret are the things you cannot have
+    // without the real thing behind them.
+    const src = readFileSync(file, "utf8");
+    const guards = src.match(/const canRun[A-Za-z]* =[\s\S]*?;/g) ?? [];
+    for (const guard of guards) {
+      expect(guard, `${file}: guard on a secret`).toMatch(
+        /SUPABASE_SERVICE_ROLE_KEY|STRIPE_SECRET_KEY|AC_API_KEY/,
+      );
+      expect(guard, `${file}: NEXT_PUBLIC_ values are defaulted for tests`).not.toContain(
+        "NEXT_PUBLIC_",
+      );
+    }
+  });
+
   it.each(files)("%s does not open a bare describe", (file) => {
     // A single unguarded describe runs its body — and its fixtures — anyway.
     const bare = readFileSync(file, "utf8").match(/^describe\(/gm);

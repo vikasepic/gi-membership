@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { createServiceClient } from "@/lib/supabase/server";
 import { rememberLead, markLeadConverted, flushDueLeads, LEAD_DELAY_MINUTES } from "@/lib/leads";
 
-const canRun = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const db = () => createServiceClient();
 const PRODUCT = "00000000-0000-0000-0000-0000000000b1";
 const KEY = "test-visitor-key";

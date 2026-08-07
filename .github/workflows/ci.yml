@@ -8,6 +8,13 @@ on:
     branches: [main]
   pull_request:
 
+# Push twice in a minute and the first run becomes an answer about a commit
+# nobody is on any more — and its failure email is indistinguishable from a real
+# one. Superseded runs are cancelled rather than finished.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -27,7 +34,22 @@ jobs:
       - name: Lint
         run: npx next lint
 
-      # Integration suites self-skip without STRIPE_SECRET_KEY / Supabase, so CI
-      # runs the pure logic: offers, tokens, sanitizer, progress, tax, consent.
+      # Integration suites self-skip without SUPABASE_SERVICE_ROLE_KEY /
+      # STRIPE_SECRET_KEY — a secret you cannot have without the real thing
+      # behind it. Everything else runs, and vitest.setup.ts fills in the public
+      # variables so the suite does not depend on what a developer has on disk.
       - name: Unit tests
         run: npm test
+
+      # The build reads the environment for real. It stays here because a
+      # typecheck and a green suite have both passed while the build was broken
+      # — twice, in one afternoon.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-anon-key
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci
+          STRIPE_SECRET_KEY: sk_test_ci
+          SUPABASE_SERVICE_ROLE_KEY: ci-service-key

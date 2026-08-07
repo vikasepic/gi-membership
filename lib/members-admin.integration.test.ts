@@ -13,7 +13,7 @@ import {
 
 // Manual grants create REAL entitlement — a granted product appears in the
 // library exactly like a bought one. These run against the real database.
-const canRun = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const db = () => createServiceClient();
 
 const emails: string[] = [];

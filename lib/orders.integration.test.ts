@@ -3,7 +3,7 @@ import { listOrders, refundOrder } from "@/lib/orders";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 
-const canRun = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const createdUserIds: string[] = [];
 const createdOrderIds: string[] = [];
 
@@ -110,7 +110,7 @@ import { createCheckoutIntent, finalizeOrder } from "@/lib/checkout";
 import { stripe } from "@/lib/stripe";
 
 const canRunStripe =
-  !!process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") && !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+  !!process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") && !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 describe.skipIf(!canRunStripe)("refunding a genuinely charged order (integration)", () => {
   it("issues the Stripe refund, revokes access, and is safe to repeat", async () => {

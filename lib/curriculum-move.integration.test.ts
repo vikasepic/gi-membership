@@ -18,7 +18,7 @@ import { listCurriculum } from "@/lib/curriculum";
 // No database in CI, so the whole file stands down there — the sibling suites
 // do the same. Without this the root beforeAll still runs and the file fails
 // on a missing NEXT_PUBLIC_SUPABASE_URL rather than skipping.
-const canRun = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const db = () => createServiceClient();
 let courseId = "";

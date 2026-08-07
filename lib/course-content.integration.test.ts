@@ -10,7 +10,7 @@ import {
 import { uploadCourseAttachment, uploadCourseCover, signedItemAsset } from "@/lib/media";
 import { createServiceClient } from "@/lib/supabase/server";
 
-const canRun = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const createdCourseIds: string[] = [];
 
 // The "simple course" path: a course that carries its own file/cover directly,

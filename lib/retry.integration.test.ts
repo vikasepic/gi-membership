@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { recordError, MAX_ATTEMPTS } from "@/lib/errors";
 import { runDueJobs } from "@/lib/retry";
 
-const canRun = !!process.env.NEXT_PUBLIC_SUPABASE_URL;
+const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const db = () => createServiceClient();
 
