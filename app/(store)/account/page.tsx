@@ -5,6 +5,8 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { purchaseDocsForUser, subscriptionInvoicesForUser } from "@/lib/receipts";
 import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";
+import { YourDetails } from "@/components/account/your-details";
+import { getProfile } from "@/lib/profile";
 
 export const metadata = NOINDEX;
 
@@ -37,18 +39,19 @@ export default async function AccountPage({
     );
   }
 
-  const [purchases, invoices] = await Promise.all([
+  const [purchases, invoices, profile] = await Promise.all([
     purchaseDocsForUser(user.id),
     subscriptionInvoicesForUser(user.id),
+    getProfile(user.id),
   ]);
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6 py-10">
       <h1 className="text-2xl">Your account</h1>
-      <div className="flex flex-col gap-1 rounded-2xl border border-border bg-surface p-5">
-        <span className="kicker text-muted">Signed in as</span>
-        <span>{user.email}</span>
-      </div>
+      <YourDetails
+        email={profile?.email ?? user.email ?? ""}
+        fullName={profile?.fullName ?? ""}
+      />
       <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
         <span className="kicker text-muted">Appearance</span>
         <ThemeToggle />
