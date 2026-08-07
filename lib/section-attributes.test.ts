@@ -75,10 +75,11 @@ describe("where they end up", () => {
 });
 
 describe("the background can be positioned", () => {
-  it("offers top, centre and bottom", () => {
+  it("uses the same nine-spot picker a block does", () => {
+    // Three keywords could not describe a face in the top-left corner, and a
+    // section having a different control from a block is two things to learn.
     const src = readFileSync("components/admin/section-settings.tsx", "utf8");
-    expect(src).toContain('["top", "Top"]');
-    expect(src).toContain('["bottom", "Bottom"]');
-    expect(src).toContain("setBg({ position: v })");
+    expect(src).toContain("PositionPicker");
+    expect(src).toContain("onChange={(position) => setBg({ position })}");
   });
 });

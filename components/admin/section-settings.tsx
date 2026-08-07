@@ -3,6 +3,7 @@
 import { BAND_STYLES, BAND_STYLE_KEYS, type BandStyleKey } from "@/lib/page-sections";
 import { emptyBackground, type Background } from "@/lib/blocks";
 import { MediaButton } from "@/components/admin/media-modal";
+import { PositionPicker } from "@/components/admin/position-picker";
 import { publicCoverUrl } from "@/lib/media-url";
 
 export type SectionEdit = {
@@ -180,29 +181,12 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
-                <span className="text-xs text-fg">Position</span>
-                <div className="flex overflow-hidden rounded-lg border border-border">
-                  {(
-                    [
-                      ["top", "Top"],
-                      ["center", "Centre"],
-                      ["bottom", "Bottom"],
-                    ] as const
-                  ).map(([v, label]) => (
-                    <button
-                      key={v}
-                      type="button"
-                      aria-pressed={bg.position === v}
-                      onClick={() => setBg({ position: v })}
-                      className={`flex-1 border-r border-border px-1 py-1 text-[0.66rem] last:border-r-0 ${
-                        bg.position === v ? "bg-primary/12 text-primary" : "text-muted hover:text-fg"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+              <div className="grid grid-cols-[92px_minmax(0,1fr)] items-start gap-2.5">
+                <span className="pt-1 text-xs text-fg">Position</span>
+                <PositionPicker
+                  value={bg.position}
+                  onChange={(position) => setBg({ position })}
+                />
               </div>
 
               <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">

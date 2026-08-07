@@ -49,6 +49,7 @@ import {
 } from "@/lib/blocks";
 import { DeviceSwitch } from "@/components/admin/device-switch";
 import { BlockTree } from "@/components/admin/block-tree";
+import { PositionPicker } from "@/components/admin/position-picker";
 import { SectionSettings, type SectionEdit } from "@/components/admin/section-settings";
 import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/lib/undo";
 
@@ -1347,6 +1348,15 @@ function ControlField({
           </button>
         </div>,
         { value: control.unit && typeof value === "number" ? control.unit : undefined },
+      );
+
+    case "position":
+      return row(
+        <PositionPicker
+          value={typeof value === "string" ? value : "center center"}
+          onChange={onChange}
+        />,
+        { stack: true },
       );
 
     case "color":

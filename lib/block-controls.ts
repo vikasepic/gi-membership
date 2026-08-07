@@ -56,6 +56,8 @@ export type Control =
    * mobile" and the value is flipped on the way in and out.
    */
   | (Base & { kind: "toggle"; invert?: boolean })
+  /** The nine named spots, or a percentage pair. See PositionPicker. */
+  | (Base & { kind: "position" })
   | (Base & { kind: "number"; min: number; max: number; step: number; unit?: string })
   | (Base & { kind: "color" })
   | (Base & { kind: "dim" })
@@ -434,7 +436,7 @@ export const COLUMN_CONTROLS: Control[] = [
   style({ kind: "color", key: "background.color", label: "Colour", when: bgIs("classic") }),
   style({ kind: "image", key: "background.image", label: "Image", when: bgIs("classic") }),
   style({ kind: "select", key: "background.size", label: "Size", options: [["cover", "Cover"], ["contain", "Contain"], ["auto", "Auto"]], when: bgIs("classic") }),
-  style({ kind: "select", key: "background.position", label: "Position", options: [["center", "Centre"], ["top", "Top"], ["bottom", "Bottom"]], when: bgIs("classic") }),
+  style({ kind: "position", key: "background.position", label: "Position", when: bgIs("classic") }),
   style({ kind: "select", key: "background.repeat", label: "Repeat", options: [["no-repeat", "No"], ["repeat", "Tile"]], when: bgIs("classic") }),
   style({ kind: "number", key: "background.overlay", label: "Darken", min: 0, max: 90, step: 5, unit: "%", when: bgIs("classic") }),
   style({ kind: "color", key: "background.from", label: "Colour one", when: bgIs("gradient") }),
@@ -469,7 +471,7 @@ export const ADVANCED_CONTROLS: Control[] = [
   style({ kind: "color", key: "background.color", label: "Colour", when: bgIs("classic") }),
   style({ kind: "image", key: "background.image", label: "Image", when: bgIs("classic") }),
   style({ kind: "select", key: "background.size", label: "Size", options: [["cover", "Cover"], ["contain", "Contain"], ["auto", "Auto"]], when: bgIs("classic") }),
-  style({ kind: "select", key: "background.position", label: "Position", options: [["center", "Centre"], ["top", "Top"], ["bottom", "Bottom"]], when: bgIs("classic") }),
+  style({ kind: "position", key: "background.position", label: "Position", when: bgIs("classic") }),
   style({ kind: "select", key: "background.repeat", label: "Repeat", options: [["no-repeat", "No"], ["repeat", "Tile"]], when: bgIs("classic") }),
   style({ kind: "color", key: "background.from", label: "Colour one", when: bgIs("gradient") }),
   style({ kind: "number", key: "background.fromAt", label: "Location", min: 0, max: 100, step: 1, unit: "%", when: bgIs("gradient") }),

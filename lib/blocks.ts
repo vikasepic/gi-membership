@@ -56,7 +56,17 @@ export type Background = {
   color: string | null;
   image: string;
   size: "cover" | "contain" | "auto";
-  position: "center" | "top" | "bottom";
+  /**
+   * Where the picture sits, as a CSS background-position.
+   *
+   * A string rather than three keywords: nine named spots is what people
+   * actually reach for, and a face in the top-left corner cannot be described
+   * by "top" alone. A percentage pair is allowed too, for the picture that
+   * needs to sit somewhere none of the nine names.
+   *
+   * Validated on the way in, because this lands in a style declaration.
+   */
+  position: string;
   repeat: "no-repeat" | "repeat";
   from: string | null;
   fromAt: number;
@@ -183,7 +193,7 @@ export const emptyBackground = (): Background => ({
   color: null,
   image: "",
   size: "cover",
-  position: "center",
+  position: "center center",
   repeat: "no-repeat",
   from: null,
   fromAt: 0,
@@ -329,6 +339,42 @@ function normalizeDim(v: unknown, fallback: Dim): Dim {
   };
 }
 
+/** The nine named spots, in reading order. */
+export const BG_POSITIONS = [
+  "left top",
+  "center top",
+  "right top",
+  "left center",
+  "center center",
+  "right center",
+  "left bottom",
+  "center bottom",
+  "right bottom",
+] as const;
+
+/** "42% 80%" — a spot none of the nine names. */
+const CUSTOM_POSITION = /^(\d{1,3})% (\d{1,3})%$/;
+
+/**
+ * A background-position we are willing to put in a style attribute.
+ *
+ * Anything unrecognised falls back rather than being escaped: this is a value
+ * with a small, knowable set of legal forms, so accepting only those is simpler
+ * and safer than trying to make an arbitrary string safe.
+ */
+export function normalizePosition(v: unknown, fallback = "center center"): string {
+  const value = String(v ?? "").trim();
+  if ((BG_POSITIONS as readonly string[]).includes(value)) return value;
+  // What the three old keywords meant, so pages saved before this keep looking
+  // the way they did.
+  if (value === "center") return "center center";
+  if (value === "top") return "center top";
+  if (value === "bottom") return "center bottom";
+  const custom = CUSTOM_POSITION.exec(value);
+  if (custom && Number(custom[1]) <= 100 && Number(custom[2]) <= 100) return value;
+  return fallback;
+}
+
 export function normalizeBackground(v: unknown): Background {
   const d = emptyBackground();
   if (!isRecord(v)) return d;
@@ -337,7 +383,7 @@ export function normalizeBackground(v: unknown): Background {
     color: colorOrNull(v.color),
     image: str(v.image),
     size: oneOf(v.size, ["cover", "contain", "auto"] as const, d.size),
-    position: oneOf(v.position, ["center", "top", "bottom"] as const, d.position),
+    position: normalizePosition(v.position, d.position),
     repeat: oneOf(v.repeat, ["no-repeat", "repeat"] as const, d.repeat),
     from: colorOrNull(v.from),
     fromAt: num(v.fromAt, d.fromAt),
