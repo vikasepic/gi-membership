@@ -126,6 +126,11 @@ function Inner({
   // Which address we have already reported, so re-focusing the field or
   // tabbing back through the form does not fire again for the same person.
   const capturedEmail = useRef<string | null>(null);
+  // The buffered lead is keyed on address AND name, because the name usually
+  // arrives after the address: someone who clicks straight into Email, tabs
+  // out, then fills their name would otherwise be forwarded to ActiveCampaign
+  // with no first name at all. The pixel above still fires once per address.
+  const bufferedLead = useRef<string | null>(null);
   const startedCheckout = useRef(false);
   const enteredPayment = useRef(false);
 
@@ -161,14 +166,20 @@ function Inner({
   function captureEmail() {
     const value = email.trim().toLowerCase();
     setEmailHint(suggestEmail(value));
-    if (!value || !value.includes("@") || capturedEmail.current === value) return;
-    capturedEmail.current = value;
-    // An address on a checkout is a lead whether or not they go on to buy —
-    // and it is the last thing many of them do.
-    track("Lead", { content_ids: [product.slug] }, eventIdFor("Lead", value));
+    if (!value || !value.includes("@")) return;
+    if (capturedEmail.current !== value) {
+      capturedEmail.current = value;
+      // An address on a checkout is a lead whether or not they go on to buy —
+      // and it is the last thing many of them do.
+      track("Lead", { content_ids: [product.slug] }, eventIdFor("Lead", value));
+    }
+    const name = fullName.trim();
+    const key = `${value}|${name}`;
+    if (bufferedLead.current === key) return;
+    bufferedLead.current = key;
     // Not awaited: this only buffers the address for an abandoned-cart email.
     // The buyer must never wait on it or see it fail.
-    void captureAbandonedCart(product.slug, value, fullName.trim() || undefined);
+    void captureAbandonedCart(product.slug, value, name || undefined);
   }
 
   const [couponInput, setCouponInput] = useState("");
@@ -283,7 +294,12 @@ function Inner({
               <input
                 type="text" required placeholder="Full name" value={fullName}
                 autoComplete="name" aria-label="Full name"
-                onChange={(e) => setFullName(e.target.value)} className={input}
+                onChange={(e) => setFullName(e.target.value)}
+                // A name typed after the address still belongs on the buffered
+                // lead. Re-runs the same capture; it re-sends only if the pair
+                // actually changed.
+                onBlur={captureEmail}
+                className={input}
               />
               <input
                 type="email" required placeholder="Email" value={email}
