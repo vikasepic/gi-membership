@@ -421,17 +421,36 @@ function Upload({ kind, onDone }: { kind: MediaKind; onDone: (item: PickedMedia)
     if (!file) return;
     setBusy(true);
     setError(null);
+    // A fetch with no timeout can wait forever, and "Uploading…" that never
+    // ends is the same as no feedback at all. Two minutes is generous for a
+    // 100MB attachment on a slow line and far short of forever.
+    const stop = new AbortController();
+    const timer = setTimeout(() => stop.abort(), 120_000);
     try {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("kind", kind);
-      const res = await fetch("/api/media/library", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok || !data.item) setError(data.error ?? "Upload failed.");
-      else onDone(data.item);
-    } catch {
-      setError("Upload failed.");
+      const res = await fetch("/api/media/library", {
+        method: "POST",
+        body: fd,
+        signal: stop.signal,
+      });
+      // Not every failure answers in JSON — a proxy rejecting the size sends
+      // HTML, and parsing that would throw where a message was wanted.
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.item) {
+        setError(data.error ?? `Upload failed (${res.status}). The file may be too large.`);
+      } else {
+        onDone(data.item);
+      }
+    } catch (e) {
+      setError(
+        e instanceof DOMException && e.name === "AbortError"
+          ? "That took too long and was stopped. Try a smaller file, or check the connection."
+          : "Upload failed. Check the connection and try again.",
+      );
     }
+    clearTimeout(timer);
     setBusy(false);
   }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useSlowSave } from "@/components/admin/save-status";
 import { useActionState } from "react";
 import { saveSettings, type SaveState } from "@/app/admin/settings/actions";
 import { inputClass as input, Field } from "@/components/admin/form-controls";
@@ -7,6 +8,7 @@ import type { StoreSettings } from "@/lib/admin";
 
 export function SettingsForm({ settings }: { settings: StoreSettings }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveSettings, {});
+  const slow = useSlowSave(pending);
 
   return (
     <form action={action} className="flex max-w-xl flex-col gap-6">
@@ -41,6 +43,11 @@ export function SettingsForm({ settings }: { settings: StoreSettings }) {
       >
         {pending ? "Saving…" : "Save settings"}
       </button>
+      {slow && (
+        <p className="text-xs text-primary" role="status">
+          Still going. It may already have worked — reload to check.
+        </p>
+      )}
     </form>
   );
 }

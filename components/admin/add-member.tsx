@@ -1,5 +1,6 @@
 "use client";
 
+import { useSlowSave } from "@/components/admin/save-status";
 import { useActionState } from "react";
 import { addMemberAction, type MemberActionState } from "@/app/admin/members/actions";
 import { inputClass as input } from "@/components/admin/form-controls";
@@ -19,6 +20,7 @@ export function AddMember({
   grants: { value: string; label: string }[];
 }) {
   const [state, action, pending] = useActionState<MemberActionState, FormData>(addMemberAction, {});
+  const slow = useSlowSave(pending);
 
   return (
     <form action={action} className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5">
@@ -61,6 +63,11 @@ export function AddMember({
       >
         {pending ? "Adding…" : "Add member"}
       </button>
+      {slow && (
+        <p className="text-xs text-primary" role="status">
+          Still going. It may already have worked — reload to check.
+        </p>
+      )}
     </form>
   );
 }

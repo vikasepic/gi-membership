@@ -90,7 +90,7 @@ const schema = z
     path: ["interval"],
   });
 
-export type SaveState = { error?: string };
+export type SaveState = { error?: string; saved?: boolean };
 
 export async function saveOffer(_prev: SaveState, formData: FormData): Promise<SaveState> {
   await requireAdmin();
@@ -155,7 +155,13 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
 
   revalidatePath("/admin/offers");
   revalidatePath("/admin");
-  redirect("/admin/offers");
+
+  // A new offer goes to the list; an edit stays where it is. Being thrown back
+  // to the list after every save meant re-opening the offer to make the next
+  // change, and losing which tab you were on.
+  if (!v.id) redirect("/admin/offers");
+  revalidatePath(`/admin/offers/${v.id}`);
+  return { saved: true };
 }
 
 export async function removeOffer(formData: FormData): Promise<void> {

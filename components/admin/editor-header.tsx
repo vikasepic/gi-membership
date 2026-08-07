@@ -24,6 +24,7 @@ export function EditorHeader({
   dirty,
   pending,
   saveLabel,
+  saveStatus,
 }: {
   backHref: string;
   backLabel: string;
@@ -38,6 +39,8 @@ export function EditorHeader({
   dirty: boolean;
   pending: boolean;
   saveLabel: string;
+  /** What the last save did. Replaces the bare "Unsaved" when given. */
+  saveStatus?: React.ReactNode;
 }) {
   return (
     <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-bg/95 px-1 py-2 backdrop-blur">
@@ -80,7 +83,7 @@ export function EditorHeader({
 
       <span className="ml-auto flex flex-wrap items-center gap-2">
         {links}
-        {dirty && <span className="text-xs text-primary">Unsaved</span>}
+        {saveStatus ?? (dirty && <span className="text-xs text-primary">Unsaved</span>)}
         <button
           type="submit"
           disabled={pending}

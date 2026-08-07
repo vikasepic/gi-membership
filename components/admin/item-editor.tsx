@@ -2,6 +2,7 @@ import Link from "next/link";
 import { DeleteItemButton } from "@/components/admin/delete-item-button";
 import { LessonTypeFields } from "@/components/admin/lesson-type-fields";
 import { Section } from "@/components/admin/form-controls";
+import { SubmitButton } from "@/components/admin/save-status";
 import { ItemCoverPick, ItemFilePick } from "@/components/admin/item-media";
 import { publicCoverUrl } from "@/lib/media";
 import type { CourseItem } from "@/lib/curriculum";
@@ -56,9 +57,7 @@ export function ItemEditor({
         </label>
 
         <div className="flex items-center gap-4">
-          <button className="rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover">
-            Save changes
-          </button>
+          <SubmitButton>Save changes</SubmitButton>
           <Link href={`/admin/courses/${courseId}`} className="text-sm text-muted hover:text-fg">
             Back to curriculum
           </Link>

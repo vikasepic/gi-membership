@@ -1,11 +1,13 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { saveProduct, removeProduct, type SaveState } from "@/app/admin/actions";
 import { inputClass, Field, Group } from "@/components/admin/form-controls";
 import { EditorTabs, TabPanel } from "@/components/admin/editor-tabs";
 import { EditorHeader } from "@/components/admin/editor-header";
 import { ConfirmSubmit } from "@/components/admin/confirm-submit";
+import { SaveStatus, useJustSaved, useSlowSave } from "@/components/admin/save-status";
+import { PRODUCT_FIELD_TABS, summarise, tabToShow, tabsWithErrors } from "@/lib/save-feedback";
 import { publicCoverUrl } from "@/lib/media-url";
 import { MediaButton, type PickedMedia } from "@/components/admin/media-modal";
 import { StorefrontPreview, BumpPreview, Readiness } from "@/components/admin/editor-preview";
@@ -129,6 +131,9 @@ export function ProductForm({
     if (Object.keys(errs).length > 0) {
       e.preventDefault(); // stops the server action — no submit, no reload
       setClientErr(errs);
+      // Bump the attempt so the tabs move to the first problem even if the same
+      // field fails twice running.
+      setAttempt((n) => n + 1);
     }
   }
 
@@ -143,6 +148,28 @@ export function ProductForm({
   // The offer that will actually be shown on the checkout, so the preview moves
   // when the bump is changed rather than describing the one saved last time.
   const bumpOffer = offers.find((o) => o.id === bumpOfferId) ?? null;
+
+  // Everything wrong right now, from either side. The client's own check and
+  // the server's answer are the same kind of thing to the person reading it.
+  const allErrors = { ...state.errors, ...clientErr };
+  const problem = summarise(allErrors);
+  const badTabs = tabsWithErrors(allErrors, PRODUCT_FIELD_TABS, "basics");
+  // Which tab to move to. Recomputed per attempt so pressing Save again after
+  // fixing one field walks you to the next.
+  const [attempt, setAttempt] = useState(0);
+  const showTab = useMemo(
+    () => tabToShow(allErrors, PRODUCT_FIELD_TABS, "", "basics"),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [attempt],
+  );
+
+  const slow = useSlowSave(pending);
+  const justSaved = useJustSaved(state.saved);
+  useEffect(() => {
+    // A save that worked has nothing left unsaved. Leaving the word on screen
+    // is indistinguishable from a save that did not happen.
+    if (state.saved) setDirty(false);
+  }, [state.saved]);
 
   return (
     <form
@@ -174,7 +201,7 @@ export function ProductForm({
         }}
         links={
           <>
-            {notReady > 0 && (
+            {notReady > 0 && !problem && (
               <span className="text-xs text-primary">
                 {notReady} to sort out
               </span>
@@ -199,15 +226,29 @@ export function ProductForm({
         dirty={dirty}
         pending={pending}
         saveLabel={product ? "Save" : "Create product"}
+        saveStatus={
+          <SaveStatus
+            pending={pending}
+            slow={slow}
+            justSaved={justSaved}
+            problem={problem}
+            dirty={dirty}
+          />
+        }
       />
 
       <EditorTabs
+        showTab={showTab}
         tabs={[
-          { key: "basics", label: "Basics" },
-          { key: "content", label: "Content", attention: courseIds.length === 0 },
-          { key: "pricing", label: "Pricing" },
-          { key: "funnel", label: "Funnel", attention: !hasSalesPage },
-          { key: "marketing", label: "Marketing" },
+          { key: "basics", label: "Basics", attention: badTabs.has("basics") },
+          {
+            key: "content",
+            label: "Content",
+            attention: badTabs.has("content") || courseIds.length === 0,
+          },
+          { key: "pricing", label: "Pricing", attention: badTabs.has("pricing") },
+          { key: "funnel", label: "Funnel", attention: badTabs.has("funnel") || !hasSalesPage },
+          { key: "marketing", label: "Marketing", attention: badTabs.has("marketing") },
         ]}
       >
 

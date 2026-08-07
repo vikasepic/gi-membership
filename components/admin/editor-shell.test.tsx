@@ -155,8 +155,10 @@ describe("the offer form uses the same shell", () => {
   });
 
   it("saves from the top, like the product editor", () => {
+    // "Unsaved" moved into SaveStatus, which also says saving, saved, taking
+    // too long, and what is wrong — the word alone could only say one of those.
     expect(src).toContain("sticky top-0");
-    expect(src).toContain("Unsaved");
+    expect(src).toContain("<SaveStatus");
   });
 
   it("keeps Active where it can be seen", () => {

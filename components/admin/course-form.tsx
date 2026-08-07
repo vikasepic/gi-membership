@@ -1,5 +1,6 @@
 "use client";
 
+import { useSlowSave } from "@/components/admin/save-status";
 import { useActionState, useState } from "react";
 import { saveCourseAction, deleteCourseAction, type SaveState } from "@/app/admin/courses/actions";
 import { inputClass, Field, Section } from "@/components/admin/form-controls";
@@ -26,6 +27,7 @@ function invalid(cls: string, hasError: boolean) {
 
 export function CourseForm({ course }: { course?: Course }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveCourseAction, {});
+  const slow = useSlowSave(pending);
 
   const [title, setTitle] = useState(course?.title ?? "");
   const [slug, setSlug] = useState(course?.slug ?? "");
@@ -139,6 +141,11 @@ export function CourseForm({ course }: { course?: Course }) {
         >
           {pending ? "Saving…" : course ? "Save course" : "Create course"}
         </button>
+      {slow && (
+        <p className="text-xs text-primary" role="status">
+          Still going. It may already have worked — reload to check.
+        </p>
+      )}
         {course && (
           <button
             type="submit"

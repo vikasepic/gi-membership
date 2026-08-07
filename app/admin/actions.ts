@@ -13,7 +13,7 @@ import { validateUpload, uploadProductCover, pickedFile } from "@/lib/media";
 
 // Errors are keyed by field so the form can show each one next to its own input
 // and never reload. `_form` carries anything not tied to a single field.
-export type SaveState = { errors?: Record<string, string> };
+export type SaveState = { errors?: Record<string, string>; saved?: boolean };
 
 export async function saveProduct(_prev: SaveState, formData: FormData): Promise<SaveState> {
   await requireAdmin();
@@ -57,7 +57,14 @@ export async function saveProduct(_prev: SaveState, formData: FormData): Promise
 
   revalidatePath("/");
   revalidatePath("/admin");
-  redirect(`/admin/products/${productId}`);
+
+  // Only a new product goes anywhere. Redirecting an update to the page it is
+  // already on re-renders everything to arrive where it started, and leaves the
+  // button saying "Saving…" for the length of it — which is the difference
+  // between a save that worked and a save that looks broken.
+  if (!id) redirect(`/admin/products/${productId}`);
+  revalidatePath(`/admin/products/${productId}`);
+  return { saved: true };
 }
 
 const MAX_ASSET_BYTES = 100 * 1024 * 1024; // 100MB

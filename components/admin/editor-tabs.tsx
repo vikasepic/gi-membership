@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 /**
  * Tabs inside a form.
@@ -25,11 +25,23 @@ export type EditorTab = {
 export function EditorTabs({
   tabs,
   children,
+  /**
+   * Move to this tab when it changes.
+   *
+   * A validation message rendered inside a hidden panel is a message nobody
+   * reads: press Save on Basics with no price and the explanation appears on
+   * Pricing. The form says where to go and the tabs go there.
+   */
+  showTab,
 }: {
   tabs: EditorTab[];
   children: React.ReactNode;
+  showTab?: string | null;
 }) {
   const [active, setActive] = useState(tabs[0]?.key ?? "");
+  useEffect(() => {
+    if (showTab) setActive(showTab);
+  }, [showTab]);
   return (
     <TabCtx.Provider value={{ active, setActive }}>
       <div className="flex gap-1 overflow-x-auto border-b border-border" role="tablist">

@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { saveOffer, removeOffer, type SaveState } from "@/app/admin/offers/actions";
 import { inputClass as input, Field, Section } from "@/components/admin/form-controls";
 import { EditorTabs, TabPanel } from "@/components/admin/editor-tabs";
 import { ConfirmSubmit } from "@/components/admin/confirm-submit";
+import { SaveStatus, useJustSaved, useSlowSave } from "@/components/admin/save-status";
+import { OFFER_FIELD_TABS, summarise, tabToShow, tabsWithErrors } from "@/lib/save-feedback";
 import type { Offer } from "@/lib/types";
 import type { ProductOption, AppOption, OfferOption } from "@/lib/admin";
 import { money } from "@/lib/money";
@@ -34,9 +36,69 @@ export function OfferForm({
   const hasTrial = Number(trialDays) > 0;
   const [dirty, setDirty] = useState(false);
   const [active, setActive] = useState(offer ? offer.active : true);
+  const [clientErr, setClientErr] = useState<Record<string, string>>({});
+  const [attempt, setAttempt] = useState(0);
+
+  // Every required field, checked here rather than by the browser.
+  //
+  // The browser refuses to submit a form holding an invalid control it cannot
+  // focus, and reports that only to the console. With the fields spread over
+  // five tabs, an empty Name on a tab you are not looking at made the Save
+  // button do nothing at all — no message, no pending, no clue. Checking it
+  // ourselves is what lets the form say which field and walk you to it.
+  function check(form: HTMLFormElement): Record<string, string> {
+    const errs: Record<string, string> = {};
+    for (const el of form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+      "[required]",
+    )) {
+      if (!el.name) continue;
+      if (!String(el.value ?? "").trim()) errs[el.name] = "Required";
+    }
+    return errs;
+  }
+
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    // Delete has its own action and must not be blocked by save-validation.
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLElement | null;
+    if (submitter?.dataset.action === "delete") return;
+
+    const errs = check(e.currentTarget);
+    if (Object.keys(errs).length > 0) {
+      e.preventDefault();
+      setClientErr(errs);
+      setAttempt((n) => n + 1);
+    } else {
+      setClientErr({});
+    }
+  }
+
+  const allErrors = state.error ? { ...clientErr, _form: state.error } : clientErr;
+  const problem = summarise(allErrors);
+  const badTabs = tabsWithErrors(allErrors, OFFER_FIELD_TABS, "basics");
+  const showTab = useMemo(
+    () => tabToShow(clientErr, OFFER_FIELD_TABS, "", "basics"),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [attempt],
+  );
+  const slow = useSlowSave(pending);
+  const justSaved = useJustSaved(state.saved);
+  useEffect(() => {
+    if (state.saved) {
+      setDirty(false);
+      setClientErr({});
+    }
+  }, [state.saved]);
 
   return (
-    <form action={action} onInput={() => setDirty(true)} className="flex flex-col gap-5">
+    /* noValidate: see check() — the browser's own validation cannot report a
+       problem on a hidden tab, so it blocks the submit and says nothing. */
+    <form
+      action={action}
+      onSubmit={onSubmit}
+      onInput={() => setDirty(true)}
+      className="flex flex-col gap-5"
+      noValidate
+    >
       {offer && <input type="hidden" name="id" value={offer.id} />}
 
       {/* The same bar the product editor carries, for the same reason: Save was
@@ -54,7 +116,13 @@ export function OfferForm({
           <span className="text-muted">— available to attach</span>
         </label>
         <span className="ml-auto flex items-center gap-3">
-          {dirty && <span className="text-xs text-primary">Unsaved</span>}
+          <SaveStatus
+            pending={pending}
+            slow={slow}
+            justSaved={justSaved}
+            problem={problem}
+            dirty={dirty}
+          />
           <button
             type="submit"
             disabled={pending}
@@ -66,12 +134,13 @@ export function OfferForm({
       </div>
 
       <EditorTabs
+        showTab={showTab}
         tabs={[
-          { key: "basics", label: "Basics" },
-          { key: "grants", label: "Grants" },
-          { key: "pricing", label: "Pricing" },
-          { key: "copy", label: "Copy & pages" },
-          { key: "marketing", label: "Marketing" },
+          { key: "basics", label: "Basics", attention: badTabs.has("basics") },
+          { key: "grants", label: "Grants", attention: badTabs.has("grants") },
+          { key: "pricing", label: "Pricing", attention: badTabs.has("pricing") },
+          { key: "copy", label: "Copy & pages", attention: badTabs.has("copy") },
+          { key: "marketing", label: "Marketing", attention: badTabs.has("marketing") },
         ]}
       >
 
