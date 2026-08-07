@@ -20,12 +20,15 @@ export function OfferForm({
   products,
   apps,
   offers = [],
+  defaultCurrency = "usd",
 }: {
   offer?: Offer;
   products: ProductOption[];
   apps: AppOption[];
   /** Other offers, for this page's second price. */
   offers?: OfferOption[];
+  /** The store's currency, so a new offer starts in the one it actually sells in. */
+  defaultCurrency?: string;
 }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveOffer, {});
   const sections = sectionsToForm(offer?.otoSections as never);
@@ -237,7 +240,7 @@ export function OfferForm({
           <input name="compareAt" type="number" min="0" step="1" defaultValue={offer?.compareAtCents ? offer.compareAtCents / 100 : ""} className={input} />
         </Field>
         <Field label="Currency">
-          <input name="currency" defaultValue={offer?.currency ?? "usd"} className={input} />
+          <input name="currency" defaultValue={offer?.currency ?? defaultCurrency} className={input} />
         </Field>
       </div>
       </Section>

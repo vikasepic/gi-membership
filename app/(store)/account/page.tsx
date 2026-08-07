@@ -7,6 +7,7 @@ import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";
 import { YourDetails } from "@/components/account/your-details";
 import { getProfile } from "@/lib/profile";
+import { getLegal } from "@/lib/legal";
 
 export const metadata = NOINDEX;
 
@@ -39,10 +40,11 @@ export default async function AccountPage({
     );
   }
 
-  const [purchases, invoices, profile] = await Promise.all([
+  const [purchases, invoices, profile, legal] = await Promise.all([
     purchaseDocsForUser(user.id),
     subscriptionInvoicesForUser(user.id),
     getProfile(user.id),
+    getLegal(),
   ]);
 
   return (
@@ -51,6 +53,7 @@ export default async function AccountPage({
       <YourDetails
         email={profile?.email ?? user.email ?? ""}
         fullName={profile?.fullName ?? ""}
+        supportEmail={legal.contactEmail}
       />
       <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
         <span className="kicker text-muted">Appearance</span>

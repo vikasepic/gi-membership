@@ -222,18 +222,13 @@ function LegalFields({ s, errors }: FieldsProps) {
           <input name="vatNumber" defaultValue={s.vatNumber} className={input} />
         </Field>
       </div>
-      <div className={row}>
-        <Field label="Support email" error={errors.contactEmail}>
-          <input name="contactEmail" type="email" defaultValue={s.contactEmail} className={input} />
-        </Field>
-        <Field
-          label="Privacy email"
-          hint="a separate address, on purpose"
-          error={errors.privacyEmail}
-        >
-          <input name="privacyEmail" type="email" defaultValue={s.privacyEmail} className={input} />
-        </Field>
-      </div>
+      <Field
+        label="Privacy email"
+        hint="where data requests go — a separate inbox from support, on purpose"
+        error={errors.privacyEmail}
+      >
+        <input name="privacyEmail" type="email" defaultValue={s.privacyEmail} className={input} />
+      </Field>
       <Field
         label="Policies last updated"
         hint="shown at the top of every policy page"
@@ -310,8 +305,12 @@ function CommerceFields({ s, errors }: FieldsProps) {
         <Field label="Currency" hint="three-letter ISO code" error={errors.currency}>
           <input name="currency" defaultValue={s.currency} className={input} />
         </Field>
-        <Field label="Support email" hint="shown to buyers" error={errors.supportEmail}>
-          <input name="supportEmail" type="email" defaultValue={s.supportEmail} className={input} />
+        <Field
+          label="Support email"
+          hint="on the policy pages and every refund reply"
+          error={errors.contactEmail}
+        >
+          <input name="contactEmail" type="email" defaultValue={s.contactEmail} className={input} />
         </Field>
       </div>
       <Field
@@ -376,9 +375,6 @@ function SeoFields({ s, errors }: FieldsProps) {
 function AdvancedFields({ s, errors }: FieldsProps) {
   return (
     <>
-      <Field label="Timezone" hint="used when a date is shown as the store's own" error={errors.timezone}>
-        <input name="timezone" defaultValue={s.timezone} className={input} />
-      </Field>
       <Field
         label="Site-wide CSS"
         hint="applied to every store page, after the theme"

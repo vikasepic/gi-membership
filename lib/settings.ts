@@ -41,7 +41,7 @@ export const getSettings = cache(async (): Promise<Settings> => {
     .single();
   if (error || !data) throw new Error(`getSettings: ${error?.message ?? "no store row"}`);
 
-  const stored = (data.settings ?? {}) as Record<string, unknown>;
+  const stored = migrateLegacyKeys((data.settings ?? {}) as Record<string, unknown>);
   const parsed = SETTINGS_SCHEMA.safeParse(stored);
   if (parsed.success) return { ...parsed.data, name: data.name as string };
 
@@ -54,6 +54,44 @@ export const getSettings = cache(async (): Promise<Settings> => {
   }
   return { ...(out as z.infer<typeof SETTINGS_SCHEMA>), name: data.name as string };
 });
+/**
+ * Keys the previous settings writer used, mapped to the ones in use now.
+ *
+ * That writer stored snake_case `support_email`; the schema reads
+ * `contactEmail`. Without this the address is still in the blob and simply
+ * stops being displayed — which looks exactly like nobody ever set one, and
+ * invites setting it again in a second field.
+ *
+ * Read-side only. The value moves for real the next time Commerce is saved.
+ */
+function migrateLegacyKeys(stored: Record<string, unknown>): Record<string, unknown> {
+  const legacy = stored.support_email;
+  if (typeof legacy !== "string" || !legacy.trim()) return stored;
+  if (typeof stored.contactEmail === "string" && stored.contactEmail.trim()) return stored;
+  return { ...stored, contactEmail: legacy };
+}
+
+/**
+ * Settings, or the defaults, but never an exception.
+ *
+ * For the storefront layout, which reads these on every public page. A store
+ * whose settings row cannot be read should lose its logo and its brand colour,
+ * not its shop — before this existed, one failed read would have turned every
+ * page into a 500, including the checkout.
+ *
+ * The admin uses `getSettings` directly: there, a read that is quietly falling
+ * back to defaults is the last thing you want, because you are about to save
+ * over the top of what it shows you.
+ */
+export async function getSettingsOrDefaults(): Promise<Settings> {
+  try {
+    return await getSettings();
+  } catch (e) {
+    console.error("[settings] falling back to defaults:", e);
+    return { ...SETTINGS_DEFAULTS, name: "Greater Inside" };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Writing
 // ---------------------------------------------------------------------------

@@ -18,7 +18,16 @@ import { useSlowSave, useJustSaved } from "@/components/admin/save-status";
  * every purchase, entitlement and CRM contact keyed to it. Showing it as an
  * input that silently does nothing would be worse than showing it plainly.
  */
-export function YourDetails({ email, fullName }: { email: string; fullName: string }) {
+export function YourDetails({
+  email,
+  fullName,
+  supportEmail,
+}: {
+  email: string;
+  fullName: string;
+  /** Where "ask us" actually goes. The store's own support address. */
+  supportEmail: string;
+}) {
   const [state, action] = useActionState<ProfileState, FormData>(saveMyName, {});
   const justSaved = useJustSaved(state.saved);
 
@@ -49,10 +58,15 @@ export function YourDetails({ email, fullName }: { email: string; fullName: stri
         <p className="text-xs text-muted">
           Your purchases and access are tied to this address. To change it,{" "}
           {/* A real person, because moving an account between addresses has to
-              be checked by someone — every entitlement follows it. */}
-          <Link href="/account?billing=none" className="text-primary hover:underline">
-            ask us
-          </Link>{" "}
+              be checked by someone — every entitlement follows it. This used to
+              link to /account?billing=none, which contacted nobody and set the
+              flag that makes Billing below say "nothing to manage yet". */}
+          <a
+            href={`mailto:${supportEmail}?subject=${encodeURIComponent("Change the email on my account")}&body=${encodeURIComponent(`My account email is ${email}. I would like to change it to:`)}`}
+            className="text-primary hover:underline"
+          >
+            email us
+          </a>{" "}
           and we will move everything across.
         </p>
       </div>

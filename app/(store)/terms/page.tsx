@@ -22,6 +22,17 @@ export default async function TermsPage() {
           that company. &ldquo;You&rdquo; means the person using the store. Contact:{" "}
           <a href={`mailto:${LEGAL.contactEmail}`}>{LEGAL.contactEmail}</a>.
         </p>
+        {/* Registration numbers, when the store has given them. Each one is
+            omitted rather than printed with an empty value — a terms page
+            stating "VAT number:" and nothing else reads as an error, and a
+            store with neither is not required to invent them. */}
+        {(LEGAL.companyNumber || LEGAL.vatNumber) && (
+          <p>
+            {LEGAL.companyNumber && `Company number ${LEGAL.companyNumber}`}
+            {LEGAL.companyNumber && LEGAL.vatNumber ? ". " : ""}
+            {LEGAL.vatNumber && `VAT number ${LEGAL.vatNumber}`}.
+          </p>
+        )}
       </Clause>
 
       <Clause heading="Your account">

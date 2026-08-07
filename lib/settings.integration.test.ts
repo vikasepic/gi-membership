@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from "vitest";
-import { getSettings, saveSettings } from "@/lib/settings";
+import { getSettings, getSettingsOrDefaults, saveSettings } from "@/lib/settings";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 
@@ -56,6 +56,40 @@ describe.skipIf(!canRun)("saving one group", () => {
     // The store still has its name: it is a column, not a settings key, so
     // emptying the blob must not blank it.
     expect(s.name.length).toBeGreaterThan(0);
+  });
+
+  it("carries the previous writer's support_email forward", async () => {
+    // The old writer stored snake_case. Without the read-side migration the
+    // address is still in the blob and simply stops being displayed, which
+    // looks exactly like nobody ever set one.
+    original ??= await snapshot();
+    const db = createServiceClient();
+    await db
+      .from("stores")
+      .update({ settings: { support_email: "help@greaterinside.com" } })
+      .eq("id", await getStoreId());
+
+    expect((await getSettings()).contactEmail).toBe("help@greaterinside.com");
+  });
+
+  it("does not let the legacy key beat a real one", async () => {
+    original ??= await snapshot();
+    const db = createServiceClient();
+    await db
+      .from("stores")
+      .update({ settings: { support_email: "old@x.test", contactEmail: "new@x.test" } })
+      .eq("id", await getStoreId());
+
+    expect((await getSettings()).contactEmail).toBe("new@x.test");
+  });
+
+  it("agrees with the tolerant reader while the row is healthy", async () => {
+    // getSettingsOrDefaults only differs when the read throws. If it ever
+    // diverged on a healthy row the storefront and the admin would disagree
+    // about the store's own settings, which is worse than either being wrong.
+    original ??= await snapshot();
+    const [strict, tolerant] = [await getSettings(), await getSettingsOrDefaults()];
+    expect(tolerant).toEqual(strict);
   });
 
   it("keeps the good fields when one stored value is nonsense", async () => {

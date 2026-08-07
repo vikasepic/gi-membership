@@ -49,6 +49,20 @@ export async function pushOwnershipStateToApps(ownershipIds: string[]): Promise<
       entitlementKey = (offer?.grant_entitlement_key as string) ?? null;
     }
 
+    // The customer id was hardcoded null here, which was harmless while this
+    // only ran one row at a time after a change the app had just been told
+    // about — but a bulk re-send would hand every entitlement a null, and an
+    // app that stores what it receives would wipe the id it already had. Read
+    // the real one instead; null now means "we genuinely have none".
+    const { data: order } = await db
+      .from("orders")
+      .select("stripe_customer_id")
+      .eq("user_id", row.user_id as string)
+      .not("stripe_customer_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     // Best-effort, exactly like the original provision call: an app being down
     // must never break a webhook or a refund.
     await notifyAppEntitlement({
@@ -57,7 +71,7 @@ export async function pushOwnershipStateToApps(ownershipIds: string[]): Promise<
       fullName: (user.username as string | null) ?? null,
       entitlementKey,
       status: row.status as OwnershipStatus,
-      stripeCustomerId: null,
+      stripeCustomerId: (order?.stripe_customer_id as string) ?? null,
       stripeSubscriptionId: (row.stripe_subscription_id as string) ?? null,
     });
   }

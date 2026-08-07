@@ -74,7 +74,6 @@ export const SETTINGS_SCHEMA = z.object({
 
   // ---- Commerce ----------------------------------------------------------
   currency: z.string().trim().toLowerCase().length(3, "Three-letter ISO code").default("usd"),
-  supportEmail: z.string().trim().max(160).default(""),
   /** Shown on the checkout. Blank means we promise nothing, which is honest. */
   replyTime: z.string().trim().max(80).default(""),
 
@@ -90,7 +89,6 @@ export const SETTINGS_SCHEMA = z.object({
   // ---- Advanced ----------------------------------------------------------
   customCss: z.string().max(20000).default(""),
   customJs: z.string().max(20000).default(""),
-  timezone: z.string().trim().max(60).default("UTC"),
 });
 
 export type Settings = z.infer<typeof SETTINGS_SCHEMA> & { name: string };
@@ -123,14 +121,13 @@ export const GROUP_FIELDS: Record<SettingsGroupKey, readonly (keyof Settings)[]>
     "governingLaw",
     "companyNumber",
     "vatNumber",
-    "contactEmail",
     "privacyEmail",
     "refundWindowDays",
     "policiesUpdated",
   ],
   identity: ["name", "tagline"],
   brand: ["primaryColor", "deepColor", "logoPath", "faviconPath"],
-  commerce: ["currency", "supportEmail", "replyTime"],
+  commerce: ["currency", "contactEmail", "replyTime"],
   seo: [
     "metaTitle",
     "metaDescription",
@@ -140,6 +137,6 @@ export const GROUP_FIELDS: Record<SettingsGroupKey, readonly (keyof Settings)[]>
     "socialX",
     "socialLinkedin",
   ],
-  advanced: ["customCss", "customJs", "timezone"],
+  advanced: ["customCss", "customJs"],
 };
 

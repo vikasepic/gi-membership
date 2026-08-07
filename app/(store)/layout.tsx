@@ -5,7 +5,7 @@ import { Analytics } from "@/components/analytics";
 import { publicAnalyticsIds } from "@/lib/env";
 import { ConsentBanner } from "@/components/consent-banner";
 import { StoreBrand } from "@/components/store-brand";
-import { getSettings } from "@/lib/settings";
+import { getSettingsOrDefaults } from "@/lib/settings";
 import { storeMetadata } from "@/lib/site-metadata";
 
 // Live store — never statically prerender (server data uses runtime-only env).
@@ -18,11 +18,11 @@ export const dynamic = "force-dynamic";
  * beneath it, not a replacement for it.
  */
 export async function generateMetadata(): Promise<Metadata> {
-  return storeMetadata(await getSettings());
+  return storeMetadata(await getSettingsOrDefaults());
 }
 
 export default async function StoreLayout({ children }: { children: React.ReactNode }) {
-  const settings = await getSettings();
+  const settings = await getSettingsOrDefaults();
   return (
     <>
       <StoreBrand settings={settings} />
