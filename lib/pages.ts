@@ -26,7 +26,7 @@ export async function getPageSections(owner: OwnerType, ownerId: string): Promis
   const db = createServiceClient();
   const { data, error } = await db
     .from("page_sections")
-    .select("section_key, position, enabled, style, accent, variant, content, background, css_id, css_class")
+    .select("section_key, position, enabled, style, accent, variant, content, background, css_id, css_class, updated_at")
     .eq("owner_type", owner)
     .eq("owner_id", ownerId)
     .order("position");
@@ -101,12 +101,29 @@ export function cssClasses(value: string | null | undefined): string | null {
  * than a label on a button. Writing the whole page as a blob would let a save
  * of section 4 silently discard an edit to section 9 made a moment earlier.
  */
+/** Thrown when the row moved under you. Carries who to blame and when. */
+export class StaleSectionError extends Error {
+  constructor(readonly savedAt: string) {
+    super("This section was changed by someone else while you had it open.");
+    this.name = "StaleSectionError";
+  }
+}
+
 export async function saveSection(
   owner: OwnerType,
   ownerId: string,
   sectionKey: string,
   input: SectionInput,
-): Promise<void> {
+  /**
+   * The `updated_at` this editor loaded.
+   *
+   * Supplied, the write refuses to land on a row that has moved since — which
+   * is the only thing that actually stops one person's work vanishing under
+   * another's. Absent, the write is unconditional, so callers that have no
+   * baseline to offer (seeding a page, a script) are unaffected.
+   */
+  baseUpdatedAt?: string | null,
+): Promise<string | null> {
   const def = sectionDef(sectionKey);
   if (!def) throw new Error(`unknown section: ${sectionKey}`);
 
@@ -115,8 +132,7 @@ export async function saveSection(
   const variant = def.variants?.some((v) => v.key === input.variant) ? input.variant : null;
 
   const db = createServiceClient();
-  const { error } = await db.from("page_sections").upsert(
-    {
+  const row = {
       store_id: await getStoreId(),
       owner_type: owner,
       owner_id: ownerId,
@@ -137,10 +153,65 @@ export async function saveSection(
       css_id: cssIdent(input.cssId),
       css_class: cssClasses(input.cssClass),
       updated_at: new Date().toISOString(),
-    },
-    { onConflict: "owner_type,owner_id,section_key" },
-  );
+  };
+
+  if (baseUpdatedAt) {
+    const landed = await updateIfUnchanged(owner, ownerId, def.key, baseUpdatedAt, row);
+    if (landed) return landed;
+    // Either the row moved under us, or there is no row yet. Only the first is
+    // a conflict — a section saved for the first time has nothing to lose.
+    const { data: current } = await db
+      .from("page_sections")
+      .select("updated_at")
+      .eq("owner_type", owner)
+      .eq("owner_id", ownerId)
+      .eq("section_key", def.key)
+      .maybeSingle();
+    if (current) throw new StaleSectionError(current.updated_at as string);
+  }
+
+  // Read the stamp back rather than trusting the one we sent: a BEFORE UPDATE
+  // trigger sets updated_at = now(), so the value that lands is the database's,
+  // not ours. Returning ours would hand the editor a baseline that never
+  // matches, and the next save would report a conflict with nobody.
+  const { data, error } = await db
+    .from("page_sections")
+    .upsert(row, { onConflict: "owner_type,owner_id,section_key" })
+    .select("updated_at")
+    .maybeSingle();
   if (error) throw new Error(`saveSection: ${error.message}`);
+  return (data?.updated_at as string) ?? null;
+}
+
+/**
+ * Write, but only onto the row we read.
+ *
+ * The check and the write are one statement on purpose. Reading the row,
+ * comparing in JavaScript and then writing leaves a window in which the other
+ * person's save lands between the two and is overwritten anyway — the same bug,
+ * made narrower rather than fixed. `eq("updated_at", …)` closes it: Postgres
+ * matches zero rows if anything moved, and zero rows is the answer.
+ *
+ * Returns the new stamp when it landed, or null when it did not.
+ */
+async function updateIfUnchanged(
+  owner: OwnerType,
+  ownerId: string,
+  sectionKey: string,
+  baseUpdatedAt: string,
+  row: Record<string, unknown>,
+): Promise<string | null> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("page_sections")
+    .update(row)
+    .eq("owner_type", owner)
+    .eq("owner_id", ownerId)
+    .eq("section_key", sectionKey)
+    .eq("updated_at", baseUpdatedAt)
+    .select("updated_at");
+  // The stamp the trigger wrote, which is the baseline for the next save.
+  return (data ?? []).length > 0 ? ((data![0].updated_at as string) ?? null) : null;
 }
 
 /**

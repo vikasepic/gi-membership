@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { saveSectionAction } from "@/app/admin/pages/actions";
+import { usePresence, PresenceNote } from "@/components/admin/presence";
 import { SectionBand, type PageMoney } from "@/components/page/sales-page";
 import {
   BAND_STYLES,
@@ -85,6 +86,10 @@ export function PageEditor({
       fd.append("cssId", row.cssId ?? "");
       fd.append("cssClass", row.cssClass ?? "");
       fd.append("content", JSON.stringify({ ...def?.defaults, ...(row.content as Draft) }));
+      // What this editor loaded. The write refuses a row that has moved since,
+      // so the second of two people on one section is told rather than
+      // silently winning.
+      fd.append("baseUpdatedAt", row.updatedAt ?? "");
       const res = await saveSectionAction({}, fd);
       if (res.error) {
         setSaveError(`${def?.title ?? row.sectionKey}: ${res.error}`);
@@ -92,6 +97,11 @@ export function PageEditor({
         return;
       }
       setDirty((d) => ({ ...d, [key]: false }));
+      // Move the baseline forward, or the next save compares against a stamp
+      // the database has already replaced and reports a conflict with nobody.
+      if (res.updatedAt) {
+        setRows((rs) => rs.map((r) => (r.sectionKey === key ? { ...r, updatedAt: res.updatedAt } : r)));
+      }
     }
     setSaving(false);
     setSavedAt(Date.now());
@@ -135,6 +145,14 @@ export function PageEditor({
   const openRow = rows.find((r) => r.sectionKey === openKey) ?? null;
   const openDef = openRow ? sectionDef(openRow.sectionKey) : null;
 
+  // Per section, not per page. Two people on different bands of the same page
+  // are not in each other's way, and a warning that fires when nothing is
+  // wrong is a warning everyone learns to scroll past.
+  const editors = usePresence(
+    "section",
+    openKey ? `${ownerType}:${ownerId}:${openKey}` : null,
+  );
+
   return (
     <div className="flex flex-col gap-4">
       {notBuyable && (
@@ -157,6 +175,7 @@ export function PageEditor({
         >
           {saving ? "Saving…" : dirtyKeys.length ? `Save ${dirtyKeys.length} change${dirtyKeys.length > 1 ? "s" : ""}` : "Saved"}
         </button>
+        <PresenceNote editors={editors} what={openDef ? `the ${openDef.title} section` : "this section"} />
         <span className="text-xs text-muted" aria-live="polite">
           {saveError
             ? saveError

@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import {
   GROUP_FIELDS,
   SETTINGS_SCHEMA,
+  getSettings,
   saveSettings,
   type SettingsGroupKey,
   type Settings,
@@ -17,6 +18,33 @@ export type SaveState = {
   /** Which group the result belongs to, so one panel's error cannot appear on another. */
   group?: SettingsGroupKey;
 };
+
+/** The values this form was rendered from, as the browser last saw them. */
+function parseBaseline(raw: FormDataEntryValue | null): Record<string, unknown> | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    // A baseline we cannot read is a baseline we cannot check against. Saving
+    // unguarded is the behaviour this replaced, not a new risk.
+    return null;
+  }
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  legalEntity: "the registered entity",
+  address: "the address",
+  governingLaw: "the governing law",
+  contactEmail: "the support email",
+  privacyEmail: "the privacy email",
+  refundWindowDays: "the refund window",
+  primaryColor: "the primary colour",
+  deepColor: "the deep colour",
+  name: "the store name",
+};
+
+const labelOf = (f: string | number | symbol) => FIELD_LABELS[String(f)] ?? String(f);
 
 /**
  * Save one group.
@@ -58,6 +86,26 @@ export async function saveSettingsGroup(
   }
 
   if (Object.keys(errors).length > 0) return { errors, group };
+
+  // Refuse to overwrite a value somebody else changed while this form was
+  // open. Only THIS group's fields are compared: groups merge, so two people
+  // saving Legal and Brand at the same moment is not a conflict and must not
+  // be reported as one.
+  const baseline = parseBaseline(formData.get("_baseline"));
+  if (baseline) {
+    const current = await getSettings() as unknown as Record<string, unknown>;
+    const moved = fields.filter(
+      (f) => f in baseline && String(current[f as string] ?? "") !== String(baseline[f as string] ?? ""),
+    );
+    if (moved.length > 0) {
+      return {
+        group,
+        errors: {
+          _form: `Someone else changed ${moved.map(labelOf).join(" and ")} while you had this open. Reload to see their version — saving now would replace it.`,
+        },
+      };
+    }
+  }
 
   try {
     await saveSettings(patch as Partial<Settings>);

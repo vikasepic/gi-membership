@@ -7,7 +7,8 @@ import { publicCoverUrl } from "@/lib/media-url";
 import { inputClass as input, Field } from "@/components/admin/form-controls";
 import { useSlowSave, useJustSaved } from "@/components/admin/save-status";
 import { saveSettingsGroup, type SaveState } from "@/app/admin/settings/actions";
-import { SETTINGS_GROUPS, type Settings, type SettingsGroupKey } from "@/lib/settings-schema";
+import { GROUP_FIELDS, SETTINGS_GROUPS, type Settings, type SettingsGroupKey } from "@/lib/settings-schema";
+import { usePresence, PresenceNote } from "@/components/admin/presence";
 
 /**
  * Site settings, in groups.
@@ -104,9 +105,24 @@ function GroupForm({
   const errors = state.group === group ? (state.errors ?? {}) : {};
   const justSaved = useJustSaved(state.group === group && state.saved);
 
+  // Per group, not per page: two people on Legal and Brand are not in each
+  // other's way, and warning them they are teaches everyone to ignore it.
+  const editors = usePresence("settings", group);
+
+  // What this form was rendered from. Sent back so the save can tell the
+  // difference between "you changed this" and "somebody else did".
+  const baseline = JSON.stringify(
+    Object.fromEntries(
+      (GROUP_FIELDS[group] ?? []).map((f) => [f, (settings as unknown as Record<string, unknown>)[f as string]]),
+    ),
+  );
+
   return (
     <form action={action} className="flex flex-col gap-5" noValidate>
       <input type="hidden" name="_group" value={group} />
+      <input type="hidden" name="_baseline" value={baseline} />
+
+      <PresenceNote editors={editors} what="these settings" className="w-fit" />
 
       {attention && group === "legal" && (
         <p className="rounded-r-lg border-l-2 border-primary bg-primary/5 px-3 py-2 text-xs text-primary">

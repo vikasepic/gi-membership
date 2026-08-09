@@ -2,13 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
-import { savePageSettings, saveSection, seedPage, type OwnerType } from "@/lib/pages";
+import { savePageSettings, saveSection, seedPage, StaleSectionError, type OwnerType } from "@/lib/pages";
 import { sectionDef } from "@/lib/page-sections";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
 import { priceProblems, priceProblemMessage } from "@/lib/page-price-truth";
 import { realPriceLabel } from "@/lib/page-money";
 
-export type SectionSaveState = { error?: string; savedKey?: string };
+export type SectionSaveState = {
+  error?: string;
+  savedKey?: string;
+  /** The stamp the write landed on, which is the baseline for the next save. */
+  updatedAt?: string | null;
+};
 
 /**
  * The band's background, off the form.
@@ -64,8 +69,9 @@ export async function saveSectionAction(
   );
   if (problem) return { error: problem };
 
+  let updatedAt: string | null = null;
   try {
-    await saveSection(owner, ownerId, sectionKey, {
+    updatedAt = await saveSection(owner, ownerId, sectionKey, {
       enabled: String(formData.get("enabled") ?? "true") === "true",
       style: String(formData.get("style") ?? ""),
       accent: String(formData.get("accent") ?? "").trim() || null,
@@ -75,15 +81,25 @@ export async function saveSectionAction(
       content: sanitizeSectionContent(content),
     // Empty means the band's preset alone.
     background: parseBackground(formData.get("background")),
-    });
+    },
+    // What the editor loaded. The write refuses to land on a row that has
+    // moved since, so two people on one section cannot silently overwrite
+    // each other — the second one is told.
+    String(formData.get("baseUpdatedAt") ?? "") || null,
+    );
   } catch (err) {
+    if (err instanceof StaleSectionError) {
+      return {
+        error: `${err.message} Open it again to see their version — saving now would replace it.`,
+      };
+    }
     return { error: err instanceof Error ? err.message : "Could not save." };
   }
 
   revalidatePath(`/admin/${owner === "offer" ? "offers" : "products"}/${ownerId}/page`);
   revalidatePath("/p", "layout");
   revalidatePath("/checkout/oto");
-  return { savedKey: sectionKey };
+  return { savedKey: sectionKey, updatedAt };
 }
 
 export async function enablePageAction(formData: FormData): Promise<void> {

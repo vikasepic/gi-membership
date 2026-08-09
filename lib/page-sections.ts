@@ -577,6 +577,14 @@ export type SectionRow = {
   background?: unknown;
   cssId?: string | null;
   cssClass?: string | null;
+  /**
+   * When this row was last written, as the editor last read it.
+   *
+   * Sent back on save so the write can refuse to land on a row somebody else
+   * has changed in the meantime. Absent for a section that has never been
+   * stored — there is nothing to lose on its first save.
+   */
+  updatedAt?: string | null;
 };
 
 export type SectionView = {
