@@ -61,7 +61,7 @@ import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/li
  * except to hand it on.
  */
 const CanvasDevice = createContext<Device>("desktop");
-import { backgroundCss, blockCssAt, columnCss, effectiveWidths, rowLayout, stacksAt } from "@/lib/block-style";
+import { backgroundCss, blockCssAt, columnCss, effectiveWidths, mobilePaddingNotice, rowLayout, stacksAt } from "@/lib/block-style";
 import { imageSrc } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
 
@@ -1060,6 +1060,11 @@ function ControlField({
 }) {
   if (isGroup(control)) return null;
   const value = readControl(block, control, device);
+  // Said where the number is, not in a console nobody opens.
+  const notice =
+    "key" in control && control.key === "padding" && device !== "mobile"
+      ? mobilePaddingNotice(block)
+      : null;
   // Only style controls have a wider device to inherit from; a heading's text
   // is the same words at every width.
   const at = deviceOf(control, device);
@@ -1110,6 +1115,7 @@ function ControlField({
         {field}
       </div>
       {control.hint && <p className="text-[0.66rem] leading-snug text-muted">{control.hint}</p>}
+      {notice && <p className="text-[0.66rem] leading-snug text-primary">{notice}</p>}
     </div>
   );
 

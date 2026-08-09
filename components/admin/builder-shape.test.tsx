@@ -46,7 +46,7 @@ describe("sections", () => {
 
 describe("which selects become buttons", () => {
   it("shows a short list as buttons", () => {
-    const align = controlsFor(newBlock("button")).style.find((c) => "key" in c && c.key === "align");
+    const align = controlsFor(newBlock("button")).style.find((c) => "key" in c && c.key === "blockAlign");
     expect(align && asSegment(align)).toBe(true);
   });
 

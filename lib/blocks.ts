@@ -86,8 +86,31 @@ export type Background = {
 export type BlockStyle = {
   margin: Dim;
   padding: Dim;
-  width: "fit" | "narrow" | "normal" | "wide" | "full";
-  align: "left" | "center" | "right";
+  /**
+   * How wide the block's box is allowed to be.
+   *
+   * `auto` fills whatever contains it, `fit` hugs the content, `custom` takes
+   * the number and unit below. The old preset scale (narrow/normal/wide/full)
+   * is gone: "wide" and "full" both rendered 100%, so there was no step between
+   * a reading measure and the whole page — which is exactly the gap people
+   * filled with side padding, and side padding is what breaks on a phone.
+   */
+  width: "auto" | "fit" | "custom";
+  /** The number beside the unit. Null until a custom width is set. */
+  maxWidthValue: number | null;
+  /**
+   * `ch` is not offered in the editor and exists only to read blocks saved
+   * under the old preset scale, which stored measures in it. Converting those
+   * to px on read would be a visible change on every page: `ch` scales with
+   * font size, so the same 62ch is a reading measure on a paragraph and no
+   * constraint at all on a 40px heading. They stay as they are until someone
+   * sets a new width, and then it is theirs to choose.
+   */
+  maxWidthUnit: "%" | "px" | "ch";
+  /** Where the words sit inside the box. */
+  textAlign: "left" | "center" | "right";
+  /** Where the box sits inside its container. Centre is `margin: 0 auto`. */
+  blockAlign: "left" | "center" | "right";
   size: number | null;
   lineHeight: number | null;
   letterSpacing: number | null;
@@ -207,8 +230,11 @@ export const emptyBackground = (): Background => ({
 export const baseStyle = (over: Partial<BlockStyle> = {}): BlockStyle => ({
   margin: dim(0, 0, 16, 0),
   padding: dim(0, 0, 0, 0),
-  width: "normal",
-  align: "left",
+  width: "auto",
+  maxWidthValue: null,
+  maxWidthUnit: "px",
+  textAlign: "left",
+  blockAlign: "left",
   size: null,
   lineHeight: null,
   letterSpacing: null,
@@ -291,12 +317,27 @@ function newId(): string {
   return `b_${g && "randomUUID" in g ? g.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * A new block of running text starts at a readable measure, centred.
+ *
+ * Not a preference — a paragraph set the full width of a section is the thing
+ * people were reaching for side padding to fix, and side padding is inherited
+ * by the phone and cannot shrink. Everything else fills its column, because a
+ * picture or a button has no measure to keep.
+ *
+ * 680px rather than a `ch` value: the unit picker offers % and px, and a
+ * default nobody can see the unit of is a default nobody can adjust.
+ */
+const TEXT_MEASURE: Partial<Record<BlockType, Partial<BlockStyle>>> = {
+  text: { width: "custom", maxWidthValue: 680, maxWidthUnit: "px", blockAlign: "center" },
+};
+
 export function newBlock(type: BlockType, over: Partial<Block> = {}): Block {
   const block: Block = {
     id: newId(),
     type,
     props: { ...DEFAULT_PROPS[type] },
-    style: baseStyle(type === "row" ? { width: "wide" } : {}),
+    style: baseStyle(TEXT_MEASURE[type] ?? {}),
     ...over,
   };
   if (type === "row" && !block.columns) {
@@ -397,6 +438,38 @@ export function normalizeBackground(v: unknown): Background {
   };
 }
 
+/**
+ * Width, from either the current fields or the preset scale they replaced.
+ *
+ * The presets were only ever numbers: narrow and normal were measures in `ch`,
+ * and wide and full were both 100% — identical output from two different words.
+ * Each maps to what it already rendered, so no stored page changes.
+ */
+function legacyWidth(
+  v: Record<string, unknown>,
+  d: BlockStyle,
+): Pick<BlockStyle, "width" | "maxWidthValue" | "maxWidthUnit"> {
+  const PRESETS: Record<string, Pick<BlockStyle, "width" | "maxWidthValue" | "maxWidthUnit">> = {
+    fit: { width: "fit", maxWidthValue: null, maxWidthUnit: "px" },
+    narrow: { width: "custom", maxWidthValue: 38, maxWidthUnit: "ch" },
+    normal: { width: "custom", maxWidthValue: 62, maxWidthUnit: "ch" },
+    wide: { width: "auto", maxWidthValue: null, maxWidthUnit: "px" },
+    full: { width: "auto", maxWidthValue: null, maxWidthUnit: "px" },
+  };
+  if (typeof v.width === "string" && v.width in PRESETS) return PRESETS[v.width];
+
+  const width = oneOf(v.width, ["auto", "fit", "custom"] as const, d.width);
+  const raw = v.maxWidthValue;
+  const value = typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? raw : null;
+  return {
+    width,
+    // A custom width with no number is just auto — better than a max-width of
+    // zero, which would collapse the block to nothing.
+    maxWidthValue: width === "custom" ? value : null,
+    maxWidthUnit: oneOf(v.maxWidthUnit, ["%", "px", "ch"] as const, d.maxWidthUnit),
+  };
+}
+
 function normalizeStyle(v: unknown): BlockStyle {
   const d = baseStyle();
   if (!isRecord(v)) return d;
@@ -404,8 +477,11 @@ function normalizeStyle(v: unknown): BlockStyle {
   return {
     margin: normalizeDim(v.margin, d.margin),
     padding: normalizeDim(v.padding, d.padding),
-    width: oneOf(v.width, ["fit", "narrow", "normal", "wide", "full"] as const, d.width),
-    align: oneOf(v.align, ["left", "center", "right"] as const, d.align),
+    ...legacyWidth(v, d),
+    // One control used to set both, so an old block carries the same value into
+    // each and renders exactly as it did.
+    textAlign: oneOf(v.textAlign ?? v.align, ["left", "center", "right"] as const, d.textAlign),
+    blockAlign: oneOf(v.blockAlign ?? v.align, ["left", "center", "right"] as const, d.blockAlign),
     size: nullableNum(v.size),
     lineHeight: nullableNum(v.lineHeight),
     letterSpacing: nullableNum(v.letterSpacing),

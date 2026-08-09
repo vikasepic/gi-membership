@@ -39,7 +39,8 @@ describe("align", () => {
   it("is offered on the button itself", () => {
     // Nobody looks under Advanced to centre a button.
     const keys = controlsFor(newBlock("button")).style.map((c) => ("key" in c ? c.key : ""));
-    expect(keys).toContain("align");
+    // A button is a box you place, not a paragraph you align.
+    expect(keys).toContain("blockAlign");
   });
 
   it("is hidden once the button fills the row", () => {
@@ -53,7 +54,7 @@ describe("align", () => {
   it("can move an ordinary button", () => {
     // Only reachable because the button is inline-block: a block-level box
     // ignores its parent's text-align entirely.
-    const out = render({ fullWidth: false }, { align: "center" });
+    const out = render({ fullWidth: false }, { blockAlign: "center" });
     expect(out).toContain("text-align:center");
     expect(out).toContain("display:inline-block");
   });

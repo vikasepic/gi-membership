@@ -153,7 +153,7 @@ describe("each section gets its own layout", () => {
 
   it("centres some bands and not others, so the page has a rhythm", () => {
     const align = (key: string) =>
-      walkBlocks(convert(key, { heading: "H", headline: "H" })).find((b) => b.type === "heading")!.style.align;
+      walkBlocks(convert(key, { heading: "H", headline: "H" })).find((b) => b.type === "heading")!.style.blockAlign;
     const centredKeys = ["problem", "benefits", "proof", "value"].map(align);
     const leftKeys = ["hero", "offer", "solution", "authority", "cta"].map(align);
     expect(new Set(centredKeys)).toEqual(new Set(["center"]));
@@ -248,7 +248,7 @@ describe("the shapes come across", () => {
     const cards = out.find((b) => b.type === "cards")!;
     expect(cards.props.columns).toBe(3);
     expect(cards.props.skin).toBe("tinted");
-    expect(cards.style.width).toBe("full");
+    expect(cards.style.width).toBe("auto");
     expect(cards.props.items).toHaveLength(3);
   });
 
@@ -471,7 +471,7 @@ describe("the authority band", () => {
     const out = convert("authority", { heading: "H", body: "B", imageUrl: "https://x.test/p.jpg" });
     const row = out.find((b) => b.type === "row")!;
     expect(row.columns![1][0].type).toBe("image");
-    expect(row.columns![0][0].style.width).toBe("full");
+    expect(row.columns![0][0].style.width).toBe("auto");
   });
 
   it("puts the logos in their own panel, with the label", () => {

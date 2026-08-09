@@ -158,16 +158,49 @@ describe("blockWrapperCss", () => {
     expect(css.padding).toBe("0px 0px 0px 0px");
   });
 
-  it("caps the measure unless the width is full", () => {
-    expect(blockWrapperCss(withStyle("text", { width: "narrow" }), paper).maxWidth).toBe("38ch");
-    expect(blockWrapperCss(withStyle("text", { width: "full" }), paper).maxWidth).toBeUndefined();
+  it("caps the measure at the width that was asked for", () => {
+    const px = withStyle("text", { width: "custom", maxWidthValue: 680, maxWidthUnit: "px" });
+    expect(blockWrapperCss(px, paper).maxWidth).toBe("680px");
+
+    const pct = withStyle("text", { width: "custom", maxWidthValue: 60, maxWidthUnit: "%" });
+    expect(blockWrapperCss(pct, paper).maxWidth).toBe("60%");
+
+    expect(blockWrapperCss(withStyle("text", { width: "auto" }), paper).maxWidth).toBeUndefined();
+    expect(blockWrapperCss(withStyle("text", { width: "fit" }), paper).maxWidth).toBe("fit-content");
   });
 
-  it("centres with auto side margins, which the shorthand would otherwise eat", () => {
-    const css = blockWrapperCss(withStyle("text", { align: "center", width: "narrow" }), paper);
+  it("treats a custom width with no number as no width at all", () => {
+    // A max-width of zero collapses the block to nothing, which looks like the
+    // block was deleted rather than mis-set.
+    const css = blockWrapperCss(withStyle("text", { width: "custom", maxWidthValue: null }), paper);
+    expect(css.maxWidth).toBeUndefined();
+  });
+
+  it("centres the BOX without centring the words", () => {
+    // The whole point of splitting the control. One switch used to do both, so
+    // asking for a centred column of text centred every line inside it too.
+    const css = blockWrapperCss(
+      withStyle("text", { blockAlign: "center", textAlign: "left", width: "custom", maxWidthValue: 680 }),
+      paper,
+    );
     expect(css.marginLeft).toBe("auto");
     expect(css.marginRight).toBe("auto");
+    expect(css.textAlign).toBe("left");
+  });
+
+  it("centres the words without moving the box", () => {
+    const css = blockWrapperCss(withStyle("text", { blockAlign: "left", textAlign: "center" }), paper);
     expect(css.textAlign).toBe("center");
+    expect(css.marginLeft).toBeUndefined();
+  });
+
+  it("pushes the box right with one auto margin", () => {
+    const css = blockWrapperCss(
+      withStyle("text", { blockAlign: "right", width: "custom", maxWidthValue: 400 }),
+      paper,
+    );
+    expect(css.marginLeft).toBe("auto");
+    expect(css.marginRight).toBeUndefined();
   });
 
   it("rounds the corner only when there is a background to round", () => {

@@ -34,7 +34,7 @@ describe("newBlock", () => {
       const b = newBlock(type);
       expect(b.type).toBe(type);
       expect(b.id).toMatch(/^b_/);
-      expect(b.style).toMatchObject({ width: expect.any(String), align: expect.any(String) });
+      expect(b.style).toMatchObject({ width: expect.any(String), blockAlign: expect.any(String) });
     }
   });
 

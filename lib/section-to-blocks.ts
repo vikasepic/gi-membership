@@ -32,15 +32,15 @@ function escapeHtml(s: string): string {
 
 /** Centred, which is how most bands on a sales page set their heading. */
 function centred<T extends Block>(b: T): T {
-  return { ...b, style: { ...b.style, align: "center" as const } };
+  return { ...b, style: { ...b.style, textAlign: "center" as const, blockAlign: "center" as const } };
 }
-const wide = <T extends Block>(b: T): T => ({ ...b, style: { ...b.style, width: "full" as const } });
+const wide = <T extends Block>(b: T): T => ({ ...b, style: { ...b.style, width: "auto" as const, maxWidthValue: null } });
 
 /** Two columns of unequal weight — copy beside a card. */
 function split(left: Block[], right: Block[], structure: RowStructure): Block | null {
   if (left.length === 0 && right.length === 0) return null;
   if (left.length === 0 || right.length === 0) return null;
-  const row = block("row", { widths: widthsOf(structure), verticalAlign: "flex-start" }, { width: "full" });
+  const row = block("row", { widths: widthsOf(structure), verticalAlign: "flex-start" }, { width: "auto", maxWidthValue: null });
   row.columns = [left, right];
   return row;
 }
@@ -63,7 +63,7 @@ function cardGrid(
     block(
       "cards",
       { items, columns: evenColumns(items.length), numbered, skin, numberStyle },
-      { width: "full" },
+      { width: "auto", maxWidthValue: null },
     ),
   ];
 }
@@ -111,7 +111,7 @@ function priceCard(c: Record<string, unknown>, t: (k: string) => string): Block 
 function boxed(inner: Block[]): Block | null {
   if (inner.length === 0) return null;
   const row = block("row", { widths: widthsOf("1"), gap: 0 }, {
-    width: "full",
+    width: "auto", maxWidthValue: null,
     padding: { t: 24, r: 24, b: 24, l: 24, u: "px", link: true },
     radius: 18,
   });
@@ -151,7 +151,7 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
       const stats = listOf(c.stats, ["value", "label"]);
       if (stats.length) left.push(wide(block("stats", { items: stats, layout: "strip" })));
       // A chip that hugs its text, not a full-width line.
-      if (t("audience")) left.push({ ...paragraph(t("audience")), style: { ...paragraph("").style, width: "fit" as const } });
+      if (t("audience")) left.push({ ...paragraph(t("audience")), style: { ...paragraph("").style, width: "fit" as const, maxWidthValue: null } });
 
       // The deliverables become the card beside the copy — numbered, boxed,
       // one column. That card is the first thing the model page shows you.
@@ -186,7 +186,7 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
             block(
               "pricing",
               { items: stack, highlightLast: false, totalLabel: t("totalLabel"), totalAmount: t("totalAmount") },
-              { width: "full" },
+              { width: "auto", maxWidthValue: null },
             ),
           ]),
         );
@@ -205,7 +205,7 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
       // Their own words, quoted — the quote marks were added by the renderer
       // before, so they are made part of the text here rather than lost.
       if (chips.length) {
-        push(block("iconlist", { items: chips.map((x) => ({ text: `“${x.text}”` })), layout: "inline" }, { width: "full" }));
+        push(block("iconlist", { items: chips.map((x) => ({ text: `“${x.text}”` })), layout: "inline" }, { width: "auto", maxWidthValue: null }));
       }
       // One narrower column to close the section — the story they tell
       // themselves in italics, then the reframe in bold. The two-column version
@@ -213,8 +213,8 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
       // right, which is the opposite of the point.
       const feels = t("feels");
       const truth = t("truth");
-      if (feels) push(centred(block("text", { html: `<p><em>${escapeHtml(feels)}</em></p>` }, { width: "wide" })));
-      if (truth) push(centred(block("text", { html: `<p><strong>${escapeHtml(truth)}</strong></p>` }, { width: "wide" })));
+      if (feels) push(centred(block("text", { html: `<p><em>${escapeHtml(feels)}</em></p>` }, { width: "auto", maxWidthValue: null })));
+      if (truth) push(centred(block("text", { html: `<p><strong>${escapeHtml(truth)}</strong></p>` }, { width: "auto", maxWidthValue: null })));
       break;
     }
 
@@ -232,7 +232,7 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
       out.push(...cardGrid(listOf(c.steps, ["title", "body"]), true, "boxed", "circle"));
       // Left, like the heading and the cards above it. Centred on its own it
       // read as a stray caption rather than the conclusion of the section.
-      if (t("result")) push(block("text", { html: `<p><strong>${escapeHtml(t("result"))}</strong></p>` }, { width: "wide" }));
+      if (t("result")) push(block("text", { html: `<p><strong>${escapeHtml(t("result"))}</strong></p>` }, { width: "auto", maxWidthValue: null }));
       break;
     }
 
@@ -270,14 +270,14 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
       if (pair) push(pair);
       // With no portrait the copy would run the whole width of the band, which
       // is far too long a line for a headline this size. Kept to a measure.
-      else out.push(...copy.map((b) => (b.type === "row" ? b : { ...b, style: { ...b.style, width: "normal" as const } })));
+      else out.push(...copy.map((b) => (b.type === "row" ? b : { ...b, style: { ...b.style, width: "custom" as const, maxWidthValue: 62, maxWidthUnit: "ch" as const } })));
       break;
     }
 
     case "proof": {
       if (t("heading")) push(centred(wide(heading(t("heading")))));
       const quotes = listOf(c.quotes, ["quote", "name", "role"]);
-      if (quotes.length) push(block("slides", { items: quotes, perView: Math.min(quotes.length, 2) }, { width: "full" }));
+      if (quotes.length) push(block("slides", { items: quotes, perView: Math.min(quotes.length, 2) }, { width: "auto", maxWidthValue: null }));
       const results = listOf(c.results, ["title", "before", "after", "detail"]);
       if (results.length) {
         out.push(...cardGrid(
@@ -300,15 +300,15 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
       // definition asks for both and we only had the second.
       const worth = listOf(c.worth, ["label", "amount"]);
       if (worth.length) {
-        push(block("pricing", { items: worth, highlightLast: false, totalLabel: "", totalAmount: "" }, { width: "full" }));
+        push(block("pricing", { items: worth, highlightLast: false, totalLabel: "", totalAmount: "" }, { width: "auto", maxWidthValue: null }));
       }
       const options = listOf(c.options, ["label", "amount", "note"]);
-      if (options.length) push(block("pricing", { items: options, highlightLast: true }, { width: "full" }));
+      if (options.length) push(block("pricing", { items: options, highlightLast: true }, { width: "auto", maxWidthValue: null }));
       // The checkout box: what is included, the note under the price and the
       // guarantee, in one bordered panel rather than three loose paragraphs.
       const checklist = listOf(c.checklist, ["text"]);
       const boxInner: Block[] = [];
-      if (checklist.length) boxInner.push(block("iconlist", { items: checklist }, { width: "wide" }));
+      if (checklist.length) boxInner.push(block("iconlist", { items: checklist }, { width: "auto", maxWidthValue: null }));
       if (t("priceNote")) boxInner.push(paragraph(t("priceNote")));
       // The checklist on the left, the price card on the right — the way the
       // reference page reveals a price. The card's own price is left blank so
@@ -343,14 +343,14 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
     }
 
     case "footer": {
-      if (t("logoUrl")) push(centred(block("image", { url: t("logoUrl"), alt: "" }, { width: "narrow" })));
+      if (t("logoUrl")) push(centred(block("image", { url: t("logoUrl"), alt: "" }, { width: "custom", maxWidthValue: 38, maxWidthUnit: "ch" })));
       if (t("note")) push(centred(paragraph(t("note"))));
       const links = listOf(c.links, ["label", "url"]);
       if (links.length) {
         const html = links
           .map((l) => `<a href="${escapeHtml(l.url)}">${escapeHtml(l.label)}</a>`)
           .join(" &middot; ");
-        push(centred(block("text", { html: `<p>${html}</p>` }, { width: "wide" })));
+        push(centred(block("text", { html: `<p>${html}</p>` }, { width: "auto", maxWidthValue: null })));
       }
       break;
     }

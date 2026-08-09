@@ -34,9 +34,9 @@ describe("what a device inherits", () => {
   it("is the tablet value on the phone, not the desktop one", () => {
     // The point of layering mobile on tablet: a phone is also a narrow screen,
     // so an override set for narrow screens has to reach it.
-    let b = setStyleAt(heading(), "desktop", { align: "left" });
-    b = setStyleAt(b, "tablet", { align: "center" });
-    expect(styleFor(b, "mobile").align).toBe("center");
+    let b = setStyleAt(heading(), "desktop", { textAlign: "left" });
+    b = setStyleAt(b, "tablet", { textAlign: "center" });
+    expect(styleFor(b, "mobile").textAlign).toBe("center");
   });
 
   it("follows a later desktop edit, because the override is sparse", () => {
@@ -78,11 +78,11 @@ describe("what survives a round trip through the database", () => {
 
   it("keeps the overrides", () => {
     let b = setStyleAt(heading(), "desktop", { size: 48 });
-    b = setStyleAt(b, "mobile", { size: 28, align: "center" });
+    b = setStyleAt(b, "mobile", { size: 28, textAlign: "center" });
     const back = trip(b);
     expect(styleFor(back, "mobile").size).toBe(28);
-    expect(styleFor(back, "mobile").align).toBe("center");
-    expect(styleFor(back, "desktop").align).toBe("left");
+    expect(styleFor(back, "mobile").textAlign).toBe("center");
+    expect(styleFor(back, "desktop").textAlign).toBe("left");
   });
 
   it("stays sparse — a round trip must not freeze the desktop values in", () => {
@@ -92,9 +92,9 @@ describe("what survives a round trip through the database", () => {
   });
 
   it("drops a value the desktop style would have rejected", () => {
-    const raw = [{ ...heading(), responsive: { tablet: { align: "diagonal" }, mobile: {} } }];
+    const raw = [{ ...heading(), responsive: { tablet: { textAlign: "diagonal" }, mobile: {} } }];
     // Not "align: diagonal" and not a crash: the same validation desktop gets.
-    expect(styleFor(normalizeBlocks(JSON.parse(JSON.stringify(raw)))[0], "tablet").align).toBe("left");
+    expect(styleFor(normalizeBlocks(JSON.parse(JSON.stringify(raw)))[0], "tablet").textAlign).toBe("left");
   });
 
   it("stores nothing at all for a block nobody made responsive", () => {
@@ -221,7 +221,7 @@ describe("blocks stored before a field existed", () => {
       id: "b_old1",
       type: "heading",
       props: { text: "Hi", tag: "h2" },
-      style: { margin: { t: 0, r: 0, b: 16, l: 0, u: "px", link: false }, align: "left" },
+      style: { margin: { t: 0, r: 0, b: 16, l: 0, u: "px", link: false }, textAlign: "left" },
     };
     const view = {
       def: { key: "hero", label: "Hero" },

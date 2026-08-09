@@ -158,13 +158,12 @@ export function blockColors(block: Block, theme: BandTheme, at: BlockStyle = blo
   }
 }
 
-export const BLOCK_WIDTH: Record<BlockStyle["width"], string> = {
-  fit: "fit-content",
-  narrow: "38ch",
-  normal: "62ch",
-  wide: "100%",
-  full: "100%",
-};
+/** The max-width a block asks for, or null to fill its container. */
+export function maxWidthCss(s: BlockStyle): string | null {
+  if (s.width === "fit") return "fit-content";
+  if (s.width === "custom" && s.maxWidthValue) return `${s.maxWidthValue}${s.maxWidthUnit}`;
+  return null;
+}
 
 /** Typography, with every unset value left out so the cascade supplies it. */
 export function typographyCss(s: BlockStyle): CSSProperties {
@@ -186,17 +185,25 @@ function wrapperCssFrom(block: Block, s: BlockStyle, theme: BandTheme): CSSPrope
   const css: CSSProperties = {
     margin: dimCss(s.margin),
     padding: dimCss(s.padding),
-    textAlign: s.align,
+    // Where the words sit. Nothing to do with where the box sits — one control
+    // used to set both, so asking for a centred column of text centred every
+    // line inside it as well, which is the thing nobody wants.
+    textAlign: s.textAlign,
     ...backgroundCss(s.background, theme),
   };
-  if (s.width !== "full") {
-    css.maxWidth = BLOCK_WIDTH[s.width];
-    // A centred block with a max width needs auto margins, but the stored
-    // margin already occupies the shorthand — so the sides are reapplied.
-    if (s.align === "center") {
-      css.marginLeft = "auto";
-      css.marginRight = "auto";
-    }
+
+  const max = maxWidthCss(s);
+  if (max) css.maxWidth = max;
+
+  // Where the box sits. Auto margins only mean anything against a max width —
+  // a block already filling its container has nowhere to move — so they are
+  // applied regardless and simply do nothing in that case. The stored margin
+  // occupies the shorthand above, so the sides are reapplied here.
+  if (s.blockAlign === "center") {
+    css.marginLeft = "auto";
+    css.marginRight = "auto";
+  } else if (s.blockAlign === "right") {
+    css.marginLeft = "auto";
   }
   if (s.background.type !== "none" && s.radius) css.borderRadius = `${s.radius}px`;
   return css;
@@ -449,11 +456,60 @@ export function blockRules(block: Block, theme: BandTheme): string {
     }
   }
 
+  const capped = mobilePaddingCap(block, sel);
+  if (capped) out.push(capped);
+
   if (block.type === "row") out.push(...rowRules(block, sel));
 
   const custom = customCss(block.style.customCss, sel);
   if (custom) out.push(custom);
   return out.join("");
+}
+
+/**
+ * Side padding that would eat a phone.
+ *
+ * Padding cascades down and cannot shrink: 160px of side padding set on a
+ * laptop is still 160px on a 390px handset, which leaves 70px of column for
+ * the text. It was the standard way to pull a block toward the middle, because
+ * until the width control could set a measure there was no other way to do it.
+ *
+ * The cap only applies where the phone INHERITED the value. Setting padding at
+ * mobile deliberately is a decision, and a decision the editor quietly
+ * overrules is worse than the problem.
+ *
+ * `min()` rather than a smaller fixed number: it keeps the chosen padding
+ * wherever it fits and only gives way on the screens where it does not.
+ */
+export const MOBILE_SIDE_PADDING_MAX = 24;
+
+export function mobilePaddingCap(block: Block, sel: string): string {
+  const p = styleFor(block, "mobile").padding;
+  // A percentage or em already scales with something; only a fixed length is
+  // stuck at its desktop size.
+  if (p.u !== "px") return "";
+  if (hasOverride(block, "mobile", "padding")) return "";
+
+  const decls: string[] = [];
+  if (p.l > MOBILE_SIDE_PADDING_MAX) decls.push(`padding-left:min(${p.l}px,6vw)`);
+  if (p.r > MOBILE_SIDE_PADDING_MAX) decls.push(`padding-right:min(${p.r}px,6vw)`);
+  if (decls.length === 0) return "";
+  return `@media (max-width:${DEVICE_MAX.mobile}px){${sel}{${decls.join(";")}}}`;
+}
+
+/**
+ * What to tell the person who set that padding.
+ *
+ * The cap keeps the page usable, but a phone that quietly ignores a number you
+ * typed is a phone you stop trusting. This says what happened and where to
+ * change it, in the panel where the number lives.
+ */
+export function mobilePaddingNotice(block: Block): string | null {
+  const p = styleFor(block, "mobile").padding;
+  if (p.u !== "px" || hasOverride(block, "mobile", "padding")) return null;
+  const worst = Math.max(p.l, p.r);
+  if (worst <= MOBILE_SIDE_PADDING_MAX) return null;
+  return `${worst}px of side padding would leave almost no room on a phone, so it is capped there. Set a padding on mobile to choose your own.`;
 }
 
 /**

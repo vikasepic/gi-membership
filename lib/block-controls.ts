@@ -179,12 +179,12 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
     ],
     style: [
       group("Layout"),
-      // The same style.align the Advanced tab writes. Duplicated on purpose:
-      // nobody looks under Advanced to centre a button, and a control nobody
-      // finds is a control that does not exist.
+      // The same style.blockAlign the Advanced tab writes. Duplicated on
+      // purpose: nobody looks under Advanced to centre a button, and a control
+      // nobody finds is a control that does not exist.
       style({
         kind: "select",
-        key: "align",
+        key: "blockAlign",
         label: "Align",
         options: [["left", "Left"], ["center", "Centre"], ["right", "Right"]],
         when: (b) => !b.props.fullWidth,
@@ -455,8 +455,44 @@ export const ADVANCED_CONTROLS: Control[] = [
   group("Layout"),
   style({ kind: "dim", key: "margin", label: "Margin" }),
   style({ kind: "dim", key: "padding", label: "Padding" }),
-  style({ kind: "select", key: "width", label: "Width", options: [["fit", "Hug content"], ["narrow", "Narrow"], ["normal", "Normal"], ["wide", "Wide"], ["full", "Full"]] }),
-  style({ kind: "select", key: "align", label: "Align", options: [["left", "Left"], ["center", "Centre"], ["right", "Right"]] }),
+  style({
+    kind: "select",
+    key: "width",
+    label: "Width",
+    options: [["auto", "Fill"], ["custom", "Custom"], ["fit", "Hug content"]],
+    hint: "Fill takes the whole column. Custom sets a maximum.",
+  }),
+  style({
+    kind: "number",
+    key: "maxWidthValue",
+    label: "Max width",
+    min: 1,
+    max: 2000,
+    step: 1,
+    when: (b) => b.style.width === "custom",
+  }),
+  style({
+    kind: "select",
+    key: "maxWidthUnit",
+    label: "Unit",
+    options: [["%", "%"], ["px", "px"]],
+    when: (b) => b.style.width === "custom",
+    hint: "% is of the column it sits in, so it holds up on a phone.",
+  }),
+  style({
+    kind: "select",
+    key: "blockAlign",
+    label: "Block position",
+    options: [["left", "Left"], ["center", "Centre"], ["right", "Right"]],
+    hint: "Where the box sits. Centre is margin auto — it needs a max width to move.",
+  }),
+  style({
+    kind: "select",
+    key: "textAlign",
+    label: "Text",
+    options: [["left", "Left"], ["center", "Centre"], ["right", "Right"]],
+    hint: "Where the words sit inside the box.",
+  }),
 
   group("Background"),
   style({
@@ -634,11 +670,22 @@ export const PALETTE: { type: BlockType; label: string; props?: Record<string, u
  * pictures, because you stop reading once you have learnt the shapes.
  */
 /** Icons for the two where a picture beats a word. Keyed on the control's key. */
+const TEXT_ALIGN_ICONS = {
+  left: "M3 5h18v2H3V5Zm0 4h12v2H3V9Zm0 4h18v2H3v-2Zm0 4h12v2H3v-2Z",
+  center: "M3 5h18v2H3V5Zm3 4h12v2H6V9Zm-3 4h18v2H3v-2Zm3 4h12v2H6v-2Z",
+  right: "M3 5h18v2H3V5Zm6 4h12v2H9V9Zm-6 4h18v2H3v-2Zm6 4h12v2H9v-2Z",
+};
+
 export const SEGMENT_ICONS: Record<string, Record<string, string>> = {
-  align: {
-    left: "M3 5h18v2H3V5Zm0 4h12v2H3V9Zm0 4h18v2H3v-2Zm0 4h12v2H3v-2Z",
-    center: "M3 5h18v2H3V5Zm3 4h12v2H6V9Zm-3 4h18v2H3v-2Zm3 4h12v2H6v-2Z",
-    right: "M3 5h18v2H3V5Zm6 4h12v2H9V9Zm-6 4h18v2H3v-2Zm6 4h12v2H9v-2Z",
+  align: TEXT_ALIGN_ICONS,
+  textAlign: TEXT_ALIGN_ICONS,
+  // A box against its container, not lines of text — otherwise the two
+  // controls sit next to each other wearing the same picture and the whole
+  // point of separating them is lost at a glance.
+  blockAlign: {
+    left: "M3 4h2v16H3V4Zm4 4h9v8H7V8Z",
+    center: "M11 4h2v16h-2V4ZM6 8h12v8H6V8Z",
+    right: "M19 4h2v16h-2V4ZM8 8h9v8H8V8Z",
   },
 };
 
