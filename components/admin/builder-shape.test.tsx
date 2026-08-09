@@ -51,9 +51,16 @@ describe("which selects become buttons", () => {
   });
 
   it("leaves a long list as a dropdown", () => {
-    // Five widths as five buttons is five buttons nobody can read.
+    // Four bands as four buttons is fine; the case this guards is the long one.
+    const band = controlsFor(newBlock("heading")).advanced.find(
+      (c) => "key" in c && c.key === "background.type",
+    );
+    expect(band && asSegment(band)).toBe(true);
+
+    // Width is two words now — Fill or Custom — so it earns being buttons.
+    // It was five, and five widths as five buttons is five nobody can read.
     const width = controlsFor(newBlock("heading")).advanced.find((c) => "key" in c && c.key === "width");
-    expect(width && asSegment(width)).toBe(false);
+    expect(width && asSegment(width)).toBe(true);
   });
 });
 

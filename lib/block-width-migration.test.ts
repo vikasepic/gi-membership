@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { normalizeBlocks, newBlock, setStyleAt } from "@/lib/blocks";
 import { blockWrapperCss, blockRules } from "@/lib/block-style";
 import { bandTheme } from "@/lib/page-sections";
+import { controlsFor, isGroup } from "@/lib/block-controls";
 
 /**
  * Every sales page in the database was saved under the old width scale, which
@@ -117,5 +118,37 @@ describe("side padding on a phone", () => {
       padding: { t: 0, r: 40, b: 0, l: 40, u: "px", link: false },
     });
     expect(blockRules(b, paper)).not.toContain("6vw");
+  });
+});
+
+describe("the width picker", () => {
+  const widthOptions = (b: ReturnType<typeof newBlock>) =>
+    controlsFor(b)
+      .advanced.filter((c) => !isGroup(c) && c.key === "width")
+      .flatMap((c) => (!isGroup(c) && c.kind === "select" ? c.options.map(([v]) => v) : []));
+
+  it("offers two answers, not three", () => {
+    // Fill or a number. "Hug content" is a third answer to a question nobody
+    // asks of a paragraph.
+    expect(widthOptions(newBlock("text"))).toEqual(["auto", "custom"]);
+  });
+
+  it("still offers hug to a block already set to it", () => {
+    // A select that cannot express the value it is showing is a select that
+    // lies. The hero's audience chip is saved this way.
+    const chip = setStyleAt(newBlock("text"), "desktop", { width: "fit" });
+    expect(widthOptions(chip)).toContain("fit");
+  });
+
+  it("scales the max width bounds to the unit", () => {
+    const maxOf = (b: ReturnType<typeof newBlock>) => {
+      const c = controlsFor(b).advanced.find((x) => !isGroup(x) && x.key === "maxWidthValue");
+      return c && !isGroup(c) && c.kind === "number" ? c.max : null;
+    };
+    const pct = setStyleAt(newBlock("text"), "desktop", { maxWidthUnit: "%" });
+    const px = setStyleAt(newBlock("text"), "desktop", { maxWidthUnit: "px" });
+    // 2000% of a column is not a width anyone means.
+    expect(maxOf(pct)).toBe(100);
+    expect(maxOf(px)).toBeGreaterThan(1000);
   });
 });

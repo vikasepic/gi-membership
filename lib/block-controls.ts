@@ -455,11 +455,15 @@ export const ADVANCED_CONTROLS: Control[] = [
   group("Layout"),
   style({ kind: "dim", key: "margin", label: "Margin" }),
   style({ kind: "dim", key: "padding", label: "Padding" }),
+  // Two choices, because there are two things anyone wants: the whole column,
+  // or a number. "Hug content" is a third answer to a question nobody asked of
+  // a paragraph. It is added back by `forBlock` for the few blocks already
+  // saved with it, so a select never shows a value it cannot express.
   style({
     kind: "select",
     key: "width",
     label: "Width",
-    options: [["auto", "Fill"], ["custom", "Custom"], ["fit", "Hug content"]],
+    options: [["auto", "Fill"], ["custom", "Custom"]],
     hint: "Fill takes the whole column. Custom sets a maximum.",
   }),
   style({
@@ -553,8 +557,30 @@ export function controlsFor(block: Block): { content: Control[]; style: Control[
   return {
     content: keep(defs.content),
     style: keep(defs.style),
-    advanced: keep(ADVANCED_CONTROLS),
+    advanced: keep(ADVANCED_CONTROLS).map((c) => forBlock(c, block)),
   };
+}
+
+/**
+ * The two places a control's shape depends on the block in front of it.
+ *
+ * Done when the control is handed out rather than by defining a second control:
+ * two entries sharing one key is a collision, and the one that renders last
+ * silently wins.
+ *
+ *  - A max width in per-cent cannot sensibly run to 2000, or the slider spends
+ *    nineteen twentieths of its travel on values that overflow the column.
+ *  - "Hug content" is offered only to a block already set to it.
+ */
+function forBlock(c: Control, block: Block): Control {
+  if (isGroup(c)) return c;
+  if (c.kind === "number" && c.key === "maxWidthValue") {
+    return block.style.maxWidthUnit === "%" ? { ...c, max: 100 } : { ...c, max: 1600 };
+  }
+  if (c.kind === "select" && c.key === "width" && block.style.width === "fit") {
+    return { ...c, options: [...c.options, ["fit", "Hug content"]] };
+  }
+  return c;
 }
 
 /** Read a control's current value, following a dotted key such as background.color. */
