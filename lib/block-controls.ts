@@ -82,6 +82,16 @@ const style = <T extends Control>(c: T): T => ({ ...c, scope: "style" as const }
 // --- shared typography, offered by anything that renders words ---------------
 const TYPOGRAPHY: Control[] = [
   group("Typography"),
+  // Options are filled in by controlsFor from what is actually installed —
+  // offering a family the site does not have produces text in the fallback and
+  // no explanation.
+  style({
+    kind: "select",
+    key: "fontFamily",
+    label: "Font",
+    options: [["", "Page default"]],
+    hint: "Add fonts in Site settings → Typography.",
+  }),
   style({ kind: "number", key: "size", label: "Size", min: 10, max: 96, step: 1, unit: "px", hint: "Unset inherits the page's scale." }),
   style({ kind: "number", key: "lineHeight", label: "Line height", min: 0.9, max: 2.4, step: 0.05 }),
   style({ kind: "number", key: "letterSpacing", label: "Letter spacing", min: -3, max: 8, step: 0.1, unit: "px" }),
@@ -551,14 +561,25 @@ export const ADVANCED_CONTROLS: Control[] = [
 ];
 
 /** The three tabs for one block, with controls that do not apply left out. */
-export function controlsFor(block: Block): { content: Control[]; style: Control[]; advanced: Control[] } {
+export function controlsFor(
+  block: Block,
+  /** Families installed on this site, for the Font select. */
+  fonts: readonly string[] = [],
+): { content: Control[]; style: Control[]; advanced: Control[] } {
   const defs = BLOCK_CONTROLS[block.type];
   const keep = (list: Control[]) => list.filter((c) => !c.when || c.when(block));
+  const shape = (c: Control) => withFonts(forBlock(c, block), fonts);
   return {
-    content: keep(defs.content),
-    style: keep(defs.style),
-    advanced: keep(ADVANCED_CONTROLS).map((c) => forBlock(c, block)),
+    content: keep(defs.content).map(shape),
+    style: keep(defs.style).map(shape),
+    advanced: keep(ADVANCED_CONTROLS).map(shape),
   };
+}
+
+/** The Font select, filled in with what the site actually has. */
+function withFonts(c: Control, fonts: readonly string[]): Control {
+  if (isGroup(c) || c.kind !== "select" || c.key !== "fontFamily") return c;
+  return { ...c, options: [["", "Page default"], ...fonts.map((f) => [f, f] as [string, string])] };
 }
 
 /**

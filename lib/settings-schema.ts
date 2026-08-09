@@ -52,6 +52,11 @@ export const SETTINGS_SCHEMA = z.object({
   deepColor: hexColor.default("#1f3a5f"),
   logoPath: z.string().trim().max(300).default(""),
   faviconPath: z.string().trim().max(300).default(""),
+  // Empty means the font the app was built with. Stored as the family name,
+  // validated against what is actually installed when the form saves — a name
+  // with nothing behind it renders as the fallback and looks like a bug.
+  headingFont: z.string().trim().max(60).default(""),
+  bodyFont: z.string().trim().max(60).default(""),
 
   // ---- Legal -------------------------------------------------------------
   legalEntity: z.string().trim().max(160).default(LEGAL_DEFAULTS.legalEntity),
@@ -106,6 +111,7 @@ export const SETTINGS_GROUPS = [
   { key: "legal", label: "Legal" },
   { key: "identity", label: "Identity" },
   { key: "brand", label: "Brand" },
+  { key: "typography", label: "Typography" },
   { key: "commerce", label: "Commerce" },
   { key: "seo", label: "SEO & social" },
   { key: "advanced", label: "Advanced" },
@@ -127,6 +133,7 @@ export const GROUP_FIELDS: Record<SettingsGroupKey, readonly (keyof Settings)[]>
   ],
   identity: ["name", "tagline"],
   brand: ["primaryColor", "deepColor", "logoPath", "faviconPath"],
+  typography: ["headingFont", "bodyFont"],
   commerce: ["currency", "contactEmail", "replyTime"],
   seo: [
     "metaTitle",

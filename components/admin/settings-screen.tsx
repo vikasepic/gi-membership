@@ -9,6 +9,7 @@ import { useSlowSave, useJustSaved } from "@/components/admin/save-status";
 import { saveSettingsGroup, type SaveState } from "@/app/admin/settings/actions";
 import { GROUP_FIELDS, SETTINGS_GROUPS, type Settings, type SettingsGroupKey } from "@/lib/settings-schema";
 import { usePresence, PresenceNote } from "@/components/admin/presence";
+import { TypographyFields, FontLibrary, type InstalledFont } from "@/components/admin/typography-fields";
 
 /**
  * Site settings, in groups.
@@ -27,9 +28,12 @@ import { usePresence, PresenceNote } from "@/components/admin/presence";
 export function SettingsScreen({
   settings,
   legalPlaceholders,
+  fonts = [],
 }: {
   settings: Settings;
   legalPlaceholders: string[];
+  /** What is installed, for the Typography group's two selects and its library. */
+  fonts?: InstalledFont[];
 }) {
   const [open, setOpen] = useState<SettingsGroupKey>("legal");
 
@@ -76,8 +80,16 @@ export function SettingsScreen({
           })}
         </nav>
 
-        <div className="min-w-0 p-5">
-          <GroupForm key={open} group={open} settings={settings} attention={attention[open]} />
+        <div className="flex min-w-0 flex-col gap-4 p-5">
+          <GroupForm
+            key={open}
+            group={open}
+            settings={settings}
+            attention={attention[open]}
+            fonts={fonts}
+          />
+          {/* Outside the form on purpose — see FontLibrary. */}
+          {open === "typography" && <FontLibrary installed={fonts} />}
         </div>
       </div>
 
@@ -96,10 +108,12 @@ function GroupForm({
   group,
   settings,
   attention,
+  fonts,
 }: {
   group: SettingsGroupKey;
   settings: Settings;
   attention?: string;
+  fonts: InstalledFont[];
 }) {
   const [state, action] = useActionState<SaveState, FormData>(saveSettingsGroup, {});
   const errors = state.group === group ? (state.errors ?? {}) : {};
@@ -140,6 +154,14 @@ function GroupForm({
       {group === "legal" && <LegalFields s={settings} errors={errors} />}
       {group === "identity" && <IdentityFields s={settings} errors={errors} />}
       {group === "brand" && <BrandFields s={settings} errors={errors} />}
+      {group === "typography" && (
+        <TypographyFields
+          headingFont={settings.headingFont}
+          bodyFont={settings.bodyFont}
+          installed={fonts}
+          errors={errors}
+        />
+      )}
       {group === "commerce" && <CommerceFields s={settings} errors={errors} />}
       {group === "seo" && <SeoFields s={settings} errors={errors} />}
       {group === "advanced" && <AdvancedFields s={settings} errors={errors} />}

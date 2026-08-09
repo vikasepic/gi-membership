@@ -1,4 +1,5 @@
 import { SETTINGS_DEFAULTS, type Settings } from "@/lib/settings-schema";
+import { fontFaceCss, familyStack, type FontRow } from "@/lib/fonts";
 
 /**
  * The saved brand, as real CSS.
@@ -17,7 +18,17 @@ import { SETTINGS_DEFAULTS, type Settings } from "@/lib/settings-schema";
  * snippet that breaks every page it is on must leave one page working, and that
  * page is the one with the box you remove it from.
  */
-export function StoreBrand({ settings }: { settings: Settings }) {
+export function StoreBrand({
+  settings,
+  fonts = [],
+  publicBase = "",
+}: {
+  settings: Settings;
+  /** Everything installed, so any face a block asks for is declared. */
+  fonts?: FontRow[];
+  /** Where the files are served from — our own origin, never Google's. */
+  publicBase?: string;
+}) {
   const rules: string[] = [];
 
   if (settings.primaryColor !== SETTINGS_DEFAULTS.primaryColor) {
@@ -29,8 +40,19 @@ export function StoreBrand({ settings }: { settings: Settings }) {
   if (settings.deepColor !== SETTINGS_DEFAULTS.deepColor) {
     rules.push(`--navy:${settings.deepColor}`);
   }
+  // The two names the whole stylesheet asks for. Left alone, they keep the
+  // fonts the app was built with.
+  if (settings.headingFont) {
+    rules.push(`--font-heading:${familyStack(settings.headingFont, "system-ui, sans-serif")}`);
+  }
+  if (settings.bodyFont) {
+    rules.push(`--font-body:${familyStack(settings.bodyFont, "system-ui, sans-serif")}`);
+  }
 
   const css = [
+    // Faces first: a rule that names a family before its @font-face is declared
+    // is a rule the browser resolves to the fallback.
+    fonts.length > 0 ? fontFaceCss(fonts, publicBase) : "",
     rules.length > 0 ? `:root{${rules.join(";")}}` : "",
     settings.customCss.trim(),
   ]

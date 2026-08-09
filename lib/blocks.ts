@@ -111,6 +111,14 @@ export type BlockStyle = {
   textAlign: "left" | "center" | "right";
   /** Where the box sits inside its container. Centre is `margin: 0 auto`. */
   blockAlign: "left" | "center" | "right";
+  /**
+   * A family name, or empty for the page's own.
+   *
+   * Empty rather than null-as-Inter on purpose: a block that names its font is
+   * a block that keeps that font when the site's default changes, and most
+   * blocks should follow the site.
+   */
+  fontFamily: string;
   size: number | null;
   lineHeight: number | null;
   letterSpacing: number | null;
@@ -235,6 +243,7 @@ export const baseStyle = (over: Partial<BlockStyle> = {}): BlockStyle => ({
   maxWidthUnit: "px",
   textAlign: "left",
   blockAlign: "left",
+  fontFamily: "",
   size: null,
   lineHeight: null,
   letterSpacing: null,
@@ -482,6 +491,8 @@ function normalizeStyle(v: unknown): BlockStyle {
     // each and renders exactly as it did.
     textAlign: oneOf(v.textAlign ?? v.align, ["left", "center", "right"] as const, d.textAlign),
     blockAlign: oneOf(v.blockAlign ?? v.align, ["left", "center", "right"] as const, d.blockAlign),
+    // Sanitised here as well as at render: it is written into a style attribute.
+    fontFamily: str(v.fontFamily).replace(/[^A-Za-z0-9 \-]/g, "").trim().slice(0, 60),
     size: nullableNum(v.size),
     lineHeight: nullableNum(v.lineHeight),
     letterSpacing: nullableNum(v.letterSpacing),

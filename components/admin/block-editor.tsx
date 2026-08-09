@@ -130,6 +130,27 @@ export function BlockEditor({
   // can move from — the canvas, the tree, a drop. One effect covers them all;
   // a reset in each handler covers whichever ones somebody remembered.
   useEffect(() => setConfirmDelete(false), [selectedId]);
+
+  /**
+   * The families this site has, for the Font select.
+   *
+   * Fetched once when the builder opens rather than threaded down from the
+   * page: this is one small list, several components above, and a builder that
+   * opened before the fetch lands simply shows "Page default" until it does.
+   */
+  const [families, setFamilies] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void fetch("/api/fonts")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { families?: string[] } | null) => {
+        if (alive && j?.families) setFamilies(j.families);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   // What is being dragged, in words. The tile that follows the cursor needs it,
   // and so does the gap that opens where it will land.
   const [dragging, setDragging] = useState<{ label: string | null; type: BlockType | null }>({
@@ -229,7 +250,7 @@ export function BlockEditor({
   const tabs = column
     ? { content: [], style: COLUMN_CONTROLS, advanced: [] }
     : selected
-      ? controlsFor(selected)
+      ? controlsFor(selected, families)
       : null;
 
   /**

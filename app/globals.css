@@ -58,8 +58,16 @@
   --color-navy: var(--navy);
   --color-plum: var(--plum);
 
-  --font-display: var(--font-inter);
-  --font-sans: var(--font-poppins);
+  /* The two names everything else asks for. next/font is build-time, so these
+     start as the fonts compiled in and are overridden at runtime by whatever
+     Site settings holds — see components/store-brand.tsx. Anything that reads
+     --font-inter directly would ignore that override, which is why nothing
+     does any more. */
+  --font-heading: var(--font-inter);
+  --font-body: var(--font-poppins);
+
+  --font-display: var(--font-heading);
+  --font-sans: var(--font-body);
 }
 
 html {
@@ -76,7 +84,7 @@ body {
     var(--bg);
   background-attachment: fixed;
   color: var(--fg);
-  font-family: var(--font-poppins), system-ui, sans-serif;
+  font-family: var(--font-body), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   /* No rubber-band overscroll or accidental pull-to-refresh inside the shell —
      the page should feel anchored the way an app screen does, not like a
@@ -153,14 +161,14 @@ textarea:focus-visible {
 }
 
 h1, h2, h3, h4 {
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: var(--font-heading), system-ui, sans-serif;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
 
 /* Small-caps editorial kicker/label. */
 .kicker {
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: var(--font-heading), system-ui, sans-serif;
   font-weight: 600;
   font-size: 0.72rem;
   letter-spacing: 0.14em;

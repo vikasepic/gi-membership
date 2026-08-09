@@ -168,6 +168,10 @@ export function maxWidthCss(s: BlockStyle): string | null {
 /** Typography, with every unset value left out so the cascade supplies it. */
 export function typographyCss(s: BlockStyle): CSSProperties {
   const css: CSSProperties = {};
+  // Named family first, then the page's own, then something that always
+  // exists — a face whose file has not arrived must land on a real fallback
+  // rather than on nothing.
+  if (s.fontFamily) css.fontFamily = `"${s.fontFamily}", var(--font-body), system-ui, sans-serif`;
   if (s.size !== null) css.fontSize = `${s.size}px`;
   if (s.lineHeight !== null) css.lineHeight = s.lineHeight;
   if (s.letterSpacing !== null) css.letterSpacing = `${s.letterSpacing}px`;

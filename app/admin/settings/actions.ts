@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
+import { availableFamilies } from "@/lib/fonts";
 import {
   GROUP_FIELDS,
   SETTINGS_SCHEMA,
@@ -83,6 +84,19 @@ export async function saveSettingsGroup(
     const parsed = shape.safeParse(raw === null ? undefined : raw);
     if (parsed.success) patch[field as string] = parsed.data;
     else errors[field as string] = parsed.error.issues[0]?.message ?? "Not valid";
+  }
+
+  // A family name with nothing behind it renders as the fallback, which reads
+  // as a broken page rather than an unset setting. Checked against what is
+  // actually installed rather than against a list of names.
+  if (group === "typography") {
+    const families = await availableFamilies();
+    for (const key of ["headingFont", "bodyFont"] as const) {
+      const chosen = String(patch[key] ?? "");
+      if (chosen && !families.includes(chosen)) {
+        errors[key] = `${chosen} is not installed. Add it below first.`;
+      }
+    }
   }
 
   if (Object.keys(errors).length > 0) return { errors, group };
