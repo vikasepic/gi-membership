@@ -121,3 +121,64 @@ export function Sub({
     </div>
   );
 }
+
+/**
+ * A short list of choices, all of them visible.
+ *
+ * These panels were columns of `<select>`s reading "Inherit" or "Today: yes",
+ * stretched across the width available. Ten identical white bars you have to
+ * open one at a time to read is slower than showing two to four words, and it
+ * hides the one thing worth seeing at a glance: which rows are still at their
+ * default and which are not.
+ *
+ * A select is still right above about five options — Family and Weight keep
+ * theirs. This is for the sets small enough that hiding them costs more room
+ * than showing them.
+ */
+export function Seg({
+  label,
+  value,
+  onChange,
+  options,
+  firstLabel = "Default",
+  defaultIs,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  /** The real choices. The unset one is prepended and must not appear here. */
+  options: readonly (readonly [string, string])[];
+  /** What the unset chip says — "Default", "Inherit", "Body font — Poppins". */
+  firstLabel?: string;
+  /** What leaving it alone actually does, named once, only while it applies. */
+  defaultIs?: string;
+}) {
+  const all: readonly (readonly [string, string])[] = [["", firstLabel], ...options];
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-2">
+      <span
+        role="group"
+        aria-label={label}
+        className="flex flex-wrap gap-0.5 rounded-lg border border-border bg-surface-2 p-0.5"
+      >
+        {all.map(([v, l]) => {
+          const on = value === v;
+          return (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={on}
+              onClick={() => onChange(v)}
+              className={`rounded-[0.3rem] px-2 py-1 text-[0.7rem] transition-colors ${
+                on ? "bg-surface font-medium text-fg shadow-sm" : "text-muted hover:text-fg"
+              }`}
+            >
+              {l}
+            </button>
+          );
+        })}
+      </span>
+      {defaultIs && value === "" && <span className="text-[0.62rem] text-muted">{defaultIs}</span>}
+    </span>
+  );
+}

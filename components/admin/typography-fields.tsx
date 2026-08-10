@@ -2,7 +2,7 @@
 
 import { useActionState, useState, type CSSProperties } from "react";
 import { useFormStatus } from "react-dom";
-import { inputClass as input, Field, Group } from "@/components/admin/form-controls";
+import { inputClass as input, Field, Group, Seg } from "@/components/admin/form-controls";
 import { ConfirmSubmit } from "@/components/admin/confirm-submit";
 import { DeviceSwitch } from "@/components/admin/device-switch";
 import { DEVICE_CANVAS, DEVICE_RANGE, type Device } from "@/lib/blocks";
@@ -122,7 +122,7 @@ export function TypographyFields({
           </div>
 
           {UNSTYLED.includes(el) && (
-            <p className="rounded-r-lg border-l-2 border-primary bg-primary/5 px-3 py-2 text-xs text-primary">
+            <p className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-primary">
               Nothing outside a sales page styles {el} today — h5 and h6 are the two heading levels
               app/globals.css leaves alone. A heading block set to {el} does have a size of its own
               ({HEADING_SIZE[el as "h5"]}), and a size set here replaces it.
@@ -157,31 +157,41 @@ export function TypographyFields({
                 inherit="Inherit"
               />
             </Line>
+            {/* Two to four choices each. As selects these were three more
+                identical bars reading "Inherit", which is the state of almost
+                every row here — so the panel spent its whole width saying
+                nothing and hid the rows that did say something. */}
             <Line label="Style">
-              <Pick
+              <Seg
                 label="Style"
+                firstLabel="Inherit"
                 value={style.style}
                 onChange={(v) => patch({ style: v })}
-                options={TYPOGRAPHY_STYLES}
-                inherit="Inherit"
+                options={TYPOGRAPHY_STYLES.map((o) => [o, o] as [string, string])}
               />
             </Line>
             <Line label="Case">
-              <Pick
+              <Seg
                 label="Case"
+                firstLabel="Inherit"
                 value={style.transform}
                 onChange={(v) => patch({ transform: v })}
-                options={TYPOGRAPHY_TRANSFORMS}
-                inherit="Inherit"
+                // Each option set in the case it applies, so a chip is its own
+                // preview. "none" is what Inherit already means here.
+                options={TYPOGRAPHY_TRANSFORMS.filter((o) => o !== "none").map(
+                  (o) => [o, CASE_LABEL[o] ?? o] as [string, string],
+                )}
               />
             </Line>
             <Line label="Decoration">
-              <Pick
+              <Seg
                 label="Decoration"
+                firstLabel="Inherit"
                 value={style.decoration}
                 onChange={(v) => patch({ decoration: v })}
-                options={TYPOGRAPHY_DECORATIONS}
-                inherit="Inherit"
+                options={TYPOGRAPHY_DECORATIONS.filter((o) => o !== "none").map(
+                  (o) => [o, DECOR_LABEL[o] ?? o] as [string, string],
+                )}
               />
             </Line>
             <Line label="Colour">
@@ -363,9 +373,21 @@ function ElementRail({
 const cell =
   "w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs outline-none transition-colors focus:border-primary";
 
+/** Each option written the way it renders, so the chip is its own preview. */
+const CASE_LABEL: Record<string, string> = {
+  uppercase: "UPPERCASE",
+  lowercase: "lowercase",
+  capitalize: "Capitalized",
+};
+
+const DECOR_LABEL: Record<string, string> = {
+  underline: "Underlined",
+  "line-through": "Struck through",
+};
+
 function Line({ label, children, note }: { label: string; children: React.ReactNode; note?: string }) {
   return (
-    <label className="grid grid-cols-[7rem_minmax(0,1fr)] items-center gap-3">
+    <label className="grid grid-cols-[7rem_minmax(0,26rem)] items-center gap-3">
       <span className="text-xs text-muted">{label}</span>
       <span className="flex flex-col gap-1">
         {children}

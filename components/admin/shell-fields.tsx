@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Group, Sub } from "@/components/admin/form-controls";
+import { Group, Seg, Sub } from "@/components/admin/form-controls";
 import {
   SHELL_CASES,
   SHELL_DEFAULT_LINKS,
@@ -579,61 +579,6 @@ function Len({
         onChange={(e) => onChange(e.target.value)}
         className={cell}
       />
-    </span>
-  );
-}
-
-/**
- * A short list of choices, all of them visible.
- *
- * These were `<select>`s stretched across the panel whose first option read
- * "Today: yes". Ten of them made the page a column of identical white bars you
- * had to open one at a time to read. Every set here is two to four choices, so
- * showing them costs less room than hiding them did — and which one is Default
- * is then visible at a glance down the whole panel.
- */
-function Seg({
-  value,
-  onChange,
-  options,
-  label,
-  defaultIs,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: readonly (readonly [string, string])[];
-  label: string;
-  /** What leaving it alone actually does, named once, only while it applies. */
-  defaultIs?: string;
-}) {
-  const all: readonly (readonly [string, string])[] = [["", "Default"], ...options];
-  return (
-    <span className="flex min-w-0 flex-wrap items-center gap-2">
-      <span
-        role="group"
-        aria-label={label}
-        className="flex flex-wrap gap-0.5 rounded-lg border border-border bg-surface-2 p-0.5"
-      >
-        {all.map(([v, l]) => {
-          const on = value === v;
-          return (
-            <button
-              key={v}
-              type="button"
-              aria-pressed={on}
-              onClick={() => onChange(v)}
-              className={`rounded-[0.3rem] px-2 py-1 text-[0.7rem] transition-colors ${
-                on ? "bg-surface font-medium text-fg shadow-sm" : "text-muted hover:text-fg"
-              }`}
-            >
-              {l}
-            </button>
-          );
-        })}
-      </span>
-      {defaultIs && value === "" && (
-        <span className="text-[0.62rem] text-muted">{defaultIs}</span>
-      )}
     </span>
   );
 }

@@ -103,6 +103,31 @@ function pick(label: string, value: string) {
   });
 }
 
+/**
+ * Case, Style and Decoration are segmented controls now — two to four choices
+ * each, all of them on screen. `chosen` reads the pressed chip, which is the
+ * same question `select.value` used to answer.
+ */
+function press(group: string, value: string) {
+  const box = document.querySelector(`[role="group"][aria-label="${group}"]`);
+  if (!box) throw new Error(`no control group labelled ${group}`);
+  const labels: Record<string, string> = { uppercase: "UPPERCASE", lowercase: "lowercase", capitalize: "Capitalized" };
+  const want = labels[value] ?? value;
+  const btn = [...box.querySelectorAll("button")].find((b) => (b.textContent ?? "").trim() === want);
+  if (!btn) throw new Error(`no chip "${want}" in ${group}`);
+  act(() => {
+    btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+function chosen(group: string): string {
+  const box = document.querySelector(`[role="group"][aria-label="${group}"]`);
+  if (!box) throw new Error(`no control group labelled ${group}`);
+  return [...box.querySelectorAll("button")]
+    .find((b) => b.getAttribute("aria-pressed") === "true")
+    ?.textContent?.trim() ?? "";
+}
+
 describe("the Typography panel", () => {
   it("posts a store that has set nothing back unchanged", () => {
     mount();
@@ -148,14 +173,14 @@ describe("the Typography panel", () => {
     mount();
     click(button("H2"));
     pick("Weight", "700");
-    pick("Case", "uppercase");
+    press("Case", "uppercase");
     pick("Family", "Lora");
 
     click(button("Tablet"));
     // The same values are still on screen, which is the panel saying out loud
     // that the switch does not reach them.
     expect(field<HTMLSelectElement>("Weight").value).toBe("700");
-    expect(field<HTMLSelectElement>("Case").value).toBe("uppercase");
+    expect(chosen("Case")).toBe("UPPERCASE");
 
     pick("Weight", "300");
     click(button("Desktop"));
@@ -256,5 +281,38 @@ describe("the Typography panel", () => {
     // A `max-width:767px` query never matches a box a few hundred pixels wide
     // inside a full window, so the phone view would have shown desktop type.
     expect(css).not.toContain("@media");
+  });
+
+  /**
+   * Style, Case and Decoration became segmented controls: every choice on
+   * screen instead of a dropdown reading "Inherit". Almost every row here IS
+   * at Inherit, so a column of selects spent the panel's whole width saying
+   * nothing and hid the rows that said something.
+   */
+  it("writes from a chip, and puts the value back with Inherit", () => {
+    mount();
+    click(button("H2"));
+
+    press("Decoration", "Underlined");
+    expect((posted().h2 as unknown as Record<string, unknown>).decoration).toBe("underline");
+
+    press("Style", "italic");
+    expect((posted().h2 as unknown as Record<string, unknown>).style).toBe("italic");
+
+    // The unset chip has to stay reachable, or a decoration is a decision you
+    // cannot take back without reloading.
+    press("Decoration", "Inherit");
+    expect((posted().h2 as unknown as Record<string, unknown>).decoration).toBe("");
+  });
+
+  it("shows the option in the shape it applies", () => {
+    // A chip reading "uppercase" in sentence case describes the setting; a
+    // chip reading "UPPERCASE" IS it.
+    mount();
+    click(button("H2"));
+    const chips = [...document.querySelectorAll('[role="group"][aria-label="Case"] button')].map(
+      (b) => b.textContent?.trim(),
+    );
+    expect(chips).toEqual(["Inherit", "UPPERCASE", "lowercase", "Capitalized"]);
   });
 });

@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { MediaButton, type PickedMedia } from "@/components/admin/media-modal";
 import { publicCoverUrl } from "@/lib/media-url";
-import { inputClass as input, Field } from "@/components/admin/form-controls";
+import { inputClass as input, Field, Group } from "@/components/admin/form-controls";
 import { useSlowSave, useJustSaved } from "@/components/admin/save-status";
 import { saveSettingsGroup, type SaveState } from "@/app/admin/settings/actions";
 import { GROUP_FIELDS, SETTINGS_GROUPS, type Settings, type SettingsGroupKey } from "@/lib/settings-schema";
@@ -140,7 +140,7 @@ function GroupForm({
       <PresenceNote editors={editors} what="these settings" className="w-fit" />
 
       {attention && group === "legal" && (
-        <p className="rounded-r-lg border-l-2 border-primary bg-primary/5 px-3 py-2 text-xs text-primary">
+        <p className="rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 text-xs text-primary">
           Still unset: {attention}. Your terms page is showing a draft warning to buyers because
           of it.
         </p>
@@ -219,64 +219,78 @@ type FieldsProps = { s: Settings; errors: Record<string, string> };
 
 const row = "grid grid-cols-1 gap-4 sm:grid-cols-2";
 
+/**
+ * Eight fields that are three decisions.
+ *
+ * They ran as one list, which put the registered address — the field currently
+ * making /terms show buyers a draft warning — between a trading name and a
+ * choice of jurisdiction, with nothing saying they answer different questions.
+ * Who the business is, what it promises, and where data requests go are three
+ * things, and two of them are answered by a lawyer rather than by whoever is
+ * on this screen.
+ */
 function LegalFields({ s, errors }: FieldsProps) {
   return (
     <>
-      <Field
-        label="Registered entity"
-        hint="exactly as registered"
-        error={errors.legalEntity}
-      >
-        <input name="legalEntity" defaultValue={s.legalEntity} className={input} />
-      </Field>
-      <Field
-        label="Registered address"
-        hint="required in EU/UK consumer terms"
-        error={errors.address}
-      >
-        <textarea name="address" defaultValue={s.address} rows={3} className={input} />
-      </Field>
-      <div className={row}>
-        <Field label="Governing law" hint="e.g. England and Wales" error={errors.governingLaw}>
-          <input name="governingLaw" defaultValue={s.governingLaw} className={input} />
+      <Group label="Who the business is" hint="as registered, not as traded">
+        <Field label="Registered entity" hint="exactly as registered" error={errors.legalEntity}>
+          <input name="legalEntity" defaultValue={s.legalEntity} className={input} />
         </Field>
         <Field
-          label="Refund window"
-          hint="days — stated on the checkout too"
-          error={errors.refundWindowDays}
+          label="Registered address"
+          hint="required in EU/UK consumer terms"
+          error={errors.address}
         >
-          <input
-            name="refundWindowDays"
-            type="number"
-            min={14}
-            max={365}
-            defaultValue={s.refundWindowDays}
-            className={input}
-          />
+          <textarea name="address" defaultValue={s.address} rows={3} className={input} />
         </Field>
-      </div>
-      <div className={row}>
-        <Field label="Company number" error={errors.companyNumber}>
-          <input name="companyNumber" defaultValue={s.companyNumber} className={input} />
+        <div className={row}>
+          <Field label="Company number" error={errors.companyNumber}>
+            <input name="companyNumber" defaultValue={s.companyNumber} className={input} />
+          </Field>
+          <Field label="VAT number" hint="shown on invoices" error={errors.vatNumber}>
+            <input name="vatNumber" defaultValue={s.vatNumber} className={input} />
+          </Field>
+        </div>
+      </Group>
+
+      <Group label="What the store promises" hint="every one of these is quoted back to a buyer on a policy page">
+        <div className={row}>
+          <Field label="Governing law" hint="e.g. England and Wales" error={errors.governingLaw}>
+            <input name="governingLaw" defaultValue={s.governingLaw} className={input} />
+          </Field>
+          <Field
+            label="Refund window"
+            hint="days — stated on the checkout too"
+            error={errors.refundWindowDays}
+          >
+            <input
+              name="refundWindowDays"
+              type="number"
+              min={14}
+              max={365}
+              defaultValue={s.refundWindowDays}
+              className={input}
+            />
+          </Field>
+        </div>
+        <Field
+          label="Policies last updated"
+          hint="shown at the top of every policy page"
+          error={errors.policiesUpdated}
+        >
+          <input name="policiesUpdated" defaultValue={s.policiesUpdated} className={input} />
         </Field>
-        <Field label="VAT number" hint="shown on invoices" error={errors.vatNumber}>
-          <input name="vatNumber" defaultValue={s.vatNumber} className={input} />
+      </Group>
+
+      <Group label="Where data requests go">
+        <Field
+          label="Privacy email"
+          hint="a separate inbox from support, on purpose — these arrive with a deadline attached"
+          error={errors.privacyEmail}
+        >
+          <input name="privacyEmail" type="email" defaultValue={s.privacyEmail} className={input} />
         </Field>
-      </div>
-      <Field
-        label="Privacy email"
-        hint="where data requests go — a separate inbox from support, on purpose"
-        error={errors.privacyEmail}
-      >
-        <input name="privacyEmail" type="email" defaultValue={s.privacyEmail} className={input} />
-      </Field>
-      <Field
-        label="Policies last updated"
-        hint="shown at the top of every policy page"
-        error={errors.policiesUpdated}
-      >
-        <input name="policiesUpdated" defaultValue={s.policiesUpdated} className={input} />
-      </Field>
+      </Group>
     </>
   );
 }
