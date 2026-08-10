@@ -39,6 +39,10 @@ export type Product = {
   upsellAltOfferId: string | null;
   isPlaceholder: boolean;
   sortOrder: number;
+  /** A line under the tagline on the checkout. Null falls back to nothing. */
+  checkoutNote: string | null;
+  /** Replaces the checkout's reassurance list. Empty falls back to the defaults. */
+  checkoutBullets: string[];
 };
 
 export type GrantType = "product" | "subscription";

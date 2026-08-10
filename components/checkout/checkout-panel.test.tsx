@@ -95,3 +95,29 @@ describe("claims it must never make", () => {
     expect(out).not.toMatch(pattern);
   });
 });
+
+describe("copy the product supplies", () => {
+  it("shows a note under the tagline", () => {
+    expect(panel({ note: "Delivered as a PDF you keep." })).toContain("Delivered as a PDF you keep.");
+  });
+
+  it("replaces the standard list when the product has its own", () => {
+    const out = panel({ bullets: ["Written for founders, not marketers."] });
+    expect(out).toContain("Written for founders, not marketers.");
+    expect(out).not.toContain("days to change your mind");
+  });
+
+  it("keeps the standard list when the product says nothing", () => {
+    // A blank column is worse than four true sentences.
+    const out = panel({ bullets: [] });
+    expect(out).toContain("never reach our servers");
+    expect(out).toContain("days to change your mind");
+  });
+
+  it("still warns about a trial even when the list was replaced", () => {
+    // What a buyer is agreeing to is not a selling point to be edited away.
+    const out = panel({ hasTrial: true, bullets: ["Only my line."] });
+    expect(out).toContain("Only my line.");
+    expect(out).toContain("before it ends and turns into a payment");
+  });
+});

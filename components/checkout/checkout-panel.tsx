@@ -36,6 +36,8 @@ export function CheckoutPanel({
    * already unhappy.
    */
   replyTime,
+  note,
+  bullets = [],
 }: {
   title: string;
   tagline: string | null;
@@ -44,6 +46,17 @@ export function CheckoutPanel({
   hasTrial?: boolean;
   refundWindowDays?: number;
   replyTime?: string;
+  /** One line about THIS product, under the tagline. */
+  note?: string | null;
+  /**
+   * Replaces the reassurance list.
+   *
+   * Empty keeps the four below, which are true of every product and were the
+   * only thing this panel could say. A product with something of its own to
+   * promise says it instead — and if it says nothing, the honest defaults
+   * stand rather than a blank column.
+   */
+  bullets?: string[];
 }) {
   return (
     <aside
@@ -90,17 +103,29 @@ export function CheckoutPanel({
         <div className="flex flex-col gap-2">
           <h1 className="font-display text-2xl leading-tight md:text-3xl">{title}</h1>
           {tagline && <p className="text-muted">{tagline}</p>}
+          {note && <p className="text-sm text-muted">{note}</p>}
         </div>
 
         <ul className="flex flex-col gap-3 border-t border-border pt-6">
-          <Reassurance>
-            Your card details go straight to Stripe. They never reach our servers.
-          </Reassurance>
-          <Reassurance>
-            {refundWindowDays} days to change your mind, whatever the reason.
-          </Reassurance>
-          <Reassurance>Access opens the moment the payment clears — nothing to wait for.</Reassurance>
-          {replyTime && <Reassurance>{replyTime}</Reassurance>}
+          {bullets.length > 0 ? (
+            bullets.map((line) => <Reassurance key={line}>{line}</Reassurance>)
+          ) : (
+            <>
+              <Reassurance>
+                Your card details go straight to Stripe. They never reach our servers.
+              </Reassurance>
+              <Reassurance>
+                {refundWindowDays} days to change your mind, whatever the reason.
+              </Reassurance>
+              <Reassurance>
+                Access opens the moment the payment clears — nothing to wait for.
+              </Reassurance>
+              {replyTime && <Reassurance>{replyTime}</Reassurance>}
+            </>
+          )}
+          {/* Outside the choice on purpose. A trial that turns into a payment
+              is a thing the buyer is agreeing to, not a selling point to be
+              edited away — so it shows whether or not the list was replaced. */}
           {hasTrial && (
             <Reassurance>
               If you take the free trial, we email you before it ends and turns into a payment.

@@ -14,7 +14,7 @@ import type {
 // Admin-side reads/writes. Service-role; callers are admin server actions/pages.
 
 const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, is_placeholder, sort_order";
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, is_placeholder, sort_order, checkout_note, checkout_bullets";
 
 const OFFER_COLUMNS =
   "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, page_alt_offer_id, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, activecampaign_trial_tag_id, activecampaign_cancelled_tag_id, bump_headline, bump_description, bump_banner, bump_bullets, bump_note, bump_accent, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live";
@@ -52,6 +52,8 @@ export type ProductInput = {
   upsellAltOfferId?: string | null;
   activecampaignTagId: string | null;
   activecampaignAbandonedTagId: string | null;
+  checkoutNote?: string | null;
+  checkoutBullets?: string[];
 };
 
 export async function listAllProducts(): Promise<Product[]> {
@@ -116,6 +118,10 @@ function toRow(input: ProductInput, storeId: string) {
     // remember to trim.
     activecampaign_tag_id: input.activecampaignTagId?.trim() || null,
     activecampaign_abandoned_tag_id: input.activecampaignAbandonedTagId?.trim() || null,
+    checkout_note: input.checkoutNote?.trim() || null,
+    // Blank lines dropped rather than stored: an empty bullet renders as a tick
+    // beside nothing, which reads as a missing promise.
+    checkout_bullets: (input.checkoutBullets ?? []).map((b) => b.trim()).filter(Boolean),
   };
 }
 

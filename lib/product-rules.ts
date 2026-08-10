@@ -52,6 +52,11 @@ export const productSchema = z.object({
   // identifier handed straight back to AC, never arithmetic. Digits only, so a
   // pasted tag NAME is rejected here rather than silently failing at purchase
   // time when nobody is watching.
+  // Optional, and blank means "use what the checkout already says".
+  checkoutNote: z.preprocess(
+    (x) => (typeof x === "string" && x.trim() === "" ? null : x),
+    z.string().trim().max(240).nullable().default(null),
+  ),
   activecampaignAbandonedTagId: z.preprocess(
     emptyToNull,
     z
@@ -85,6 +90,7 @@ export type ParsedProduct = {
   upsellAltOfferId: string | null;
   activecampaignTagId: string | null;
   activecampaignAbandonedTagId: string | null;
+  checkoutNote: string | null;
 };
 
 export type ParseResult =
@@ -125,6 +131,7 @@ export function parseProductForm(raw: Record<string, unknown>): ParseResult {
       upsellAltOfferId: altFor(v.upsellOfferId, v.upsellAltOfferId),
       activecampaignTagId: v.activecampaignTagId,
       activecampaignAbandonedTagId: v.activecampaignAbandonedTagId,
+      checkoutNote: v.checkoutNote,
     },
   };
 }

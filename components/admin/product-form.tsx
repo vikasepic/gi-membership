@@ -455,6 +455,26 @@ export function ProductForm({
       </TabPanel>
 
       <TabPanel tab="funnel">
+      <Group
+        label="On the checkout"
+        hint="What the half beside the card fields says about this product."
+      >
+        <Field
+          label="Line under the tagline"
+          hint="Optional. The one thing worth saying to someone who already has their card out."
+          error={err("checkoutNote")}
+        >
+          <input
+            name="checkoutNote"
+            defaultValue={product?.checkoutNote ?? ""}
+            maxLength={240}
+            placeholder="Delivered as a PDF you keep — no app, no login."
+            className={inputClass}
+          />
+        </Field>
+        <CheckoutBullets initial={product?.checkoutBullets ?? []} />
+      </Group>
+
       <Group label="Upsells"
         hint="The bump shows on checkout. If it's declined, the upsell shows once, right after."
       >
@@ -659,5 +679,72 @@ function Placement({
         </p>
       )}
     </div>
+  );
+}
+
+
+/**
+ * The reassurance list beside the card fields.
+ *
+ * Empty leaves the four lines the checkout already shows — the card going
+ * straight to Stripe, the refund window, access on payment, and the trial
+ * warning. Those are true of every product, and a product with nothing of its
+ * own to promise is better served by them than by a blank column.
+ *
+ * The trial warning is not in this list and cannot be edited away. It is a
+ * thing the buyer is agreeing to rather than a selling point.
+ */
+function CheckoutBullets({ initial }: { initial: string[] }) {
+  const [lines, setLines] = useState<string[]>(initial.length > 0 ? initial : []);
+
+  return (
+    <Field
+      label="Reassurance list"
+      hint={
+        lines.length === 0
+          ? "Empty — the checkout shows its standard four lines."
+          : "These replace the standard four."
+      }
+    >
+      <div className="flex flex-col gap-2">
+        {lines.map((line, i) => (
+          <span key={i} className="flex items-center gap-2">
+            <input
+              name="checkoutBullets"
+              value={line}
+              onChange={(e) =>
+                setLines((ls) => ls.map((l, j) => (j === i ? e.target.value : l)))
+              }
+              maxLength={160}
+              className={inputClass}
+            />
+            <button
+              type="button"
+              onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}
+              aria-label={`Remove line ${i + 1}`}
+              className="shrink-0 rounded-md border border-border px-2 py-1.5 text-xs text-muted hover:border-primary hover:text-primary"
+            >
+              Remove
+            </button>
+          </span>
+        ))}
+        <button
+          type="button"
+          onClick={() => setLines((ls) => [...ls, ""])}
+          className="w-fit rounded-lg border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary"
+        >
+          {lines.length === 0 ? "Write your own instead" : "Add a line"}
+        </button>
+        {lines.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setLines([])}
+            className="w-fit text-xs text-muted underline-offset-2 hover:text-primary hover:underline"
+          >
+            Go back to the standard four
+          </button>
+        )}
+      </div>
+    </Field>
   );
 }

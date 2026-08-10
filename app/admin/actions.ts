@@ -22,6 +22,13 @@ export async function saveProduct(_prev: SaveState, formData: FormData): Promise
   if (!parsed.ok) return { errors: parsed.errors };
   const { id, ...input } = parsed.data;
 
+  // getAll, not fromEntries: a repeated field collapses to its last value, so
+  // four bullets would have arrived as one.
+  const checkoutBullets = formData
+    .getAll("checkoutBullets")
+    .map((v) => String(v).trim())
+    .filter(Boolean);
+
   // Which courses this product unlocks. The library delivers courses and nothing
   // else, so a published product with no course is one a buyer can pay for and
   // never receive. Refuse to publish it rather than sell a dead end; drafts may
@@ -41,7 +48,8 @@ export async function saveProduct(_prev: SaveState, formData: FormData): Promise
 
   let productId: string;
   try {
-    productId = id ? (await updateProduct(id, input), id) : await createProduct(input);
+    const withCopy = { ...input, checkoutBullets };
+    productId = id ? (await updateProduct(id, withCopy), id) : await createProduct(withCopy);
     await setProductCourses(productId, courseIds);
     if (clearCover) await clearProductCover(productId);
     else if (chosen.picked) await setProductCover(productId, chosen.picked.path);

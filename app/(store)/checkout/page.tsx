@@ -122,6 +122,8 @@ export default async function CheckoutPage({
         hasTrial={Boolean(bumpAsSold?.trialDays || altOffer?.trialDays)}
         refundWindowDays={legal.refundWindowDays}
         replyTime={settings.replyTime}
+        note={product.checkoutNote}
+        bullets={product.checkoutBullets}
       />
 
       {/* The ground bleeds to the window edge; the content does not. A form

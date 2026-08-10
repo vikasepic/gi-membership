@@ -55,7 +55,12 @@ export default async function ProductPage({
       // 1024px and the page read as a card floating on the shell's background
       // rather than as a page. overflow-x-clip guards the scrollbar gap that
       // 100vw leaves behind.
-      <div className="mx-[calc(50%-50vw)] w-screen overflow-x-clip">
+      // -mt-6 cancels the shell's top padding. The shell gives every page a
+      // gap under the header, which is right for a page that sits in a column
+      // and wrong for one whose first band is a full-width colour: the padding
+      // showed as a stripe of the shell's own background between the header and
+      // the band, which reads as a rendering fault rather than as spacing.
+      <div className="-mt-6 mx-[calc(50%-50vw)] w-screen overflow-x-clip">
         <TrackView
           event="ViewContent"
           stableKey={product.slug}
