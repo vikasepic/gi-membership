@@ -1415,13 +1415,17 @@ function ControlField({
   const key = control.key.split(".")[0];
   const set = at !== "desktop" && hasOverride(block, at, key, scopeOf(control));
 
-  // A dotted key is stored whole. `writeControl` puts the entire background
-  // under `background` — a sparse half-background is not a thing CSS can
-  // express — so `clearAt` takes the image, the overlay and the gradient stops
-  // along with the colour. Twelve fields on a block's Advanced tab and ten on a
-  // column, each promising to reset only itself and every one of them resetting
-  // all the others, is how someone loses a background image by tidying up a
-  // colour. The chip names the group it actually clears.
+  // A dotted key is stored whole: an override is `{ background: {...} }`, one
+  // top-level key, so `clearAt("background")` takes the image, the overlay and
+  // the gradient stops along with the colour. Not because a sparse background
+  // is inexpressible — the colour field's own ✕ below clears exactly itself by
+  // writing null through the path — but because the per-device patch has no
+  // room to say "this half is set and that half is not". Twelve fields on a
+  // block's Advanced tab and ten on a column, each promising to reset only
+  // itself and every one of them resetting all the others, is how someone
+  // loses a background image by tidying up a colour. The chip names the group
+  // it actually clears, and its accessible name still names the field it sits
+  // beside — otherwise seven chips in one panel share one label and one action.
   const grouped = control.key.includes(".");
   const clears = grouped ? key[0].toUpperCase() + key.slice(1) : control.label;
 
@@ -1429,11 +1433,14 @@ function ControlField({
   // whatever the tab says, so typing into Text on the Mobile tab edits the one
   // value there is. The `set` chip cannot say so — it only appears where there
   // IS an override — and silence reads as "this width forked". Said rather
-  // than disabled, and left shared rather than made per-device: everything
-  // that lays a block out is per-device already (see `responsive: true`), and
-  // what is left is content and behaviour, where a card's words being the same
-  // words at every width is the right answer and hiding the field on the
-  // Mobile tab would only send people back to Desktop to type.
+  // than disabled, and left shared rather than made per-device: nearly all of
+  // what lays a block out is per-device already (see `responsive: true`), and
+  // most of what is left is content and behaviour, where a card's words being
+  // the same words at every width is the right answer and hiding the field on
+  // the Mobile tab would only send people back to Desktop to type. "Nearly"
+  // and "most" on purpose — a button's `fullWidth` is layout and is not
+  // responsive. The chip tells the truth about it either way; this comment
+  // used to claim there were no such controls.
   const shared = device !== "desktop" && at === "desktop";
 
   // The six keys a narrow width stopped inheriting. Clearing one does NOT give
@@ -1453,13 +1460,33 @@ function ControlField({
   const desktopValue = readControl(block, control, "desktop");
   const desktopSet = desktopValue !== null && desktopValue !== "" && desktopValue !== "none";
 
+  // The Desktop tab's half of the same fact. `fallsToSite` cannot say it —
+  // it is false at desktop by construction — so the one tab where the value is
+  // actually typed said nothing about where it stops, under a device switch
+  // whose tooltip reads "Desktop — every width". Only when nothing narrower has
+  // been set: a block migration 0042 pinned has a value at every width and this
+  // would be noise.
+  const desktopStops =
+    device === "desktop" &&
+    siteDefaulted &&
+    desktopSet &&
+    !hasOverride(block, "tablet", key) &&
+    !hasOverride(block, "mobile", key);
+
   // Said where the number is, not in a console nobody opens.
+  //
+  // "stops at 1023px and narrower", not "stops above 1023px": the rule is
+  // `@media (width > 1023px)`, so it APPLIES above 1023 and stops at 1023 and
+  // below. "Stops above X" reads as the opposite — the tree line stops above
+  // 2000m — and this is the one sentence about the boundary a person reads.
   const notice =
-    "key" in control && control.key === "padding" && device !== "mobile"
+    "key" in control && control.key === "padding"
       ? mobilePaddingNotice(block)
       : fallsToSite && !set && desktopSet
-        ? `The desktop value stops above ${DEVICE_MAX.tablet}px. Site settings → Typography decides this at ${at} width — type here to choose your own.`
-        : null;
+        ? `The desktop value stops at ${DEVICE_MAX.tablet}px and narrower. Site settings → Typography decides this at ${at} width — type here to choose your own.`
+        : desktopStops
+          ? `This applies above ${DEVICE_MAX.tablet}px only. At ${DEVICE_MAX.tablet}px and narrower, Site settings → Typography decides it until you set a value on the Tablet or Mobile tab.`
+          : null;
   // The label, and the marker saying this control is holding a value for the
   // width being edited. A control that does not say so is one you will change
   // on desktop and wonder why nothing moved.
@@ -1480,7 +1507,7 @@ function ControlField({
                 : `Set for ${at}. Click to use the ${at === "mobile" ? "tablet" : "desktop"} value again.`
           }
           className="shrink-0 rounded-full bg-primary/15 px-1.5 text-[0.58rem] leading-4 text-primary hover:bg-primary/25"
-          aria-label={`Reset ${clears} for ${at}`}
+          aria-label={grouped ? `Reset ${clears} for ${at}, from ${control.label}` : `Reset ${clears} for ${at}`}
         >
           {at} ✕
         </button>
@@ -1658,7 +1685,13 @@ function ControlField({
           </select>
           {count > 1 && (
             <span className="text-[0.66rem] text-muted">
-              Fewer columns moves what is in them into the last one — nothing is deleted.
+              {/* `setColumnCount` moves the CONTENT and drops the column's own
+                  styling — background, padding, order, align — to match what
+                  `normalizeBlocks` keeps on a reload. The old wording said
+                  "nothing is deleted", which was true of the blocks and not of
+                  the column they sat in. */}
+              Fewer columns moves the blocks in them into the last one. The dropped
+              column&rsquo;s own background and spacing go with it.
             </span>
           )}
         </label>
@@ -1721,16 +1754,22 @@ function ControlField({
             {/* 100 and 100 for a two-column row is correct on a phone and looks
                 exactly like a bug, because nothing else on screen says the
                 columns have stopped being side by side. */}
-            {stacksAt(block, at) ? (
-              <span className="text-[0.62rem] leading-tight text-muted">
-                Stacked here — each is full width. Type one to override.
-              </span>
-            ) : owned.some(Boolean) ? (
-              <span className="text-[0.62rem] leading-tight text-muted">
-                {owned.map((o, i) => (o ? `Col ${i + 1}` : null)).filter(Boolean).join(", ")}: own
-                width, set on the column. The row&rsquo;s share does not reach it.
-              </span>
-            ) : null}
+            {/* Both, not one or the other. They were a ternary with the stack
+                first, so a stacked row with a column that owns its width said
+                "each is full width" — and `rowLayout` spreads the column's own
+                layout last, so that column draws its 220px stacked as well.
+                The sentence that explains it was in the branch that could not
+                run, beside a field disabled with no reason given. */}
+            {(stacksAt(block, at) || owned.some(Boolean)) && (
+            <span className="text-[0.62rem] leading-tight text-muted">
+              {stacksAt(block, at) &&
+                (owned.some(Boolean)
+                  ? "Stacked here — full width, except the columns below. "
+                  : "Stacked here — each is full width. Type one to override.")}
+              {owned.some(Boolean) &&
+                `${owned.map((o, i) => (o ? `Col ${i + 1}` : null)).filter(Boolean).join(", ")}: own width, set on the column. The row’s share does not reach it.`}
+            </span>
+            )}
           </div>
         </div>
       );

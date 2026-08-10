@@ -14,10 +14,13 @@ import { renderToStaticMarkup } from "react-dom/server";
  * Mutations this catches:
  *  - `formData.getAll("checkoutBullets")` → `[formData.get(...)]`, or reading
  *    the field off the `Object.fromEntries` above it: one line survives.
- *  - dropping `.filter(Boolean)`: a row someone emptied but did not remove
- *    reaches the panel as a blank `<li>` with a tick beside it.
- *  - dropping `.map(trim)`: the stored line keeps whatever whitespace the
- *    input had.
+ *  - dropping `.filter(Boolean)` or `.map(trim)` from the action: the value
+ *    handed to `updateProduct` keeps the blank row and the stray spaces. NOT
+ *    "a blank <li> reaches the buyer" — `lib/admin.ts` trims and filters again
+ *    on the way to the column, so the buyer is covered twice over and this
+ *    assertion is on the redundant half. Both copies are kept on purpose: the
+ *    action guards what the form posts, `updateProduct` guards every other
+ *    caller. What is asserted here is that the action still does its half.
  *  - `name="checkoutBullets"` on the input becoming unique per row: the form
  *    posts nothing this action reads and every list saves empty.
  */
@@ -26,7 +29,6 @@ const updated = vi.fn(async (_id: string, _input: unknown) => {});
 const created = vi.fn(async (_input: unknown) => "new-id");
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
-vi.mock("next/navigation", () => ({ redirect: () => {} }));
 vi.mock("@/lib/admin-guard", () => ({ requireAdmin: async () => {} }));
 vi.mock("@/lib/courses", () => ({ setProductCourses: async () => {} }));
 vi.mock("@/lib/admin", () => ({

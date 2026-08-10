@@ -9,7 +9,6 @@ import {
   columnCss,
   rowLayout,
   headingTag,
-  hiddenClasses,
   softAccent,
   typographyCss,
 } from "@/lib/block-style";
@@ -211,9 +210,7 @@ function BlockNode({
       {rules && <style dangerouslySetInnerHTML={{ __html: rules }} />}
       <div
         id={s.cssId || undefined}
-        className={[blockClass(block), at ? "" : hiddenClasses(block), s.cssClass]
-          .filter(Boolean)
-          .join(" ")}
+        className={[blockClass(block), s.cssClass].filter(Boolean).join(" ")}
         style={at ? blockCssAt(block, theme, at) : undefined}
         hidden={at ? hiddenAt(block, at) : undefined}
       >

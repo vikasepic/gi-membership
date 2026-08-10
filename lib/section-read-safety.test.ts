@@ -11,20 +11,27 @@ import { describe, it, expect, vi } from "vitest";
  * is that it CALLS it on the way out. So the row arrives from a stubbed client
  * instead of from Postgres, and the assertion is unchanged.
  *
- * Mutation this catches: dropping `sanitizeSectionContent(...)` from the map in
- * `getPageSections` — i.e. handing the page whatever is stored. The stored
- * script comes back whole and both cases fail.
+ * Mutations this catches: dropping `sanitizeSectionContent(...)` from the map
+ * in `getPageSections` — i.e. handing the page whatever is stored — and
+ * dropping either `.eq(...)`, which is how one owner's page would come back
+ * for another. A stub whose `eq` swallowed its arguments could not see the
+ * second, and a file called read safety that cannot see a cross-owner read is
+ * only half a name, so the calls are recorded.
  */
 
 type Row = Record<string, unknown>;
 let rows: Row[] = [];
+let filters: [string, unknown][] = [];
 
 // The call in getPageSections is .from().select().eq().eq().order() — every
 // step returns the builder and only the last one resolves.
 vi.mock("@/lib/supabase/server", () => {
   const builder: Record<string, unknown> = {
     select: () => builder,
-    eq: () => builder,
+    eq: (col: string, val: unknown) => {
+      filters.push([col, val]);
+      return builder;
+    },
     order: async () => ({ data: rows, error: null }),
   };
   return { createServiceClient: () => ({ from: () => builder }) };
@@ -83,5 +90,15 @@ describe("reading a section nobody sanitized", () => {
     // second band carries the script would still ship it.
     rows = [row("hero", []), row("benefits", [hostileHeading])];
     expect(await contentOf("benefits")).not.toContain("<script");
+  });
+});
+
+describe("which rows it asks for", () => {
+  it("narrows to this owner's page, not to whatever the table holds", async () => {
+    rows = [];
+    filters = [];
+    await getPageSections("product", "p1");
+    expect(filters).toContainEqual(["owner_type", "product"]);
+    expect(filters).toContainEqual(["owner_id", "p1"]);
   });
 });

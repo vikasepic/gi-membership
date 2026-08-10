@@ -43,12 +43,15 @@ describe("align", () => {
     expect(keys).toContain("blockAlign");
   });
 
-  it("is hidden once the button fills the row", () => {
-    // At 100% wide there is nothing left to align, and a control that cannot
-    // change anything is a control that looks broken.
+  it("is still offered once the button fills the row", () => {
+    // Rewritten to new intent, and the old one never bit: it asserted the
+    // absence of "align" from a list that only ever held "blockAlign". The
+    // control stays because Centre moves a full-width button too — the auto
+    // cross-axis margin stops the wrapper stretching and the anchor's 100%
+    // resolves against what is left.
     const full = newBlock("button", { props: { text: "x", fullWidth: true } });
     const keys = controlsFor(full).style.map((c) => ("key" in c ? c.key : ""));
-    expect(keys).not.toContain("align");
+    expect(keys).toContain("blockAlign");
   });
 
   it("can move an ordinary button", () => {

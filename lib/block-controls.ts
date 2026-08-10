@@ -103,7 +103,12 @@ const TYPOGRAPHY: Control[] = [
   style({ kind: "number", key: "size", label: "Size", min: 10, max: 96, step: 1, unit: "px", hint: "Unset inherits the page's scale." }),
   style({ kind: "number", key: "lineHeight", label: "Line height", min: 0.9, max: 2.4, step: 0.05 }),
   style({ kind: "number", key: "letterSpacing", label: "Letter spacing", min: -3, max: 8, step: 0.1, unit: "px" }),
-  style({ kind: "select", key: "weight", label: "Weight", options: [["400", "Regular"], ["500", "Medium"], ["600", "Semibold"], ["700", "Bold"], ["800", "Heavy"]] }),
+  // "Page default" first, the way fontFamily has one. Without it the unset
+  // value (null) matched no option, so a select rendered the FIRST one — a
+  // heading whose tablet weight comes from Site settings read "Regular" on the
+  // Tablet tab, which is a concrete number nothing draws, and picking it to
+  // confirm what the field said wrote a real 400 override.
+  style({ kind: "select", key: "weight", label: "Weight", options: [["", "Page default"], ["400", "Regular"], ["500", "Medium"], ["600", "Semibold"], ["700", "Bold"], ["800", "Heavy"]] }),
   style({ kind: "select", key: "transform", label: "Case", options: [["none", "As typed"], ["uppercase", "UPPER"], ["lowercase", "lower"], ["capitalize", "Title"]] }),
   style({ kind: "color", key: "color", label: "Colour", hint: "Unset follows the section's band." }),
 ];
@@ -113,27 +118,29 @@ const TYPOGRAPHY: Control[] = [
  *
  * It used to be two entries on the same `style.blockAlign`: "Align" on the
  * button's own Style tab, guarded on `fullWidth`, and "Block position" under
- * Advanced with no guard at all. So a full-width button hid the control in one
- * tab and offered it in the other, where it could not move anything — a
- * full-width box has no free space for an auto margin to take. Two names for
- * one value also read as two settings that might disagree.
+ * Advanced with no guard at all. Two names for one value read as two settings
+ * that might disagree, so they became one object.
+ *
+ * The `fullWidth` guard came with it and has now gone, because it was built on
+ * a belief the hint below disproves. Every block wrapper is a flex item of the
+ * column that holds it (`Blocks` in components/page/blocks.tsx), and a flex
+ * item with an auto cross-axis margin is not stretched — it shrink-to-fits.
+ * So a full-width button set to Centre draws a wrapper the width of its label
+ * (the anchor's `width:100%` resolves against that wrapper) sitting in the
+ * middle of the row. `blockAlign` visibly moves a full-width button, and with
+ * the guard in place there was no field in either tab to see that or clear it:
+ * anyone holding that combination had a page the panel could not change.
  *
  * Listed twice rather than moved, for the reason the duplicate was added:
  * nobody looks under Advanced to centre a button. One object means the label
- * and the guard cannot drift apart again.
- *
- * The hint says "shrinks" because it does: every block wrapper is a flex item
- * of the column that holds it (`Blocks` in components/page/blocks.tsx), and a
- * flex item with an auto cross-axis margin is not stretched — it takes its
- * content's width and the margin moves it. A max width is not required.
+ * and the hint cannot drift apart again.
  */
 const BLOCK_POSITION: Control = style({
   kind: "select",
   key: "blockAlign",
   label: "Block position",
   options: [["left", "Left"], ["center", "Centre"], ["right", "Right"]],
-  hint: "Where the box sits. Centre and Right shrink it to its contents and move it.",
-  when: (b) => !b.props.fullWidth,
+  hint: "Where the box sits. Centre and Right shrink it to its contents and move it — including a full-width button.",
 });
 
 const RATIOS: [string, string][] = [["16/9", "16:9"], ["4/3", "4:3"], ["1/1", "1:1"], ["3/4", "3:4"], ["21/9", "21:9"]];
@@ -234,7 +241,8 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       style({ kind: "number", key: "radius", label: "Corner", min: 0, max: 999, step: 4, unit: "px" }),
       group("Typography"),
       style({ kind: "number", key: "size", label: "Size", min: 10, max: 40, step: 1, unit: "px" }),
-      style({ kind: "select", key: "weight", label: "Weight", options: [["400", "Regular"], ["600", "Semibold"], ["700", "Bold"]] }),
+      // "Page default" for the same reason as the shared list above.
+      style({ kind: "select", key: "weight", label: "Weight", options: [["", "Page default"], ["400", "Regular"], ["600", "Semibold"], ["700", "Bold"]] }),
     ],
   },
 
@@ -973,8 +981,17 @@ export function writeControl(block: Block, c: Control, value: unknown, device: D
   const scope = scopeOf(c);
 
   // A dotted key still lands as ONE top-level override: `background.color` on
-  // mobile stores the whole background, because a sparse patch has no room for
-  // half of one and half a background is not a thing CSS can express either.
+  // mobile stores the whole background, because a per-device patch has no room
+  // to say "this half is set and that half is not".
+  //
+  // `styleFor`, deliberately NOT the `renderedStyle` that `readControl` uses.
+  // Reading has to show what the width beside it draws; writing has to merge
+  // onto what is STORED, or the six keys `renderedStyle` blanks at a narrow
+  // width would be baked into the patch as site defaults the moment anyone
+  // edited a sibling field. The two disagree on purpose. It costs nothing
+  // today because `current` is only consulted for dotted keys and every dotted
+  // key is `background.*`, which no narrow width blanks — if a dotted key ever
+  // lands in SITE_DEFAULTED_KEYS, that is the line to look at.
   const current =
     scope === "style"
       ? (styleFor(block, at) as unknown as Record<string, unknown>)

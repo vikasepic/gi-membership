@@ -181,7 +181,11 @@ export function typographyCss(s: BlockStyle): CSSProperties {
   if (s.size !== null) css.fontSize = `${s.size}px`;
   if (s.lineHeight !== null) css.lineHeight = s.lineHeight;
   if (s.letterSpacing !== null) css.letterSpacing = `${s.letterSpacing}px`;
-  if (s.weight !== null) css.fontWeight = s.weight;
+  // Truthiness, not `!== null`: the Weight select's "Page default" option
+  // writes "" (a select's value is a string), and `normalizeBlocks` only turns
+  // that into null on the next save. `font-weight:` with nothing after it is a
+  // broken declaration and would take the rest of the rule with it.
+  if (s.weight) css.fontWeight = s.weight;
   if (s.transform !== "none") css.textTransform = s.transform;
   return css;
 }
@@ -220,23 +224,38 @@ function wrapperCssFrom(block: Block, s: BlockStyle, theme: BandTheme): CSSPrope
 }
 
 /**
- * Which breakpoints hide this block.
+ * Which widths hide this block, as rules off the block's own selector.
  *
- * Returned as class names rather than inline CSS: a media query cannot be
- * expressed in a style attribute, and this is the one part of a block's look
- * that depends on the viewport rather than on the band.
+ * These were Tailwind classes — `max-md:hidden`, `max-lg:md:hidden`,
+ * `lg:hidden` — which made the hide flags the one part of a block's look whose
+ * breakpoints were not this file's. Two ways that hurt:
+ *
+ *  - Tailwind's screens are `rem`, so they scale with the root font size. A
+ *    reader who sets their browser text to Large gets a 20px root, `64rem`
+ *    becomes 1280px, and a block set to hide on desktop stayed visible for
+ *    another 256px while every other rule about it had already switched.
+ *  - Even at 16px they were off by one against DEVICE_MAX: `lg:hidden` starts
+ *    at 1024 and the typography query starts above 1023, so at 1023.5px a
+ *    block hidden on desktop was visible wearing its full desktop type — a
+ *    rendering it had at neither neighbouring width.
+ *
+ * Written as three bands that are exact complements off DEVICE_MAX, so every
+ * real number belongs to exactly one and there is one set of boundaries in the
+ * file rather than two that can drift.
  */
-export function hiddenClasses(block: Block): string {
+function hiddenRules(block: Block, sel: string): string[] {
   // Each flag is read at its own device, so switching to Mobile and unticking
   // "show this block" hides it on the phone — the device you were looking at —
   // rather than wherever the desktop copy of the flag happened to point.
   return [
-    styleFor(block, "mobile").hideMobile ? "max-md:hidden" : "",
-    styleFor(block, "tablet").hideTablet ? "max-lg:md:hidden" : "",
-    block.style.hideDesktop ? "lg:hidden" : "",
+    styleFor(block, "mobile").hideMobile ? `@media (max-width:${DEVICE_MAX.mobile}px)` : "",
+    styleFor(block, "tablet").hideTablet
+      ? `@media (width > ${DEVICE_MAX.mobile}px) and (max-width:${DEVICE_MAX.tablet}px)`
+      : "",
+    block.style.hideDesktop ? `@media (width > ${DEVICE_MAX.tablet}px)` : "",
   ]
     .filter(Boolean)
-    .join(" ");
+    .map((query) => `${query}{${sel}{display:none}}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -847,6 +866,11 @@ export function blockRules(block: Block, theme: BandTheme): string {
 
   if (block.type === "row") out.push(...rowRules(block, sel, theme));
   if (block.type === "cards") out.push(...cardsRules(block, sel));
+
+  // After the frame and the per-device boxes, so `display:none` wins on source
+  // order against whatever `display` those set — and before the custom CSS,
+  // which stays the last word.
+  out.push(...hiddenRules(block, sel));
 
   const custom = customCss(block.style.customCss, sel);
   if (custom) out.push(custom);

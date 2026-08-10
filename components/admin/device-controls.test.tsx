@@ -165,9 +165,15 @@ describe("what a control writes", () => {
     click(tab("Mobile"));
     click(tab("advanced"));
     // One override holds the colour, the image, the overlay and the gradient
-    // stops together — `writeControl` cannot store half a background — so a
+    // stops together — the per-device patch has no room for half of one — so a
     // chip offering to reset "Colour" was offering to take the image with it.
-    expect(document.querySelector('[aria-label="Reset Background for mobile"]')).toBeTruthy();
+    // Rewritten to new intent for the tail of the label: every background.*
+    // field grows one of these chips, so naming only the group gave seven
+    // buttons in one panel one accessible name. The group it clears is still
+    // first; the field it sits beside is what tells them apart.
+    const chips = [...document.querySelectorAll('[aria-label^="Reset Background for mobile"]')];
+    expect(chips.length).toBeGreaterThan(0);
+    expect(new Set(chips.map((c) => c.getAttribute("aria-label"))).size).toBe(chips.length);
     expect(document.querySelector('[aria-label="Reset Colour for mobile"]')).toBeFalsy();
   });
 });
@@ -212,7 +218,12 @@ describe("what the panel says a narrow width renders", () => {
     click(tab("Mobile"));
     click(tab("style"));
     expect(document.body.textContent).toContain("Site settings → Typography decides this at mobile width");
-    expect(document.body.textContent).toContain(`stops above ${DEVICE_MAX.tablet}px`);
+    // Rewritten to new intent: the rule is `@media (width > 1023px)`, so the
+    // desktop value APPLIES above 1023 and stops at 1023 and below. "Stops
+    // above 1023px" said the opposite of the CSS on the one string a person
+    // reads.
+    expect(document.body.textContent).toContain(`stops at ${DEVICE_MAX.tablet}px and narrower`);
+    expect(document.body.textContent).not.toContain("stops above");
   });
 
   it("says nothing of the sort for a key that still inherits", () => {

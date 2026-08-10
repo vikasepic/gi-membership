@@ -12,8 +12,13 @@ import { describe, it, expect, vi } from "vitest";
  * So the mutation each test catches is the same one twice over: delete the
  * guard, or move it below the client call. Either way the client throws and
  * the test fails with "nothing here should reach the database" rather than
- * with a message about the guard, which is the honest report — the guarantee
- * is the ORDER, not the wording.
+ * with a message about the guard.
+ *
+ * The refusals ARE matched on their wording, and there is no way around that:
+ * the only thing distinguishing "the guard fired" from "the client exploded"
+ * is which message came back. So rewording one of them reds this file with no
+ * behaviour change — annoying, and the alternative is a test that cannot tell
+ * the two apart, which is not a test. What the wording buys is the ORDER.
  */
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -30,6 +35,7 @@ vi.mock("@/lib/store", () => ({
 const { copyPage, saveSection } = await import("@/lib/pages");
 const { createMember } = await import("@/lib/members");
 const { moveItemTo } = await import("@/lib/curriculum-admin");
+const { SECTION_KEYS } = await import("@/lib/page-sections");
 
 const ID = "00000000-0000-0000-0000-0000000000a1";
 
@@ -69,9 +75,25 @@ describe("refusals that never reach Postgres", () => {
   it("lets a good value through to the client, so these are guards and not walls", async () => {
     // Without this the four above would still pass with the guards widened to
     // refuse everything — which is not the behaviour any of them describe.
+    //
+    // One line per guard, not per function: this covered `moveItemTo` and
+    // `copyPage` only, so `if (!def)` -> `if (true)` in saveSection (no section
+    // on any page can ever be saved) and `if (!email.includes("@"))` ->
+    // `if (true)` in createMember (no member can ever be created) both survived
+    // a full green suite.
     await expect(moveItemTo(ID, null, 0)).rejects.toThrow(/reach the database/);
     await expect(
       copyPage({ ownerType: "product", ownerId: ID }, { ownerType: "offer", ownerId: ID }),
     ).rejects.toThrow(/reach the database/);
+    await expect(
+      saveSection("product", ID, SECTION_KEYS[0], {
+        enabled: true, style: "paper", accent: null, variant: null, content: {},
+      }),
+    ).rejects.toThrow(/reach the database/);
+    // Returns rather than throws on a bad address, so the good one has to be
+    // the thing that gets as far as the client.
+    await expect(createMember({ email: "someone@example.com" })).rejects.toThrow(
+      /reach the database/,
+    );
   });
 });

@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { contrastRatio } from "@/lib/color";
 import { bandTheme, BAND_STYLE_KEYS } from "@/lib/page-sections";
-import { newBlock, type Block } from "@/lib/blocks";
+import { DEVICE_MAX, newBlock, type Block } from "@/lib/blocks";
 import {
   backgroundCss,
   blockColors,
+  blockRules,
   blockWrapperCss,
   dimCss,
-  hiddenClasses,
   typographyCss,
 } from "@/lib/block-style";
 
@@ -213,15 +213,40 @@ describe("blockWrapperCss", () => {
   });
 });
 
-describe("hiddenClasses", () => {
-  it("is empty when the block shows everywhere", () => {
-    expect(hiddenClasses(newBlock("text"))).toBe("");
+describe("hiding a block at a width", () => {
+  // Rewritten to new intent. These were Tailwind classes (`max-md:hidden`,
+  // `lg:hidden`), whose rem-based screens move with the reader's font size and
+  // start one pixel off DEVICE_MAX. Now they are rules off the block's own
+  // selector, on the same boundaries as everything else it emits.
+  const rules = (b: Block) => blockRules(b, paper);
+
+  it("says nothing when the block shows everywhere", () => {
+    expect(rules(newBlock("text"))).not.toContain("display:none");
   });
 
-  it("emits a class per hidden breakpoint", () => {
+  it("emits one band per hidden width", () => {
     const b = newBlock("text");
     const hidden = { ...b, style: { ...b.style, hideMobile: true, hideDesktop: true } };
-    expect(hiddenClasses(hidden).split(" ").sort()).toEqual(["lg:hidden", "max-md:hidden"]);
+    const css = rules(hidden);
+    expect(css).toContain(`@media (max-width:${DEVICE_MAX.mobile}px){.bk-${b.id}.bk-${b.id}{display:none}}`);
+    expect(css).toContain(`@media (width > ${DEVICE_MAX.tablet}px){.bk-${b.id}.bk-${b.id}{display:none}}`);
+  });
+
+  it("gives the tablet flag a band that touches neither neighbour", () => {
+    // The half pixel is the point: (…,767], (767,1023], (1023,…) leave no
+    // width belonging to two bands or to none.
+    const b = newBlock("text");
+    const hidden = { ...b, style: { ...b.style, hideTablet: true } };
+    expect(rules(hidden)).toContain(
+      `@media (width > ${DEVICE_MAX.mobile}px) and (max-width:${DEVICE_MAX.tablet}px){.bk-${b.id}.bk-${b.id}{display:none}}`,
+    );
+  });
+
+  it("hides after the frame, so display:none beats the display the frame set", () => {
+    const b = newBlock("row");
+    const hidden = { ...b, style: { ...b.style, hideMobile: true } };
+    const css = rules(hidden);
+    expect(css.indexOf("display:none")).toBeGreaterThan(css.indexOf(`.bk-${b.id}.bk-${b.id}{`));
   });
 });
 

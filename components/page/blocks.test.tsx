@@ -256,8 +256,15 @@ describe("style is applied", () => {
     expect(out).toContain("promo");
   });
 
-  it("emits hide classes for the breakpoints turned off", () => {
-    expect(render([make("heading", {}, { hideMobile: true })])).toContain("max-md:hidden");
+  it("hides at the breakpoints turned off", () => {
+    // Rewritten to new intent. This was a Tailwind class — `max-md:hidden` —
+    // whose rem-based screen moves with the reader's font size and starts one
+    // pixel off DEVICE_MAX. Now it is a rule on the block's own selector, on
+    // the same boundary as everything else the block emits.
+    const out = render([make("heading", {}, { hideMobile: true })]);
+    expect(out).toContain("@media (max-width:767px)");
+    expect(out).toContain("display:none");
+    expect(out).not.toContain("max-md:hidden");
   });
 
   it("does not emit an empty id attribute when none was set", () => {

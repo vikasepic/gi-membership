@@ -126,10 +126,16 @@ describe("block position is one control, not two", () => {
     );
   });
 
-  it("disappears from BOTH tabs once the button fills the row", () => {
+  it("stays offered once the button fills the row", () => {
+    // Rewritten to new intent. It used to assert the opposite, on the belief
+    // that a full-width box has no free space for an auto margin to take. It
+    // has: the wrapper is a flex item, an auto cross-axis margin stops it
+    // stretching, and the anchor's width:100% then resolves against a
+    // shrink-to-fit wrapper. So Centre really does move a full-width button,
+    // and hiding the field left that state unreachable from the panel.
     const full = newBlock("button", { props: { text: "x", fullWidth: true } });
-    expect(find(full, "style")).toBeUndefined();
-    expect(find(full, "advanced")).toBeUndefined();
+    expect(find(full, "style")).toBeTruthy();
+    expect(find(full, "advanced")).toBeTruthy();
   });
 
   it("stays under Advanced for everything that is not a button", () => {
