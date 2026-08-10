@@ -11,8 +11,10 @@ import { blockRendersNothing, styleFor, type Block, type Device } from "@/lib/bl
  * at all, an empty one renders nothing to aim at, and two nested columns look
  * identical to one. All three are unmistakable in a list.
  *
- * Read-only on purpose for now. Selecting from here and dragging on the canvas
- * are two ways of saying the same thing, and one of them already works.
+ * Selecting from here is not a duplicate of the canvas either. A column can
+ * only be clicked on the canvas where nothing is drawn on top of it, so a
+ * column with blocks in it has no target at all and its own background,
+ * padding and corner are unreachable. This tree is the only way in.
  */
 
 function hiddenAt(block: Block, device: Device): boolean {
@@ -140,30 +142,40 @@ function Row({
         )}
       </button>
 
-      {columns.map((col, i) => (
-        <ul key={i} className="flex flex-col">
-          {col.length === 0 ? (
-            <li
-              style={{ paddingLeft: 10 + (depth + 1) * 16 }}
-              className="border-b border-border py-1.5 text-[0.66rem] text-muted"
-            >
-              Column {i + 1} — empty
+      {columns.map((col, i) => {
+        // The same id the canvas builds, so both ways of selecting a column
+        // land on the same thing.
+        const colId = `${block.id}#${i}`;
+        return (
+          <ul key={i} className="flex flex-col">
+            <li>
+              <button
+                type="button"
+                onClick={() => onSelect(colId)}
+                style={{ paddingLeft: 10 + (depth + 1) * 16 }}
+                className={`flex w-full items-center gap-2 border-b border-border py-1.5 pr-2 text-left text-[0.66rem] ${
+                  selectedId === colId ? "bg-primary/12 text-primary" : "text-muted hover:bg-surface-2"
+                }`}
+              >
+                {/* One string, not a span: split text nodes read as
+                    "Column 1" plus a comment to anyone reading the markup. */}
+                {`Column ${i + 1}${col.length === 0 ? " — empty" : ""}`}
+              </button>
             </li>
-          ) : (
-            col.map((child) => (
+            {col.map((child) => (
               <Row
                 key={child.id}
                 block={child}
-                depth={depth + 1}
+                depth={depth + 2}
                 selectedId={selectedId}
                 device={device}
                 onSelect={onSelect}
                 onContext={onContext}
               />
-            ))
-          )}
-        </ul>
-      ))}
+            ))}
+          </ul>
+        );
+      })}
     </li>
   );
 }

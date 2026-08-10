@@ -266,3 +266,53 @@ describe("the block context menu", () => {
     expect(menuItems().some((t) => t.startsWith("Paste"))).toBe(true);
   });
 });
+
+/**
+ * Selecting a column from the structure tree.
+ *
+ * The canvas only selects a column where nothing is drawn over it, so a column
+ * with blocks in it cannot be reached there at all — and its background,
+ * padding and corner have been editable but unreachable the whole time.
+ */
+describe("selecting a column", () => {
+  const openTree = () =>
+    click([...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Structure")!);
+
+  const inspector = () => document.querySelectorAll("aside")[1]?.textContent ?? "";
+
+  const rowOf = (...cols: Block[][]) => {
+    const row = newBlock("row");
+    row.columns = cols;
+    return row;
+  };
+
+  it("opens the column's own controls from the tree, not the block's", () => {
+    mount([rowOf([newBlock("heading")], [newBlock("text")])]);
+    openTree();
+    const col2 = [...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === "Column 2");
+    expect(col2, "a column with blocks in it still gets a row in the tree").toBeTruthy();
+    click(col2!);
+
+    const panel = inspector();
+    expect(panel).toContain("Column 2");
+    // The three settings the bug report says exist but cannot be reached.
+    expect(panel).toContain("Background");
+    expect(panel).toContain("Padding");
+    expect(panel).toContain("Corner");
+    // If the click had landed on the text block inside it, the panel would
+    // offer the row's own layout instead — the failure this replaces.
+    expect(panel).not.toContain("Vertical align");
+  });
+
+  it("still right-clicks the blocks inside a column", () => {
+    // The column row sits between the row and its children in the markup; a
+    // wrong nesting there silently drops the children's menu.
+    mount([rowOf([newBlock("text")], [])]);
+    openTree();
+    const child = [...document.querySelectorAll("aside button")].find(
+      (b) => b.textContent?.trim() === "Text",
+    )!;
+    rightClick(child);
+    expect(menuItems()).toContain("Duplicate");
+  });
+});
