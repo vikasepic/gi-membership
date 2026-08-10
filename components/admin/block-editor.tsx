@@ -338,7 +338,12 @@ export function BlockEditor({
    * as it is. Keeping that in one place is what stops the two paths drifting.
    */
   function applyEdit(next: Block, key?: string) {
-    if (column) patch(column.row.id, setColumnStyle(column.row, column.index, next.style), key);
+    if (column)
+      patch(
+        column.row.id,
+        setColumnStyle(column.row, column.index, next.style, next.responsive),
+        key,
+      );
     else if (selected) patch(selected.id, next, key);
   }
 
@@ -737,7 +742,7 @@ export function BlockEditor({
                       // step but moving to the next control starts another.
                       onChange={(v) =>
                         applyEdit(
-                          writeControl(selected, c, v, column ? "desktop" : device),
+                          writeControl(selected, c, v, device),
                           `set:${selected.id}:${c.key}`,
                         )
                       }
@@ -1164,7 +1169,7 @@ function RowColumns({
           style={{
             borderColor: theme.rule,
             ...layout.columns[c],
-            ...columnCss(block, c, theme),
+            ...columnCss(block, c, theme, device),
           }}
         >
           <Zone

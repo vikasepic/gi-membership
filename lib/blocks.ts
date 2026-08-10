@@ -77,6 +77,51 @@ export type Background = {
 };
 
 /**
+ * How one column sits in the row that holds it.
+ *
+ * Only columns read this — every other block stores it and nothing looks at it.
+ * It lives on `BlockStyle` rather than in its own place on the row because a
+ * column is edited through `columnAsBlock`, and the whole point of that trick
+ * is that the ordinary control machinery — `writeControl`, `styleFor`, the
+ * per-device overrides, `STYLE_KEYS` — needs no special case. A key outside
+ * `baseStyle()` would be dropped by `normalizeOverride`, so "align this column
+ * to the top on mobile only" would silently not save.
+ *
+ * One nested object, the way `background` is, so a dotted control key lands as
+ * a single top-level override instead of nine.
+ *
+ * Every default here is the value that emits no declaration at all: a column
+ * nobody has touched has to produce exactly the CSS it produced before any of
+ * this existed.
+ */
+export type ColumnLayout = {
+  /** `full` leaves the width the row's own arithmetic gives this column. */
+  width: "full" | "custom";
+  widthValue: number | null;
+  widthUnit: "px" | "%" | "vw";
+  /** Empty means "whatever the row aligns its columns to". */
+  alignSelf: "" | "flex-start" | "center" | "flex-end" | "stretch";
+  /** Empty means "wherever it sits in the row". */
+  order: "" | "start" | "end" | "custom";
+  orderValue: number | null;
+  size: "none" | "grow" | "shrink" | "custom";
+  grow: number | null;
+  shrink: number | null;
+};
+
+export const emptyColumnLayout = (): ColumnLayout => ({
+  width: "full",
+  widthValue: null,
+  widthUnit: "px",
+  alignSelf: "",
+  order: "",
+  orderValue: null,
+  size: "none",
+  grow: null,
+  shrink: null,
+});
+
+/**
  * `null` means "inherit from the band".
  *
  * This is the whole reason a section preset can repaint what is standing on it.
@@ -134,6 +179,8 @@ export type BlockStyle = {
   hideDesktop: boolean;
   hideTablet: boolean;
   hideMobile: boolean;
+  /** Columns only — see `ColumnLayout`. Read by `rowLayout`, ignored elsewhere. */
+  col: ColumnLayout;
 };
 
 /**
@@ -205,8 +252,19 @@ export type Block = {
    * array on purpose: a row nobody has styled stores nothing, and an old row
    * reads back exactly as it did.
    */
-  columnStyles?: (BlockStyle | null)[];
+  columnStyles?: (ColumnStyle | null)[];
 };
+
+/**
+ * A column's style, and what it changes about itself on a narrower screen.
+ *
+ * The overrides ride on the column rather than on the row because there is one
+ * per column: a row's own `responsive` is already spoken for by the row's
+ * widths, gap and direction, and pushing three columns' worth of overrides into
+ * it would need a key per column index anyway. Same shape as `Block.responsive`
+ * so `styleFor` reads it without knowing it is a column.
+ */
+export type ColumnStyle = BlockStyle & { responsive?: ResponsiveStyle };
 
 /** Where a block is being put. */
 export type DropTarget =
@@ -258,6 +316,7 @@ export const baseStyle = (over: Partial<BlockStyle> = {}): BlockStyle => ({
   hideDesktop: false,
   hideTablet: false,
   hideMobile: false,
+  col: emptyColumnLayout(),
   ...over,
 });
 
@@ -524,6 +583,30 @@ function legacyWidth(
   };
 }
 
+/**
+ * A column's layout, from whatever is in the database.
+ *
+ * Numbers stay null rather than falling back to a default, because null is what
+ * "nobody set this" means downstream and a zero here is a real answer: `grow: 0`
+ * and `order: 0` both mean something a column may have been given on purpose.
+ */
+function normalizeColumnLayout(v: unknown): ColumnLayout {
+  const d = emptyColumnLayout();
+  if (!isRecord(v)) return d;
+  const n = (x: unknown): number | null => (typeof x === "number" && Number.isFinite(x) ? x : null);
+  return {
+    width: oneOf(v.width, ["full", "custom"] as const, d.width),
+    widthValue: n(v.widthValue),
+    widthUnit: oneOf(v.widthUnit, ["px", "%", "vw"] as const, d.widthUnit),
+    alignSelf: oneOf(v.alignSelf, ["", "flex-start", "center", "flex-end", "stretch"] as const, d.alignSelf),
+    order: oneOf(v.order, ["", "start", "end", "custom"] as const, d.order),
+    orderValue: n(v.orderValue),
+    size: oneOf(v.size, ["none", "grow", "shrink", "custom"] as const, d.size),
+    grow: n(v.grow),
+    shrink: n(v.shrink),
+  };
+}
+
 function normalizeStyle(v: unknown): BlockStyle {
   const d = baseStyle();
   if (!isRecord(v)) return d;
@@ -552,6 +635,7 @@ function normalizeStyle(v: unknown): BlockStyle {
     hideDesktop: v.hideDesktop === true,
     hideTablet: v.hideTablet === true,
     hideMobile: v.hideMobile === true,
+    col: normalizeColumnLayout(v.col),
   };
 }
 
@@ -746,19 +830,36 @@ export function columnWidths(props: Record<string, unknown>, count: number): num
  * columns as well is how the two drift apart.
  */
 export function columnAsBlock(row: Block, index: number): Block {
+  const stored = row.columnStyles?.[index];
+  // Split rather than passed whole: the overrides are stored inside the column's
+  // style object, and leaving them there as well would put a `responsive` key
+  // inside every style patch `writeControl` writes back.
+  const { responsive, ...style } = (stored ?? baseStyle()) as ColumnStyle;
   return {
     id: `${row.id}#${index}`,
     type: "row",
     props: {},
-    style: row.columnStyles?.[index] ?? baseStyle(),
+    style,
+    ...(responsive ? { responsive } : {}),
   };
 }
 
-/** Write a column's style back onto its row. */
-export function setColumnStyle(row: Block, index: number, style: BlockStyle): Block {
+/**
+ * Write a column's style back onto its row.
+ *
+ * `responsive` is rejoined here and omitted when there is none, because a
+ * column that was never touched on a phone must store no key for it — the same
+ * sparseness rule blocks obey, and the reason an untouched row stores nothing.
+ */
+export function setColumnStyle(
+  row: Block,
+  index: number,
+  style: BlockStyle,
+  responsive?: ResponsiveStyle,
+): Block {
   const count = row.columns?.length ?? 0;
   const next = Array.from({ length: count }, (_, i) =>
-    i === index ? style : (row.columnStyles?.[i] ?? null),
+    i === index ? { ...style, ...(responsive ? { responsive } : {}) } : (row.columnStyles?.[i] ?? null),
   );
   return { ...row, columnStyles: next };
 }
@@ -891,9 +992,17 @@ export function normalizeBlocks(value: unknown, depth = 0): Block[] {
       // double the size of every row on every page for nothing.
       const rawStyles = Array.isArray(raw.columnStyles) ? raw.columnStyles : [];
       if (rawStyles.some(isRecord)) {
-        block.columnStyles = Array.from({ length: want }, (_, i) =>
-          isRecord(rawStyles[i]) ? normalizeStyle(rawStyles[i]) : null,
-        );
+        block.columnStyles = Array.from({ length: want }, (_, i) => {
+          const raw = rawStyles[i];
+          if (!isRecord(raw)) return null;
+          const style: ColumnStyle = normalizeStyle(raw);
+          // Validated the same way a block's are, so an align-self set on mobile
+          // survives the trip through jsonb instead of being read back as part
+          // of the desktop style.
+          const r = normalizeResponsive(raw.responsive, style);
+          if (r) style.responsive = r;
+          return style;
+        });
       }
       // Anything the stored columns hold beyond `want` would otherwise vanish.
       if (stored.length > want) {

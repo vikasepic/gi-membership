@@ -9,6 +9,7 @@ import {
   styleFor,
   type Block,
   type BlockType,
+  type ColumnLayout,
   type Device,
 } from "@/lib/blocks";
 
@@ -562,6 +563,8 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
 // --- Advanced, identical for every block ------------------------------------
 
 const bgIs = (t: string) => (b: Block) => b.style.background.type === t;
+const colIs = <K extends keyof ColumnLayout>(key: K, v: ColumnLayout[K]) => (b: Block) =>
+  b.style.col?.[key] === v;
 
 /**
  * What a column can be given.
@@ -596,6 +599,57 @@ export const COLUMN_CONTROLS: Control[] = [
   group("Spacing"),
   style({ kind: "dim", key: "padding", label: "Padding" }),
   style({ kind: "number", key: "radius", label: "Corner", min: 0, max: 60, step: 2, unit: "px" }),
+
+  // How the column sits in its row, as opposed to what is drawn on it. Every
+  // default here emits no CSS, so a column that already had a background keeps
+  // rendering exactly what it rendered before these existed.
+  group("Layout"),
+  style({
+    kind: "select",
+    key: "col.width",
+    label: "Width",
+    options: [["full", "Full"], ["custom", "Custom"]],
+    hint: "Full keeps the share of the row set beside the other columns.",
+  }),
+  style({ kind: "number", key: "col.widthValue", label: "Size", min: 1, max: 2000, step: 1, when: colIs("width", "custom") }),
+  style({
+    kind: "select",
+    key: "col.widthUnit",
+    label: "Unit",
+    options: [["px", "px"], ["%", "%"], ["vw", "vw"]],
+    when: colIs("width", "custom"),
+    hint: "% is of the row, so it holds up on a phone. vw is of the window.",
+  }),
+  style({
+    kind: "select",
+    key: "col.alignSelf",
+    label: "Align self",
+    options: [
+      ["", "Inherit"],
+      ["flex-start", "Start"],
+      ["center", "Center"],
+      ["flex-end", "End"],
+      ["stretch", "Stretch"],
+    ],
+    hint: "Inherit follows the row's own vertical alignment.",
+  }),
+  style({
+    kind: "select",
+    key: "col.order",
+    label: "Order",
+    options: [["", "Default"], ["start", "First"], ["end", "Last"], ["custom", "Custom"]],
+    hint: "Moves the column on screen only — it stays where it is for a reader.",
+  }),
+  style({ kind: "number", key: "col.orderValue", label: "Position", min: -99, max: 99, step: 1, when: colIs("order", "custom") }),
+  style({
+    kind: "select",
+    key: "col.size",
+    label: "Size",
+    options: [["none", "None"], ["grow", "Grow"], ["shrink", "Shrink"], ["custom", "Custom"]],
+    hint: "Grow takes the space left over. Shrink gives space up first.",
+  }),
+  style({ kind: "number", key: "col.grow", label: "Grow", min: 0, max: 10, step: 1, when: colIs("size", "custom") }),
+  style({ kind: "number", key: "col.shrink", label: "Shrink", min: 0, max: 10, step: 1, when: colIs("size", "custom") }),
 ];
 
 export const ADVANCED_CONTROLS: Control[] = [

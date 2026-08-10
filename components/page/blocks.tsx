@@ -879,7 +879,10 @@ function Inner({
             <div
               key={i}
               className="flex flex-col"
-              style={{ ...layout?.columns[i], ...columnCss(block, i, theme) }}
+              // Nothing inline on a live page: the column's own style is in the
+              // rules with everything else, so what it changes on a phone can
+              // actually reach the phone.
+              style={at ? { ...layout?.columns[i], ...columnCss(block, i, theme, at) } : undefined}
             >
               {flow(col.filter((child) => !blockRendersNothing(child)), theme, money, cta, at)}
             </div>

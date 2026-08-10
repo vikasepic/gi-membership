@@ -7,8 +7,9 @@ import {
   splitColumnId,
   baseStyle,
   emptyBackground,
+  setStyleAt,
 } from "@/lib/blocks";
-import { columnCss, backgroundCss } from "@/lib/block-style";
+import { columnCss, backgroundCss, blockRules, rowLayout } from "@/lib/block-style";
 import { bandTheme } from "@/lib/page-sections";
 import { COLUMN_CONTROLS, writeControl } from "@/lib/block-controls";
 
@@ -146,6 +147,125 @@ describe("stored rows", () => {
       { type: "row", props: { widths: [100] }, columns: [[]], columnStyles: [{ radius: 4 }, { radius: 9 }] },
     ]);
     expect(back[0].columnStyles).toHaveLength(1);
+  });
+});
+
+// How a column places itself in its row: its own width, where it sits across
+// and down, and what it does with the space left over. All of it optional, and
+// all of it per device.
+
+describe("a column nobody has laid out", () => {
+  const layoutKeys = (b: ReturnType<typeof row2>) =>
+    rowLayout(b, "desktop").columns.map((c) => Object.keys(c).sort());
+
+  it("lays out exactly as it did before any of this existed", () => {
+    // The additive guarantee, and the only one worth testing: a row read back
+    // from a database written before `col` existed must emit the same three
+    // declarations it has always emitted, and nothing beside them.
+    const stored = normalizeBlocks([{ type: "row", props: { widths: [60, 40] }, columns: [[], []] }])[0];
+    expect(layoutKeys(stored)).toEqual([
+      ["minWidth", "order", "width"],
+      ["minWidth", "order", "width"],
+    ]);
+    expect(rowLayout(stored, "desktop").columns[0].width).toBe("calc(60% - 9.6px)");
+  });
+
+  it("adds nothing when the column was styled but not laid out", () => {
+    // A column given a background is the commonest reason a `columnStyles`
+    // entry exists at all. It must not start emitting flex properties.
+    const painted = setColumnStyle(row2(), 0, baseStyle({ radius: 12 }));
+    expect(layoutKeys(painted)[0]).toEqual(["minWidth", "order", "width"]);
+  });
+});
+
+describe("what a column can be told about itself", () => {
+  const withCol = (patch: Partial<ReturnType<typeof baseStyle>["col"]>, index = 0) =>
+    rowLayout(
+      setColumnStyle(row2(), index, baseStyle({ col: { ...baseStyle().col, ...patch } })),
+      "desktop",
+    ).columns[index];
+
+  it("takes a width of its own, in the unit it was given", () => {
+    expect(withCol({ width: "custom", widthValue: 320, widthUnit: "px" }).width).toBe("320px");
+    expect(withCol({ width: "custom", widthValue: 40, widthUnit: "vw" }).width).toBe("40vw");
+  });
+
+  it("keeps the width the row already stores when Custom has no number", () => {
+    // A max-width of nothing collapses a column to nothing. The share the row
+    // gave it is the answer that was already there.
+    expect(withCol({ width: "custom", widthValue: null }).width).toBe("calc(50% - 12px)");
+  });
+
+  it("aligns itself against the row", () => {
+    expect(withCol({ alignSelf: "flex-end" }).alignSelf).toBe("flex-end");
+    expect(withCol({ alignSelf: "" }).alignSelf).toBeUndefined();
+  });
+
+  it("moves to the front or the back without moving in the markup", () => {
+    // The row hands out 0 and 1, so -1 and 3 clear both ends without a magic
+    // number — and the DOM order stays what a screen reader follows.
+    expect(withCol({ order: "start" }, 1).order).toBe(-1);
+    expect(withCol({ order: "end" }, 0).order).toBe(3);
+    expect(withCol({ order: "custom", orderValue: 5 }, 0).order).toBe(5);
+  });
+
+  it("grows into the space left over, or gives it up", () => {
+    expect(withCol({ size: "grow" }).flexGrow).toBe(1);
+    expect(withCol({ size: "shrink" }).flexShrink).toBe(1);
+    expect(withCol({ size: "custom", grow: 2, shrink: 0 })).toMatchObject({ flexGrow: 2, flexShrink: 0 });
+    expect(withCol({ size: "none" }).flexGrow).toBeUndefined();
+  });
+
+  it("refuses a value nothing in CSS would accept", () => {
+    // Column styles are raw jsonb and normalize is not the last word — this is
+    // the boundary where stored text becomes a stylesheet.
+    const evil = normalizeBlocks([
+      {
+        type: "row",
+        columns: [[], []],
+        columnStyles: [{ col: { alignSelf: "url(evil)", width: "custom", widthValue: 1, widthUnit: ";}" } }, null],
+      },
+    ])[0];
+    const css = rowLayout(evil, "desktop").columns[0];
+    expect(css.alignSelf).toBeUndefined();
+    expect(css.width).toBe("1px");
+  });
+});
+
+describe("a column laid out for one device only", () => {
+  const onMobile = (patch: Partial<ReturnType<typeof baseStyle>["col"]>) => {
+    const edited = setStyleAt(columnAsBlock(row2(), 0), "mobile", {
+      col: { ...baseStyle().col, ...patch },
+    });
+    return setColumnStyle(row2(), 0, edited.style, edited.responsive);
+  };
+
+  it("says nothing about it at desktop", () => {
+    const r = onMobile({ order: "start" });
+    expect(rowLayout(r, "desktop").columns[0].order).toBe(0);
+    expect(rowLayout(r, "mobile").columns[0].order).toBe(-1);
+  });
+
+  it("reaches the live page as a media query, not a style attribute", () => {
+    // A style attribute has no media query, and it would outrank the one this
+    // emits anyway — so "first on a phone" would silently never happen.
+    const css = blockRules(onMobile({ order: "start" }), theme);
+    expect(css.split("max-width:767px")[1] ?? "").toContain("order:-1");
+    expect(css.split("max-width:767px")[0]).not.toContain("order:-1");
+  });
+
+  it("survives a round trip through the database", () => {
+    const back = normalizeBlocks(JSON.parse(JSON.stringify([onMobile({ alignSelf: "center", order: "end" })])));
+    const col = back[0].columnStyles?.[0];
+    expect(col?.responsive?.mobile.style.col).toMatchObject({ alignSelf: "center", order: "end" });
+    // Sparse, or every column on every page carries a full copy of a style it
+    // never changed — and the next desktop edit stops reaching the phone.
+    expect(Object.keys(col?.responsive?.tablet.style ?? {})).toEqual([]);
+  });
+
+  it("stores no overrides at all for a column that has none", () => {
+    const back = normalizeBlocks(JSON.parse(JSON.stringify([setColumnStyle(row2(), 0, baseStyle({ radius: 4 }))])));
+    expect(back[0].columnStyles?.[0]?.responsive).toBeUndefined();
   });
 });
 

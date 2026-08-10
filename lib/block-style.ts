@@ -3,6 +3,7 @@ import { readableInk, tint } from "@/lib/color";
 import { imageSrc, type BandTheme } from "@/lib/page-sections";
 import {
   DEVICE_MAX,
+  columnAsBlock,
   columnWidths,
   hasOverride,
   oneOf,
@@ -11,6 +12,7 @@ import {
   type Background,
   type Block,
   type BlockStyle,
+  type ColumnLayout,
   type Device,
   type Dim,
 } from "@/lib/blocks";
@@ -282,14 +284,67 @@ export function effectiveWidths(block: Block, device: Device): number[] {
 }
 
 /**
+ * A column's own style at one width, overrides layered on.
+ *
+ * Through `columnAsBlock` and `styleFor` rather than a second layering function:
+ * a column's overrides have the same shape a block's do precisely so there is
+ * only ever one implementation of "mobile sits on tablet sits on desktop".
+ */
+const columnStyleAt = (row: Block, index: number, device: Device): BlockStyle =>
+  styleFor(columnAsBlock(row, index), device);
+
+/**
+ * How one column places itself in the row, as declarations.
+ *
+ * Emitted only where something was actually set. Anything else and a row that
+ * has been given a background — the one thing that puts a `columnStyles` entry
+ * on it — would start emitting four flex properties it never emitted before,
+ * and "the page renders identically" would stop being provable.
+ */
+function columnLayoutCss(col: ColumnLayout | undefined, count: number): CSSProperties {
+  if (!col) return {};
+  const css: CSSProperties = {};
+
+  // A custom width with no number is not a width. The column keeps the one the
+  // row already stores for it, the same answer `legacyWidth` gives a block.
+  if (col.width === "custom" && typeof col.widthValue === "number" && col.widthValue > 0) {
+    css.width = `${col.widthValue}${oneOf(col.widthUnit, ["px", "%", "vw"] as const, "px")}`;
+  }
+
+  const self = oneOf(col.alignSelf, ["", "flex-start", "center", "flex-end", "stretch"] as const, "");
+  if (self) css.alignSelf = self;
+
+  // The row hands every column an `order` already — 0…n-1, or n…1 reversed — so
+  // first and last only have to clear those, not reach for a magic 99999.
+  if (col.order === "start") css.order = -1;
+  else if (col.order === "end") css.order = count + 1;
+  else if (col.order === "custom" && typeof col.orderValue === "number") {
+    css.order = Math.round(col.orderValue);
+  }
+
+  if (col.size === "grow") css.flexGrow = 1;
+  else if (col.size === "shrink") css.flexShrink = 1;
+  else if (col.size === "custom") {
+    if (typeof col.grow === "number" && col.grow >= 0) css.flexGrow = col.grow;
+    if (typeof col.shrink === "number" && col.shrink >= 0) css.flexShrink = col.shrink;
+  }
+  return css;
+}
+
+/**
  * What one column looks like, beyond how wide it is.
  *
  * Returned separately from the width because the width is arithmetic the row
  * owns and this is a decision someone made about that column.
  */
-export function columnCss(block: Block, index: number, theme: BandTheme): CSSProperties {
-  const s = block.columnStyles?.[index];
-  if (!s) return {};
+export function columnCss(
+  block: Block,
+  index: number,
+  theme: BandTheme,
+  device: Device = "desktop",
+): CSSProperties {
+  if (!block.columnStyles?.[index]) return {};
+  const s = columnStyleAt(block, index, device);
   const css: CSSProperties = { ...backgroundCss(s.background, theme) };
   const pad = dimCss(s.padding);
   if (pad !== "0px 0px 0px 0px") css.padding = pad;
@@ -384,6 +439,11 @@ export function rowLayout(block: Block, device: Device): RowLayout {
       // Order, not reversed markup: the columns have to stay where they are in
       // the DOM or the editor's drop targets and the reading order move too.
       order: flip ? count - i : i,
+      // Last, so a column that was given its own width or order overrules the
+      // row's — that is the whole point of setting one on the column.
+      ...(block.columnStyles?.[i]
+        ? columnLayoutCss(columnStyleAt(block, i, device).col, count)
+        : {}),
     })),
   };
 }
@@ -407,8 +467,9 @@ function cssProp(key: string): string {
  * Declarations as CSS text.
  *
  * Numbers are left bare. Every length in this file is already a string with a
- * unit; the only bare numbers are line-height and font-weight, which are
- * unitless by definition — so appending "px" here would be wrong every time.
+ * unit; the only bare numbers are line-height, font-weight and a column's
+ * order, flex-grow and flex-shrink, all unitless by definition — so appending
+ * "px" here would be wrong every time.
  */
 function declarations(css: CSSProperties): string {
   return Object.entries(css)
@@ -528,7 +589,7 @@ export function blockRules(block: Block, theme: BandTheme): string {
   const capped = mobilePaddingCap(block, sel);
   if (capped) out.push(capped);
 
-  if (block.type === "row") out.push(...rowRules(block, sel));
+  if (block.type === "row") out.push(...rowRules(block, sel, theme));
   if (block.type === "cards") out.push(...cardsRules(block, sel));
 
   const custom = customCss(block.style.customCss, sel);
@@ -589,9 +650,19 @@ export function mobilePaddingNotice(block: Block): string | null {
  * purpose: a row nested inside a column would otherwise match its parent's
  * selector and take the outer row's widths.
  */
-function rowRules(block: Block, sel: string): string[] {
+function rowRules(block: Block, sel: string, theme: BandTheme): string[] {
   const out: string[] = [];
-  const at = (device: Device) => rowLayout(block, device);
+  // A column's decoration belongs in the rule, not on the element: it holds
+  // per-device overrides now, and a background set on mobile cannot reach the
+  // live page from a style attribute — an attribute has no media query, and it
+  // would outrank the one this emits anyway.
+  const at = (device: Device): RowLayout => {
+    const layout = rowLayout(block, device);
+    return {
+      container: layout.container,
+      columns: layout.columns.map((col, i) => ({ ...col, ...columnCss(block, i, theme, device) })),
+    };
+  };
   const write = (layout: RowLayout, prev: RowLayout | null): string => {
     const parts: string[] = [];
     const box = prev ? diff(layout.container, prev.container) : layout.container;
