@@ -655,7 +655,11 @@ export function BlockEditor({
                     </button>
                   ) : (
                     <IconBtn label="Delete" onClick={() => setConfirmDelete(true)}>
-                      ✕
+                      {/* A bin, not a cross. Every other ✕ in this editor
+                          closes something, and a delete wearing the same
+                          picture is one people avoid pressing — or press by
+                          mistake expecting the panel to shut. */}
+                      <TrashIcon />
                     </IconBtn>
                   )}
                   </>
@@ -778,6 +782,15 @@ const Dragging = createContext<{ label: string | null; type: BlockType | null }>
   label: null,
   type: null,
 });
+
+/** A bin. Drawn rather than typed, so it reads as a delete at 12px. */
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className="size-3.5 fill-current">
+      <path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 11.2a2 2 0 0 1-2 1.8H9a2 2 0 0 1-2-1.8L6 9Zm4 2v9h2v-9h-2Zm4 0v9h2v-9h-2Z" />
+    </svg>
+  );
+}
 
 function IconBtn({
   label,

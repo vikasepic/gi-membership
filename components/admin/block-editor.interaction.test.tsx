@@ -42,6 +42,14 @@ function mount(initial: Block[]) {
 const click = (el: Element) =>
   act(() => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
 
+const rightClick = (el: Element) =>
+  act(() => {
+    el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+  });
+
+const menuItems = () =>
+  [...document.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent?.trim() ?? "");
+
 describe("editing in the canvas", () => {
   it("selecting a heading by clicking it opens its controls", () => {
     const h = { ...newBlock("heading"), props: { text: "Click me", tag: "h2" } };
@@ -215,5 +223,46 @@ describe("dropping into a column", () => {
     dragTo(document.querySelector('[data-zone="root"]')!);
     expect(state.blocks).toHaveLength(1);
     expect(state.blocks[0].id).toBe("h1");
+  });
+});
+
+
+/**
+ * Right-clicking a block.
+ *
+ * Rendered markup cannot answer this: the menu only exists once a contextmenu
+ * event has actually been dispatched at a block, and it lands in a portal
+ * outside the editor's own tree.
+ */
+describe("the block context menu", () => {
+  it("opens on a right-click, with the same things the toolbar offers", () => {
+    mount([newBlock("text")]);
+    rightClick(document.querySelector("[data-block]")!);
+    const items = menuItems();
+    expect(items).toContain("Copy");
+    expect(items).toContain("Duplicate");
+    expect(items).toContain("Delete");
+  });
+
+  it("deletes the block it was opened on", () => {
+    const editor = mount([newBlock("text"), newBlock("heading")]);
+    rightClick(document.querySelector("[data-block]")!);
+    click([...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent?.trim() === "Delete")!);
+    expect(editor.blocks).toHaveLength(1);
+    expect(editor.blocks[0].type).toBe("heading");
+  });
+
+  it("duplicates from the menu", () => {
+    const editor = mount([newBlock("text")]);
+    rightClick(document.querySelector("[data-block]")!);
+    click([...document.querySelectorAll('[role="menuitem"]')].find((b) => b.textContent?.trim() === "Duplicate")!);
+    expect(editor.blocks).toHaveLength(2);
+  });
+
+  it("says why paste is unavailable rather than hiding it", () => {
+    // An option that vanishes is one people assume was never there.
+    mount([newBlock("text")]);
+    rightClick(document.querySelector("[data-block]")!);
+    expect(menuItems().some((t) => t.startsWith("Paste"))).toBe(true);
   });
 });

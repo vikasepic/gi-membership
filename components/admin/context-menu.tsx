@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 /**
@@ -36,25 +36,41 @@ export function menuAt(e: React.MouseEvent, items: MenuItem[]): MenuState {
 
 export function ContextMenu({ state, onClose }: { state: MenuState; onClose: () => void }) {
   const [mounted, setMounted] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!state) return;
-    const close = () => onClose();
+    /**
+     * Close on a click OUTSIDE the menu.
+     *
+     * The `true` below is the capture phase, which runs before the element's
+     * own handler — so without this guard the menu unmounted before its own
+     * item could be clicked, and every entry did nothing at all. Capture is
+     * still right for the outside case: a click on something that stops
+     * propagation has to close the menu too.
+     */
+    const close = (e: Event) => {
+      if (e.target instanceof Node && menuRef.current?.contains(e.target)) return;
+      onClose();
+    };
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     // Capture, so a click on something that stops propagation still closes it.
     window.addEventListener("click", close, true);
     window.addEventListener("contextmenu", close, true);
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
+    // These never come from inside the menu, and both mean it is now pointing
+    // at whatever has moved into that spot.
+    const dismiss = () => onClose();
+    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
     window.addEventListener("keydown", key);
     return () => {
       window.removeEventListener("click", close, true);
       window.removeEventListener("contextmenu", close, true);
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
       window.removeEventListener("keydown", key);
     };
   }, [state, onClose]);
@@ -70,9 +86,10 @@ export function ContextMenu({ state, onClose }: { state: MenuState; onClose: () 
 
   return createPortal(
     <div
+      ref={menuRef}
       role="menu"
       style={{ left: Math.max(8, x), top: Math.max(8, y), width: WIDTH }}
-      className="fixed z-[100] overflow-hidden rounded-xl border border-border bg-surface py-1 shadow-[0_18px_40px_-16px_rgba(0,0,0,.45)]"
+      className="fixed z-[200] overflow-hidden rounded-xl border border-border bg-surface py-1 shadow-[0_18px_40px_-16px_rgba(0,0,0,.45)]"
       onContextMenu={(e) => e.preventDefault()}
     >
       {state.items.map((item) => (
