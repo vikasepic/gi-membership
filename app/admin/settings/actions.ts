@@ -33,6 +33,9 @@ function parseBaseline(raw: FormDataEntryValue | null): Record<string, unknown> 
   }
 }
 
+/** Settings that are an object, posted as one JSON string from a hidden input. */
+const JSON_FIELDS = new Set(["siteTypography", "siteShell"]);
+
 const FIELD_LABELS: Record<string, string> = {
   legalEntity: "the registered entity",
   address: "the address",
@@ -86,19 +89,21 @@ export async function saveSettingsGroup(
       else patch.name = value;
       continue;
     }
-    // The one field that is an object. It posts as JSON from a hidden input,
-    // so it cannot go through `shape.safeParse(raw)` below: that would hand a
+    // The fields that are objects. They post as JSON from a hidden input, so
+    // they cannot go through `shape.safeParse(raw)` below: that would hand a
     // string to a schema expecting an object, get back the all-empty default,
-    // and blank the whole store's typography on any save of this group.
-    if (field === "siteTypography") {
-      const raw = formData.get("siteTypography");
+    // and blank the whole store's typography — or its whole header — on any
+    // save of that group.
+    if (JSON_FIELDS.has(field as string)) {
+      const raw = formData.get(field as string);
       // Not posted at all means this form never carried it — leave what is
       // stored alone rather than replacing it with nothing.
       if (typeof raw !== "string") continue;
       try {
-        patch.siteTypography = SETTINGS_SCHEMA.shape.siteTypography.parse(JSON.parse(raw));
+        const shape = SETTINGS_SCHEMA.shape[field as "siteTypography" | "siteShell"];
+        patch[field as string] = shape.parse(JSON.parse(raw));
       } catch {
-        errors.siteTypography = "The typography could not be read. Reload and try again.";
+        errors[field as string] = "That could not be read. Reload and try again.";
       }
       continue;
     }

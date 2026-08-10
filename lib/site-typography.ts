@@ -103,15 +103,18 @@ const SIZE = /^(\d*\.?\d+(px|em|rem))?$/;
 const LINE = /^(\d*\.?\d+(px|em)?)?$/;
 const SPACE = /^(-?\d*\.?\d+(px|em))?$/;
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
+// Exported for `lib/site-shell`, which reads a jsonb blob under the same two
+// rules — never throw, and every string it keeps ends up in a stylesheet. One
+// copy, because a second sanitiser is a sanitiser that drifts.
+export const isRecord = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
 
 /** A field that is a CSS token or nothing at all. Never throws. */
-const cleaned = (clean: (raw: string) => string) =>
+export const cleaned = (clean: (raw: string) => string) =>
   z.unknown().optional().transform((v) => clean(typeof v === "string" ? v.trim() : ""));
 
-const matching = (re: RegExp) => cleaned((raw) => (re.test(raw.toLowerCase()) ? raw.toLowerCase() : ""));
-const oneOf = (values: readonly string[]) =>
+export const matching = (re: RegExp) => cleaned((raw) => (re.test(raw.toLowerCase()) ? raw.toLowerCase() : ""));
+export const oneOf = (values: readonly string[]) =>
   cleaned((raw) => (values.includes(raw.toLowerCase()) ? raw.toLowerCase() : ""));
 
 /** A nested object that is allowed to be missing, which is the usual case. */

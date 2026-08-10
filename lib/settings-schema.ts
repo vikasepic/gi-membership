@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
 import { SITE_TYPOGRAPHY_SCHEMA } from "@/lib/site-typography";
+import { SITE_SHELL_SCHEMA } from "@/lib/site-shell";
 
 /**
  * Everything that is true of the whole store.
@@ -66,6 +67,12 @@ export const SETTINGS_SCHEMA = z.object({
   // exactly as it renders today.
   siteTypography: SITE_TYPOGRAPHY_SCHEMA,
 
+  // ---- Header & navigation ------------------------------------------------
+  // One object for the same reason: the header, its links, its call to action
+  // and the footer are about thirty values, and the panel posts them as one
+  // JSON string. Empty means the shell exactly as it was hardcoded.
+  siteShell: SITE_SHELL_SCHEMA,
+
   // ---- Legal -------------------------------------------------------------
   legalEntity: z.string().trim().max(160).default(LEGAL_DEFAULTS.legalEntity),
   address: z.string().trim().max(400).default(LEGAL_DEFAULTS.address),
@@ -120,6 +127,7 @@ export const SETTINGS_GROUPS = [
   { key: "identity", label: "Identity" },
   { key: "brand", label: "Brand" },
   { key: "typography", label: "Typography" },
+  { key: "shell", label: "Header & navigation" },
   { key: "commerce", label: "Commerce" },
   { key: "seo", label: "SEO & social" },
   { key: "advanced", label: "Advanced" },
@@ -142,6 +150,7 @@ export const GROUP_FIELDS: Record<SettingsGroupKey, readonly (keyof Settings)[]>
   identity: ["name", "tagline"],
   brand: ["primaryColor", "deepColor", "logoPath", "faviconPath"],
   typography: ["headingFont", "bodyFont", "siteTypography"],
+  shell: ["siteShell"],
   commerce: ["currency", "contactEmail", "replyTime"],
   seo: [
     "metaTitle",

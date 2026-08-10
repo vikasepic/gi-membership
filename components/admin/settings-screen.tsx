@@ -10,6 +10,7 @@ import { saveSettingsGroup, type SaveState } from "@/app/admin/settings/actions"
 import { GROUP_FIELDS, SETTINGS_GROUPS, type Settings, type SettingsGroupKey } from "@/lib/settings-schema";
 import { usePresence, PresenceNote } from "@/components/admin/presence";
 import { TypographyFields, FontLibrary, type InstalledFont } from "@/components/admin/typography-fields";
+import { ShellFields } from "@/components/admin/shell-fields";
 
 /**
  * Site settings, in groups.
@@ -163,6 +164,7 @@ function GroupForm({
           errors={errors}
         />
       )}
+      {group === "shell" && <ShellFields siteShell={settings.siteShell} errors={errors} />}
       {group === "commerce" && <CommerceFields s={settings} errors={errors} />}
       {group === "seo" && <SeoFields s={settings} errors={errors} />}
       {group === "advanced" && <AdvancedFields s={settings} errors={errors} />}

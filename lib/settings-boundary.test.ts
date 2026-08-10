@@ -18,6 +18,9 @@ const CLIENT_FILES = [
   // scale. Neither is server-only today, and this is the line that says so if
   // one of them ever grows a database client.
   "components/admin/typography-fields.tsx",
+  // The Header & navigation panel and the shell it configures both read
+  // `lib/site-shell`, which is why that module holds no database client.
+  "components/admin/shell-fields.tsx",
   "components/app-shell.tsx",
 ];
 
