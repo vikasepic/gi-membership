@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getProductById } from "@/lib/admin";
-import { getPageSections, getPageSettings } from "@/lib/pages";
+import { getPageSections, getPageSettings , listPageSources } from "@/lib/pages";
 import { PageEditor } from "@/components/admin/page-editor";
 import { PageSettings } from "@/components/admin/page-settings";
 import { money } from "@/lib/money";
@@ -17,9 +17,10 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
   const product = await getProductById(id);
   if (!product) notFound();
 
-  const [rows, settings] = await Promise.all([
+  const [rows, settings, pageSources] = await Promise.all([
     getPageSections("product", id),
     getPageSettings("product", id),
+    listPageSources(),
   ]);
 
   return (
@@ -67,6 +68,7 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
       </details>
 
       <PageEditor
+        pageSources={pageSources}
         ownerType="product"
         ownerId={id}
         initial={rows}

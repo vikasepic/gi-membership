@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
-import { savePageSettings, saveSection, seedPage, StaleSectionError, type OwnerType } from "@/lib/pages";
+import { savePageSettings, saveSection, seedPage, copyPage, StaleSectionError, type OwnerType } from "@/lib/pages";
 import { sectionDef } from "@/lib/page-sections";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
 import { priceProblems, priceProblemMessage } from "@/lib/page-price-truth";
@@ -143,5 +143,38 @@ export async function savePageSettingsAction(
     return { saved: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not save." };
+  }
+}
+
+export type CopyPageState = { error?: string; message?: string };
+
+/**
+ * Use another page as a template.
+ *
+ * Replaces every section here with that page's. The prices and buy buttons
+ * still belong to whatever owns THIS page — they are resolved at render — so a
+ * copied page sells the thing it was copied onto, not the thing it came from.
+ */
+export async function copyPageAction(
+  _prev: CopyPageState,
+  formData: FormData,
+): Promise<CopyPageState> {
+  await requireAdmin();
+
+  const owner = String(formData.get("ownerType") ?? "") as OwnerType;
+  const ownerId = String(formData.get("ownerId") ?? "");
+  const [fromType, fromId] = String(formData.get("from") ?? "").split(":");
+  if (owner !== "product" && owner !== "offer") return { error: "Bad owner." };
+  if ((fromType !== "product" && fromType !== "offer") || !fromId) {
+    return { error: "Choose a page to copy from." };
+  }
+
+  try {
+    const n = await copyPage({ ownerType: fromType, ownerId: fromId }, { ownerType: owner, ownerId });
+    revalidatePath(`/admin/${owner === "offer" ? "offers" : "products"}/${ownerId}/page`);
+    revalidatePath("/p", "layout");
+    return { message: `${n} sections copied. Reload to edit them.` };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not copy that page." };
   }
 }

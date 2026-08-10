@@ -1,6 +1,7 @@
 "use client";
 
 import { MediaButton } from "@/components/admin/media-modal";
+import { copyToClipboard, readClipboard, onClipboardChange, type Clip } from "@/lib/clipboard";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -27,8 +28,10 @@ import {
   addTarget,
   blockRendersNothing,
   duplicateBlock,
+  reid,
   edgeIndex,
   findBlock,
+  normalizeBlocks,
   insertBlock,
   moveBlock,
   newBlock,
@@ -138,6 +141,20 @@ export function BlockEditor({
    * page: this is one small list, several components above, and a builder that
    * opened before the fetch lands simply shows "Page default" until it does.
    */
+  /**
+   * What is on the clipboard, so the paste control can name it.
+   *
+   * Watched rather than read once: a block copied in another tab — the other
+   * product's editor, which is the whole point — has to become pasteable here
+   * without a reload.
+   */
+  const [clip, setClip] = useState<Clip | null>(null);
+  useEffect(() => {
+    const sync = () => setClip(readClipboard());
+    sync();
+    return onClipboardChange(sync);
+  }, []);
+
   const [families, setFamilies] = useState<string[]>([]);
   useEffect(() => {
     let alive = true;
@@ -455,9 +472,27 @@ export function BlockEditor({
               target={(index) => ({ zone: "root", index })}
             />
             {blocks.length === 0 && (
-              <p className="rounded-xl border border-dashed p-8 text-center text-sm" style={{ color: theme.muted, borderColor: theme.rule }}>
-                Drag a block here, or click one on the left.
-              </p>
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-8 text-center text-sm" style={{ color: theme.muted, borderColor: theme.rule }}>
+                <span>Drag a block here, or click one on the left.</span>
+                {/* Without this the only way to paste is beside an existing
+                    block, and the section you most want to paste into is the
+                    empty one. */}
+                {clip?.kind === "block" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const copy = reid(normalizeBlocks([clip.data])[0]);
+                      if (!copy) return;
+                      commit(insertBlock(blocks, copy, { zone: "root", index: 0 }));
+                      setSelectedId(copy.id);
+                    }}
+                    className="rounded-full border px-3 py-1.5 text-xs"
+                    style={{ borderColor: theme.rule }}
+                  >
+                    Paste {clip.label}
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -495,6 +530,48 @@ export function BlockEditor({
                   <IconBtn label="Duplicate" onClick={() => commit(duplicateBlock(blocks, selected.id))}>
                     ⧉
                   </IconBtn>
+                  {/* Copy travels between pages; duplicate stays here. Both
+                      exist because "another one of these, right there" and
+                      "this one, on the other product" are different jobs. */}
+                  <IconBtn
+                    label="Copy — paste it on any page"
+                    onClick={() =>
+                      copyToClipboard({
+                        kind: "block",
+                        label: BLOCK_LABEL[selected.type] ?? selected.type,
+                        data: selected,
+                      })
+                    }
+                  >
+                    ⧉+
+                  </IconBtn>
+                  {clip?.kind === "block" && (
+                    <IconBtn
+                      label={`Paste ${clip.label} after this`}
+                      onClick={() => {
+                        const found = findBlock(blocks, selected.id);
+                        if (!found) return;
+                        // Fresh ids, or the pasted block and the one it was
+                        // copied from answer to the same id and selecting
+                        // either selects the first.
+                        const copy = reid(normalizeBlocks([clip.data])[0]);
+                        if (!copy) return;
+                        const target =
+                          found.parentId === null
+                            ? ({ zone: "root", index: found.index + 1 } as const)
+                            : ({
+                                zone: "column",
+                                rowId: found.parentId,
+                                column: found.column ?? 0,
+                                index: found.index + 1,
+                              } as const);
+                        commit(insertBlock(blocks, copy, target));
+                        setSelectedId(copy.id);
+                      }}
+                    >
+                      ⎘
+                    </IconBtn>
+                  )}
                   {/* Two clicks, like every other delete here. Undo exists,
                       but a block removed by a mis-aimed click on a 24px target
                       is one you have to notice before you can undo it. */}

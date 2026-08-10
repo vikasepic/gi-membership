@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { saveSectionAction } from "@/app/admin/pages/actions";
 import { usePresence, PresenceNote } from "@/components/admin/presence";
+import { copyToClipboard, readClipboard, onClipboardChange, type Clip } from "@/lib/clipboard";
+import { CopyPage } from "@/components/admin/copy-page";
+import type { PageSource } from "@/lib/pages";
 import { SectionBand, type PageMoney } from "@/components/page/sales-page";
 import {
   BAND_STYLES,
@@ -42,12 +45,15 @@ export function PageEditor({
   initial,
   money,
   liveHref,
+  pageSources = [],
 }: {
   ownerType: OwnerType;
   ownerId: string;
   initial: SectionRow[];
   money: PageMoney;
   liveHref: string;
+  /** Other pages that could be used as a template. */
+  pageSources?: PageSource[];
 }) {
   const [rows, setRows] = useState<SectionRow[]>(initial);
   const [openKey, setOpenKey] = useState<string | null>(initial[0]?.sectionKey ?? null);
@@ -153,6 +159,15 @@ export function PageEditor({
     openKey ? `${ownerType}:${ownerId}:${openKey}` : null,
   );
 
+  // A section copied in another product's editor has to be pasteable here
+  // without a reload — that is the whole point of copying it.
+  const [clip, setClip] = useState<Clip | null>(null);
+  useEffect(() => {
+    const sync = () => setClip(readClipboard());
+    sync();
+    return onClipboardChange(sync);
+  }, []);
+
   return (
     <div className="flex flex-col gap-4">
       {notBuyable && (
@@ -176,6 +191,15 @@ export function PageEditor({
           {saving ? "Saving…" : dirtyKeys.length ? `Save ${dirtyKeys.length} change${dirtyKeys.length > 1 ? "s" : ""}` : "Saved"}
         </button>
         <PresenceNote editors={editors} what={openDef ? `the ${openDef.title} section` : "this section"} />
+        <CopyPage
+          ownerType={ownerType}
+          ownerId={ownerId}
+          sources={pageSources}
+          hasSections={rows.some((r) => {
+            const view = buildSectionView(r);
+            return !!view && blocksForSection(view).length > 0;
+          })}
+        />
         <span className="text-xs text-muted" aria-live="polite">
           {saveError
             ? saveError
@@ -225,6 +249,7 @@ export function PageEditor({
             money={money}
             onChange={(next) => patch(openRow.sectionKey, next)}
             device={device}
+            clip={clip}
           />
         ) : (
           <p className="p-6 text-sm text-muted">Pick a section on the left.</p>
@@ -338,11 +363,13 @@ function SectionPanel({
   money,
   onChange,
   device,
+  clip,
 }: {
   row: SectionRow;
   money: PageMoney;
   onChange: (next: Partial<SectionRow>) => void;
   device: Device;
+  clip: Clip | null;
 }) {
   const def = sectionDef(row.sectionKey)!;
   const content = useMemo<Draft>(
@@ -372,6 +399,7 @@ function SectionPanel({
           {def.purpose}
         </span>
         {/* Everything that acts on this section, together on the right. */}
+        <SectionClip row={row} clip={clip} onChange={onChange} />
 
         {/* One editor. The typed fields were a form; this is the editor. A
             section that has never been opened here converts its stored fields
@@ -481,5 +509,83 @@ function BlockCanvasField({
         />
       )}
     </>
+  );
+}
+
+
+/**
+ * Copy this section, or paste one over it.
+ *
+ * A section is its content and its presentation — the band, the accent, the
+ * background, the blocks. All of it travels, because a section pasted without
+ * its band is a section that looks like a different one.
+ *
+ * What does NOT travel is which section it is. Pasting a Problem into an
+ * Authority slot would leave a band whose name and purpose no longer describe
+ * what is in it, so a paste is refused across kinds and says why. The paste
+ * button simply does not appear otherwise.
+ */
+function SectionClip({
+  row,
+  clip,
+  onChange,
+}: {
+  row: SectionRow;
+  clip: Clip | null;
+  onChange: (next: Partial<SectionRow>) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const pasteable = clip?.kind === "section" && clip.sectionKey === row.sectionKey;
+
+  return (
+    <span className="flex shrink-0 items-center gap-2">
+      <button
+        type="button"
+        onClick={() => {
+          copyToClipboard({
+            kind: "section",
+            label: sectionDef(row.sectionKey)?.title ?? row.sectionKey,
+            sectionKey: row.sectionKey,
+            data: {
+              content: row.content,
+              style: row.style,
+              accent: row.accent,
+              variant: row.variant,
+              background: row.background,
+              cssId: row.cssId,
+              cssClass: row.cssClass,
+            },
+          });
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 2500);
+        }}
+        className="rounded-md border border-border px-2 py-1 text-[0.66rem] text-muted transition-colors hover:border-fg hover:text-fg"
+        title="Copy this section — paste it into the same section on another page"
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
+      {pasteable && (
+        <button
+          type="button"
+          onClick={() => {
+            const d = clip.data as Partial<SectionRow>;
+            // Nothing is written until Save, like every other edit here.
+            onChange({
+              content: d.content,
+              style: d.style,
+              accent: d.accent ?? null,
+              variant: d.variant ?? null,
+              background: d.background,
+              cssId: d.cssId ?? null,
+              cssClass: d.cssClass ?? null,
+            });
+          }}
+          className="rounded-md border border-primary/50 px-2 py-1 text-[0.66rem] text-primary transition-colors hover:bg-primary/10"
+          title="Replace this section with the copied one"
+        >
+          Paste
+        </button>
+      )}
+    </span>
   );
 }

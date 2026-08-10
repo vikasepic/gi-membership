@@ -965,7 +965,14 @@ export function duplicateBlock(blocks: Block[], id: string): Block[] {
   return insertBlock(blocks, copy, target);
 }
 
-function reid(b: Block): Block {
+/**
+ * A copy with fresh ids, all the way down.
+ *
+ * Exported because paste needs exactly this: a block copied from another page
+ * carries the ids it had there, and two blocks with one id means selecting
+ * either selects the first, and deleting either deletes the first.
+ */
+export function reid(b: Block): Block {
   return {
     ...b,
     id: newId(),

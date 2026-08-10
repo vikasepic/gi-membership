@@ -279,3 +279,110 @@ export async function savePageSettings(
   );
   if (error) throw new Error(`savePageSettings: ${error.message}`);
 }
+
+/** A page that exists and could be copied from. */
+export type PageSource = {
+  ownerType: OwnerType;
+  ownerId: string;
+  title: string;
+  sections: number;
+};
+
+/**
+ * Every page with something on it, for the "copy from" picker.
+ *
+ * Only pages with rows: a page nobody has written is a page with nothing to
+ * copy, and offering it makes the list longer without making it more useful.
+ */
+export async function listPageSources(): Promise<PageSource[]> {
+  const db = createServiceClient();
+  const storeId = await getStoreId();
+
+  const { data: rows } = await db
+    .from("page_sections")
+    .select("owner_type, owner_id")
+    .eq("store_id", storeId);
+
+  const counts = new Map<string, number>();
+  for (const r of rows ?? []) {
+    const key = `${r.owner_type}:${r.owner_id}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  if (counts.size === 0) return [];
+
+  const ids = (t: string) =>
+    [...counts.keys()].filter((k) => k.startsWith(`${t}:`)).map((k) => k.slice(t.length + 1));
+
+  const [{ data: products }, { data: offers }] = await Promise.all([
+    db.from("products").select("id, title").in("id", ids("product")),
+    db.from("offers").select("id, name").in("id", ids("offer")),
+  ]);
+
+  const out: PageSource[] = [];
+  for (const p of products ?? []) {
+    out.push({
+      ownerType: "product",
+      ownerId: p.id as string,
+      title: p.title as string,
+      sections: counts.get(`product:${p.id}`) ?? 0,
+    });
+  }
+  for (const o of offers ?? []) {
+    out.push({
+      ownerType: "offer",
+      ownerId: o.id as string,
+      title: o.name as string,
+      sections: counts.get(`offer:${o.id}`) ?? 0,
+    });
+  }
+  return out.sort((a, b) => a.title.localeCompare(b.title));
+}
+
+/**
+ * Copy every section of one page onto another.
+ *
+ * Structure, copy, colours and backgrounds — everything the section rows hold.
+ * What it deliberately does NOT carry across is the owner: prices, buy buttons
+ * and the offer a page sells are resolved at render from whatever owns the
+ * page, so a copied page sells the thing it was copied ONTO. That is the only
+ * behaviour that makes "use this as a template" safe on a store taking money.
+ *
+ * Replaces the target's sections rather than merging. A half-copied page — some
+ * bands from one design, some from another — is not a thing anybody asked for,
+ * and telling which was which afterwards is impossible.
+ */
+export async function copyPage(
+  from: { ownerType: OwnerType; ownerId: string },
+  to: { ownerType: OwnerType; ownerId: string },
+): Promise<number> {
+  if (from.ownerType === to.ownerType && from.ownerId === to.ownerId) {
+    throw new Error("That is the same page.");
+  }
+  const db = createServiceClient();
+  const storeId = await getStoreId();
+
+  const { data: source, error } = await db
+    .from("page_sections")
+    .select("section_key, position, enabled, style, accent, variant, content, background, css_id, css_class")
+    .eq("owner_type", from.ownerType)
+    .eq("owner_id", from.ownerId);
+  if (error) throw new Error(`copyPage read: ${error.message}`);
+  if (!source || source.length === 0) throw new Error("That page has nothing on it.");
+
+  await db
+    .from("page_sections")
+    .delete()
+    .eq("owner_type", to.ownerType)
+    .eq("owner_id", to.ownerId);
+
+  const { error: writeErr } = await db.from("page_sections").insert(
+    source.map((r) => ({
+      ...r,
+      store_id: storeId,
+      owner_type: to.ownerType,
+      owner_id: to.ownerId,
+    })),
+  );
+  if (writeErr) throw new Error(`copyPage write: ${writeErr.message}`);
+  return source.length;
+}

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getOfferById } from "@/lib/admin";
-import { getPageSections, getPageSettings } from "@/lib/pages";
+import { getPageSections, getPageSettings , listPageSources } from "@/lib/pages";
 import { PageEditor } from "@/components/admin/page-editor";
 import { PageSettings } from "@/components/admin/page-settings";
 import { buildBumpView } from "@/lib/bump";
@@ -17,9 +17,10 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
   const offer = await getOfferById(id);
   if (!offer) notFound();
 
-  const [rows, settings] = await Promise.all([
+  const [rows, settings, pageSources] = await Promise.all([
     getPageSections("offer", id),
     getPageSettings("offer", id),
+    listPageSources(),
   ]);
   // The price shown on the page comes from the offer, never from a copy field —
   // the same rule as the order bump.
@@ -71,6 +72,7 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
       </details>
 
       <PageEditor
+        pageSources={pageSources}
         ownerType="offer"
         ownerId={id}
         initial={rows}

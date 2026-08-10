@@ -39,19 +39,63 @@ export function TypographyFields({
   errors: Record<string, string>;
 }) {
   const families = installed.map((f) => f.family);
+  // Held in state so the sample changes as you choose, rather than after a
+  // save — the whole question here is "what does that one look like".
+  const [heading, setHeading] = useState(headingFont);
+  const [body, setBody] = useState(bodyFont);
 
   return (
     <>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Heading font" hint="titles, and anything set in the display face" error={errors.headingFont}>
-          <FontSelect name="headingFont" value={headingFont} families={families} />
+          <FontSelect name="headingFont" value={heading} families={families} onChange={setHeading} />
         </Field>
         <Field label="Body font" hint="paragraphs, labels, buttons" error={errors.bodyFont}>
-          <FontSelect name="bodyFont" value={bodyFont} families={families} />
+          <FontSelect name="bodyFont" value={body} families={families} onChange={setBody} />
         </Field>
       </div>
 
+      <Specimen heading={heading} body={body} />
     </>
+  );
+}
+
+/**
+ * What is set, in the fonts that are set.
+ *
+ * A dropdown reading "Lora" tells you the name and nothing else — and when it
+ * reads "Built in" it does not even tell you that much. This says which face
+ * each one resolves to and then shows it, because the only real question about
+ * a typeface is what it looks like next to the other one.
+ *
+ * The settings page declares the @font-face rules for everything installed —
+ * declarations only, no variable override — so the sample is the real face and
+ * a font that fails to load still cannot disturb the admin around it.
+ */
+function Specimen({ heading, body }: { heading: string; body: string }) {
+  const headingName = heading || "Inter";
+  const bodyName = body || "Poppins";
+  const stack = (f: string) => `"${f}", system-ui, sans-serif`;
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-2 p-4">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <span className="kicker text-muted">Currently</span>
+        <span className="text-xs text-muted">
+          Headings in <b className="font-medium text-fg">{headingName}</b>
+          {!heading && " (built in)"} · body in <b className="font-medium text-fg">{bodyName}</b>
+          {!body && " (built in)"}
+        </span>
+      </div>
+
+      <p className="text-2xl leading-tight text-fg" style={{ fontFamily: stack(headingName) }}>
+        The quick brown fox jumps
+      </p>
+      <p className="text-sm leading-relaxed text-fg/90" style={{ fontFamily: stack(bodyName) }}>
+        Body copy looks like this — 0123456789, and a sentence long enough to show the rhythm of the
+        letters rather than just their shapes.
+      </p>
+    </div>
   );
 }
 
@@ -59,14 +103,18 @@ function FontSelect({
   name,
   value,
   families,
+  onChange,
 }: {
   name: string;
   value: string;
   families: string[];
+  onChange: (v: string) => void;
 }) {
   return (
-    <select name={name} defaultValue={value} className={input}>
-      <option value="">Built in — the font this site ships with</option>
+    <select name={name} value={value} onChange={(e) => onChange(e.target.value)} className={input}>
+      <option value="">
+        {name === "headingFont" ? "Inter — built in" : "Poppins — built in"}
+      </option>
       {families.map((f) => (
         <option key={f} value={f}>
           {f}
