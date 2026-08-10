@@ -89,10 +89,19 @@ template previews as a stacked list.
   changes them, the design changes on reload.
 - **`blockRendersNothing` must not eat them.** It drops empty blocks on save.
 
-## Open question for the first session
+## The authoring loop — decided
 
-How the authoring loop is verified. Either the owner opens the library and says
-what is wrong with each design, or the builder gains an export so a design can
-be built once in the UI and read out as a file. The second is more work up
-front and much faster per design after that — with a dozen screenshots waiting,
-it likely pays for itself immediately.
+**The export comes first.** A design is built once in the real builder and read
+out as a file, rather than hand-written as block JSON and corrected over a
+round trip per pixel. With a dozen screenshots waiting this pays for itself on
+the second design, and it is phase 3 work — "save as template" — done early
+against the one caller that will exercise it hardest.
+
+So phase 1 ships the shelf AND the export, and phase 2 is then: build the
+design in the builder, export, drop the file in `lib/templates/`, write its
+test. No hand-authored block trees at any point.
+
+Consequence worth stating: the export is the format's real test. If a template
+exported from the builder does not insert back into the builder identically,
+the round trip is broken and every design built afterwards inherits it. That
+check belongs in phase 1, not phase 2.
