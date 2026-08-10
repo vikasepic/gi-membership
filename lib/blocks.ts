@@ -725,9 +725,9 @@ export function styleFor(block: Block, device: Device): BlockStyle {
  *
  * `color` is deliberately NOT here, though site typography has a colour field.
  * A sales band paints `color` inline on its own `<section>`, so `:root body`
- * never reaches inside one: a colour withdrawn below 1024px would fall to the
- * band's ink rather than to anything the owner chose, and a red heading set on
- * a laptop would go black on a phone with nobody having asked for that.
+ * never reaches inside one: a colour withdrawn at 1023px and narrower would
+ * fall to the band's ink rather than to anything the owner chose, and a red
+ * heading set on a laptop would go black on a phone with nobody having asked.
  *
  * The break lives in the CSS emission, not in `styleFor`: the panels, the
  * padding notice and the editor canvas all ask "what does this block look like

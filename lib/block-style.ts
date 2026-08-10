@@ -670,8 +670,8 @@ export function blockCssAt(block: Block, theme: BandTheme, device: Device = "des
  * The colour is here rather than with the six per-width values because nothing
  * site-wide answers for it on a sales page: the band paints `color` inline on
  * its own `<section>`, so `:root body{color}` never reaches inside one. A
- * colour withdrawn below 1024px would fall to the band's ink, not to anything
- * the owner chose — so it inherits down the widths the way padding does.
+ * colour withdrawn at 1023px and narrower would fall to the band's ink, not to
+ * anything the owner chose — so it inherits down the widths the way padding does.
  */
 function frameCss(block: Block, theme: BandTheme, s: BlockStyle): CSSProperties {
   return {
@@ -745,14 +745,6 @@ export function blockTextRules(block: Block, device: Device): string {
 }
 
 /**
- * The width above which the desktop values are the ones that apply.
- *
- * Read off DEVICE_MAX rather than written down, so there is one boundary
- * between a block and a tablet rather than two that can drift apart.
- */
-const DESKTOP_MIN = (DEVICE_MAX.tablet ?? 0) + 1;
-
-/**
  * Everything a block's look needs, as one stylesheet.
  *
  * Emitted as rules rather than a `style` attribute because that is the only
@@ -778,15 +770,25 @@ export function blockRules(block: Block, theme: BandTheme): string {
 
   // The desktop typography is scoped to the desktop width instead of riding the
   // unscoped rule with everything else. That is the whole of "a width that sets
-  // nothing falls through to the site's own type": below 1024px this rule stops
-  // matching, nothing replaces it, and the `:root h2` written from Settings is
-  // what is left standing.
+  // nothing falls through to the site's own type": at the tablet ceiling and
+  // below this rule stops matching, nothing replaces it, and the `:root h2`
+  // written from Settings is what is left standing.
   //
-  // A min-width query rather than a `revert` in the narrow ones, because
-  // `revert` rolls back the whole author origin — it would discard the site
-  // rule too and land on the browser's default.
+  // A width query rather than a `revert` in the narrow ones, because `revert`
+  // rolls back the whole author origin — it would discard the site rule too and
+  // land on the browser's default.
+  //
+  // Written as the exact complement of the tablet query below, off the same
+  // number, not as a second constant one greater than it. `min-width:1024px`
+  // beside `max-width:1023px` left a gap: a viewport at 1023.5 CSS px matched
+  // neither, and there is nothing exotic about landing there — 110% zoom on a
+  // 1126px window is 1023.6, and a fractional-DPR window gets there on its own.
+  // In that band a heading given a size lost it to the site default while the
+  // page around it was still desktop in every other respect. `(width > N)` is
+  // true exactly when `(max-width:N)` is false, so the two together cover every
+  // real number and there is one boundary here rather than two that can drift.
   const desktop = declarations(typographyAt(ownTypography(block, "desktop")));
-  if (desktop) out.push(`@media (min-width:${DESKTOP_MIN}px){${textSel}{${desktop}}}`);
+  if (desktop) out.push(`@media (width > ${DEVICE_MAX.tablet}px){${textSel}{${desktop}}}`);
 
   // The colour follows the frame's rules, not the six's — but it still has to
   // name the text, or `:root h2{color}` beats it there while the wrapper keeps

@@ -175,7 +175,7 @@ describe("the CSS a block emits", () => {
         "font-size:clamp(1.7rem,3.4vw,2.4rem);font-weight:600;line-height:1.15;" +
         "letter-spacing:-0.015em;color:#123456}" +
         // The six, scoped to the laptop, on the wrapper and on the text alike.
-        `@media (min-width:1024px){.bk-gold1.bk-gold1,.bk-gold1.bk-gold1 :where(${TAGS})` +
+        `@media (width > 1023px){.bk-gold1.bk-gold1,.bk-gold1.bk-gold1 :where(${TAGS})` +
         "{font-size:48px;font-weight:700}}" +
         // The author's colour, named on the text so `:root h2{color}` cannot
         // take it there while the wrapper keeps it.
@@ -223,14 +223,20 @@ describe("the CSS a block emits", () => {
     const frame = css.split("@media")[0];
     expect(frame).toContain("clamp");
     expect(frame).not.toContain("font-size:20px");
-    expect(css).toContain("@media (min-width:1024px)");
+    expect(css).toContain("@media (width > 1023px)");
+    // The exact complement of the tablet query, off the same number. Written as
+    // `min-width:1024px` it was a second constant, and the two skipped every
+    // viewport between them: at 1023.5 CSS px — 110% zoom on a 1126px window —
+    // neither matched and this size fell to the site default on its own.
+    expect(css).toContain(`@media (width > ${DEVICE_MAX.tablet}px)`);
+    expect(css).not.toContain("@media (min-width:");
     expect(css.indexOf("clamp")).toBeLessThan(css.indexOf("font-size:20px"));
   });
 
   it("stops a desktop-only size reaching the phone, so the site's own can", () => {
-    // The reason for the min-width query. `styleFor` still layers desktop down
+    // The reason for the width query. `styleFor` still layers desktop down
     // — the panel has to show what the phone renders — but the stylesheet says
-    // nothing about size below 1024px unless that width was given one.
+    // nothing about size at 1023px and narrower unless that width was given one.
     const b = setStyleAt(heading(), "desktop", { size: 20 });
     expect(styleFor(b, "mobile").size).toBe(20);
     // The query, named as a query. `not.toContain("max-width:")` also matched
@@ -238,7 +244,7 @@ describe("the CSS a block emits", () => {
     // silently depended on the fixture having no measure set.
     expect(blockRules(b, paper)).not.toContain("@media (max-width:");
     // And the size is nowhere a narrower width can see it.
-    expect(blockRules(b, paper).split("@media (min-width:1024px)")[0]).not.toContain("font-size:20px");
+    expect(blockRules(b, paper).split("@media (width > 1023px)")[0]).not.toContain("font-size:20px");
   });
 
   it("says it again at a width that was given its own value", () => {
@@ -260,7 +266,7 @@ describe("the CSS a block emits", () => {
     // a named value beats an inherited one whatever its specificity. So the
     // block has to name it too — at 0-2-0, which `:where()` leaves untouched.
     const b = setStyleAt(heading(), "desktop", { size: 48, fontFamily: "Lora", weight: 700 });
-    const desktop = blockRules(b, paper).split("@media (min-width:1024px)")[1];
+    const desktop = blockRules(b, paper).split("@media (width > 1023px)")[1];
     expect(desktop).toContain(`:where(${TAGS}){`);
     expect(desktop).toContain("font-size:48px");
     // `a` is not in the list: at 0-2-0 it would also outrank `:root a:hover`
@@ -288,13 +294,13 @@ describe("the CSS a block emits", () => {
 
   it("keeps a colour on the phone, because nothing site-wide answers for one", () => {
     // A band paints `color` inline on its own <section>, so `:root body{color}`
-    // never reaches inside one. Withdrawing a colour below 1024px the way a
+    // never reaches inside one. Withdrawing a colour at 1023px and narrower the way a
     // size is withdrawn would drop it to the band's ink — a red heading going
     // black on a phone with nobody having asked for that.
     const b = setStyleAt(heading(), "desktop", { color: "#ff0000" });
     const css = blockRules(b, paper);
     expect(css).not.toContain("max-width:");
-    expect(css.split("@media (min-width:1024px)")[0]).toContain("color:#ff0000");
+    expect(css.split("@media (width > 1023px)")[0]).toContain("color:#ff0000");
   });
 
   it("cannot be broken out of by a value that carries a brace", () => {

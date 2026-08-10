@@ -85,10 +85,10 @@ describe.skipIf(!canRun)("a desktop-only value, across the migration", () => {
   it("stops reaching the narrower widths before the migration runs", async () => {
     await seed();
     const before = blockRules(await readBack(), paper);
-    // The point of the change: nothing is said about size below 1024px, which
+    // The point of the change: nothing is said about size at 1023px and narrower, which
     // is what leaves room for the site's own `:root h2`.
-    expect(before).toContain("@media (min-width:1024px)");
-    expect(scope(before, "min-width:1024px")).toContain("font-size:48px");
+    expect(before).toContain("@media (width > 1023px)");
+    expect(scope(before, "width > 1023px")).toContain("font-size:48px");
     expect(before).not.toContain("max-width:");
   });
 
@@ -108,7 +108,7 @@ describe.skipIf(!canRun)("a desktop-only value, across the migration", () => {
 
     // And in the stylesheet, said once per width rather than once and inherited.
     const css = blockRules(block, paper);
-    for (const at of ["min-width:1024px", "max-width:1023px", "max-width:767px"]) {
+    for (const at of ["width > 1023px", "max-width:1023px", "max-width:767px"]) {
       expect(scope(css, at), at).toContain("font-size:48px");
     }
     // The colour is the exception, and is said ONCE, unscoped: a band paints
