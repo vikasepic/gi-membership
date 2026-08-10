@@ -104,12 +104,14 @@ const SWITCH = ["on", "off"] as const;
  * written straight into an `href` that every visitor is invited to click, and
  * that is a trust boundary whatever the shape of the session behind it.
  *
- * `(?!\/)` after the first slash is what stops `//evil.com`: a protocol-
+ * `(?![\/\\])` after the first slash is what stops `//evil.com`: a protocol-
  * relative URL looks like a path to a regex and like another origin to a
  * browser, and "starts with a slash so it is on this site" was the whole
- * reason that branch is allowed.
+ * reason that branch is allowed. The backslash is in there because the URL
+ * parser treats `\` as `/` in an http(s) URL and a regex does not — `/\evil.com`
+ * read as a path and resolved to `https://evil.com/`.
  */
-const HREF = /^(\/(?!\/)[^\s]*|https?:\/\/[^\s]+|mailto:[^\s]+)$/i;
+const HREF = /^(\/(?![/\\])[^\s]*|https?:\/\/[^\s]+|mailto:[^\s]+)$/i;
 
 export function shellHrefIsValid(raw: string): boolean {
   const v = raw.trim();

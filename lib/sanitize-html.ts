@@ -125,10 +125,16 @@ export function sanitizeBlockHtml(dirty: string): string {
  * Every one of them is one line of copy, so they take the inline policy: a
  * heading containing a <ul> is not a heading with a list in it, it is a
  * browser quietly moving the list out of the heading.
+ *
+ * These lists must name EXACTLY the fields the renderer hands to
+ * `dangerouslySetInnerHTML` (search `<Inline` in components/page/blocks.tsx).
+ * A field that is here and rendered as React text is encoded twice — sanitize
+ * turns `&` into `&amp;` and React encodes the ampersand again, so "Join &
+ * Save" reaches the buyer as "Join &amp; Save". A field that is rendered as
+ * markup and missing from here is not filtered at all.
  */
 const INLINE_FIELDS: Record<string, string[]> = {
   heading: ["text"],
-  button: ["text"],
 };
 
 /** The same, for the objects inside a list-shaped prop. */
@@ -137,8 +143,7 @@ const INLINE_ITEM_FIELDS: Record<string, { prop: string; keys: string[] }> = {
   iconlist: { prop: "items", keys: ["text"] },
   cards: { prop: "items", keys: ["title", "body"] },
   stats: { prop: "items", keys: ["value", "label"] },
-  steps: { prop: "items", keys: ["title", "body"] },
-  slides: { prop: "items", keys: ["quote", "name", "role"] },
+  pricing: { prop: "items", keys: ["label"] },
 };
 
 export function sanitizeBlocks(blocks: Block[]): Block[] {

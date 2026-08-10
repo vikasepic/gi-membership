@@ -139,7 +139,7 @@ export function AppShell({
             </ul>
           </details>
         )}
-        <Link href="/" aria-label={settings.name}>
+        <Link href="/" aria-label={settings.name || "Home"}>
           <Mark className={`h-7 w-auto text-fg${hook(SHELL_CLASS.brandMobile)}`} />
         </Link>
         {ctaOnMobile && (
@@ -155,7 +155,7 @@ export function AppShell({
       {/* Desktop top bar */}
       <header className={`sticky top-0 z-20 hidden border-b border-border bg-surface/80 backdrop-blur md:block${hook(SHELL_CLASS.bar)}`}>
         <div className={`mx-auto flex max-w-5xl items-center justify-between px-6 py-4${hook(SHELL_CLASS.barInner)}`}>
-          <Link href="/" aria-label={settings.name}>
+          <Link href="/" aria-label={settings.name || "Home"}>
             <Mark className={`h-7 w-auto text-fg${hook(SHELL_CLASS.brandDesktop)}`} />
           </Link>
           <nav className="flex items-center gap-1">

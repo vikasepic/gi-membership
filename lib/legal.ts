@@ -1,5 +1,5 @@
 import "server-only";
-import { getSettings, type Settings } from "@/lib/settings";
+import { getSettingsOrDefaults, type Settings } from "@/lib/settings";
 import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
 
 /**
@@ -48,9 +48,11 @@ export function legalFrom(s: Settings): Legal {
   };
 }
 
-/** The legal block, read fresh. */
+/** The legal block, read fresh. Never throws — /terms, /refunds and both
+ *  checkouts render off this, and a store row that cannot be read should cost
+ *  them their address, not their existence. */
 export async function getLegal(): Promise<Legal> {
-  return legalFrom(await getSettings());
+  return legalFrom(await getSettingsOrDefaults());
 }
 
 /**

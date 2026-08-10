@@ -27,7 +27,82 @@ const heading = (text: string, tag = "h2"): Block => block("heading", { text, ta
 const paragraph = (text: string): Block => block("text", { html: `<p>${escapeHtml(text)}</p>` });
 
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // The quote is not optional: this value also lands inside href="…", where an
+  // unescaped one closes the attribute and opens another.
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * A URL typed into a section's link list, or "".
+ *
+ * `href` is written straight into markup that every visitor is invited to
+ * click, and it lands in a `text` block rendered with dangerouslySetInnerHTML,
+ * so React's own `javascript:` blocker never sees it.
+ *
+ * A deny rule rather than an allow list: a footer link is as likely to be
+ * `terms` or `../pricing` as it is to be absolute, and refusing those to catch
+ * a scheme nobody types by accident would break more links than it saves.
+ */
+function safeHref(raw: string): string {
+  const v = raw.trim();
+  const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(v);
+  if (!scheme) return v;
+  return ["http", "https", "mailto", "tel"].includes(scheme[1].toLowerCase()) ? v : "";
+}
+
+/**
+ * Typed section fields, escaped on their way into a block.
+ *
+ * These were plain-text form inputs — a headline, a card title, an FAQ answer.
+ * The block renderer hands the same fields to the page as markup now (see the
+ * `<Inline` call sites in components/page/blocks.tsx and the maps in
+ * lib/sanitize-html.ts, which cover the SAVED tree only). Nothing sanitizes
+ * this tree: it is built at render time from `content`, and
+ * `sanitizeSectionContent` only cleans `copy` and `blocks`.
+ *
+ * Escaped rather than sanitized, because these fields never offered markup:
+ * escaping renders "Save 20% <today>" as the words somebody typed instead of
+ * silently swallowing them, and it needs no HTML parser in the editor bundle.
+ *
+ * Must name the same fields sanitize-html's INLINE maps do.
+ */
+const MARKUP_FIELDS: Partial<Record<BlockType, string[]>> = { heading: ["text"] };
+const MARKUP_ITEM_FIELDS: Partial<Record<BlockType, string[]>> = {
+  faq: ["q", "a"],
+  iconlist: ["text"],
+  cards: ["title", "body"],
+  stats: ["value", "label"],
+  pricing: ["label"],
+};
+
+function escapeTyped(blocks: Block[]): Block[] {
+  return blocks.map((b) => {
+    const props = { ...b.props };
+    for (const k of MARKUP_FIELDS[b.type] ?? []) {
+      if (typeof props[k] === "string") props[k] = escapeHtml(props[k] as string);
+    }
+    const keys = MARKUP_ITEM_FIELDS[b.type];
+    if (keys && Array.isArray(props.items)) {
+      props.items = (props.items as Record<string, unknown>[]).map((it) => {
+        if (!it || typeof it !== "object") return it;
+        const next = { ...it };
+        for (const k of keys) if (typeof next[k] === "string") next[k] = escapeHtml(next[k] as string);
+        // IconTile renders `icon` as raw markup whenever it is not an http(s)
+        // URL, on the stated assumption that it was sanitized on save — which
+        // is true of the saved tree and not of this one. A logo URL somebody
+        // typed is a URL, so anything else is escaped into the text it is.
+        if (typeof next.icon === "string" && !/^https?:\/\//i.test(next.icon.trim())) {
+          next.icon = escapeHtml(next.icon);
+        }
+        return next;
+      });
+    }
+    return { ...b, props, ...(b.columns ? { columns: b.columns.map(escapeTyped) } : {}) };
+  });
 }
 
 /** Centred, which is how most bands on a sales page set their heading. */
@@ -348,7 +423,7 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
       const links = listOf(c.links, ["label", "url"]);
       if (links.length) {
         const html = links
-          .map((l) => `<a href="${escapeHtml(l.url)}">${escapeHtml(l.label)}</a>`)
+          .map((l) => `<a href="${escapeHtml(safeHref(l.url))}">${escapeHtml(l.label)}</a>`)
           .join(" &middot; ");
         push(centred(block("text", { html: `<p>${html}</p>` }, { width: "auto", maxWidthValue: null })));
       }
@@ -379,11 +454,14 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
     }
   }
 
-  // The free-form Copy field goes last, as it rendered before.
+  // The free-form Copy field goes last, as it rendered before. It is the one
+  // field here that is meant to be HTML, and sanitizeSectionContent cleans it
+  // on both save and read — so it is added AFTER the escape pass.
+  const escaped = escapeTyped(out);
   const copy = t("copy");
-  if (copy.replace(/<[^>]*>/g, "").trim()) out.push(block("text", { html: copy }));
+  if (copy.replace(/<[^>]*>/g, "").trim()) escaped.push(block("text", { html: copy }));
 
-  return out;
+  return escaped;
 }
 
 /**

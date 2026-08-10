@@ -13,7 +13,7 @@ import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";
 import { CheckoutPanel } from "@/components/checkout/checkout-panel";
 import { legalFrom } from "@/lib/legal";
-import { getSettings } from "@/lib/settings";
+import { getSettingsOrDefaults } from "@/lib/settings";
 import { publicCoverUrl } from "@/lib/media";
 import { productDisplay } from "@/lib/courses";
 
@@ -59,7 +59,9 @@ export default async function OfferCheckoutPage({
     ? publicCoverUrl((await productDisplay([offer.grantProductId])).get(offer.grantProductId)?.coverPath ?? null)
     : null;
 
-  const settings = await getSettings();
+  // Never the throwing read: a settings row that cannot be parsed must cost this
+  // page its logo, not its ability to take a payment.
+  const settings = await getSettingsOrDefaults();
   const legal = legalFrom(settings);
 
   return (

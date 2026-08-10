@@ -108,7 +108,7 @@ export function CheckoutPanel({
 
         <ul className="flex flex-col gap-3 border-t border-border pt-6">
           {bullets.length > 0 ? (
-            bullets.map((line) => <Reassurance key={line}>{line}</Reassurance>)
+            bullets.map((line, i) => <Reassurance key={i}>{line}</Reassurance>)
           ) : (
             <>
               <Reassurance>

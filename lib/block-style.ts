@@ -374,6 +374,8 @@ const FLEX_PLACEMENT = [
   "space-evenly",
 ] as const;
 const OVERFLOWS = ["visible", "hidden", "auto"] as const;
+/** The four the panel offers, plus the one CSS default nobody types. */
+const ALIGN_ITEMS = ["stretch", "flex-start", "center", "flex-end", "baseline"] as const;
 const CONTAINERS = ["flex", "grid"] as const;
 
 /** Whether this container lays its columns out on a grid rather than a flex line. */
@@ -466,13 +468,20 @@ function gridContainer(
       ? "minmax(0,1fr)"
       : gridTracks(p.gridColumns, `repeat(${Math.max(count, 1)}, minmax(0,1fr))`),
     gap: `${rowGap}px ${colGap}px`,
-    alignItems: String(p.verticalAlign ?? "stretch"),
+    alignItems: oneOf(p.verticalAlign, ALIGN_ITEMS, "stretch"),
   };
   const rows = gridTracks(p.gridRows, "");
   if (rows) css.gridTemplateRows = rows;
   // Column flow only: `row` is the CSS default, so emitting it would be a
   // declaration on every grid container that says nothing.
-  if (oneOf(p.autoFlow, ["row", "column"] as const, "row") === "column") css.gridAutoFlow = "column";
+  //
+  // Never where the row has stacked. The single track above only sizes the
+  // FIRST item under column flow; the rest are placed into implicit columns
+  // sized by grid-auto-columns, so "stack into one" left four columns of 80px
+  // side by side on a 390px phone instead of four rows.
+  if (!stacked && oneOf(p.autoFlow, ["row", "column"] as const, "row") === "column") {
+    css.gridAutoFlow = "column";
+  }
   const items = oneOf(p.justifyItems, ["", "start", "center", "end", "stretch"] as const, "");
   if (items) css.justifyItems = items;
   return css;
@@ -503,17 +512,21 @@ export function rowLayout(block: Block, device: Device): RowLayout {
       : "";
 
   const grid = rowIsGrid(block, device);
+  const stacked = stacksAt(block, device);
 
   // Only what was actually set gets a declaration. Emitting a neutral value for
   // each of these instead would put six new properties on every row on every
   // page for nothing, and "renders identically" would stop being provable.
   const container: CSSProperties = grid
-    ? gridContainer(p, block.columns?.length ?? 0, gap, stacksAt(block, device))
+    ? gridContainer(p, block.columns?.length ?? 0, gap, stacked)
     : {
         display: "flex",
-        flexWrap: oneOf(p.wrap, ["wrap", "nowrap"] as const, "wrap"),
+        // Stacking wins over No wrap. Stacking only ever set the column widths
+        // to 100%, and 100% on a `nowrap` line still shrinks — two columns set
+        // to stack came out side by side at 171px each on a 390px phone.
+        flexWrap: stacked ? "wrap" : oneOf(p.wrap, ["wrap", "nowrap"] as const, "wrap"),
         gap: `${gap}px`,
-        alignItems: String(p.verticalAlign ?? "stretch"),
+        alignItems: oneOf(p.verticalAlign, ALIGN_ITEMS, "stretch"),
       };
   // Direction is the flex half of the pair; on a grid the axis is grid-auto-flow
   // and `flex-direction` on a grid container does nothing at all.
@@ -579,10 +592,13 @@ function cssProp(key: string): string {
 function declarations(css: CSSProperties): string {
   return Object.entries(css)
     .filter(([, v]) => v !== undefined && v !== null && v !== "")
-    // Semicolons and braces would end the declaration and open a new rule. The
-    // values reaching here are validated, but this is the boundary where a
-    // string becomes a stylesheet, so it is checked at the boundary.
-    .map(([k, v]) => `${cssProp(k)}:${String(v).replace(/[;{}]/g, "")}`)
+    // Semicolons and braces would end the declaration and open a new rule, and
+    // `</` would end the <style> ELEMENT — a raw-text element closes at the
+    // first `</style`, so everything after it is parsed as markup. Most values
+    // reaching here are allow-listed, but `verticalAlign` and anything added
+    // beside it are raw jsonb props, and this is the boundary where a string
+    // becomes a stylesheet.
+    .map(([k, v]) => `${cssProp(k)}:${String(v).replace(/[;{}]|<\//g, "")}`)
     .join(";");
 }
 

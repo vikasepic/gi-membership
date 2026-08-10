@@ -13,7 +13,7 @@ import { rememberLead } from "@/lib/leads";
 import { NOINDEX } from "@/lib/seo";
 import { CheckoutPanel } from "@/components/checkout/checkout-panel";
 import { legalFrom } from "@/lib/legal";
-import { getSettings } from "@/lib/settings";
+import { getSettingsOrDefaults } from "@/lib/settings";
 
 export const metadata = NOINDEX;
 
@@ -107,7 +107,9 @@ export default async function CheckoutPage({
   // Two halves of one page: what they are buying and why they should trust us
     // on the left, and nothing but the transaction on the right. The store shell
   // is deliberately not around this — see AppShell.
-  const settings = await getSettings();
+  // Never the throwing read: a settings row that cannot be parsed must cost this
+  // page its logo, not its ability to take a payment.
+  const settings = await getSettingsOrDefaults();
   const legal = legalFrom(settings);
 
   return (

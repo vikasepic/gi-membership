@@ -4,7 +4,9 @@ import { getStoreId } from "@/lib/store";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
 import { camelize } from "@/lib/case";
 import { normalizeHex } from "@/lib/color";
-import { normalizeBackground, type Background } from "@/lib/blocks";
+import { normalizeBackground, normalizeBlocks, type Background, type Block } from "@/lib/blocks";
+import { priceProblems } from "@/lib/page-price-truth";
+import { realPriceLabel } from "@/lib/page-money";
 import {
   SECTIONS,
   SECTION_KEYS,
@@ -351,6 +353,32 @@ export async function listPageSources(): Promise<PageSource[]> {
 }
 
 /**
+ * Typed price figures that would contradict the page they are landing on.
+ *
+ * A Price card left blank renders the owner's real figure, which is what makes
+ * copying a page safe. A figure someone TYPED is content, and content is what
+ * copyPage carries — so a $47 page copied onto a $29 product advertised $47
+ * while the checkout charged $29. `saveSectionAction` refuses that on save;
+ * this is the same rule on the other write path, except it cannot refuse
+ * (the figure is right on the page it came from), so it clears the field back
+ * to "use the real one".
+ */
+function retruthPrices(
+  content: Record<string, unknown>,
+  real: string | null,
+): Record<string, unknown> {
+  const bad = new Set(priceProblems(content.blocks, "", real).map((p) => p.blockId));
+  if (bad.size === 0) return content;
+  const clear = (blocks: Block[]): Block[] =>
+    blocks.map((b) => ({
+      ...b,
+      props: bad.has(b.id) ? { ...b.props, price: "" } : b.props,
+      ...(b.columns ? { columns: b.columns.map(clear) } : {}),
+    }));
+  return { ...content, blocks: clear(normalizeBlocks(content.blocks)) };
+}
+
+/**
  * Copy every section of one page onto another.
  *
  * Structure, copy, colours and backgrounds — everything the section rows hold.
@@ -387,9 +415,11 @@ export async function copyPage(
     .eq("owner_type", to.ownerType)
     .eq("owner_id", to.ownerId);
 
+  const real = await realPriceLabel(to.ownerType, to.ownerId);
   const { error: writeErr } = await db.from("page_sections").insert(
     source.map((r) => ({
       ...r,
+      content: retruthPrices((r.content ?? {}) as Record<string, unknown>, real),
       store_id: storeId,
       owner_type: to.ownerType,
       owner_id: to.ownerId,

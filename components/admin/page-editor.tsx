@@ -203,6 +203,10 @@ export function PageEditor({
           label: clip?.kind === "section" ? `Paste ${clip.label} here` : "Paste section",
           onSelect: () => clip && patch(row.sectionKey, pastedSection(clip, row)),
           disabled: clip?.kind === "section" ? undefined : "Nothing copied yet",
+          // It REPLACES this section — every block in it goes, and the page
+          // editor has no undo. Delete-a-block is marked in the same menu; the
+          // one action that destroys more than a block should not look safer.
+          danger: true,
         },
         {
           label: row.enabled ? "Hide this section" : "Show this section",
