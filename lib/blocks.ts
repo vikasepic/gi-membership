@@ -1009,6 +1009,11 @@ export function setColumnWidth(widths: number[], index: number, value: number): 
  *
  * Widths reset to even, and any per-device widths are cleared with them — an
  * override written for three columns describes a shape that no longer exists.
+ * A dropped column's `columnStyles` entry goes for the same reason: three to
+ * two and back to three used to hand the new empty column the deleted one's
+ * background, padding and order. `normalizeBlocks` trims the array to the
+ * count on reload, so keeping it also made the panel and a refresh disagree
+ * about the same row.
  */
 export function setColumnCount(block: Block, count: number): Block {
   if (block.type !== "row") return block;
@@ -1027,6 +1032,7 @@ export function setColumnCount(block: Block, count: number): Block {
   let out: Block = {
     ...block,
     columns,
+    ...(block.columnStyles ? { columnStyles: block.columnStyles.slice(0, want) } : {}),
     props: { ...block.props, widths: evenWidths(want) },
   };
   for (const device of ["tablet", "mobile"] as const) out = clearAt(out, device, "widths", "props");

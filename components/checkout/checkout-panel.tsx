@@ -51,10 +51,11 @@ export function CheckoutPanel({
   /**
    * Replaces the reassurance list.
    *
-   * Empty keeps the four below, which are true of every product and were the
-   * only thing this panel could say. A product with something of its own to
-   * promise says it instead — and if it says nothing, the honest defaults
-   * stand rather than a blank column.
+   * Empty keeps the three below, plus the reply time where the store makes
+   * one — all true of every product and the only thing this panel could say. A
+   * product with something of its own to promise says it instead — and if it
+   * says nothing, the honest defaults stand rather than a blank column. The
+   * trial warning is not among them and is not replaceable.
    */
   bullets?: string[];
 }) {

@@ -4,6 +4,7 @@ import {
   normalizeBlocks,
   columnAsBlock,
   setColumnStyle,
+  setColumnCount,
   splitColumnId,
   baseStyle,
   emptyBackground,
@@ -149,6 +150,25 @@ describe("stored rows", () => {
       { type: "row", props: { widths: [100] }, columns: [[]], columnStyles: [{ radius: 4 }, { radius: 9 }] },
     ]);
     expect(back[0].columnStyles).toHaveLength(1);
+  });
+
+  it("drops it in the editor too, not only on the way back in", () => {
+    // Removing a column left its style in state. Grow back to three and the
+    // new empty column arrived wearing the deleted one's corner — and reading
+    // the row from the database gave a different answer to the panel that had
+    // just built it, which is the pair of facts this asserts together.
+    const three = { ...row2(), columns: [[], [], []] };
+    const shrunk = setColumnCount(setColumnStyle(three, 2, baseStyle({ radius: 12 })), 2);
+    expect(shrunk.columnStyles).toHaveLength(2);
+    expect(setColumnCount(shrunk, 3).columnStyles?.[2] ?? null).toBeNull();
+    // The same row after a trip through jsonb, grown back the same way: the
+    // panel and a refresh have to hand the third column the same style, and
+    // they did not — normalizeBlocks trimmed on the way in, setColumnCount
+    // did not, so which one you had depended on whether you had reloaded.
+    const reloaded = normalizeBlocks(JSON.parse(JSON.stringify([shrunk])))[0];
+    expect(setColumnCount(reloaded, 3).columnStyles?.[2] ?? null).toEqual(
+      setColumnCount(shrunk, 3).columnStyles?.[2] ?? null,
+    );
   });
 });
 

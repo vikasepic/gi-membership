@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { BlockEditor } from "@/components/admin/block-editor";
 import { bandTheme } from "@/lib/page-sections";
-import { DEVICE_MAX, baseStyle, emptyColumnLayout, newBlock, setStyleAt, styleFor, type Block } from "@/lib/blocks";
+import { DEVICE_MAX, baseStyle, emptyBackground, emptyColumnLayout, newBlock, setStyleAt, styleFor, type Block } from "@/lib/blocks";
 import { controlsFor, isGroup, scopeOf } from "@/lib/block-controls";
 
 // Editing a block at three widths, from the panel rather than from the model.
@@ -137,6 +137,52 @@ describe("what a control writes", () => {
     click(tab("Mobile"));
     click(tab("content"));
     expect(byText("button", "mobile ✕")).toBeFalsy();
+  });
+
+  it("says so, rather than leaving the tab to imply the opposite", () => {
+    // `deviceOf` sends a control with no per-device value to desktop whatever
+    // the tab says. The reset chip cannot report that — it only appears where
+    // there IS an override — so silence was the only signal, and silence reads
+    // as "this width forked".
+    mount([newBlock("heading")]);
+    selectFirstBlock();
+    click(tab("Mobile"));
+    click(tab("content"));
+    expect(byText("span", "every width")).toBeTruthy();
+  });
+
+  it("keeps quiet about it on desktop, where there is nothing to mistake", () => {
+    mount([newBlock("heading")]);
+    selectFirstBlock();
+    click(tab("content"));
+    expect(byText("span", "every width")).toBeFalsy();
+  });
+
+  it("names the whole background on the chip that clears the whole background", () => {
+    const background = { ...emptyBackground(), type: "classic" as const, color: "#ff0000" };
+    mount([setStyleAt(newBlock("heading"), "mobile", { background })]);
+    selectFirstBlock();
+    click(tab("Mobile"));
+    click(tab("advanced"));
+    // One override holds the colour, the image, the overlay and the gradient
+    // stops together — `writeControl` cannot store half a background — so a
+    // chip offering to reset "Colour" was offering to take the image with it.
+    expect(document.querySelector('[aria-label="Reset Background for mobile"]')).toBeTruthy();
+    expect(document.querySelector('[aria-label="Reset Colour for mobile"]')).toBeFalsy();
+  });
+});
+
+describe("leaving the builder", () => {
+  it("offers one way out, not two that do the same thing", () => {
+    // "Back to the page" and "Done" both called onClose, and neither saved —
+    // the page's own Save persists the draft. A secondary beside a primary
+    // reads as "leave" beside "keep", so one of them looked like losing work.
+    mount([newBlock("heading")]);
+    expect(byText("button", "Done")).toBeTruthy();
+    const ways = [...document.querySelectorAll("header button")].filter((b) =>
+      /back|done|close/i.test(b.textContent ?? ""),
+    );
+    expect(ways).toHaveLength(1);
   });
 });
 

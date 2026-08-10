@@ -441,13 +441,13 @@ export function BlockEditor({
         <span className="text-xs text-muted">
           {blocks.length === 0 ? "Empty" : `${blocks.length} block${blocks.length === 1 ? "" : "s"}`}
         </span>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full border border-border px-4 py-2 text-sm hover:border-fg"
-        >
-          &larr; Back to the page
-        </button>
+        {/* One button, not two. "Back to the page" sat beside this one and
+            called the same onClose — no save on either, because edits stream
+            into the draft and the page's own Save is what persists them. A
+            secondary beside a primary reads as "leave" beside "keep", so the
+            pair taught people that one of the two loses work. "Done" survives
+            because it is the one that says nothing was lost. Escape is the
+            other way out and still needs no label — see the key handler. */}
         <button
           type="button"
           onClick={onClose}
@@ -1415,6 +1415,27 @@ function ControlField({
   const key = control.key.split(".")[0];
   const set = at !== "desktop" && hasOverride(block, at, key, scopeOf(control));
 
+  // A dotted key is stored whole. `writeControl` puts the entire background
+  // under `background` — a sparse half-background is not a thing CSS can
+  // express — so `clearAt` takes the image, the overlay and the gradient stops
+  // along with the colour. Twelve fields on a block's Advanced tab and ten on a
+  // column, each promising to reset only itself and every one of them resetting
+  // all the others, is how someone loses a background image by tidying up a
+  // colour. The chip names the group it actually clears.
+  const grouped = control.key.includes(".");
+  const clears = grouped ? key[0].toUpperCase() + key.slice(1) : control.label;
+
+  // `deviceOf` sends a control that holds no per-device value to desktop
+  // whatever the tab says, so typing into Text on the Mobile tab edits the one
+  // value there is. The `set` chip cannot say so — it only appears where there
+  // IS an override — and silence reads as "this width forked". Said rather
+  // than disabled, and left shared rather than made per-device: everything
+  // that lays a block out is per-device already (see `responsive: true`), and
+  // what is left is content and behaviour, where a card's words being the same
+  // words at every width is the right answer and hiding the field on the
+  // Mobile tab would only send people back to Desktop to type.
+  const shared = device !== "desktop" && at === "desktop";
+
   // The six keys a narrow width stopped inheriting. Clearing one does NOT give
   // the width above back — nothing is emitted at all and Site settings is what
   // is left standing — so the chip must not offer "the desktop value again",
@@ -1454,13 +1475,23 @@ function ControlField({
           title={
             fallsToSite
               ? `Set for ${at}. Click to follow Site settings → Typography here again.`
-              : `Set for ${at}. Click to use the ${at === "mobile" ? "tablet" : "desktop"} value again.`
+              : grouped
+                ? `${clears} is set for ${at}. Click to use the ${at === "mobile" ? "tablet" : "desktop"} ${key} again — colour, image, overlay and gradient go together, because they are stored as one.`
+                : `Set for ${at}. Click to use the ${at === "mobile" ? "tablet" : "desktop"} value again.`
           }
           className="shrink-0 rounded-full bg-primary/15 px-1.5 text-[0.58rem] leading-4 text-primary hover:bg-primary/25"
-          aria-label={`Reset ${control.label} for ${at}`}
+          aria-label={`Reset ${clears} for ${at}`}
         >
           {at} ✕
         </button>
+      )}
+      {shared && (
+        <span
+          title="One value for the block. Editing it here changes it at every width."
+          className="shrink-0 rounded-full bg-border px-1.5 text-[0.58rem] leading-4 text-muted"
+        >
+          every width
+        </span>
       )}
     </span>
   );

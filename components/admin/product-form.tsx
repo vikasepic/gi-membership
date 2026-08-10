@@ -686,13 +686,17 @@ function Placement({
 /**
  * The reassurance list beside the card fields.
  *
- * Empty leaves the four lines the checkout already shows — the card going
- * straight to Stripe, the refund window, access on payment, and the trial
- * warning. Those are true of every product, and a product with nothing of its
- * own to promise is better served by them than by a blank column.
+ * Empty leaves the three lines the checkout already shows — the card going
+ * straight to Stripe, the refund window, and access on payment — and a fourth
+ * only where Settings → Commerce has a reply time to promise. Those are true
+ * of every product, and a product with nothing of its own to promise is better
+ * served by them than by a blank column.
  *
- * The trial warning is not in this list and cannot be edited away. It is a
- * thing the buyer is agreeing to rather than a selling point.
+ * The trial warning is not one of them and cannot be edited away: it is a
+ * thing the buyer is agreeing to rather than a selling point, so the checkout
+ * renders it outside this choice whether or not the list was replaced. It used
+ * to be counted here as the fourth line, which made the number wrong in both
+ * directions — a store with a reply time shows five.
  */
 function CheckoutBullets({ initial }: { initial: string[] }) {
   const [lines, setLines] = useState<string[]>(initial.length > 0 ? initial : []);
@@ -702,8 +706,8 @@ function CheckoutBullets({ initial }: { initial: string[] }) {
       label="Reassurance list"
       hint={
         lines.length === 0
-          ? "Empty — the checkout shows its standard four lines."
-          : "These replace the standard four."
+          ? "Empty — the checkout shows its standard lines: card safety, the refund window, access on payment, and your reply time if Settings gives one."
+          : "These replace all of those. The trial warning stays either way."
       }
     >
       <div className="flex flex-col gap-2">
@@ -741,7 +745,7 @@ function CheckoutBullets({ initial }: { initial: string[] }) {
             onClick={() => setLines([])}
             className="w-fit text-xs text-muted underline-offset-2 hover:text-primary hover:underline"
           >
-            Go back to the standard four
+            Go back to the standard lines
           </button>
         )}
       </div>

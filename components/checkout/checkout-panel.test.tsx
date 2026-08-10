@@ -108,10 +108,25 @@ describe("copy the product supplies", () => {
   });
 
   it("keeps the standard list when the product says nothing", () => {
-    // A blank column is worse than four true sentences.
+    // A blank column is worse than three true sentences.
     const out = panel({ bullets: [] });
     expect(out).toContain("never reach our servers");
     expect(out).toContain("days to change your mind");
+  });
+
+  it("is the list the product form promises: three, and four with a reply time", () => {
+    // The hint beside the Reassurance list in product-form is the only place
+    // an owner is told what "empty" leaves behind, and it said four — counting
+    // the trial warning, which is not in this list and cannot be replaced, and
+    // not counting the reply time, which is. Asserted as a count so the copy
+    // and the render cannot drift apart again.
+    // `<li ` with the space: a cover image makes React emit a preload `<link`,
+    // which a looser match counts as a fourth reassurance.
+    const lines = (out: string) => (out.match(/<li /g) ?? []).length;
+    expect(lines(panel({ bullets: [] }))).toBe(3);
+    expect(lines(panel({ bullets: [], replyTime: "We answer within a day." }))).toBe(4);
+    // The warning arrives on top of them rather than among them.
+    expect(lines(panel({ bullets: [], hasTrial: true }))).toBe(4);
   });
 
   it("still warns about a trial even when the list was replaced", () => {
