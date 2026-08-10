@@ -254,14 +254,16 @@ describe("managing columns", () => {
   });
 
   it("reverses the order for one device only", () => {
+    // Reversing is a Direction now rather than a switch of its own, but the
+    // thing that has to keep working is the same: it lands on the phone alone.
     const editor = open([rowWith({}, 2)]);
     click(tab("Mobile"));
-    // A switch now, not a checkbox in a label — found by its accessible name,
-    // which is the part that has to keep working either way.
-    const reverse = document.querySelector('[role="switch"][aria-label="Reverse the order"]');
-    click(reverse);
-    expect(editor.blocks[0].props.reverse).not.toBe(true);
-    expect(editor.blocks[0].responsive?.mobile.props.reverse).toBe(true);
+    const direction = [...document.querySelectorAll("select")].find((s) =>
+      [...s.options].some((o) => o.value === "row-reverse"),
+    )!;
+    pick(direction, "row-reverse");
+    expect(editor.blocks[0].props.direction).toBe("row");
+    expect(editor.blocks[0].responsive?.mobile.props.direction).toBe("row-reverse");
   });
 });
 

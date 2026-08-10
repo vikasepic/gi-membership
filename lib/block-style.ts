@@ -5,6 +5,7 @@ import {
   DEVICE_MAX,
   columnWidths,
   hasOverride,
+  oneOf,
   propsFor,
   styleFor,
   type Background,
@@ -299,26 +300,90 @@ export function columnCss(block: Block, index: number, theme: BandTheme): CSSPro
   return css;
 }
 
+/**
+ * The container's flex settings, as the only values we will turn into CSS.
+ *
+ * Allow-lists rather than `String(...)`: row props are raw jsonb and normalize
+ * never validates them, so this function is the boundary where stored text
+ * becomes a stylesheet. `declarations` strips `;{}` after us, which stops a
+ * value ending the rule — it does not stop `justify-content: url(...)`.
+ */
+const DIRECTIONS = ["row", "column", "row-reverse", "column-reverse"] as const;
+const FLEX_PLACEMENT = [
+  "flex-start",
+  "center",
+  "flex-end",
+  "space-between",
+  "space-around",
+  "space-evenly",
+] as const;
+const OVERFLOWS = ["visible", "hidden", "auto"] as const;
+
+/**
+ * How wide "Boxed" holds a row's columns.
+ *
+ * The same measure the band itself uses (`max-w-[1040px]` in sales-page.tsx),
+ * so a boxed row inside a band nobody has widened is a no-op — which is the
+ * point: Boxed can only ever narrow, so it could not have been the default
+ * without re-boxing every row already saved.
+ */
+export const BAND_MEASURE = 1040;
+
 export function rowLayout(block: Block, device: Device): RowLayout {
   const p = propsFor(block, device);
   const count = block.columns?.length ?? 0;
   const gap = typeof p.gap === "number" ? p.gap : 24;
   const widths = effectiveWidths(block, device);
 
+  const direction = oneOf(p.direction, DIRECTIONS, "row");
+  const down = direction === "column" || direction === "column-reverse";
+  // Every reversal is an `order` flip, including column-reverse — one mechanism,
+  // and the one already in the database. `flex-direction: row-reverse` would
+  // also move the edge Justify Content packs against, which is not what the old
+  // Reverse switch ever meant, and a row saved with it on has to keep emitting
+  // the CSS it emits today.
+  const flip = direction === "row-reverse" || direction === "column-reverse";
+  const justify = oneOf(p.justify, FLEX_PLACEMENT, "flex-start");
+  const alignContent = oneOf(p.alignContent, [...FLEX_PLACEMENT, ""] as const, "");
+  const overflow = oneOf(p.overflow, OVERFLOWS, "visible");
+  // A string, never a number: `declarations` leaves bare numbers unitless, so a
+  // numeric min-height would emit `min-height:400` and do nothing at all.
+  const minHeight =
+    typeof p.minHeight === "number" && Number.isFinite(p.minHeight) && p.minHeight > 0
+      ? `${p.minHeight}${p.minHeightUnit === "vh" ? "vh" : "px"}`
+      : "";
+
+  // Only what was actually set gets a declaration. Emitting a neutral value for
+  // each of these instead would put six new properties on every row on every
+  // page for nothing, and "renders identically" would stop being provable.
+  const container: CSSProperties = {
+    display: "flex",
+    flexWrap: oneOf(p.wrap, ["wrap", "nowrap"] as const, "wrap"),
+    gap: `${gap}px`,
+    alignItems: String(p.verticalAlign ?? "stretch"),
+  };
+  if (down) container.flexDirection = "column";
+  if (justify !== "flex-start") container.justifyContent = justify;
+  if (alignContent) container.alignContent = alignContent;
+  if (minHeight) container.minHeight = minHeight;
+  if (overflow !== "visible") container.overflow = overflow;
+  if (p.contentWidth === "boxed") {
+    container.maxWidth = `${BAND_MEASURE}px`;
+    container.marginInline = "auto";
+  }
+
   return {
-    container: {
-      display: "flex",
-      flexWrap: "wrap",
-      gap: `${gap}px`,
-      alignItems: String(p.verticalAlign ?? "stretch"),
-    },
+    container,
     columns: widths.map((w, i) => ({
       // minWidth:0 or a long unbroken word makes the column refuse to shrink.
       minWidth: 0,
-      width: `calc(${w}% - ${Math.round((gap * (100 - w)) / 100 * 100) / 100}px)`,
+      // Down the page the gap runs between the columns, not across them, so
+      // there is nothing to subtract — taking it off would leave every stacked
+      // column narrower than the width someone typed.
+      width: down ? `${w}%` : `calc(${w}% - ${Math.round((gap * (100 - w)) / 100 * 100) / 100}px)`,
       // Order, not reversed markup: the columns have to stay where they are in
       // the DOM or the editor's drop targets and the reading order move too.
-      order: p.reverse === true ? count - i : i,
+      order: flip ? count - i : i,
     })),
   };
 }
@@ -606,6 +671,15 @@ function diff(next: CSSProperties, prev: CSSProperties): CSSProperties {
   const out: CSSProperties = {};
   for (const [k, v] of Object.entries(next)) {
     if (v !== prev[k as keyof CSSProperties]) (out as Record<string, unknown>)[k] = v;
+  }
+  // A property the wider width set and this one does not must be undone, not
+  // left standing. It cost nothing while a row emitted the same four
+  // declarations everywhere; now that direction, justify, min height and
+  // overflow are only emitted when someone sets them, a row that is a column on
+  // a laptop and a row on a phone would keep `flex-direction:column` on the
+  // phone forever. The block-level rules above already work this way.
+  for (const k of Object.keys(prev)) {
+    if (!(k in next)) (out as Record<string, unknown>)[k] = "revert";
   }
   return out;
 }

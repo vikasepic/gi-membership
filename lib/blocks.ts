@@ -299,7 +299,27 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   // actually saved with, flattening every 3-2 into a 50/50. Widths are derived
   // by columnWidths until someone sets them. `stack` is what makes columns fall
   // into one on a phone by default, which is what almost every row wants.
-  row: { verticalAlign: "stretch", gap: 24, reverse: false, stack: "mobile" },
+  //
+  // Everything from `direction` down is the container's own flex settings, and
+  // every one of them starts at the value that emits what a row emitted before
+  // they existed: the container was already `display:flex; flex-wrap:wrap` with
+  // no justify, no min height and no overflow, so `row` / `wrap` / `flex-start`
+  // / null / "visible" / "full" are not preferences, they are "as it was". A
+  // number or a corner here instead would repaint every row ever saved the
+  // moment this line shipped, because normalize spreads these over stored props.
+  row: {
+    verticalAlign: "stretch",
+    gap: 24,
+    stack: "mobile",
+    direction: "row",
+    justify: "flex-start",
+    wrap: "wrap",
+    alignContent: "",
+    minHeight: null,
+    minHeightUnit: "px",
+    overflow: "visible",
+    contentWidth: "full",
+  },
   stats: { items: [], layout: "strip" },
   pricing: { items: [], highlightLast: true, totalLabel: "", totalAmount: "" },
   faq: { items: [], layout: "accordion" },
@@ -395,7 +415,7 @@ const num = (v: unknown, fallback: number): number =>
 
 const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : fallback);
 
-const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T =>
+export const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T =>
   typeof v === "string" && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
 
 /** null stays null — it is the value that means "inherit". */
@@ -807,6 +827,27 @@ export function setColumnCount(block: Block, count: number): Block {
 export const MAX_DEPTH = 2;
 
 /**
+ * `reverse` was a boolean of its own before Direction existed.
+ *
+ * Folded into `direction` on read rather than left beside it: two keys
+ * describing one fact is how a row ends up drawn one way and edited as
+ * another — the same reason `structure` is deleted once `widths` exist.
+ *
+ * `stored` is what was actually in the database, not the props with the
+ * defaults already spread over them: `direction` now has a default, so asking
+ * the merged object whether it was set would answer yes for every row ever
+ * saved and the migration would never fire. A stored `reverse: false` is
+ * carried across too, because on a device override it means "not reversed
+ * here" and dropping it would let the desktop's reversal reach the phone.
+ */
+function foldReverse(props: Record<string, unknown>, stored: Record<string, unknown>): void {
+  if (stored.direction === undefined && typeof stored.reverse === "boolean") {
+    props.direction = stored.reverse ? "row-reverse" : "row";
+  }
+  delete props.reverse;
+}
+
+/**
  * Turn whatever is in the database into a tree we can render.
  *
  * Anything unrecognised is dropped rather than repaired: a block with no known
@@ -864,6 +905,13 @@ export function normalizeBlocks(value: unknown, depth = 0): Block[] {
       // `structure` cannot describe a row someone has since resized.
       block.props.widths = columnWidths(block.props, want);
       delete block.props.structure;
+      foldReverse(block.props, isRecord(raw.props) ? raw.props : {});
+      // The overrides carry props too, and "reversed on mobile only" was the
+      // commonest thing that switch was used for.
+      for (const device of ["tablet", "mobile"] as const) {
+        const over = block.responsive?.[device].props;
+        if (over) foldReverse(over, over);
+      }
     }
     out.push(block);
   }
@@ -1057,6 +1105,10 @@ export function blockRendersNothing(block: Block): boolean {
     case "pricecard":
       return false;
     case "row":
+      // A min height is content of a kind. An empty container set to 400px is a
+      // gap somebody asked for, and dropping it is the setting silently failing
+      // on the one row it was most likely set on.
+      if (typeof p.minHeight === "number" && p.minHeight > 0) return false;
       return (block.columns ?? []).every((col) => col.every(blockRendersNothing));
     case "spacer":
     case "divider":

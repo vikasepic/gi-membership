@@ -446,14 +446,113 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         ],
         hint: "Setting widths for a device overrides this",
       },
-      { kind: "toggle", key: "reverse", label: "Reverse the order", responsive: true },
-      { kind: "number", key: "gap", label: "Gap", min: 0, max: 80, step: 4, unit: "px", responsive: true },
+
+      group("Layout"),
+      // Reversed is still the painting order and not the markup order, so the
+      // words on the page stay in the order they are read out and the drop
+      // targets stay where they were dropped.
+      {
+        kind: "select",
+        key: "direction",
+        label: "Direction",
+        responsive: true,
+        options: [
+          ["row", "Row"],
+          ["column", "Column"],
+          ["row-reverse", "Row reversed"],
+          ["column-reverse", "Column reversed"],
+        ],
+        hint: "Reversed changes the order they are painted in, not the order they are written in.",
+      },
+      {
+        kind: "select",
+        key: "justify",
+        label: "Justify content",
+        responsive: true,
+        options: [
+          ["flex-start", "Start"],
+          ["center", "Centre"],
+          ["flex-end", "End"],
+          ["space-between", "Space between"],
+          ["space-around", "Space around"],
+          ["space-evenly", "Space evenly"],
+        ],
+        hint: "Along the direction above. It only has room to do anything once the columns leave some.",
+      },
+      // The same property Align used to be, renamed rather than joined by a
+      // second control: two keys writing align-items is a row drawn one way and
+      // edited as another. Start/End rather than Top/Bottom because in a column
+      // direction align-items runs across the page, not down it.
       {
         kind: "select",
         key: "verticalAlign",
-        label: "Align",
+        label: "Align items",
         responsive: true,
-        options: [["stretch", "Stretch"], ["flex-start", "Top"], ["center", "Middle"], ["flex-end", "Bottom"]],
+        options: [["stretch", "Stretch"], ["flex-start", "Start"], ["center", "Centre"], ["flex-end", "End"]],
+      },
+      { kind: "number", key: "gap", label: "Gap", min: 0, max: 80, step: 4, unit: "px", responsive: true },
+      {
+        kind: "select",
+        key: "wrap",
+        label: "Wrap",
+        responsive: true,
+        options: [["wrap", "Wrap"], ["nowrap", "No wrap"]],
+        hint: "No wrap keeps every column on one line, however narrow that makes them.",
+      },
+      {
+        kind: "select",
+        key: "alignContent",
+        label: "Align content",
+        responsive: true,
+        // Hidden with wrapping off because that is the only time it does
+        // anything: align-content places the LINES, and there is one line.
+        when: (b) => b.props.wrap !== "nowrap",
+        options: [
+          ["", "Default"],
+          ["flex-start", "Start"],
+          ["center", "Centre"],
+          ["flex-end", "End"],
+          ["space-between", "Space between"],
+          ["space-around", "Space around"],
+          ["space-evenly", "Space evenly"],
+        ],
+        hint: "Where the wrapped lines sit, once there is more than one.",
+      },
+
+      group("Size"),
+      {
+        kind: "number",
+        key: "minHeight",
+        label: "Min height",
+        min: 0,
+        max: 1200,
+        step: 10,
+        responsive: true,
+        hint: "Unset is as tall as what is in it.",
+      },
+      {
+        kind: "select",
+        key: "minHeightUnit",
+        label: "Unit",
+        responsive: true,
+        options: [["px", "px"], ["vh", "vh"]],
+        hint: "vh is per-cent of the screen's height, so a full-screen band is 100.",
+      },
+      {
+        kind: "select",
+        key: "contentWidth",
+        label: "Content width",
+        responsive: true,
+        options: [["full", "Full"], ["boxed", "Boxed"]],
+        hint: "Boxed holds the columns to the page's measure and centres them.",
+      },
+      {
+        kind: "select",
+        key: "overflow",
+        label: "Overflow",
+        responsive: true,
+        options: [["visible", "Default"], ["hidden", "Hidden"], ["auto", "Auto"]],
+        hint: "Hidden clips anything sticking out — needed before a corner can round a column.",
       },
     ],
     style: [],
@@ -835,7 +934,10 @@ export const PALETTE: { type: BlockType; label: string; props?: Record<string, u
   { type: "button", label: "Button", props: { action: "link" } },
   { type: "iconlist", label: "List" },
   { type: "slides", label: "Slides" },
-  { type: "row", label: "Columns" },
+  // "Container", not "Columns": the block is a flex container with a direction,
+  // a justify and a min height of its own, and columns are only what is in it.
+  // The stored type stays "row" — renaming that would orphan every block saved.
+  { type: "row", label: "Container" },
   { type: "cards", label: "Cards" },
   { type: "stats", label: "Figures" },
   { type: "pricing", label: "Price table" },
@@ -934,7 +1036,7 @@ export function sections(controls: Control[]): { title: string | null; controls:
  */
 export const PALETTE_GROUPS: { title: string; types: string[] }[] = [
   { title: "Basic", types: ["Heading", "Text", "Image", "Video", "Buy button", "Button", "List", "Slides"] },
-  { title: "Layout", types: ["Columns", "Divider", "Spacer"] },
+  { title: "Layout", types: ["Container", "Divider", "Spacer"] },
   { title: "Sales", types: ["Cards", "Figures", "Price card", "Price table", "FAQ", "HTML"] },
 ];
 

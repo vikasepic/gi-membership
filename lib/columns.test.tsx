@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   MAX_COLUMNS,
+  blockRendersNothing,
   columnWidths,
   evenWidths,
   newBlock,
@@ -148,12 +149,20 @@ describe("how a row is drawn", () => {
     // Reordering the DOM would move the drop targets and the reading order too.
     const plain = rowLayout(row({}), "desktop");
     expect(plain.columns.map((c) => c.order)).toEqual([0, 1]);
-    const back = rowLayout(row({ reverse: true }), "desktop");
+    const back = rowLayout(row({ direction: "row-reverse" }), "desktop");
     expect(back.columns.map((c) => c.order)).toEqual([2, 1]);
   });
 
+  it("reverses a column direction the same way, by order and not by flex-direction", () => {
+    // One mechanism for every reversal. `flex-direction: column-reverse` on top
+    // of the order flip would cancel it out and the row would look untouched.
+    const l = rowLayout(row({ direction: "column-reverse" }), "desktop");
+    expect(l.container.flexDirection).toBe("column");
+    expect(l.columns.map((c) => c.order)).toEqual([2, 1]);
+  });
+
   it("reverses on one device only", () => {
-    const b = setPropsAt(row({}), "mobile", { reverse: true });
+    const b = setPropsAt(row({}), "mobile", { direction: "row-reverse" });
     expect(rowLayout(b, "desktop").columns.map((c) => c.order)).toEqual([0, 1]);
     expect(rowLayout(b, "tablet").columns.map((c) => c.order)).toEqual([0, 1]);
     expect(rowLayout(b, "mobile").columns.map((c) => c.order)).toEqual([2, 1]);
@@ -198,12 +207,12 @@ describe("reverse, from the markup a preview actually renders", () => {
   it("puts the second column first, on the page", () => {
     // The preview pane and the canvas both render this component pinned to a
     // device, so if the order is not in the markup it is not anywhere.
-    const out = render(filled({ reverse: true }), "desktop");
+    const out = render(filled({ direction: "row-reverse" }), "desktop");
     expect(out).toMatch(/order:2[^]*order:1/);
   });
 
   it("leaves the markup order alone — only the painting order changes", () => {
-    const out = render(filled({ reverse: true }), "desktop");
+    const out = render(filled({ direction: "row-reverse" }), "desktop");
     expect(out.indexOf("First")).toBeLessThan(out.indexOf("Second"));
   });
 
@@ -212,13 +221,141 @@ describe("reverse, from the markup a preview actually renders", () => {
   });
 
   it("reverses on the phone only, when that is where it was set", () => {
-    const b = setPropsAt(filled({}), "mobile", { reverse: true });
+    const b = setPropsAt(filled({}), "mobile", { direction: "row-reverse" });
     expect(render(b, "desktop")).toMatch(/order:0/);
     expect(render(b, "mobile")).toMatch(/order:2/);
   });
 
   it("reaches the live page as a rule, not just the preview", () => {
-    const css = blockRules(filled({ reverse: true }), paper);
+    const css = blockRules(filled({ direction: "row-reverse" }), paper);
     expect(css).toContain("order:2");
+  });
+});
+
+describe("the container settings a row can be given", () => {
+  // What a row looked like in the database before any of this existed: no
+  // direction, no justify, no wrap, no min height — and, on the second one, the
+  // boolean that Direction replaced.
+  const asStored = (props: Record<string, unknown>): Block =>
+    normalizeBlocks([{ id: "b1", type: "row", props, columns: [[], []] }])[0];
+
+  it("emits exactly the CSS it emitted before any of this existed", () => {
+    // The byte-for-byte proof that the whole step is additive: a row saved when
+    // a container had four declarations still has four.
+    const css = blockRules(asStored({ widths: [60, 40], gap: 24 }), paper);
+    const container = css.match(/> \[data-row\]\{([^}]*)\}/)![1];
+    expect(container).toBe("display:flex;flex-wrap:wrap;gap:24px;align-items:stretch");
+  });
+
+  it("gives a stored row every new setting at the value it already had", () => {
+    const p = asStored({}).props;
+    expect(p.direction).toBe("row");
+    expect(p.wrap).toBe("wrap");
+    expect(p.justify).toBe("flex-start");
+    expect(p.overflow).toBe("visible");
+    expect(p.contentWidth).toBe("full");
+    expect(p.minHeight).toBeNull();
+  });
+
+  it("reads the old Reverse switch forward into Direction", () => {
+    // Stored rows say `reverse: true` and nothing else. Read as a plain
+    // untouched row they would quietly un-reverse on the next page load.
+    const b = asStored({ reverse: true });
+    expect(b.props.direction).toBe("row-reverse");
+    expect("reverse" in b.props).toBe(false);
+    expect(rowLayout(b, "desktop").columns.map((c) => c.order)).toEqual([2, 1]);
+  });
+
+  it("reads it forward on a device override too, in both directions", () => {
+    // "Reversed on mobile only" was the commonest use of that switch, and a
+    // stored `false` there is a row deliberately NOT reversed on the phone.
+    const b = normalizeBlocks([
+      {
+        id: "b1",
+        type: "row",
+        props: { reverse: true },
+        columns: [[], []],
+        responsive: { tablet: { style: {}, props: {} }, mobile: { style: {}, props: { reverse: false } } },
+      },
+    ])[0];
+    expect(b.responsive?.mobile.props).toEqual({ direction: "row" });
+    expect(rowLayout(b, "mobile").columns.map((c) => c.order)).toEqual([0, 1]);
+  });
+
+  it("keeps a Direction someone has since chosen, rather than the switch under it", () => {
+    expect(asStored({ reverse: true, direction: "column" }).props.direction).toBe("column");
+  });
+
+  it("survives a round trip through the database", () => {
+    const before = asStored({
+      direction: "column",
+      justify: "space-between",
+      wrap: "nowrap",
+      alignContent: "center",
+      minHeight: 400,
+      minHeightUnit: "vh",
+      overflow: "hidden",
+      contentWidth: "boxed",
+    });
+    expect(normalizeBlocks(JSON.parse(JSON.stringify([before])))[0]).toEqual(before);
+  });
+
+  it("writes each of them into the container rule", () => {
+    const css = blockRules(
+      asStored({
+        justify: "space-between",
+        wrap: "nowrap",
+        alignContent: "center",
+        minHeight: 400,
+        overflow: "hidden",
+        contentWidth: "boxed",
+      }),
+      paper,
+    );
+    const container = css.match(/> \[data-row\]\{([^}]*)\}/)![1];
+    expect(container).toContain("justify-content:space-between");
+    expect(container).toContain("flex-wrap:nowrap");
+    expect(container).toContain("align-content:center");
+    expect(container).toContain("overflow:hidden");
+    expect(container).toContain("max-width:1040px");
+    // A bare number would emit `min-height:400`, which is not a length and does
+    // nothing — the one property in here that has to be built as a string.
+    expect(container).toContain("min-height:400px");
+  });
+
+  it("takes the unit from the unit, not from the number", () => {
+    const css = blockRules(asStored({ minHeight: 100, minHeightUnit: "vh" }), paper);
+    expect(css).toContain("min-height:100vh");
+  });
+
+  it("refuses a value that is not one of the ones on offer", () => {
+    // Row props are raw jsonb and normalize never validates them, so this
+    // function is the boundary. An import is otherwise one bad string away from
+    // writing whatever it likes into the page's stylesheet.
+    const css = blockRules(asStored({ justify: "url(evil)", overflow: "scroll;color:red" }), paper);
+    expect(css).not.toContain("url(evil)");
+    expect(css).not.toContain("overflow");
+  });
+
+  it("subtracts no gap from a column stacked down the page", () => {
+    // The gap runs between the columns there, not across them. Taking 12px off
+    // would leave every column narrower than the width someone typed.
+    const l = rowLayout(asStored({ direction: "column", widths: [50, 50], gap: 24 }), "desktop");
+    expect(l.columns[0].width).toBe("50%");
+  });
+
+  it("stops treating an empty container as nothing once it has been given a height", () => {
+    // An empty row is dropped from the page. A 400px one is a gap somebody
+    // asked for, and dropping that is the control failing without saying so.
+    expect(blockRendersNothing(asStored({}))).toBe(true);
+    expect(blockRendersNothing(asStored({ minHeight: 400 }))).toBe(false);
+  });
+
+  it("undoes a property the phone does not set, rather than leaving it standing", () => {
+    // A container on a laptop and a row on a phone. Without this the media
+    // query says nothing about flex-direction and the phone stays a column.
+    const b = setPropsAt(asStored({ direction: "column" }), "mobile", { direction: "row" });
+    const mobile = blockRules(b, paper).split("max-width:767px")[1] ?? "";
+    expect(mobile).toContain("flex-direction:revert");
   });
 });
