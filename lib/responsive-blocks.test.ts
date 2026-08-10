@@ -175,11 +175,36 @@ describe("the CSS a block emits", () => {
     expect(blockRules(h3, paper)).toContain("font-size:1.12rem");
   });
 
-  it("lets a size set on the block beat the tag default", () => {
+  it("lets a size set on the block beat the tag default, at the width it was set", () => {
+    // The size still wins over the tag default — it is emitted after it, at the
+    // same specificity. What changed is where: the block's own typography now
+    // lives in a desktop-width query rather than the unscoped rule, so it is
+    // the tag default and the site's `:root h2` that answer on a phone.
     const b = setStyleAt(heading(), "desktop", { size: 20 });
-    const desktop = blockRules(b, paper).split("@media")[0];
-    expect(desktop).toContain("font-size:20px");
-    expect(desktop).not.toContain("clamp");
+    const css = blockRules(b, paper);
+    const frame = css.split("@media")[0];
+    expect(frame).toContain("clamp");
+    expect(frame).not.toContain("font-size:20px");
+    expect(css).toContain("@media (min-width:1024px)");
+    expect(css.indexOf("clamp")).toBeLessThan(css.indexOf("font-size:20px"));
+  });
+
+  it("stops a desktop-only size reaching the phone, so the site's own can", () => {
+    // The reason for the min-width query. `styleFor` still layers desktop down
+    // — the panel has to show what the phone renders — but the stylesheet says
+    // nothing about size below 1024px unless that width was given one.
+    const b = setStyleAt(heading(), "desktop", { size: 20 });
+    expect(styleFor(b, "mobile").size).toBe(20);
+    expect(blockRules(b, paper)).not.toContain("max-width:");
+  });
+
+  it("says it again at a width that was given its own value", () => {
+    const b = setStyleAt(setStyleAt(heading(), "desktop", { size: 20 }), "mobile", { size: 14 });
+    const css = blockRules(b, paper);
+    expect(css).toContain(`@media (max-width:${DEVICE_MAX.mobile}px){.bk-${b.id}.bk-${b.id}{font-size:14px}}`);
+    // Nothing to undo and nothing to restate: the desktop rule was never in
+    // force here. `revert` would have rolled back the site rules as well.
+    expect(css).not.toContain("revert");
   });
 
   it("cannot be broken out of by a value that carries a brace", () => {

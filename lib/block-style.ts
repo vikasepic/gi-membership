@@ -3,10 +3,12 @@ import { readableInk, tint } from "@/lib/color";
 import { imageSrc, type BandTheme } from "@/lib/page-sections";
 import {
   DEVICE_MAX,
+  baseStyle,
   columnAsBlock,
   columnWidths,
   hasOverride,
   oneOf,
+  ownTypography,
   propsFor,
   styleFor,
   type Background,
@@ -634,18 +636,49 @@ function typeDefaultCss(block: Block): CSSProperties {
  * show the desktop styling.
  */
 export function blockCssAt(block: Block, theme: BandTheme, device: Device = "desktop"): CSSProperties {
-  return deviceCss(block, theme, styleFor(block, device));
+  return {
+    ...frameCss(block, theme, styleFor(block, device)),
+    ...typographyAt(ownTypography(block, device)),
+  };
 }
 
-/** The style a block has at a device, ready to be written as a rule. */
-function deviceCss(block: Block, theme: BandTheme, s: BlockStyle): CSSProperties {
+/**
+ * Everything about a block's look that a narrower width still inherits.
+ *
+ * Colour is here, but only the band's own ink — the value `blockColors` derives
+ * when the block names none. A button's label and a divider's hairline are read
+ * off the band at every width and would otherwise go missing below 1024px. The
+ * block's OWN colour travels with the rest of its typography instead.
+ */
+function frameCss(block: Block, theme: BandTheme, s: BlockStyle): CSSProperties {
   return {
     ...wrapperCssFrom(block, s, theme),
     ...typeDefaultCss(block),
-    ...typographyCss(s),
-    color: blockColors(block, theme, s).fg,
+    color: blockColors(block, theme, { ...s, color: null }).fg,
   };
 }
+
+/**
+ * The seven values a width only gets if it set them itself.
+ *
+ * `s.color` rather than `blockColors`: every block type resolves its text
+ * colour to the style's own colour when there is one, whatever else it derives
+ * from the band, so there is nothing left for `blockColors` to decide.
+ */
+function typographyAt(own: Partial<BlockStyle>): CSSProperties {
+  const s = baseStyle(own);
+  const css: CSSProperties = typographyCss(s);
+  if (s.color) css.color = s.color;
+  return css;
+}
+
+/**
+ * The width above which the desktop values are the ones that apply.
+ *
+ * Read off DEVICE_MAX rather than written down, so there is one boundary
+ * between a block and a tablet rather than two that can drift apart.
+ */
+const DESKTOP_MIN = (DEVICE_MAX.tablet ?? 0) + 1;
 
 /**
  * Everything a block's look needs, as one stylesheet.
@@ -666,31 +699,37 @@ export function blockRules(block: Block, theme: BandTheme): string {
   // elements one class matched, so nothing here reaches anything new.
   const sel = `.${blockClass(block)}.${blockClass(block)}`;
   const out: string[] = [];
-  const desktop = declarations(deviceCss(block, theme, block.style));
-  if (desktop) out.push(`${sel}{${desktop}}`);
+  const frame = declarations(frameCss(block, theme, block.style));
+  if (frame) out.push(`${sel}{${frame}}`);
 
-  const r = block.responsive;
-  if (r) {
-    for (const device of ["tablet", "mobile"] as const) {
-      if (Object.keys(r[device]).length === 0) continue;
-      const s = styleFor(block, device);
-      // Only the properties this device actually changes. Re-stating the whole
-      // style would bake the desktop values into the media query, and the next
-      // desktop edit would stop reaching the phone.
-      const full = deviceCss(block, theme, s);
-      const base = deviceCss(block, theme, styleFor(block, device === "mobile" ? "tablet" : "desktop"));
-      const diff: CSSProperties = {};
-      for (const [k, v] of Object.entries(full)) {
-        if (v !== base[k as keyof CSSProperties]) (diff as Record<string, unknown>)[k] = v;
-      }
-      // A property the wider device sets and this one does not must be undone,
-      // not left standing — "no padding on mobile" is a real thing to say.
-      for (const k of Object.keys(base)) {
-        if (!(k in full)) (diff as Record<string, unknown>)[k] = "revert";
-      }
-      const decls = declarations(diff);
-      if (decls) out.push(`@media (max-width:${DEVICE_MAX[device]}px){${sel}{${decls}}}`);
-    }
+  // The desktop typography is scoped to the desktop width instead of riding the
+  // unscoped rule with everything else. That is the whole of "a width that sets
+  // nothing falls through to the site's own type": below 1024px this rule stops
+  // matching, nothing replaces it, and the `:root h2` written from Settings is
+  // what is left standing.
+  //
+  // A min-width query rather than a `revert` in the narrow ones, because
+  // `revert` rolls back the whole author origin — it would discard the site
+  // rule too and land on the browser's default.
+  const desktop = declarations(typographyAt(ownTypography(block, "desktop")));
+  if (desktop) out.push(`@media (min-width:${DESKTOP_MIN}px){${sel}{${desktop}}}`);
+
+  for (const device of ["tablet", "mobile"] as const) {
+    // Only the frame properties this device actually changes. Re-stating the
+    // whole style would bake the wider values into the media query, and the
+    // next desktop edit would stop reaching the phone.
+    const box = block.responsive
+      ? diff(
+          frameCss(block, theme, styleFor(block, device)),
+          frameCss(block, theme, styleFor(block, device === "mobile" ? "tablet" : "desktop")),
+        )
+      : {};
+    // Typography is not diffed: nothing above it is in force at this width, so
+    // there is nothing to restate and nothing to undo.
+    const body = [declarations(box), declarations(typographyAt(ownTypography(block, device)))]
+      .filter(Boolean)
+      .join(";");
+    if (body) out.push(`@media (max-width:${DEVICE_MAX[device]}px){${sel}{${body}}}`);
   }
 
   const capped = mobilePaddingCap(block, sel);

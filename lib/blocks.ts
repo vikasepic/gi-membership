@@ -710,6 +710,55 @@ export function styleFor(block: Block, device: Device): BlockStyle {
   return device === "tablet" ? tablet : { ...tablet, ...r.mobile.style };
 }
 
+/**
+ * The seven keys a width no longer inherits from the width above it.
+ *
+ * They are exactly the ones lib/site-typography now answers for. A block that
+ * says nothing about its size on a phone used to be handed the desktop size,
+ * which meant the site's own mobile heading size could never reach any block
+ * whose desktop size had been touched once — the setting would look broken on
+ * the pages it matters most on.
+ *
+ * Everything else on BlockStyle keeps inheriting, because there is no global
+ * for it to fall to. A padding that stopped inheriting would fall to zero, not
+ * to a site default, and every block with side padding would lose it on tablet.
+ *
+ * The break lives in the CSS emission, not in `styleFor`: the panels, the
+ * padding notice and the editor canvas all ask "what does this block look like
+ * on a phone", and the honest answer to that is still the layered one.
+ */
+export const SITE_DEFAULTED_KEYS = [
+  "fontFamily",
+  "size",
+  "lineHeight",
+  "letterSpacing",
+  "weight",
+  "transform",
+  "color",
+] as const satisfies readonly (keyof BlockStyle)[];
+
+const ownSeven = (patch: Partial<BlockStyle>): Partial<BlockStyle> => {
+  const out: Partial<BlockStyle> = {};
+  for (const k of SITE_DEFAULTED_KEYS) if (k in patch) (out as Record<string, unknown>)[k] = patch[k];
+  return out;
+};
+
+/**
+ * The site-defaulted values this exact width sets, rather than the ones it
+ * would inherit.
+ *
+ * Mobile still layers on tablet — a phone is also a narrow screen, and the
+ * tablet media query matches it anyway — but neither layers on desktop.
+ */
+export function ownTypography(block: Block, device: Device): Partial<BlockStyle> {
+  // The desktop style is total, so every key is its own.
+  if (device === "desktop") return ownSeven(block.style);
+  const r = block.responsive;
+  if (!r) return {};
+  const tablet = ownSeven(r.tablet.style);
+  return device === "tablet" ? tablet : { ...tablet, ...ownSeven(r.mobile.style) };
+}
+
 /** The props a block has at a given width. */
 export function propsFor(block: Block, device: Device): Record<string, unknown> {
   const r = block.responsive;
