@@ -69,7 +69,7 @@ import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/li
  * except to hand it on.
  */
 const CanvasDevice = createContext<Device>("desktop");
-import { backgroundCss, blockClass, blockCssAt, blockTextRules, columnCss, effectiveWidths, mobilePaddingNotice, rowIsGrid, rowLayout, stacksAt } from "@/lib/block-style";
+import { backgroundCss, blockClass, blockCssAt, blockTextRules, columnCss, columnOwnWidth, effectiveWidths, mobilePaddingNotice, rowIsGrid, rowLayout, stacksAt } from "@/lib/block-style";
 import { imageSrc } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
 import { PREVIEW_SCOPE, siteTypographyCssAt, type SitePreview } from "@/lib/site-typography";
@@ -1057,8 +1057,18 @@ function CanvasBlock({
     >
       {dropAt === `${zoneId}:${index}` && <DropLine label={dragLabel} />}
 
+      {/* `flex flex-col`, because that is what holds a block on the page.
+          `Blocks` in components/page/blocks.tsx is a column flex container, so
+          every block wrapper is a flex ITEM — and a flex item with an auto
+          cross-axis margin is not stretched: it takes its content's width and
+          the margin moves it. Here the wrapper was an ordinary block box, which
+          fills its parent and resolves `margin-inline: auto` to nothing. So
+          Block position centred a button on the live page and did absolutely
+          nothing in the canvas — someone centres it, sees no movement, and
+          reaches for padding instead. One item per container rather than the
+          page's many, which changes nothing across the axis alignment uses. */}
       <div
-        className={`relative rounded-sm ${selected ? "outline outline-2 outline-offset-2 outline-[var(--primary)]" : "hover:outline hover:outline-1 hover:outline-offset-2 hover:outline-[var(--border)]"}`}
+        className={`relative flex flex-col rounded-sm ${selected ? "outline outline-2 outline-offset-2 outline-[var(--primary)]" : "hover:outline hover:outline-1 hover:outline-offset-2 hover:outline-[var(--border)]"}`}
       >
         {/* Dragging by a handle, not the body: a slider or a button inside the
             block would otherwise swallow the gesture. */}
@@ -1631,6 +1641,12 @@ function ControlField({
       // that is 100 per column until someone says otherwise, and a panel
       // showing 60/40 beside a stacked canvas is a panel telling a lie.
       const widths = effectiveWidths(block, at);
+      // A column given its own Width wins — `rowLayout` applies it after the
+      // row's share, deliberately. So the field for that column is showing a
+      // number nothing draws, and typing in it changes nothing on screen. It
+      // says whose width it is and stops accepting input, the same way the
+      // stacked row below says why every field reads 100.
+      const owned = widths.map((_, i) => columnOwnWidth(block, i, at));
       return (
         <div className="flex flex-col gap-1.5">
           {label}
@@ -1640,7 +1656,10 @@ function ControlField({
           <div className="flex flex-wrap gap-1.5">
             {widths.map((w, i) => (
               <label key={i} className="flex flex-1 basis-16 flex-col gap-0.5">
-                <span className="text-[0.62rem] text-muted">Col {i + 1}</span>
+                <span className="text-[0.62rem] text-muted">
+                  Col {i + 1}
+                  {owned[i] ? ` · ${owned[i]}` : ""}
+                </span>
                 <input
                   type="number"
                   // Labelled, not merely captioned: the "Col 1" above it is a
@@ -1651,7 +1670,9 @@ function ControlField({
                   min={5}
                   max={95}
                   step={1}
-                  className={`${input} px-1.5 text-center tabular-nums`}
+                  disabled={owned[i] !== null}
+                  title={owned[i] ? `Column ${i + 1} sets its own width (${owned[i]}). Clear it there to use the row's share.` : undefined}
+                  className={`${input} px-1.5 text-center tabular-nums ${owned[i] ? "opacity-50" : ""}`}
                   value={Math.round(w * 100) / 100}
                   onChange={(e) => onChange(setColumnWidth(widths, i, Number(e.target.value)))}
                 />
@@ -1669,11 +1690,16 @@ function ControlField({
             {/* 100 and 100 for a two-column row is correct on a phone and looks
                 exactly like a bug, because nothing else on screen says the
                 columns have stopped being side by side. */}
-            {stacksAt(block, at) && (
+            {stacksAt(block, at) ? (
               <span className="text-[0.62rem] leading-tight text-muted">
                 Stacked here — each is full width. Type one to override.
               </span>
-            )}
+            ) : owned.some(Boolean) ? (
+              <span className="text-[0.62rem] leading-tight text-muted">
+                {owned.map((o, i) => (o ? `Col ${i + 1}` : null)).filter(Boolean).join(", ")}: own
+                width, set on the column. The row&rsquo;s share does not reach it.
+              </span>
+            ) : null}
           </div>
         </div>
       );

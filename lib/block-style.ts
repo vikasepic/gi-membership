@@ -333,6 +333,24 @@ function columnLayoutCss(col: ColumnLayout, count: number): CSSProperties {
 }
 
 /**
+ * The width this column set for itself, or null — the row's share decides.
+ *
+ * `rowLayout` spreads `columnLayoutCss` last, on purpose, so a column given its
+ * own Width overrules the share typed beside the other columns. Nothing said
+ * so: the row's "Column widths" field kept showing and accepting 60/40 while
+ * the canvas and the page drew 220px, and typing in it did nothing at all.
+ *
+ * Read back through the same function that emits it rather than re-reading the
+ * three `colWidth*` keys here, so the panel can only ever report the width that
+ * was actually written.
+ */
+export function columnOwnWidth(block: Block, index: number, device: Device): string | null {
+  if (!block.columnStyles?.[index]) return null;
+  const w = columnLayoutCss(columnStyleAt(block, index, device), block.columns?.length ?? 0).width;
+  return typeof w === "string" ? w : null;
+}
+
+/**
  * What one column looks like, beyond how wide it is.
  *
  * Returned separately from the width because the width is arithmetic the row

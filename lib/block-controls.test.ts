@@ -109,6 +109,37 @@ describe("a control writes somewhere that is actually read", () => {
   });
 });
 
+describe("block position is one control, not two", () => {
+  // It was two entries on the same style.blockAlign — "Align" on the button's
+  // Style tab with a fullWidth guard, "Block position" under Advanced with
+  // none — so a full-width button lost it in one tab and kept it in the other,
+  // where an auto margin has no free space to take.
+  const find = (b: Block, tab: "style" | "advanced") =>
+    controlsFor(b)[tab].find((c) => !isGroup(c) && c.key === "blockAlign");
+
+  it("is offered on the button itself and under Advanced, under one label", () => {
+    const b = newBlock("button", { props: { text: "x" } });
+    expect(find(b, "style")).toBeTruthy();
+    expect(find(b, "advanced")).toBeTruthy();
+    expect((find(b, "style") as { label: string }).label).toBe(
+      (find(b, "advanced") as { label: string }).label,
+    );
+  });
+
+  it("disappears from BOTH tabs once the button fills the row", () => {
+    const full = newBlock("button", { props: { text: "x", fullWidth: true } });
+    expect(find(full, "style")).toBeUndefined();
+    expect(find(full, "advanced")).toBeUndefined();
+  });
+
+  it("stays under Advanced for everything that is not a button", () => {
+    for (const t of BLOCK_TYPES) {
+      if (t === "button") continue;
+      expect(find(newBlock(t), "advanced"), t).toBeTruthy();
+    }
+  });
+});
+
 describe("controlsFor hides what does not apply", () => {
   it("hides the classic background controls until Classic is chosen", () => {
     const b = newBlock("text");

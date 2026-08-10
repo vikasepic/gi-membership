@@ -108,6 +108,34 @@ const TYPOGRAPHY: Control[] = [
   style({ kind: "color", key: "color", label: "Colour", hint: "Unset follows the section's band." }),
 ];
 
+/**
+ * Where the block's box sits — one object, listed in two tabs.
+ *
+ * It used to be two entries on the same `style.blockAlign`: "Align" on the
+ * button's own Style tab, guarded on `fullWidth`, and "Block position" under
+ * Advanced with no guard at all. So a full-width button hid the control in one
+ * tab and offered it in the other, where it could not move anything — a
+ * full-width box has no free space for an auto margin to take. Two names for
+ * one value also read as two settings that might disagree.
+ *
+ * Listed twice rather than moved, for the reason the duplicate was added:
+ * nobody looks under Advanced to centre a button. One object means the label
+ * and the guard cannot drift apart again.
+ *
+ * The hint says "shrinks" because it does: every block wrapper is a flex item
+ * of the column that holds it (`Blocks` in components/page/blocks.tsx), and a
+ * flex item with an auto cross-axis margin is not stretched — it takes its
+ * content's width and the margin moves it. A max width is not required.
+ */
+const BLOCK_POSITION: Control = style({
+  kind: "select",
+  key: "blockAlign",
+  label: "Block position",
+  options: [["left", "Left"], ["center", "Centre"], ["right", "Right"]],
+  hint: "Where the box sits. Centre and Right shrink it to its contents and move it.",
+  when: (b) => !b.props.fullWidth,
+});
+
 const RATIOS: [string, string][] = [["16/9", "16:9"], ["4/3", "4:3"], ["1/1", "1:1"], ["3/4", "3:4"], ["21/9", "21:9"]];
 
 /**
@@ -197,16 +225,8 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
     ],
     style: [
       group("Layout"),
-      // The same style.blockAlign the Advanced tab writes. Duplicated on
-      // purpose: nobody looks under Advanced to centre a button, and a control
-      // nobody finds is a control that does not exist.
-      style({
-        kind: "select",
-        key: "blockAlign",
-        label: "Align",
-        options: [["left", "Left"], ["center", "Centre"], ["right", "Right"]],
-        when: (b) => !b.props.fullWidth,
-      }),
+      // The same object the Advanced tab lists — see BLOCK_POSITION.
+      BLOCK_POSITION,
       group("Colour"),
       style({ kind: "color", key: "background.color", label: "Background", hint: "Unset uses the band's accent. The label recolours itself to stay readable." }),
       style({ kind: "color", key: "color", label: "Label" }),
@@ -784,13 +804,7 @@ export const ADVANCED_CONTROLS: Control[] = [
     when: (b) => b.style.width === "custom",
     hint: "% is of the column it sits in, so it holds up on a phone.",
   }),
-  style({
-    kind: "select",
-    key: "blockAlign",
-    label: "Block position",
-    options: [["left", "Left"], ["center", "Centre"], ["right", "Right"]],
-    hint: "Where the box sits. Centre is margin auto — it needs a max width to move.",
-  }),
+  BLOCK_POSITION,
   style({
     kind: "select",
     key: "textAlign",

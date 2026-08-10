@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { BlockEditor } from "@/components/admin/block-editor";
 import { bandTheme } from "@/lib/page-sections";
-import { DEVICE_MAX, newBlock, setStyleAt, styleFor, type Block } from "@/lib/blocks";
+import { DEVICE_MAX, baseStyle, emptyColumnLayout, newBlock, setStyleAt, styleFor, type Block } from "@/lib/blocks";
 import { controlsFor, isGroup, scopeOf } from "@/lib/block-controls";
 
 // Editing a block at three widths, from the panel rather than from the model.
@@ -273,6 +273,26 @@ describe("managing columns", () => {
     const editor = open([rowWith({ widths: [50, 50] })]);
     type(widthFields()[0], 70);
     expect(editor.blocks[0].props.widths).toEqual([70, 30]);
+  });
+
+  it("stops pretending where the column sets its own width", () => {
+    // rowLayout applies a column's own width AFTER the row's share, on purpose.
+    // So the field for that column was showing and accepting a number nothing
+    // draws — you could type 60 and watch the canvas not move.
+    const row = rowWith({ widths: [50, 50] });
+    open([
+      {
+        ...row,
+        columnStyles: [
+          { ...baseStyle(), ...emptyColumnLayout(), colWidth: "custom", colWidthValue: 220, colWidthUnit: "px" },
+          null,
+        ],
+      },
+    ]);
+    expect(widthFields()[0].disabled).toBe(true);
+    expect(widthFields()[1].disabled).toBe(false);
+    // And it says whose width wins, with the value the page is actually drawing.
+    expect(document.body.textContent).toContain("220px");
   });
 
   it("changes how many columns there are", () => {
