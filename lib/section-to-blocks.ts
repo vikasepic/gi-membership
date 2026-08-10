@@ -18,9 +18,45 @@ import { listOf, textOf, type SectionDef, type SectionView } from "@/lib/page-se
 
 type Props = Record<string, unknown>;
 
+/**
+ * A block for a template, pinned to what these templates have always rendered.
+ *
+ * `newBlock` carries the defaults for a block someone DROPS IN, and those are
+ * free to improve — a new paragraph now starts at a 680px measure, centred,
+ * because that is the shape people were building by hand.
+ *
+ * This is not that. `sectionToBlocks` runs on the LIVE page for every section
+ * still stored as typed fields — fifteen of them at the time of writing, hero
+ * and problem and offer among them — so whatever it returns is what a buyer
+ * sees. Inheriting a better default here silently rewrote those pages: body
+ * copy went from 62ch flush left to 680px centred, on a store taking money,
+ * with nobody having asked for it.
+ *
+ * So the measure is stated rather than inherited. When the default moves again,
+ * these pages stay where they are.
+ */
+const LEGACY_TEXT_MEASURE: Partial<Block["style"]> = {
+  width: "custom",
+  maxWidthValue: 62,
+  maxWidthUnit: "ch",
+  blockAlign: "left",
+};
+
 const block = (type: BlockType, props: Props = {}, style: Partial<Block["style"]> = {}): Block => {
   const b = newBlock(type);
-  return { ...b, props: { ...b.props, ...props }, style: { ...b.style, ...style } };
+  return {
+    ...b,
+    props: { ...b.props, ...props },
+    // Only when the caller has not chosen a width of its own. A template that
+    // asks for "fit" (the hero's audience chip) must not be left carrying a
+    // measure's unit — normalize resets the unit for any width but custom, and
+    // the block would fail to survive a round trip through the database.
+    style: {
+      ...b.style,
+      ...(type === "text" && style.width === undefined ? LEGACY_TEXT_MEASURE : {}),
+      ...style,
+    },
+  };
 };
 
 const heading = (text: string, tag = "h2"): Block => block("heading", { text, tag });
@@ -226,7 +262,10 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
       const stats = listOf(c.stats, ["value", "label"]);
       if (stats.length) left.push(wide(block("stats", { items: stats, layout: "strip" })));
       // A chip that hugs its text, not a full-width line.
-      if (t("audience")) left.push({ ...paragraph(t("audience")), style: { ...paragraph("").style, width: "fit" as const, maxWidthValue: null } });
+      if (t("audience")) left.push({ ...paragraph(t("audience")), // The unit goes back with the measure. normalize resets it for any width
+        // but "custom", so leaving "ch" here makes the chip fail to survive a
+        // round trip through the database.
+        style: { ...paragraph("").style, width: "fit" as const, maxWidthValue: null, maxWidthUnit: "px" as const } });
 
       // The deliverables become the card beside the copy — numbered, boxed,
       // one column. That card is the first thing the model page shows you.
