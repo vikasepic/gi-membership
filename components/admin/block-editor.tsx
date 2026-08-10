@@ -67,7 +67,7 @@ import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/li
  * except to hand it on.
  */
 const CanvasDevice = createContext<Device>("desktop");
-import { backgroundCss, blockCssAt, columnCss, effectiveWidths, mobilePaddingNotice, rowIsGrid, rowLayout, stacksAt } from "@/lib/block-style";
+import { backgroundCss, blockClass, blockCssAt, blockTextRules, columnCss, effectiveWidths, mobilePaddingNotice, rowIsGrid, rowLayout, stacksAt } from "@/lib/block-style";
 import { imageSrc } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
 import { PREVIEW_SCOPE, siteTypographyCssAt, type SitePreview } from "@/lib/site-typography";
@@ -1019,6 +1019,7 @@ function CanvasBlock({
   const { label: dragLabel } = useContext(Dragging);
   const selected = selectedId === block.id;
   const empty = blockRendersNothing(block);
+  const textRules = blockTextRules(block, device);
 
   /** Above or below, decided by which half of the block the cursor is in. */
   function edge(e: React.DragEvent<HTMLDivElement>): number {
@@ -1081,7 +1082,12 @@ function CanvasBlock({
           ⠿ {BLOCK_LABEL[block.type]}
         </span>
 
-        <div style={blockCssAt(block, theme, device)}>
+        {/* The wrapper as an attribute, the text it holds as a rule. An
+            attribute cannot name a child, and the children are where the
+            canvas's own `.site-type h2` would otherwise beat the block. A block
+            that sets no typography ships no element at all. */}
+        {textRules && <style dangerouslySetInnerHTML={{ __html: textRules }} />}
+        <div className={blockClass(block)} style={blockCssAt(block, theme, device)}>
           {block.type === "row" ? (
             <RowColumns
               block={block}

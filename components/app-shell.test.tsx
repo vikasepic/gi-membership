@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SETTINGS_DEFAULTS, type Settings } from "@/lib/settings-schema";
-import { normalizeSiteShell, siteShellCss, type SiteShell } from "@/lib/site-shell";
+import { SHELL_CLASS, normalizeSiteShell, shellHasTabs, shellLinks, siteShellCss, type SiteShell } from "@/lib/site-shell";
 
 // A buyer mid-payment should not be handed four ways to leave. The upsell page
 // escaped the shell for that reason long before the checkout did.
@@ -244,7 +244,21 @@ describe("the stylesheet", () => {
   it("leaves the tab bar fixed when the header stops sticking", () => {
     // Both wear `shell-bar` so a colour reaches both. `position:static` on a
     // fixed bar would drop it into the page.
-    expect(css({ barSticky: "off" })).toContain("header.shell-bar{position:static}");
+    expect(css({ barSticky: "off" })).toContain("header.shell-bar.shell-bar{position:static}");
+  });
+
+  it("names every class twice, so Typography cannot overrule this panel", () => {
+    // `:root a{color}` from Typography → Link is unlayered and 0-1-1. One class
+    // is 0-1-0, so a nav colour set in the panel actually called "Header &
+    // navigation" lost to one set under Typography — while `.shell-link:hover`
+    // still won its own fight, leaving the bar one colour at rest and another
+    // under the pointer.
+    const out = css({ linkColor: "#aa0000", linkHoverColor: "#00aa00" });
+    expect(out).toContain(".shell-link.shell-link,.shell-tab.shell-tab{color:#aa0000}");
+    expect(out).toContain(".shell-link.shell-link:hover,.shell-tab.shell-tab:hover{color:#00aa00}");
+    // The elements still wear the class once. Doubling the selector must not
+    // change what it matches.
+    expect(SHELL_CLASS.link).toBe("shell-link");
   });
 
   it("writes no media query", () => {
@@ -265,9 +279,41 @@ describe("the stylesheet", () => {
     const s = normalizeSiteShell({
       links: [
         { label: "Evil", href: "javascript:alert(1)", on: true },
+        { label: "Off site", href: "//evil.com", on: true },
         { label: "Fine", href: "/fine", on: true },
       ],
     });
-    expect(s.links.map((l) => l.href)).toEqual(["/fine"]);
+    // `//evil.com` looks like a path to a regex and like another origin to a
+    // browser. "Starts with a slash so it is on this site" was the whole reason
+    // that branch exists, so a second slash cannot be allowed to ride it.
+    expect(s.links!.map((l) => l.href)).toEqual(["/fine"]);
+  });
+
+  it("lets nothing unvalidated into the stylesheet", () => {
+    // Same two modules, same `matching`/`cleaned`/`oneOf` — but only the
+    // typography half had a hostile-input test, and every string kept here is
+    // written straight into a <style> on every page of the store.
+    const out = siteShellCss(normalizeSiteShell({
+      barColor: "red; } body { display:none",
+      barHeightDesktop: "80px; } body { display:none",
+      linkLetterSpacing: "1em} :root * {display:none",
+      linkWeight: "700; }",
+      linkCase: "uppercase} body{display:none",
+      footerLogoHeight: "20px",
+    }));
+    expect(out).not.toContain("display:none");
+    expect(out.split("{").length).toBe(out.split("}").length);
+    // The one legitimate value still survives, so this is not passing by
+    // rejecting everything.
+    expect(out).toContain("height:20px");
+  });
+
+  it("can be emptied, and an untouched store still gets its three", () => {
+    // Two states, not one. `[]` is somebody having removed every row; the shell
+    // read that as "nobody wrote a list" and put Store/Library/Account straight
+    // back, which made the × button look broken and made "no nav" unreachable.
+    expect(shellLinks(normalizeSiteShell({ links: [] }))).toEqual([]);
+    expect(shellHasTabs(normalizeSiteShell({ links: [] }))).toBe(false);
+    expect(shellLinks(normalizeSiteShell({}))).toHaveLength(3);
   });
 });

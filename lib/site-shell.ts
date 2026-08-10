@@ -48,7 +48,13 @@ export type SiteShell = {
   /** "" and "page" both mean the max-w-5xl column the pages use. */
   barWidth: string;
   // Links
-  links: ShellLink[];
+  /**
+   * `null` means nobody has written the list down and the shell's own three
+   * apply. An array means somebody did — and an EMPTY array means they emptied
+   * it on purpose. Two states, because one (`[]` for both) meant pressing × on
+   * the last link put all three straight back and the button looked broken.
+   */
+  links: ShellLink[] | null;
   linkSizeDesktop: string;
   linkSizeMobile: string;
   linkWeight: string;
@@ -97,8 +103,13 @@ const SWITCH = ["on", "off"] as const;
  * dropped. These strings come from a form an admin fills in, but they are
  * written straight into an `href` that every visitor is invited to click, and
  * that is a trust boundary whatever the shape of the session behind it.
+ *
+ * `(?!\/)` after the first slash is what stops `//evil.com`: a protocol-
+ * relative URL looks like a path to a regex and like another origin to a
+ * browser, and "starts with a slash so it is on this site" was the whole
+ * reason that branch is allowed.
  */
-const HREF = /^(\/[^\s]*|https?:\/\/[^\s]+|mailto:[^\s]+)$/i;
+const HREF = /^(\/(?!\/)[^\s]*|https?:\/\/[^\s]+|mailto:[^\s]+)$/i;
 
 export function shellHrefIsValid(raw: string): boolean {
   const v = raw.trim();
@@ -123,12 +134,16 @@ const linksSchema = z
   .unknown()
   .optional()
   .transform((v) =>
-    (Array.isArray(v) ? v : [])
-      .slice(0, 12)
-      .map((item) => linkSchema.parse(item))
-      // A row with neither a label nor a destination is a row somebody started
-      // and abandoned, not a link.
-      .filter((l) => l.label !== "" && l.href !== ""),
+    Array.isArray(v)
+      ? v
+          .slice(0, 12)
+          .map((item) => linkSchema.parse(item))
+          // A row with neither a label nor a destination is a row somebody
+          // started and abandoned, not a link.
+          .filter((l) => l.label !== "" && l.href !== "")
+      : // Not an array at all: never written. Distinct from an empty array,
+        // which is somebody having emptied the bar deliberately.
+        null,
   );
 
 const shellSchema = z.object({
@@ -186,12 +201,12 @@ export const SITE_SHELL_DEFAULTS: SiteShell = normalizeSiteShell({});
 /**
  * The links to draw.
  *
- * An empty list means nobody has opened the panel, not that somebody emptied
- * the bar — the panel always posts all of them, switched off ones included.
+ * `null` is the untouched store and gets the shell's own three. An empty array
+ * is somebody having removed every row, and gets nothing — which is the only
+ * reading under which the × button does what it says.
  */
 export function shellLinks(s: SiteShell): ShellLink[] {
-  const list = s.links.length > 0 ? s.links : SHELL_DEFAULT_LINKS;
-  return list.filter((l) => l.on);
+  return (s.links ?? SHELL_DEFAULT_LINKS).filter((l) => l.on);
 }
 
 /**
@@ -231,6 +246,18 @@ export const SHELL_CLASS = {
 } as const;
 
 /**
+ * A hook class, named twice.
+ *
+ * The same trick `blockClass` uses, for the same reason. One class is 0-1-0,
+ * which loses to the `:root a` that Typography → Link writes (0-1-1) — so a
+ * nav colour set in the panel actually called "Header & navigation" was
+ * overruled by one set under Typography, while `.shell-link:hover` still won
+ * its own fight. Naming it twice is 0-2-0 and puts the shell back on top of its
+ * own bar without an !important. It matches exactly what one class matched.
+ */
+const twice = (name: string) => `.${name}.${name}`;
+
+/**
  * The stylesheet, or "" when nothing is set.
  *
  * No media queries, deliberately. The shell already renders the two widths as
@@ -239,9 +266,10 @@ export const SHELL_CLASS = {
  * selector rather than a different width, and the one breakpoint that would
  * have to be written down (768px) stays written down in exactly one place.
  *
- * Everything is one class, which is enough: Tailwind's utilities live in
- * `@layer utilities` and this sheet is unlayered, so `.shell-bar` beats
- * `bg-surface/85` without needing to be doubled the way a block rule does.
+ * Every class is named twice — see `twice`. Tailwind's utilities are in
+ * `@layer utilities` and would lose to one class, but `:root a` from
+ * Typography → Link is unlayered and 0-1-1, and it was quietly overruling the
+ * nav colour set in this very panel.
  */
 export function siteShellCss(s: SiteShell): string {
   const out: string[] = [];
@@ -256,7 +284,7 @@ export function siteShellCss(s: SiteShell): string {
   // After the line above, so a colour and "not translucent" together give the
   // colour rather than the surface.
   if (s.barColor) bar.push(`background:${s.barColor}`);
-  if (bar.length > 0) out.push(`.${SHELL_CLASS.bar}{${bar.join(";")}}`);
+  if (bar.length > 0) out.push(`${twice(SHELL_CLASS.bar)}{${bar.join(";")}}`);
 
   // The two headers only. The mobile tab row wears the same class so a colour
   // reaches it too, but it is `fixed` to the bottom of the window — turning
@@ -265,40 +293,40 @@ export function siteShellCss(s: SiteShell): string {
   const head: string[] = [];
   if (s.barSticky === "off") head.push("position:static");
   if (s.barBorder === "off") head.push("border-bottom-width:0");
-  if (head.length > 0) out.push(`header.${SHELL_CLASS.bar}{${head.join(";")}}`);
+  if (head.length > 0) out.push(`header${twice(SHELL_CLASS.bar)}{${head.join(";")}}`);
 
   const inner: string[] = [];
   if (s.barWidth === "full") inner.push("max-width:none");
   if (s.barHeightDesktop) inner.push(`min-height:${s.barHeightDesktop}`);
-  if (inner.length > 0) out.push(`.${SHELL_CLASS.barInner}{${inner.join(";")}}`);
-  if (s.barHeightMobile) out.push(`.${SHELL_CLASS.barMobile}{min-height:${s.barHeightMobile}}`);
+  if (inner.length > 0) out.push(`${twice(SHELL_CLASS.barInner)}{${inner.join(";")}}`);
+  if (s.barHeightMobile) out.push(`${twice(SHELL_CLASS.barMobile)}{min-height:${s.barHeightMobile}}`);
 
-  if (s.logoHeightDesktop) out.push(`.${SHELL_CLASS.brandDesktop}{height:${s.logoHeightDesktop}}`);
-  if (s.logoHeightMobile) out.push(`.${SHELL_CLASS.brandMobile}{height:${s.logoHeightMobile}}`);
-  if (s.footerLogoHeight) out.push(`.${SHELL_CLASS.brandFooter}{height:${s.footerLogoHeight}}`);
+  if (s.logoHeightDesktop) out.push(`${twice(SHELL_CLASS.brandDesktop)}{height:${s.logoHeightDesktop}}`);
+  if (s.logoHeightMobile) out.push(`${twice(SHELL_CLASS.brandMobile)}{height:${s.logoHeightMobile}}`);
+  if (s.footerLogoHeight) out.push(`${twice(SHELL_CLASS.brandFooter)}{height:${s.footerLogoHeight}}`);
 
   const link: string[] = [];
   if (s.linkWeight) link.push(`font-weight:${s.linkWeight}`);
   if (s.linkCase) link.push(`text-transform:${s.linkCase}`);
   if (s.linkLetterSpacing) link.push(`letter-spacing:${s.linkLetterSpacing}`);
   if (s.linkColor) link.push(`color:${s.linkColor}`);
-  if (link.length > 0) out.push(`.${SHELL_CLASS.link},.${SHELL_CLASS.tab}{${link.join(";")}}`);
-  if (s.linkSizeDesktop) out.push(`.${SHELL_CLASS.link}{font-size:${s.linkSizeDesktop}}`);
-  if (s.linkSizeMobile) out.push(`.${SHELL_CLASS.tab}{font-size:${s.linkSizeMobile}}`);
+  if (link.length > 0) out.push(`${twice(SHELL_CLASS.link)},${twice(SHELL_CLASS.tab)}{${link.join(";")}}`);
+  if (s.linkSizeDesktop) out.push(`${twice(SHELL_CLASS.link)}{font-size:${s.linkSizeDesktop}}`);
+  if (s.linkSizeMobile) out.push(`${twice(SHELL_CLASS.tab)}{font-size:${s.linkSizeMobile}}`);
 
   // The pill is drawn by `bg-surface-2` in the markup, so the other two marks
   // have to paint it out rather than ask the markup not to draw it. Same
   // reason as everywhere else here: unset must not change what renders.
   if (s.currentMark === "underline") {
-    out.push(`.${SHELL_CLASS.current}{background:none;text-decoration:underline;text-underline-offset:0.35em}`);
+    out.push(`${twice(SHELL_CLASS.current)}{background:none;text-decoration:underline;text-underline-offset:0.35em}`);
   } else if (s.currentMark === "none") {
-    out.push(`.${SHELL_CLASS.current}{background:none}`);
+    out.push(`${twice(SHELL_CLASS.current)}{background:none}`);
   }
-  if (s.linkCurrentColor) out.push(`.${SHELL_CLASS.current}{color:${s.linkCurrentColor}}`);
+  if (s.linkCurrentColor) out.push(`${twice(SHELL_CLASS.current)}{color:${s.linkCurrentColor}}`);
   // Last, and 0-2-0 against the 0-1-0 above it, so hovering the page you are
   // already on still responds.
   if (s.linkHoverColor) {
-    out.push(`.${SHELL_CLASS.link}:hover,.${SHELL_CLASS.tab}:hover{color:${s.linkHoverColor}}`);
+    out.push(`${twice(SHELL_CLASS.link)}:hover,${twice(SHELL_CLASS.tab)}:hover{color:${s.linkHoverColor}}`);
   }
 
   return out.join("");

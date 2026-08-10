@@ -110,11 +110,58 @@ describe.skipIf(!canRun)("a desktop-only value, across the migration", () => {
     const css = blockRules(block, paper);
     for (const at of ["min-width:1024px", "max-width:1023px", "max-width:767px"]) {
       expect(scope(css, at), at).toContain("font-size:48px");
-      expect(scope(css, at), at).toContain("color:#123456");
     }
+    // The colour is the exception, and is said ONCE, unscoped: a band paints
+    // `color` inline on its own <section>, so nothing site-wide reaches inside
+    // one and a withdrawn colour would fall to the band's ink rather than to
+    // anything the owner chose. It inherits down the widths the way padding does.
+    expect(css.split("@media")[0]).toContain("color:#123456");
+    expect(scope(css, "max-width:767px")).not.toContain("#123456");
     // `revert` would roll back the whole author origin, taking the site's own
     // typography with it. There is nothing to undo here, so nothing says so.
     expect(css).not.toContain("revert");
+  });
+
+  it("reads an override stored in the shape that predates `style`", async () => {
+    // Overrides were once the style patch itself, with no `style` or `props`
+    // key around it — `normalizeOverride` still reads that shape, so a row can
+    // still be in it. Reading `->'style'` blindly would see an empty override
+    // and overwrite the real one on the way out.
+    await saveSection("product", OWNER, "hero", {
+      enabled: true, style: "paper", accent: null, variant: null, background: null, cssId: "", cssClass: "",
+      content: { blocks: [{ ...desktopOnly, responsive: { tablet: { size: 30 }, mobile: {} } }] },
+    });
+    // saveSection normalizes, so the legacy shape is put back underneath it.
+    const db = createServiceClient();
+    await db
+      .from("page_sections")
+      .update({
+        content: { blocks: [{ ...desktopOnly, responsive: { tablet: { size: 30 }, mobile: {} } }] },
+      })
+      .eq("owner_id", OWNER);
+
+    runMigration();
+    const block = await readBack();
+    // The tablet's own 30 survives, and the phone takes the TABLET value, never
+    // the desktop one — copying 48 down here is the one way to move such a page.
+    expect(block.responsive?.tablet.style.size).toBe(30);
+    expect(block.responsive?.mobile.style.size).toBe(30);
+    expect(block.responsive?.mobile.style.weight).toBe(700);
+  });
+
+  it("walks the blocks inside a row's columns", async () => {
+    await saveSection("product", OWNER, "hero", {
+      enabled: true, style: "paper", accent: null, variant: null, background: null, cssId: "", cssClass: "",
+      content: {
+        blocks: [
+          { id: "b_row1", type: "row", props: { widths: [50, 50] }, style: {}, columns: [[desktopOnly], []] },
+        ],
+      },
+    });
+    runMigration();
+    const row = await readBack();
+    const inner = row.columns?.[0]?.[0];
+    expect(inner?.responsive?.mobile.style.size).toBe(48);
   });
 
   it("does nothing the second time", async () => {

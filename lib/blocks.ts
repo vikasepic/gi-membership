@@ -711,7 +711,7 @@ export function styleFor(block: Block, device: Device): BlockStyle {
 }
 
 /**
- * The seven keys a width no longer inherits from the width above it.
+ * The six keys a width no longer inherits from the width above it.
  *
  * They are exactly the ones lib/site-typography now answers for. A block that
  * says nothing about its size on a phone used to be handed the desktop size,
@@ -722,6 +722,12 @@ export function styleFor(block: Block, device: Device): BlockStyle {
  * Everything else on BlockStyle keeps inheriting, because there is no global
  * for it to fall to. A padding that stopped inheriting would fall to zero, not
  * to a site default, and every block with side padding would lose it on tablet.
+ *
+ * `color` is deliberately NOT here, though site typography has a colour field.
+ * A sales band paints `color` inline on its own `<section>`, so `:root body`
+ * never reaches inside one: a colour withdrawn below 1024px would fall to the
+ * band's ink rather than to anything the owner chose, and a red heading set on
+ * a laptop would go black on a phone with nobody having asked for that.
  *
  * The break lives in the CSS emission, not in `styleFor`: the panels, the
  * padding notice and the editor canvas all ask "what does this block look like
@@ -734,7 +740,6 @@ export const SITE_DEFAULTED_KEYS = [
   "letterSpacing",
   "weight",
   "transform",
-  "color",
 ] as const satisfies readonly (keyof BlockStyle)[];
 
 const ownSeven = (patch: Partial<BlockStyle>): Partial<BlockStyle> => {

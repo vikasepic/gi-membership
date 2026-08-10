@@ -4,6 +4,7 @@ import {
   blockColors,
   blockCssAt,
   blockRules,
+  blockTextRules,
   cardsTrack,
   columnCss,
   rowLayout,
@@ -201,14 +202,16 @@ function BlockNode({
   const s = styleFor(block, at ?? "desktop");
   // On a real viewport the look is emitted as rules, not a style attribute: a
   // media query cannot live in an attribute, and an attribute would outrank the
-  // media query anyway. Pinned to a device, it is the attribute — see `at`.
-  const rules = at ? "" : blockRules(block, theme);
+  // media query anyway. Pinned to a device it is the attribute — plus the one
+  // half an attribute cannot express, the rule that names the text inside the
+  // block so the preview's own `.site-type h2` does not beat it there.
+  const rules = at ? blockTextRules(block, at) : blockRules(block, theme);
   return (
     <>
       {rules && <style dangerouslySetInnerHTML={{ __html: rules }} />}
       <div
         id={s.cssId || undefined}
-        className={[at ? "" : blockClass(block), at ? "" : hiddenClasses(block), s.cssClass]
+        className={[blockClass(block), at ? "" : hiddenClasses(block), s.cssClass]
           .filter(Boolean)
           .join(" ")}
         style={at ? blockCssAt(block, theme, at) : undefined}

@@ -15,6 +15,7 @@ import {
   TYPOGRAPHY_STYLES,
   TYPOGRAPHY_TRANSFORMS,
   TYPOGRAPHY_WEIGHTS,
+  colorIsValid,
   metricIsValid,
   normalizeSiteTypography,
   siteTypographyCssAt,
@@ -122,10 +123,13 @@ export function TypographyFields({
 
           {UNSTYLED.includes(el) && (
             <p className="rounded-r-lg border-l-2 border-primary bg-primary/5 px-3 py-2 text-xs text-primary">
-              Nothing on this site styles {el} today — it is the one heading level with no rule of
-              its own. Whatever you set here is the first thing that has ever styled it.
+              Nothing outside a sales page styles {el} today — h5 and h6 are the two heading levels
+              app/globals.css leaves alone. A heading block set to {el} does have a size of its own
+              ({HEADING_SIZE[el as "h5"]}), and a size set here replaces it.
             </p>
           )}
+
+          {SCOPE_NOTE[el] && <p className="text-xs text-muted">{SCOPE_NOTE[el]}</p>}
 
           <Group
             label="Every width"
@@ -185,6 +189,15 @@ export function TypographyFields({
             </Line>
           </Group>
 
+          {/* A hover state gets no measurements. `:root a:hover{font-size}`
+              reflows the line under the cursor as you point at it — the one
+              thing this group could offer that nobody could want. */}
+          {el === "linkHover" ? (
+            <p className="text-xs text-muted">
+              A hover state changes colour, weight and decoration only — a size or a line height
+              here would reflow the text under the cursor.
+            </p>
+          ) : (
           <Group
             label={`${DEVICE_LABEL[device]} only`}
             hint="size, line height, letter spacing and word spacing are the only four a width may change"
@@ -231,6 +244,7 @@ export function TypographyFields({
               />
             )}
           </Group>
+          )}
         </div>
       </div>
 
@@ -268,6 +282,21 @@ const DEVICE_LABEL: Record<Device, string> = { desktop: "Desktop", tablet: "Tabl
  * setting one should know they are the first person ever to.
  */
 const UNSTYLED: readonly TypographyElement[] = ["h5", "h6"];
+
+/**
+ * What an element actually reaches, where the label understates it.
+ *
+ * These are rules on tags, not on classes — that is what makes them reach a
+ * page written next year without being told about it, and it is also what makes
+ * "Link" mean every `<a>` on the store rather than the ones inside a paragraph.
+ * Somebody underlining links should know the buttons drawn as links go with
+ * them, before they save it and go looking for the store's checkout button.
+ */
+const SCOPE_NOTE: Partial<Record<TypographyElement, string>> = {
+  link: "Every link on the store — navigation, footer, product cards, and the buttons drawn as links. A decoration set here underlines those too.",
+  linkHover: "Every link on the store while the pointer is over it.",
+  body: "The page's base. A sales band paints its own ink, so a colour set here reaches the shell, library, checkout and legal pages but not a product or offer page.",
+};
 
 const isHeading = (el: string) => /^h[1-6]$/.test(el);
 
@@ -353,15 +382,29 @@ function Pick({
   options: readonly string[];
   inherit: string;
 }) {
+  // A value with no option to match it makes a <select> show its FIRST option
+  // while state keeps the real one — so the panel reads "inherit" while the
+  // page renders a fallback. Happens whenever a font is removed from the
+  // library after something was set to it.
+  const missing = value !== "" && !options.includes(value);
   return (
-    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={cell}>
-      <option value="">{inherit}</option>
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {o}
-        </option>
-      ))}
-    </select>
+    <>
+      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={cell}>
+        <option value="">{inherit}</option>
+        {missing && <option value={value}>{value} — not installed</option>}
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+      {missing && (
+        <span className="text-[0.66rem] text-primary">
+          {value} is no longer in the library, so this renders as the fallback. Add it back or
+          choose another.
+        </span>
+      )}
+    </>
   );
 }
 
@@ -400,25 +443,44 @@ function Metric({
   );
 }
 
+/**
+ * A colour, as typed.
+ *
+ * `red`, `rgb(0,0,0)` and `#ff000080` are all dropped on save by `normalizeHex`,
+ * so this says so while it is being typed — through that same function, the way
+ * `Metric` goes through the schema's own regexes. The swatch is dimmed while
+ * nothing is set: a solid black square beside an empty field reads as "black".
+ */
 function Colour({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const set = value.trim() !== "";
+  const bad = set && !colorIsValid(value);
   return (
-    <span className="flex items-center gap-2">
-      {/* The picker and the text write the same value, because a hex you can
-          paste matters as much as one you can point at. */}
-      <input
-        type="color"
-        aria-label="Colour picker"
-        value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000"}
-        onChange={(e) => onChange(e.target.value)}
-        className="size-8 shrink-0 cursor-pointer rounded-lg border border-border bg-surface p-1"
-      />
-      <input
-        aria-label="Colour"
-        value={value}
-        placeholder="Inherit"
-        onChange={(e) => onChange(e.target.value)}
-        className={cell}
-      />
+    <span className="flex flex-col gap-1">
+      <span className="flex items-center gap-2">
+        {/* The picker and the text write the same value, because a hex you can
+            paste matters as much as one you can point at. */}
+        <input
+          type="color"
+          aria-label="Colour picker"
+          value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000"}
+          onChange={(e) => onChange(e.target.value)}
+          className={`size-8 shrink-0 cursor-pointer rounded-lg border border-border bg-surface p-1 ${
+            set ? "" : "opacity-40"
+          }`}
+        />
+        <input
+          aria-label="Colour"
+          value={value}
+          placeholder="Inherit"
+          onChange={(e) => onChange(e.target.value)}
+          className={cell}
+        />
+      </span>
+      {bad && (
+        <span className="text-[0.66rem] text-primary">
+          Not a colour — dropped on save. Try #c8653d.
+        </span>
+      )}
     </span>
   );
 }
@@ -441,7 +503,6 @@ const SPECIMEN_BASE = [
   ...Object.entries(HEADING_SIZE).map(([tag, size]) => `.${PREVIEW_SCOPE} ${tag}{font-size:${size}}`),
   `.${PREVIEW_SCOPE} ul{list-style:disc;padding-left:1.4em}`,
   `.${PREVIEW_SCOPE} blockquote{border-left:2px solid currentColor;padding-left:1em}`,
-  `.${PREVIEW_SCOPE} a{text-decoration:underline}`,
 ].join("");
 
 /**

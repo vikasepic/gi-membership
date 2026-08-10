@@ -1,10 +1,10 @@
 -- Writing down what every stored page already does, one width at a time.
 --
--- Seven style keys — fontFamily, size, lineHeight, letterSpacing, weight,
--- transform and color — stopped being inherited by the narrower widths in the
--- same commit as this migration. They are the seven the store now has a
--- site-wide answer for, so a phone that says nothing about its heading size
--- has somewhere better to fall than "whatever the laptop said".
+-- Six style keys — fontFamily, size, lineHeight, letterSpacing, weight and
+-- transform — stopped being inherited by the narrower widths in the same commit
+-- as this migration. They are the six the store now has a site-wide answer for,
+-- so a phone that says nothing about its heading size has somewhere better to
+-- fall than "whatever the laptop said".
 --
 -- Every block saved before today was authored under the old rule. A heading
 -- given 48px on desktop and never touched on mobile MEANT 48px on mobile,
@@ -55,9 +55,10 @@ $$;
 create or replace function pin_typography(node jsonb) returns jsonb
 language plpgsql immutable as $$
 declare
-  -- The same seven as SITE_DEFAULTED_KEYS in lib/blocks.ts.
+  -- The same six as SITE_DEFAULTED_KEYS in lib/blocks.ts. `color` is not among
+  -- them: it still inherits down the widths, so there is nothing to pin.
   keys constant text[] := array[
-    'fontFamily', 'size', 'lineHeight', 'letterSpacing', 'weight', 'transform', 'color'
+    'fontFamily', 'size', 'lineHeight', 'letterSpacing', 'weight', 'transform'
   ];
   k       text;
   v       jsonb;
@@ -124,10 +125,13 @@ begin
   if jsonb_typeof(node -> 'columns') = 'array' then
     node := jsonb_set(node, '{columns}', coalesce((
       select jsonb_agg(
-               coalesce((
+               -- A column that is not an array is a column `jsonb_array_elements`
+               -- raises on, and one raise here aborts the whole `do` block and
+               -- with it every row already rewritten. Left as it was found.
+               case when jsonb_typeof(col) = 'array' then coalesce((
                  select jsonb_agg(pin_typography(b) order by bi)
                    from jsonb_array_elements(col) with ordinality as inner_b(b, bi)
-               ), '[]'::jsonb)
+               ), '[]'::jsonb) else col end
                order by ci)
         from jsonb_array_elements(node -> 'columns') with ordinality as outer_c(col, ci)
     ), '[]'::jsonb));

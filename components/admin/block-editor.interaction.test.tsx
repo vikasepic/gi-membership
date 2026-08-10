@@ -4,7 +4,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { BlockEditor } from "@/components/admin/block-editor";
 import { bandTheme } from "@/lib/page-sections";
-import { newBlock, type Block } from "@/lib/blocks";
+import { newBlock, setStyleAt, type Block } from "@/lib/blocks";
+import { normalizeSiteTypography } from "@/lib/site-typography";
 import { BLOCK_CONTROLS, writeControl, type Control } from "@/lib/block-controls";
 import { blockRules } from "@/lib/block-style";
 import { Blocks } from "@/components/page/blocks";
@@ -529,5 +530,60 @@ describe("the card layout chooser", () => {
     mount([newBlock("text")]);
     click(document.querySelector("[data-block]")!);
     expect(document.querySelectorAll("aside")[1]!.textContent).not.toContain("Keep what I have");
+  });
+});
+
+describe("the canvas follows the width being edited", () => {
+  // Rendered once at its default width, the preview stylesheet would look right
+  // even with the device hardcoded to "desktop" — which is exactly the lie the
+  // per-width work exists to stop. So this switches width and looks again.
+  // The editor portals itself to the end of the body, so the markup to read is
+  // the body's, not the host's.
+  const canvas = () => document.body.innerHTML;
+
+  function mountWithPreview(blocks: Block[]) {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    mounted = root;
+    act(() => {
+      root.render(
+        <BlockEditor
+          blocks={blocks}
+          theme={theme}
+          title="Hero"
+          onClose={() => {}}
+          onChange={() => {}}
+          preview={{
+            fontCss: "",
+            typography: normalizeSiteTypography({ h1: { desktop: { size: "41px" }, mobile: { size: "23px" } } }),
+          }}
+        />,
+      );
+    });
+  }
+
+  const toMobile = () =>
+    click([...document.querySelectorAll("button")].find((b) => b.title?.startsWith("Mobile"))!);
+
+  it("shows the phone's site type once the canvas is pinned to a phone", () => {
+    mountWithPreview([newBlock("heading")]);
+    expect(canvas()).toContain("h1{font-size:41px}");
+    expect(canvas()).not.toContain("23px");
+    toMobile();
+    expect(canvas()).toContain("h1{font-size:23px}");
+  });
+
+  it("shows the phone's own block value, on the text and not just the wrapper", () => {
+    // The block's rule is on its wrapper; the site's names the tag. Without the
+    // arm that names the tag too, the canvas would show 23px on a heading the
+    // block itself sets to 14px — the page would show 14px and the builder 23px.
+    let b = setStyleAt(newBlock("heading"), "desktop", { size: 48 });
+    b = setStyleAt(b, "mobile", { size: 14 });
+    mountWithPreview([b]);
+    expect(canvas()).toContain("font-size:48px");
+    toMobile();
+    expect(canvas()).toContain("font-size:14px");
+    expect(canvas()).not.toContain("font-size:48px");
   });
 });

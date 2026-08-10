@@ -1,5 +1,4 @@
 import { normalizeHex, readableInk, tint } from "@/lib/color";
-import { bandInk } from "@/lib/site-typography";
 
 // The ten-section sales page.
 //
@@ -50,20 +49,24 @@ export type BandTheme = {
 };
 
 /**
- * `siteColor` is the body colour from site typography, and it only ever reaches
- * the light bands — see `bandInk`. Optional so every existing caller, and every
- * page rendered before the setting exists, gets exactly the theme it got before.
+ * A band's ink is the band's own.
+ *
+ * Site typography has a body colour, and it deliberately does NOT reach here:
+ * a band paints `color` inline on its own `<section>`, and the dark presets
+ * choose a pale ink BECAUSE their ground is dark. One field repainting all six
+ * is how a band becomes unreadable, which is the thing the presets exist to
+ * prevent. There was a `siteColor` parameter for it that nothing ever passed —
+ * see the Typography panel's note on Body, which now says so out loud.
  */
 export function bandTheme(
   styleKey: string | null | undefined,
   accentOverride?: string | null,
-  siteColor?: string | null,
 ): BandTheme {
   const s = BAND_STYLES[(styleKey ?? "paper") as BandStyleKey] ?? BAND_STYLES.paper;
   const accent = normalizeHex(accentOverride, s.accent);
   // The rule and the muted tone are the ink at two alphas, so they follow it
   // rather than being a second thing to keep in step.
-  const fg = bandInk(s.fg, siteColor);
+  const fg = s.fg;
   return {
     bg: s.bg,
     fg,
@@ -656,7 +659,7 @@ export function textOf(content: Record<string, unknown>, key: string): string {
  * blank: this page is reached by buyers, and a half-configured section should
  * read as unfinished copy, not as an empty band.
  */
-export function buildSectionView(row: SectionRow, siteColor?: string | null): SectionView | null {
+export function buildSectionView(row: SectionRow): SectionView | null {
   const def = sectionDef(row.sectionKey);
   if (!def || !row.enabled) return null;
 
@@ -672,7 +675,7 @@ export function buildSectionView(row: SectionRow, siteColor?: string | null): Se
 
   return {
     def,
-    theme: bandTheme(row.style, row.accent, siteColor),
+    theme: bandTheme(row.style, row.accent),
     variant: row.variant || def.variants?.[0]?.key || "default",
     c,
     stored,

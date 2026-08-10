@@ -12,6 +12,7 @@ import {
   type ShellLink,
   type SiteShell,
 } from "@/lib/site-shell";
+import { colorIsValid } from "@/lib/site-typography";
 
 /**
  * The header, the navigation and the footer.
@@ -36,8 +37,10 @@ export function ShellFields({
   const patch = (p: Partial<SiteShell>) => setS({ ...s, ...p });
 
   // The links as the editor shows them: the three built-in ones until somebody
-  // touches something, at which point the whole list is written down.
-  const rows: readonly ShellLink[] = s.links.length > 0 ? s.links : SHELL_DEFAULT_LINKS;
+  // touches something, at which point the whole list is written down. `null`
+  // rather than an empty array is what makes "remove them all" reachable — an
+  // empty array is a decision and is posted as one.
+  const rows: readonly ShellLink[] = s.links ?? SHELL_DEFAULT_LINKS;
   const setRows = (next: ShellLink[]) => patch({ links: next });
   const editRow = (i: number, p: Partial<ShellLink>) =>
     setRows(rows.map((l, j) => (j === i ? { ...l, ...p } : l)));
@@ -59,9 +62,9 @@ export function ShellFields({
         </p>
       )}
 
-      <Group label="Logo & bar" hint="the strip at the top of every page except the checkout">
+      <Group label="Logo & bar" hint="the strip at the top of every page except the checkout — the colour also paints the mobile tab bar, which wears the same class">
         <Row label="Logo height">
-          <Len value={s.logoHeightDesktop} onChange={(v) => patch({ logoHeightDesktop: v })} example="28px" />
+          <Len value={s.logoHeightDesktop} onChange={(v) => patch({ logoHeightDesktop: v })} example="28px" desktop />
           <Len value={s.logoHeightMobile} onChange={(v) => patch({ logoHeightMobile: v })} example="28px" mobile />
         </Row>
         <Row label="With no logo">
@@ -69,7 +72,7 @@ export function ShellFields({
             value={s.brandFallback}
             onChange={(v) => patch({ brandFallback: v })}
             options={[
-              ["", "The drawn mark"],
+              ["", "Today: the drawn mark"],
               ["mark", "The drawn mark"],
               ["name", "The store name, as text"],
             ]}
@@ -78,6 +81,12 @@ export function ShellFields({
         <Row label="Bar colour">
           <Colour value={s.barColor} onChange={(v) => patch({ barColor: v })} />
         </Row>
+        {s.barColor !== "" && (
+          <p className="text-[0.66rem] text-muted">
+            The links and the logo keep their own colours — set Colour, Hovered and Current page
+            under Links to match, or a dark bar leaves the navigation unreadable.
+          </p>
+        )}
         <Row label="Translucent">
           <Switch value={s.barTranslucent} onChange={(v) => patch({ barTranslucent: v })} on="Yes, blurred" off="No, solid" />
         </Row>
@@ -88,7 +97,7 @@ export function ShellFields({
           <Switch value={s.barBorder} onChange={(v) => patch({ barBorder: v })} on="Yes" off="No" />
         </Row>
         <Row label="Bar height">
-          <Len value={s.barHeightDesktop} onChange={(v) => patch({ barHeightDesktop: v })} example="65px" />
+          <Len value={s.barHeightDesktop} onChange={(v) => patch({ barHeightDesktop: v })} example="65px" desktop />
           <Len value={s.barHeightMobile} onChange={(v) => patch({ barHeightMobile: v })} example="57px" mobile />
         </Row>
         <Row label="Bar width">
@@ -96,7 +105,7 @@ export function ShellFields({
             value={s.barWidth}
             onChange={(v) => patch({ barWidth: v })}
             options={[
-              ["", "Match the page"],
+              ["", "Today: match the page"],
               ["page", "Match the page"],
               ["full", "Full width"],
             ]}
@@ -155,7 +164,7 @@ export function ShellFields({
           Add a link
         </button>
         <Row label="Size">
-          <Len value={s.linkSizeDesktop} onChange={(v) => patch({ linkSizeDesktop: v })} example="14px" />
+          <Len value={s.linkSizeDesktop} onChange={(v) => patch({ linkSizeDesktop: v })} example="14px" desktop />
           <Len value={s.linkSizeMobile} onChange={(v) => patch({ linkSizeMobile: v })} example="11px" mobile />
         </Row>
         <Row label="Weight">
@@ -189,7 +198,7 @@ export function ShellFields({
             value={s.currentMark}
             onChange={(v) => patch({ currentMark: v })}
             options={[
-              ["", "A filled pill"],
+              ["", "Today: a filled pill"],
               ["pill", "A filled pill"],
               ["underline", "Underlined"],
               ["none", "Not marked"],
@@ -216,10 +225,20 @@ export function ShellFields({
             placeholder="/p/the-offer"
             className={cell}
           />
+          {/* The same check the nav rows get. Without it `www.example.com`
+              passes the panel, fails HREF on save, and the whole call to
+              action disappears with nothing having said why. */}
+          {!shellHrefIsValid(s.ctaHref) && (
+            <span className="w-full text-[0.66rem] text-primary">
+              Not a link this will keep — start with / or https://
+            </span>
+          )}
         </Row>
-        <Row label="On mobile">
-          <Switch value={s.ctaOnMobile} onChange={(v) => patch({ ctaOnMobile: v })} on="Show it" off="Hide it" defaultIs="off" />
-        </Row>
+        {s.ctaLabel !== "" && s.ctaHref !== "" && (
+          <Row label="On mobile">
+            <Switch value={s.ctaOnMobile} onChange={(v) => patch({ ctaOnMobile: v })} on="Show it" off="Hide it" defaultIs="off" />
+          </Row>
+        )}
         {s.ctaLabel !== "" && s.ctaHref === "" && (
           <p className="text-[0.66rem] text-primary">
             A label with no link is a button that goes nowhere, so nothing is shown until both are
@@ -234,15 +253,17 @@ export function ShellFields({
             value={s.mobileNav}
             onChange={(v) => patch({ mobileNav: v })}
             options={[
-              ["", "Tabs along the bottom"],
+              ["", "Today: tabs along the bottom"],
               ["tabs", "Tabs along the bottom"],
               ["menu", "A menu in the top bar"],
             ]}
           />
         </Row>
-        <Row label="Labels under the icons">
-          <Switch value={s.tabLabels} onChange={(v) => patch({ tabLabels: v })} on="Yes" off="No, icons only" />
-        </Row>
+        {shellHasTabs(s) && (
+          <Row label="Labels under the icons">
+            <Switch value={s.tabLabels} onChange={(v) => patch({ tabLabels: v })} on="Yes" off="No, icons only" />
+          </Row>
+        )}
         {!shellHasTabs(s) && (
           <p className="text-[0.66rem] text-muted">
             With no tab bar, the 6rem of bottom padding every page reserves for it goes too —
@@ -291,25 +312,34 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
  * The schema is an allow-list, so "28" with no unit is dropped on save. The
  * placeholder names the value the shell uses today, because "default" tells
  * you there is one and nothing about what it is.
+ *
+ * The width caption only appears where there are two of these side by side.
+ * Letter spacing and the footer logo height are one value at every width, and
+ * a control labelled "desktop" that also changes the phone is a control that
+ * lies about what it does.
  */
 function Len({
   value,
   onChange,
   example,
   mobile,
+  desktop,
 }: {
   value: string;
   onChange: (v: string) => void;
   example: string;
   mobile?: boolean;
+  /** Set on the wider half of a pair. Unset means the value is not per width. */
+  desktop?: boolean;
 }) {
+  const width = mobile ? "phone" : desktop ? "desktop" : "";
   return (
     <span className="flex min-w-[8rem] flex-1 items-center gap-1.5">
-      <span className="text-[0.66rem] uppercase tracking-wider text-muted">
-        {mobile ? "phone" : "desktop"}
-      </span>
+      {width && (
+        <span className="text-[0.66rem] uppercase tracking-wider text-muted">{width}</span>
+      )}
       <input
-        aria-label={`${mobile ? "Mobile" : "Desktop"} length`}
+        aria-label={width ? `${mobile ? "Mobile" : "Desktop"} length` : "Length"}
         value={value}
         placeholder={`Today: ${example}`}
         onChange={(e) => onChange(e.target.value)}
@@ -366,25 +396,45 @@ function Switch({
   );
 }
 
+/**
+ * A colour, as typed.
+ *
+ * `red`, `rgb(0,0,0)` and `#ff000080` are all dropped on save by
+ * `normalizeHex`, so the panel says so while it is being typed — the check is
+ * that same function, so the two cannot disagree. The swatch is dimmed while
+ * nothing is set: a solid black square next to an empty field reads as "black
+ * is the colour", not as "no colour".
+ */
 function Colour({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const set = value.trim() !== "";
+  const bad = set && !colorIsValid(value);
   return (
-    <span className="flex flex-1 items-center gap-2">
-      {/* The picker and the text write the same value, because a hex you can
-          paste matters as much as one you can point at. */}
-      <input
-        type="color"
-        aria-label="Colour picker"
-        value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000"}
-        onChange={(e) => onChange(e.target.value)}
-        className="size-8 shrink-0 cursor-pointer rounded-lg border border-border bg-surface p-1"
-      />
-      <input
-        aria-label="Colour"
-        value={value}
-        placeholder="Inherit"
-        onChange={(e) => onChange(e.target.value)}
-        className={cell}
-      />
+    <span className="flex flex-1 flex-col gap-1">
+      <span className="flex items-center gap-2">
+        {/* The picker and the text write the same value, because a hex you can
+            paste matters as much as one you can point at. */}
+        <input
+          type="color"
+          aria-label="Colour picker"
+          value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000"}
+          onChange={(e) => onChange(e.target.value)}
+          className={`size-8 shrink-0 cursor-pointer rounded-lg border border-border bg-surface p-1 ${
+            set ? "" : "opacity-40"
+          }`}
+        />
+        <input
+          aria-label="Colour"
+          value={value}
+          placeholder="Inherit"
+          onChange={(e) => onChange(e.target.value)}
+          className={cell}
+        />
+      </span>
+      {bad && (
+        <span className="text-[0.66rem] text-primary">
+          Not a colour — dropped on save. Try #c8653d.
+        </span>
+      )}
     </span>
   );
 }

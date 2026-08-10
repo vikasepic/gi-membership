@@ -141,6 +141,20 @@ export function metricIsValid(field: keyof TypographyMetrics, raw: string): bool
   return METRIC_PATTERN[field].test(raw.trim().toLowerCase());
 }
 
+/**
+ * Whether the schema will keep this colour.
+ *
+ * Same reason as `metricIsValid`, and the same trick: it asks `normalizeHex`,
+ * which is the function the save actually runs. `red`, `rgb(0,0,0)` and an
+ * eight-digit hex with alpha all become "" on save, and until this existed
+ * they did so without a word. Shared with the Header & navigation panel, whose
+ * colour fields go through the identical `normalizeHex(raw, "")`.
+ */
+export function colorIsValid(raw: string): boolean {
+  const v = raw.trim();
+  return v === "" || normalizeHex(v, "") !== "";
+}
+
 const metricsSchema = z.object({
   size: matching(SIZE),
   lineHeight: matching(LINE),
@@ -328,34 +342,4 @@ export function siteTypographyCssAt(t: SiteTypography, device: Device, scope = "
     if (d === device) break;
   }
   return out.join("");
-}
-
-// ---------------------------------------------------------------------------
-// Band ink
-// ---------------------------------------------------------------------------
-
-/**
- * The ink Paper, Cream and Sand share.
- *
- * Hardcoded rather than imported: `lib/page-sections` reads this module, so
- * reading BAND_STYLES back would be a cycle. A test asserts the three bands
- * still agree with it, which is the part that could actually drift.
- */
-export const LIGHT_BAND_INK = "#16181f";
-
-/**
- * The text colour a band should paint, given the site's own.
- *
- * A sales page has to respond to a body colour set in Settings, or the setting
- * looks broken on the pages people care most about. But the dark bands cannot:
- * Navy and Plum choose a pale ink *because* their ground is dark, and Rose has
- * its own warm near-black. Overriding those is how a band becomes unreadable,
- * which is the one thing the band presets exist to prevent.
- *
- * So only the shared light ink gives way. Anything else is a deliberate choice
- * made against a specific ground and is left exactly as it is.
- */
-export function bandInk(bandFg: string, siteColor: string | null | undefined): string {
-  if (bandFg !== LIGHT_BAND_INK || !siteColor) return bandFg;
-  return normalizeHex(siteColor, bandFg);
 }

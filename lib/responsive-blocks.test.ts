@@ -11,12 +11,14 @@ import {
   styleFor,
   type Block,
 } from "@/lib/blocks";
-import { blockClass, blockRules, customCss } from "@/lib/block-style";
+import { blockClass, blockCssAt, blockRules, blockTextRules, customCss } from "@/lib/block-style";
 import { bandTheme } from "@/lib/page-sections";
 import { blocksForSection } from "@/lib/section-to-blocks";
 
 const paper = bandTheme("paper");
 const heading = () => newBlock("heading", { props: { text: "Hi", tag: "h2" } });
+/** The tags a block's own typography names as well as inherits to. */
+const TAGS = "h1,h2,h3,h4,h5,h6,p,li,ul,ol,blockquote";
 
 describe("what a device inherits", () => {
   it("is everything, until something is set on it", () => {
@@ -133,7 +135,14 @@ describe("the CSS a block emits", () => {
     b = setStyleAt(b, "mobile", { transform: "uppercase" });
     b = { ...b, style: { ...b.style, customCss: "selector h2 { color: red }" } };
 
-    const collapsed = blockRules(b, paper).replaceAll(".bk-cap2.bk-cap2", ".bk-cap2");
+    // Two rewrites, not one: the doubling, and the arm that names the text the
+    // block contains. A block's rule sits on its wrapper, and a wrapper reaches
+    // its text only by inheritance — which loses to `:root h2` and to globals'
+    // `h1, h2, h3, h4`. Everything else is byte-identical to what one class
+    // emitted before either change.
+    const collapsed = blockRules(b, paper)
+      .replaceAll(".bk-cap2.bk-cap2,.bk-cap2.bk-cap2 :where(h1,h2,h3,h4,h5,h6,p,li,ul,ol,blockquote)", ".bk-cap2")
+      .replaceAll(".bk-cap2.bk-cap2", ".bk-cap2");
     expect(collapsed).toBe(
       ".bk-cap2{margin:0px 0px 16px 0px;padding:0px 160px 0px 160px;text-align:left;color:#16181f}" +
         "@media (max-width:1023px){.bk-cap2{text-align:center}}" +
@@ -145,6 +154,35 @@ describe("the CSS a block emits", () => {
         "@media (max-width:767px){.bk-cap2 > [data-row] > :nth-child(1){width:calc(100% - 0px)}" +
         ".bk-cap2 > [data-row] > :nth-child(2){width:calc(100% - 0px)}}" +
         ".bk-cap2 h2 { color: red }",
+    );
+  });
+
+  it("emits exactly this, for the one block shape the split actually changes", () => {
+    // The golden above holds no typography at all, so it could not see the
+    // change that moved the six keys into a width query and gave them an arm
+    // that names the text. This one is that shape, byte for byte: a heading
+    // with typography on the laptop and a smaller size on the phone.
+    let b = newBlock("heading", { props: { text: "Hi", tag: "h2" } });
+    b.id = "gold1";
+    b = setStyleAt(b, "desktop", { size: 48, weight: 700, color: "#123456" });
+    b = setStyleAt(b, "mobile", { size: 28 });
+
+    expect(blockRules(b, paper)).toBe(
+      // The frame: the box, the per-tag default, and the colour — which is NOT
+      // withdrawn at a narrower width, because a band paints its own ink and
+      // nothing site-wide would answer for it there.
+      ".bk-gold1.bk-gold1{margin:0px 0px 16px 0px;padding:0px 0px 0px 0px;text-align:left;" +
+        "font-size:clamp(1.7rem,3.4vw,2.4rem);font-weight:600;line-height:1.15;" +
+        "letter-spacing:-0.015em;color:#123456}" +
+        // The six, scoped to the laptop, on the wrapper and on the text alike.
+        `@media (min-width:1024px){.bk-gold1.bk-gold1,.bk-gold1.bk-gold1 :where(${TAGS})` +
+        "{font-size:48px;font-weight:700}}" +
+        // The author's colour, named on the text so `:root h2{color}` cannot
+        // take it there while the wrapper keeps it.
+        `.bk-gold1.bk-gold1 :where(${TAGS}){color:#123456}` +
+        // The phone's own size. Nothing restated, nothing reverted.
+        `@media (max-width:767px){.bk-gold1.bk-gold1,.bk-gold1.bk-gold1 :where(${TAGS})` +
+        "{font-size:28px}}",
     );
   });
 
@@ -195,16 +233,68 @@ describe("the CSS a block emits", () => {
     // nothing about size below 1024px unless that width was given one.
     const b = setStyleAt(heading(), "desktop", { size: 20 });
     expect(styleFor(b, "mobile").size).toBe(20);
-    expect(blockRules(b, paper)).not.toContain("max-width:");
+    // The query, named as a query. `not.toContain("max-width:")` also matched
+    // the `max-width:` DECLARATION the width control emits, so the assertion
+    // silently depended on the fixture having no measure set.
+    expect(blockRules(b, paper)).not.toContain("@media (max-width:");
+    // And the size is nowhere a narrower width can see it.
+    expect(blockRules(b, paper).split("@media (min-width:1024px)")[0]).not.toContain("font-size:20px");
   });
 
   it("says it again at a width that was given its own value", () => {
     const b = setStyleAt(setStyleAt(heading(), "desktop", { size: 20 }), "mobile", { size: 14 });
     const css = blockRules(b, paper);
-    expect(css).toContain(`@media (max-width:${DEVICE_MAX.mobile}px){.bk-${b.id}.bk-${b.id}{font-size:14px}}`);
+    expect(css).toContain(
+      `@media (max-width:${DEVICE_MAX.mobile}px){.bk-${b.id}.bk-${b.id},` +
+        `.bk-${b.id}.bk-${b.id} :where(${TAGS}){font-size:14px}}`,
+    );
     // Nothing to undo and nothing to restate: the desktop rule was never in
     // force here. `revert` would have rolled back the site rules as well.
     expect(css).not.toContain("revert");
+  });
+
+  it("names the text it contains, or the tag rules beat the panel", () => {
+    // Proved on a real page: a heading block given 48px rendered at whatever
+    // `:root h2` said, because the block's rule is on the wrapper `<div>` and
+    // the `<h2>` inside only inherited it. `:root h2` (0-1-1) names the h2, and
+    // a named value beats an inherited one whatever its specificity. So the
+    // block has to name it too — at 0-2-0, which `:where()` leaves untouched.
+    const b = setStyleAt(heading(), "desktop", { size: 48, fontFamily: "Lora", weight: 700 });
+    const desktop = blockRules(b, paper).split("@media (min-width:1024px)")[1];
+    expect(desktop).toContain(`:where(${TAGS}){`);
+    expect(desktop).toContain("font-size:48px");
+    // `a` is not in the list: at 0-2-0 it would also outrank `:root a:hover`
+    // (0-1-2) and leave every link inside a styled block dead to hover.
+    expect(desktop).not.toContain(",a");
+  });
+
+  it("leaves a bare block's text to the site, which is the whole point", () => {
+    // Nothing set means no arm at all — so `:root h2` from Settings is what is
+    // left standing on the heading, exactly as it was before this existed.
+    expect(blockRules(heading(), paper)).not.toContain(":where(");
+  });
+
+  it("carries the block's own colour onto its text, but never the band's", () => {
+    // The band's ink is the default a bare heading must NOT be given: writing
+    // it onto the h2 would beat the `:root h2{color}` Settings is for. A colour
+    // somebody typed is the opposite case and has to win there.
+    const bare = blockRules(heading(), paper);
+    expect(bare).toContain("color:#16181f");
+    expect(bare).not.toContain(`:where(${TAGS}){color`);
+
+    const red = blockRules(setStyleAt(heading(), "desktop", { color: "#ff0000" }), paper);
+    expect(red).toContain(`:where(${TAGS}){color:#ff0000}`);
+  });
+
+  it("keeps a colour on the phone, because nothing site-wide answers for one", () => {
+    // A band paints `color` inline on its own <section>, so `:root body{color}`
+    // never reaches inside one. Withdrawing a colour below 1024px the way a
+    // size is withdrawn would drop it to the band's ink — a red heading going
+    // black on a phone with nobody having asked for that.
+    const b = setStyleAt(heading(), "desktop", { color: "#ff0000" });
+    const css = blockRules(b, paper);
+    expect(css).not.toContain("max-width:");
+    expect(css.split("@media (min-width:1024px)")[0]).toContain("color:#ff0000");
   });
 
   it("cannot be broken out of by a value that carries a brace", () => {
@@ -213,6 +303,41 @@ describe("the CSS a block emits", () => {
     const css = blockRules(b, paper);
     expect(css).not.toContain("body{display:none");
     expect(css.split("{").length).toBe(css.split("}").length);
+  });
+});
+
+describe("what an editor canvas is handed", () => {
+  // A canvas is 390px wide inside a 1900px window, so no media query it emits
+  // would ever fire. It gets the same look resolved to one width instead — and
+  // that resolution is a pure function, so nothing here needs a database.
+
+  it("resolves the wrapper to the width being previewed", () => {
+    const b = setStyleAt(setStyleAt(heading(), "desktop", { size: 48 }), "mobile", { size: 28 });
+    expect(blockCssAt(b, paper, "desktop").fontSize).toBe("48px");
+    expect(blockCssAt(b, paper, "mobile").fontSize).toBe("28px");
+    // A width with nothing of its own falls back to the per-tag default, which
+    // is what the site rule then beats — the block's own 48px must not be there.
+    expect(blockCssAt(setStyleAt(heading(), "desktop", { size: 48 }), paper, "mobile").fontSize)
+      .toBe("clamp(1.7rem,3.4vw,2.4rem)");
+  });
+
+  it("names the text separately, because an attribute cannot name a child", () => {
+    // Without this the builder shows the site's heading size while the page a
+    // buyer gets shows the block's — the canvas lying about the one thing it
+    // was opened to show.
+    const b = setStyleAt(heading(), "desktop", { size: 48, color: "#ff0000" });
+    expect(blockTextRules(b, "desktop")).toBe(
+      `.bk-${b.id}.bk-${b.id} :where(${TAGS}){font-size:48px;color:#ff0000}`,
+    );
+    // Nothing set, nothing emitted — an empty rule is a bug, and an untouched
+    // block must ship no element at all.
+    expect(blockTextRules(heading(), "desktop")).toBe("");
+  });
+
+  it("follows the device, so a canvas pinned to a phone cannot show the laptop", () => {
+    const b = setStyleAt(setStyleAt(heading(), "desktop", { size: 48 }), "mobile", { size: 28 });
+    expect(blockTextRules(b, "mobile")).toContain("font-size:28px");
+    expect(blockTextRules(b, "mobile")).not.toContain("48px");
   });
 });
 

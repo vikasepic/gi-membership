@@ -3,15 +3,12 @@ import {
   PREVIEW_SCOPE,
   SITE_TYPOGRAPHY_DEFAULTS,
   TYPOGRAPHY_ELEMENTS,
-  LIGHT_BAND_INK,
-  bandInk,
   metricIsValid,
   normalizeSiteTypography,
   siteTypographyCss,
   siteTypographyCssAt,
   type SiteTypography,
 } from "@/lib/site-typography";
-import { BAND_STYLES, bandTheme } from "@/lib/page-sections";
 import { DEVICE_MAX } from "@/lib/blocks";
 
 /** The defaults with one element patched, which is how the panel will write. */
@@ -22,11 +19,14 @@ describe("the typography model", () => {
   it("starts entirely empty, and empty means no stylesheet at all", () => {
     for (const el of TYPOGRAPHY_ELEMENTS) {
       const e = SITE_TYPOGRAPHY_DEFAULTS[el];
-      expect(Object.values({ ...e, desktop: "", tablet: "", mobile: "" })).toEqual(
-        expect.arrayContaining([""]),
-      );
-      expect(e.family).toBe("");
-      expect(e.desktop.size).toBe("");
+      // Every leaf, checked as a leaf. The previous version spread three empty
+      // strings into the object before asking whether any value was empty, so
+      // it could not fail whatever the defaults held.
+      const { desktop, tablet, mobile, ...flat } = e;
+      expect(Object.values(flat), el).toEqual(["", "", "", "", "", ""]);
+      for (const m of [desktop, tablet, mobile]) {
+        expect(Object.values(m), el).toEqual(["", "", "", "", ""]);
+      }
     }
     expect(siteTypographyCss(SITE_TYPOGRAPHY_DEFAULTS)).toBe("");
   });
@@ -247,38 +247,5 @@ describe("the same type inside the admin", () => {
     for (const device of ["desktop", "tablet", "mobile"] as const) {
       expect(siteTypographyCssAt(SITE_TYPOGRAPHY_DEFAULTS, device, scope)).toBe("");
     }
-  });
-});
-
-describe("band ink", () => {
-  it("is the ink the three light bands actually share", () => {
-    // If a preset's fg is ever retuned, this is the line that says so rather
-    // than the setting quietly ceasing to reach that band.
-    for (const key of ["paper", "cream", "sand"] as const) {
-      expect(BAND_STYLES[key].fg).toBe(LIGHT_BAND_INK);
-    }
-  });
-
-  it("lets the site colour through on the light bands only", () => {
-    for (const key of ["paper", "cream", "sand"] as const) {
-      expect(bandTheme(key, null, "#2b1a0f").fg).toBe("#2b1a0f");
-    }
-    for (const key of ["rose", "navy", "plum"] as const) {
-      expect(bandTheme(key, null, "#2b1a0f").fg).toBe(BAND_STYLES[key].fg);
-    }
-  });
-
-  it("carries the ink into the rule and the muted tone", () => {
-    const t = bandTheme("paper", null, "#2b1a0f");
-    expect(t.rule).toBe("rgba(43, 26, 15, 0.14)");
-    expect(t.muted).toBe("rgba(43, 26, 15, 0.72)");
-  });
-
-  it("changes nothing when no site colour is set, or when it is not a colour", () => {
-    for (const key of Object.keys(BAND_STYLES) as (keyof typeof BAND_STYLES)[]) {
-      expect(bandTheme(key)).toEqual(bandTheme(key, null, ""));
-      expect(bandTheme(key)).toEqual(bandTheme(key, null, "red;background:url(x)"));
-    }
-    expect(bandInk("#3a2c34", "#ffffff")).toBe("#3a2c34");
   });
 });

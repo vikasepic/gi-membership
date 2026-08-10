@@ -112,9 +112,11 @@ export function AppShell({
       {css && <style dangerouslySetInnerHTML={{ __html: css }} />}
 
       {/* Mobile top bar — brand only; navigation lives in the bottom tabs. */}
+      {/* No `relative` for the menu and the CTA to hang off: `sticky` is
+          already a positioned ancestor, so adding one only worked as long as
+          Tailwind kept emitting `.sticky` after `.relative`. */}
       <header className={`sticky top-0 z-20 flex items-center justify-center border-b border-border bg-surface/85 px-5 py-3.5 backdrop-blur md:hidden${
-          menu || ctaOnMobile ? " relative" : ""
-        }${hook(SHELL_CLASS.bar)}${hook(SHELL_CLASS.barMobile)}`}
+          hook(SHELL_CLASS.bar)}${hook(SHELL_CLASS.barMobile)}`}
         style={{ paddingTop: "calc(0.875rem + env(safe-area-inset-top))" }}>
         {menu && (
           <details className="absolute left-5 top-1/2 -translate-y-1/2">

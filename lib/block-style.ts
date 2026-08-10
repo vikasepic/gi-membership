@@ -634,9 +634,15 @@ function typeDefaultCss(block: Block): CSSProperties {
  * canvas has to apply it directly — it is 390px wide inside a 1900px window, so
  * a `max-width: 767px` query would not match and the phone view would silently
  * show the desktop styling.
+ *
+ * The wrapper only. A canvas needs `blockTextRules` beside this for the same
+ * reason the live page does — see the comment on TEXT_TAGS.
  */
 export function blockCssAt(block: Block, theme: BandTheme, device: Device = "desktop"): CSSProperties {
   return {
+    // No `ownInk` here: `frameCss` already resolves to the block's own colour
+    // when it has one — that split exists so the RULES can name the text
+    // without also painting the band's default onto it.
     ...frameCss(block, theme, styleFor(block, device)),
     ...typographyAt(ownTypography(block, device)),
   };
@@ -645,31 +651,81 @@ export function blockCssAt(block: Block, theme: BandTheme, device: Device = "des
 /**
  * Everything about a block's look that a narrower width still inherits.
  *
- * Colour is here, but only the band's own ink — the value `blockColors` derives
- * when the block names none. A button's label and a divider's hairline are read
- * off the band at every width and would otherwise go missing below 1024px. The
- * block's OWN colour travels with the rest of its typography instead.
+ * The colour is here rather than with the six per-width values because nothing
+ * site-wide answers for it on a sales page: the band paints `color` inline on
+ * its own `<section>`, so `:root body{color}` never reaches inside one. A
+ * colour withdrawn below 1024px would fall to the band's ink, not to anything
+ * the owner chose — so it inherits down the widths the way padding does.
  */
 function frameCss(block: Block, theme: BandTheme, s: BlockStyle): CSSProperties {
   return {
     ...wrapperCssFrom(block, s, theme),
     ...typeDefaultCss(block),
-    color: blockColors(block, theme, { ...s, color: null }).fg,
+    color: blockColors(block, theme, s).fg,
   };
 }
 
 /**
- * The seven values a width only gets if it set them itself.
+ * The colour the block itself was given, or nothing.
  *
- * `s.color` rather than `blockColors`: every block type resolves its text
- * colour to the style's own colour when there is one, whatever else it derives
- * from the band, so there is nothing left for `blockColors` to decide.
+ * Kept apart from `frameCss`'s colour, which is the band's own ink whenever the
+ * block names none. Only a colour somebody typed may be written onto the text
+ * inside the block: painting the band's default there too would beat the
+ * `:root h2{color}` a bare heading is supposed to get from Settings.
+ */
+function ownInk(block: Block, device: Device): CSSProperties {
+  const color = styleFor(block, device).color;
+  return color ? { color } : {};
+}
+
+/**
+ * The six values a width only gets if it set them itself.
+ *
+ * They are exactly the ones lib/site-typography answers for, so a width that
+ * says nothing has somewhere better to fall than "whatever the laptop said".
  */
 function typographyAt(own: Partial<BlockStyle>): CSSProperties {
-  const s = baseStyle(own);
-  const css: CSSProperties = typographyCss(s);
-  if (s.color) css.color = s.color;
-  return css;
+  return typographyCss(baseStyle(own));
+}
+
+/**
+ * The tags a block's own typography has to name as well as inherit to.
+ *
+ * A block's rule sits on its wrapper `<div>`, and a wrapper reaches the text
+ * inside it only by inheritance — which loses to ANY rule that names the tag.
+ * Both `:root h2` from Settings and the `h1, h2, h3, h4` in app/globals.css
+ * name it, so until this existed the size, weight, family and tracking typed
+ * into a heading block's panel never reached the heading: a heading given 48px
+ * rendered at whatever Settings said, and at globals' tracking and face.
+ *
+ * `:where()` contributes nothing to specificity, so this arm is 0-2-0 exactly
+ * as the wrapper arm is — the block still beats the site, and the site still
+ * beats a block that set nothing.
+ *
+ * `a` is deliberately absent. A link colour is a site-wide decision by
+ * definition, and naming `a` here at 0-2-0 would also outrank `:root a:hover`
+ * (0-1-2) and leave every link inside a styled block unresponsive to hover.
+ */
+const TEXT_TAGS = "h1,h2,h3,h4,h5,h6,p,li,ul,ol,blockquote";
+
+/** One rule, or "" when there is nothing to say. A rule with no body is a bug. */
+function ruleFor(selector: string, css: CSSProperties): string {
+  const body = declarations(css);
+  return body ? `${selector}{${body}}` : "";
+}
+
+/**
+ * The text half of a block's rules, resolved to one width, with no media query.
+ *
+ * For an editor canvas. The wrapper there is a `style` attribute — see
+ * `blockCssAt` — but an attribute cannot name the block's own children, and
+ * those children are exactly where `.site-type h2` from the Settings preview
+ * would otherwise win. Without this the builder shows the site's heading size
+ * while the page a buyer gets shows the block's.
+ */
+export function blockTextRules(block: Block, device: Device): string {
+  const sel = `.${blockClass(block)}.${blockClass(block)} :where(${TEXT_TAGS})`;
+  return ruleFor(sel, { ...typographyAt(ownTypography(block, device)), ...ownInk(block, device) });
 }
 
 /**
@@ -698,6 +754,8 @@ export function blockRules(block: Block, theme: BandTheme): string {
   // selector 0-2-0 and puts the block back on top. It still matches exactly the
   // elements one class matched, so nothing here reaches anything new.
   const sel = `.${blockClass(block)}.${blockClass(block)}`;
+  // The wrapper and the text it holds, at the same specificity. See TEXT_TAGS.
+  const textSel = `${sel},${sel} :where(${TEXT_TAGS})`;
   const out: string[] = [];
   const frame = declarations(frameCss(block, theme, block.style));
   if (frame) out.push(`${sel}{${frame}}`);
@@ -712,24 +770,39 @@ export function blockRules(block: Block, theme: BandTheme): string {
   // `revert` rolls back the whole author origin — it would discard the site
   // rule too and land on the browser's default.
   const desktop = declarations(typographyAt(ownTypography(block, "desktop")));
-  if (desktop) out.push(`@media (min-width:${DESKTOP_MIN}px){${sel}{${desktop}}}`);
+  if (desktop) out.push(`@media (min-width:${DESKTOP_MIN}px){${textSel}{${desktop}}}`);
+
+  // The colour follows the frame's rules, not the six's — but it still has to
+  // name the text, or `:root h2{color}` beats it there while the wrapper keeps
+  // it. Diffed, so a width that did not change it stays silent.
+  const ink = declarations(ownInk(block, "desktop"));
+  if (ink) out.push(`${sel} :where(${TEXT_TAGS}){${ink}}`);
 
   for (const device of ["tablet", "mobile"] as const) {
+    const wider = device === "mobile" ? "tablet" : "desktop";
     // Only the frame properties this device actually changes. Re-stating the
     // whole style would bake the wider values into the media query, and the
     // next desktop edit would stop reaching the phone.
     const box = block.responsive
       ? diff(
           frameCss(block, theme, styleFor(block, device)),
-          frameCss(block, theme, styleFor(block, device === "mobile" ? "tablet" : "desktop")),
+          frameCss(block, theme, styleFor(block, wider)),
         )
       : {};
     // Typography is not diffed: nothing above it is in force at this width, so
     // there is nothing to restate and nothing to undo.
-    const body = [declarations(box), declarations(typographyAt(ownTypography(block, device)))]
+    const type = declarations(typographyAt(ownTypography(block, device)));
+    const boxCss = declarations(box);
+    const query = `@media (max-width:${DEVICE_MAX[device]}px)`;
+    // The box stays on the wrapper; only the typography reaches the text.
+    const inner = [
+      boxCss ? `${sel}{${boxCss}}` : "",
+      type ? `${textSel}{${type}}` : "",
+      block.responsive ? ruleFor(`${sel} :where(${TEXT_TAGS})`, diff(ownInk(block, device), ownInk(block, wider))) : "",
+    ]
       .filter(Boolean)
-      .join(";");
-    if (body) out.push(`@media (max-width:${DEVICE_MAX[device]}px){${sel}{${body}}}`);
+      .join("");
+    if (inner) out.push(`${query}{${inner}}`);
   }
 
   const capped = mobilePaddingCap(block, sel);

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import { availableFamilies } from "@/lib/fonts";
+import { TYPOGRAPHY_ELEMENTS, type SiteTypography } from "@/lib/site-typography";
 import {
   GROUP_FIELDS,
   SETTINGS_SCHEMA,
@@ -126,6 +127,18 @@ export async function saveSettingsGroup(
       if (chosen && !families.includes(chosen)) {
         errors[key] = `${chosen} is not installed. Add it below first.`;
       }
+    }
+    // The same rule for the eleven per-element families. They went unchecked,
+    // so removing a font from the library left every element still set to it
+    // rendering the fallback for ever, with the panel reporting nothing.
+    const type = patch.siteTypography as SiteTypography | undefined;
+    const gone = type
+      ? [...new Set(
+          TYPOGRAPHY_ELEMENTS.map((el) => type[el].family).filter((f) => f && !families.includes(f)),
+        )]
+      : [];
+    if (gone.length > 0) {
+      errors.siteTypography = `${gone.join(" and ")} ${gone.length > 1 ? "are" : "is"} not installed, so anything set to ${gone.length > 1 ? "them" : "it"} renders as the fallback. Add it below, or change those elements.`;
     }
   }
 

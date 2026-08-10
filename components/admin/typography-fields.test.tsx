@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { act } from "react";
+import { HEADING_SIZE } from "@/lib/block-style";
 import { createRoot } from "react-dom/client";
 import {
   SITE_TYPOGRAPHY_DEFAULTS,
@@ -211,9 +212,13 @@ describe("the Typography panel", () => {
     expect(button("H5")?.textContent).toContain("*");
     expect(button("H4")?.textContent).not.toContain("*");
     click(button("H5"));
-    expect(document.body.textContent).toContain("Nothing on this site styles h5 today");
+    // The note used to say "the one heading level" while the list holds two,
+    // and that nothing had ever styled it — false on a sales page, where a
+    // heading block gives h5 a size of its own.
+    expect(document.body.textContent).toContain("h5 and h6 are the two heading levels");
+    expect(document.body.textContent).toContain(HEADING_SIZE.h5);
     click(button("H4"));
-    expect(document.body.textContent).not.toContain("first thing that has ever styled it");
+    expect(document.body.textContent).not.toContain("h5 and h6 are the two heading levels");
   });
 
   it("says a length will be dropped rather than dropping it silently", () => {
