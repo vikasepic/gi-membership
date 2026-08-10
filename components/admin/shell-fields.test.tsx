@@ -148,4 +148,18 @@ describe("the Header & navigation panel", () => {
     // is what drifts, and drift here is a link that vanishes with nothing said.
     expect(document.body.textContent).toContain("start with / or https://");
   });
+
+  it("says a row with only one half filled in will not be shown", () => {
+    // `shellHrefIsValid` is true for "", so a label with an empty URL passed
+    // every check the panel had and then failed to draw. The call to action
+    // next door has said this about its own pair since it was written.
+    mount();
+    const href = document.querySelectorAll('input[aria-label="Link"]')[0] as HTMLInputElement;
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(href, "");
+      href.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(document.body.textContent).toContain("No link yet, so this row is saved but not shown");
+  });
 });

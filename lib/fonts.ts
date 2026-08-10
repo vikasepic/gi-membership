@@ -1,7 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
-import { GOOGLE_FAMILIES, FONT_WEIGHTS, BUILT_IN_FONTS } from "@/lib/fonts-catalogue";
+import { GOOGLE_FAMILIES, FONT_WEIGHTS, BUILT_IN_FONTS, familyToken } from "@/lib/fonts-catalogue";
 
 /**
  * Installing and serving typefaces.
@@ -57,7 +57,7 @@ export async function listFonts(): Promise<FontRow[]> {
 /** Every family the editor may offer, built-ins first. */
 export async function availableFamilies(): Promise<string[]> {
   const installed = (await listFonts()).map((f) => f.family);
-  return [...BUILT_IN_FONTS, ...installed.filter((f) => !BUILT_IN_FONTS.includes(f as never))];
+  return [...BUILT_IN_FONTS, ...installed.filter((f) => !BUILT_IN_FONTS.includes(f))];
 }
 
 // ---------------------------------------------------------------------------
@@ -277,5 +277,5 @@ export function fontFaceCss(fonts: FontRow[], publicBase: string): string {
 /** A font-family value, with the stack that catches a file that never arrives. */
 export function familyStack(family: string | null | undefined, fallback: string): string {
   const safe = safeFamily(family ?? "");
-  return safe ? `"${safe}", ${fallback}` : fallback;
+  return safe ? `${familyToken(safe)}, ${fallback}` : fallback;
 }

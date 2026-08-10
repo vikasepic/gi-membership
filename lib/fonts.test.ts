@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { safeFamily, fontFaceCss, familyStack } from "@/lib/fonts";
-import { GOOGLE_FAMILIES, GOOGLE_FONTS, BUILT_IN_FONTS } from "@/lib/fonts-catalogue";
+import { GOOGLE_FAMILIES, GOOGLE_FONTS, BUILT_IN_FONTS, familyToken } from "@/lib/fonts-catalogue";
+import { baseStyle } from "@/lib/blocks";
+import { typographyCss } from "@/lib/block-style";
+import { normalizeSiteTypography, siteTypographyCss } from "@/lib/site-typography";
 
 /**
  * A family name typed by a person ends up inside a stylesheet, twice — in an
@@ -85,5 +88,32 @@ describe("the catalogue", () => {
 
   it("offers the fonts the site already ships with", () => {
     for (const f of BUILT_IN_FONTS) expect(GOOGLE_FAMILIES).toContain(f);
+  });
+
+  it("names a built-in by the variable that holds it, everywhere it is written", () => {
+    // The picker offered Inter and Poppins and no @font-face backed either:
+    // next/font compiles them under a hashed family name, so `"Inter"` matched
+    // nothing this store serves and resolved to whatever Inter the visitor had
+    // installed — a different page per machine. Three emitters write a chosen
+    // family and all three go through this one function, so none of them can
+    // be honest while another is not.
+    for (const f of BUILT_IN_FONTS) {
+      expect(familyToken(f)).toBe(`var(--font-${f.toLowerCase()}, "${f}")`);
+      expect(familyStack(f, "system-ui")).toContain(`var(--font-${f.toLowerCase()}`);
+      expect(typographyCss({ ...baseStyle(), fontFamily: f }).fontFamily).toContain("var(--font-");
+      expect(siteTypographyCss(normalizeSiteTypography({ h1: { family: f } }))).toContain("var(--font-");
+    }
+    // An installed family keeps its own name — @font-face declared it under
+    // exactly that, and a variable for it does not exist.
+    expect(familyToken("Lora")).toBe('"Lora"');
+  });
+
+  it("keeps the quoted name inside the variable, not beside it", () => {
+    // `font-family: var(--x), var(--font-body)` where --x is undefined is not
+    // "skip to the next name": the var() substitutes to nothing, the
+    // declaration is invalid at computed-value time, and the property INHERITS.
+    // The fallback inside the var() is what makes a context without the
+    // variable draw exactly what it drew before this existed.
+    expect(familyToken("Inter")).toContain(', "Inter")');
   });
 });

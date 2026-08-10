@@ -51,6 +51,30 @@ describe("the store's own stylesheet", () => {
     expect(html.indexOf("rebeccapurple")).toBeGreaterThan(html.indexOf(":root h1"));
   });
 
+  it("cannot be ended early by the owner's own CSS or JS", () => {
+    // Both elements are raw text and close at the first `</style` / `</script`
+    // whatever the author meant — the per-page pair in sales-page.tsx has been
+    // treated since it was written and this one had not. The CSS loses the
+    // sequence; the JS keeps its meaning and escapes it.
+    const html = of({
+      customCss: "a{color:red}</style><img src=x onerror=alert(1)>",
+      customJs: 'document.write("</script><img src=x onerror=alert(1)>")',
+    });
+    expect(html).not.toContain("</style><img");
+    expect(html).not.toContain("</script><img");
+    expect(html).toContain("<\\/script>");
+  });
+
+  it("names a built-in font by the variable that actually holds it", () => {
+    // next/font compiles Inter to a hashed family name; `"Inter"` matches no
+    // face this store serves and lands on whatever the visitor has installed.
+    const html = of({ headingFont: "Inter", bodyFont: "Lora" }, FONT);
+    expect(html).toContain('--font-heading:var(--font-inter, "Inter")');
+    // An installed family keeps its own name — that is the name @font-face
+    // declared it under.
+    expect(html).toContain('--font-body:"Lora"');
+  });
+
   it("emits the site's type at all, which is the whole of the feature", () => {
     expect(of({ siteTypography: normalizeSiteTypography({ h2: { desktop: { size: "41px" } } }) }))
       .toContain(":root h2{font-size:41px}");

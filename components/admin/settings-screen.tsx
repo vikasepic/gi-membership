@@ -492,28 +492,42 @@ function ImageField({
   error?: string;
 }) {
   const [path, setPath] = useState(value);
+  // The field reads as filled in whether the file is there or not — a path is
+  // all it holds — so a picture deleted from the library left the preview a
+  // broken glyph, the Remove button still offered, and nothing saying which of
+  // the two it was. The <img> failing is the only report of it, and this panel
+  // is the one place where somebody can act on the answer.
+  const [gone, setGone] = useState(false);
+  const choose = (next: string) => {
+    setPath(next);
+    setGone(false);
+  };
   const url = publicCoverUrl(path || null);
   return (
-    <Field label={label} hint={hint} error={error}>
+    <Field
+      label={label}
+      hint={hint}
+      error={error ?? (gone ? "That file is no longer in the library — choose it again." : undefined)}
+    >
       <span className="flex items-center gap-3">
         <input type="hidden" name={name} value={path} />
         <span className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-lg border border-border bg-surface-2 text-[0.6rem] text-muted">
-          {url ? (
+          {url && !gone ? (
             /* eslint-disable-next-line @next/next/no-img-element */
-            <img src={url} alt="" className="size-full object-contain" />
+            <img src={url} alt="" className="size-full object-contain" onError={() => setGone(true)} />
           ) : (
-            "none"
+            url ? "gone" : "none"
           )}
         </span>
         <MediaButton
           kind="image"
-          onPick={(item: PickedMedia) => setPath(item.path)}
+          onPick={(item: PickedMedia) => choose(item.path)}
           label={path ? "Replace" : "Choose"}
         />
         {path && (
           <button
             type="button"
-            onClick={() => setPath("")}
+            onClick={() => choose("")}
             className="text-xs text-muted underline-offset-2 hover:text-primary hover:underline"
           >
             Remove

@@ -141,8 +141,13 @@ const linksSchema = z
           .slice(0, 12)
           .map((item) => linkSchema.parse(item))
           // A row with neither a label nor a destination is a row somebody
-          // started and abandoned, not a link.
-          .filter((l) => l.label !== "" && l.href !== "")
+          // started and abandoned, not a link. A row with ONE of them is a row
+          // somebody has not finished, and it is kept: dropping it here meant
+          // typing a label, leaving the URL for later and having the row
+          // disappear on save with nothing said. `shellLinks` is what decides
+          // whether a row is drawable, so an unfinished one is stored and
+          // waiting rather than stored and rendering as an invisible tab.
+          .filter((l) => l.label !== "" || l.href !== "")
       : // Not an array at all: never written. Distinct from an empty array,
         // which is somebody having emptied the bar deliberately.
         null,
@@ -206,9 +211,14 @@ export const SITE_SHELL_DEFAULTS: SiteShell = normalizeSiteShell({});
  * `null` is the untouched store and gets the shell's own three. An empty array
  * is somebody having removed every row, and gets nothing — which is the only
  * reading under which the × button does what it says.
+ *
+ * A row needs both halves to be drawn. A label with no href is a tab that goes
+ * nowhere and an href with no label is an invisible one, and the store is the
+ * wrong place to find out which somebody meant — the panel says so while it is
+ * being typed, and the row stays in the settings until it is finished.
  */
 export function shellLinks(s: SiteShell): ShellLink[] {
-  return (s.links ?? SHELL_DEFAULT_LINKS).filter((l) => l.on);
+  return (s.links ?? SHELL_DEFAULT_LINKS).filter((l) => l.on && l.label !== "" && l.href !== "");
 }
 
 /**

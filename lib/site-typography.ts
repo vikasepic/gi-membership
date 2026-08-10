@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DEVICE_MAX, type Device } from "@/lib/blocks";
 import { normalizeHex } from "@/lib/color";
+import { familyToken } from "@/lib/fonts-catalogue";
 
 /**
  * Typography for the whole site, as data and as CSS.
@@ -207,6 +208,25 @@ export const SITE_TYPOGRAPHY_DEFAULTS: SiteTypography = normalizeSiteTypography(
 // The CSS writer
 // ---------------------------------------------------------------------------
 
+/**
+ * The owner's own CSS and JS, on their way into a `<style>` or a `<script>`.
+ *
+ * Both are raw-text elements: they end at the first `</style` / `</script`
+ * whatever the author meant by it, so a closing tag inside the text ends the
+ * element early and everything after it is parsed as markup. These strings are
+ * typed behind `requireAdmin` and `customJs` sits beside `customCss`, so this
+ * is consistency rather than a hole — but the identical pair reaches a page
+ * from two files (components/store-brand.tsx site-wide,
+ * components/page/sales-page.tsx per page) and one of them treating it while
+ * the other did not is how the untreated one stays untreated.
+ *
+ * CSS drops the sequence, because a stylesheet has no use for it. JS escapes
+ * it instead, because `</` inside a string or a regex is legal code and
+ * deleting it would silently change what the owner's script does.
+ */
+export const inlineCss = (css: string): string => css.replace(/<\//g, "");
+export const inlineJs = (js: string): string => js.replace(/<\//g, "<\\/");
+
 const TAGS: Record<TypographyElement, readonly string[]> = {
   body: ["body"],
   link: ["a"],
@@ -271,7 +291,7 @@ const isHeading = (el: TypographyElement) => /^h[1-6]$/.test(el);
  */
 function familyValue(family: string, heading: boolean): string {
   const base = heading ? "var(--font-heading)" : "var(--font-body)";
-  return `"${family}", ${base}, system-ui, sans-serif`;
+  return `${familyToken(family)}, ${base}, system-ui, sans-serif`;
 }
 
 function rulesAt(t: SiteTypography, device: Device, scope: string): string[] {

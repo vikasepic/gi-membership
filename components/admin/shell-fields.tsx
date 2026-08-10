@@ -23,6 +23,24 @@ import { colorIsValid } from "@/lib/site-typography";
  * existed, and every label here names what that default actually is rather
  * than saying "default" and leaving you to go and look.
  */
+/**
+ * What is wrong with a link row, in the words of what happens to it.
+ *
+ * `shellLinks` draws a row only when it has both halves, and the save keeps a
+ * half-written row rather than deleting it — so the two states a person needs
+ * told apart are "this will not be saved" and "this is saved but not shown".
+ * Both used to be silence: a label with no URL passed `shellHrefIsValid`
+ * (which is true for ""), was dropped by the save's own filter, and the panel
+ * came back one link shorter with no error anywhere. The call to action next
+ * door has said this for its own pair since it was written.
+ */
+function rowNote(l: ShellLink): string {
+  if (!shellHrefIsValid(l.href)) return "Not a link this will keep — start with / or https://";
+  if (l.label !== "" && l.href === "") return "No link yet, so this row is saved but not shown";
+  if (l.label === "" && l.href !== "") return "No label yet, so this row is saved but not shown";
+  return "";
+}
+
 export function ShellFields({
   siteShell,
   errors,
@@ -148,10 +166,8 @@ export function ShellFields({
                   ×
                 </Small>
               </span>
-              {!shellHrefIsValid(l.href) && (
-                <span className="w-full text-[0.66rem] text-primary">
-                  Not a link this will keep — start with / or https://
-                </span>
+              {rowNote(l) && (
+                <span className="w-full text-[0.66rem] text-primary">{rowNote(l)}</span>
               )}
             </li>
           ))}

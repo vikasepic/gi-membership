@@ -15,6 +15,11 @@ export function storeMetadata(s: Settings): Metadata {
   const title = s.metaTitle || s.name;
   const description = s.metaDescription || s.tagline || undefined;
   const image = publicCoverUrl(s.shareImagePath || null);
+  // A path, not a file: nothing here can tell that the object behind it was
+  // deleted from the bucket, and finding out would be a storage round trip on
+  // every page render. Unset is handled — no `icons` key at all, so Next's own
+  // app/icon.svg stands — and a path that has gone dead is repaired in
+  // components/app-shell.tsx, which is where the browser reports the 404.
   const icon = publicCoverUrl(s.faviconPath || s.logoPath || null);
 
   return {

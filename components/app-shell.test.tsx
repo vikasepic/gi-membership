@@ -286,7 +286,13 @@ describe("the stylesheet", () => {
     // `//evil.com` looks like a path to a regex and like another origin to a
     // browser. "Starts with a slash so it is on this site" was the whole reason
     // that branch exists, so a second slash cannot be allowed to ride it.
-    expect(s.links!.map((l) => l.href)).toEqual(["/fine"]);
+    //
+    // The rejected href is emptied, and the ROW is kept now — an unfinished row
+    // stays in the settings so the panel can show it and say what is wrong,
+    // rather than vanishing on save. What matters is that neither string ever
+    // reaches an href attribute, which is `shellLinks`, not the schema.
+    expect(s.links!.map((l) => l.href)).toEqual(["", "", "/fine"]);
+    expect(shellLinks(s).map((l) => l.href)).toEqual(["/fine"]);
   });
 
   it("lets nothing unvalidated into the stylesheet", () => {
@@ -306,6 +312,25 @@ describe("the stylesheet", () => {
     // The one legitimate value still survives, so this is not passing by
     // rejecting everything.
     expect(out).toContain("height:20px");
+  });
+
+  it("keeps a half-written row but never draws it", () => {
+    // The save used to delete any row missing either half. Type a label, leave
+    // the URL for later, press Save: the row was gone and the panel came back
+    // one link shorter with nothing said. It is kept now — so the panel can
+    // show it and say what is missing — and `shellLinks` is what refuses to
+    // draw it, because a label with no href goes nowhere and an href with no
+    // label is an invisible tab.
+    const s = normalizeSiteShell({
+      links: [
+        { label: "Courses", href: "", on: true },
+        { label: "", href: "/blog", on: true },
+        { label: "", href: "", on: true },
+        { label: "Account", href: "/account", on: true },
+      ],
+    });
+    expect(s.links!.map((l) => l.label)).toEqual(["Courses", "", "Account"]);
+    expect(shellLinks(s).map((l) => l.label)).toEqual(["Account"]);
   });
 
   it("can be emptied, and an untouched store still gets its three", () => {

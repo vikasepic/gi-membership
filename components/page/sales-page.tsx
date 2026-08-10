@@ -3,6 +3,7 @@ import { blocksForSection } from "@/lib/section-to-blocks";
 import { buildSectionView, type SectionRow, type SectionView } from "@/lib/page-sections";
 import { normalizeBackground, type Device } from "@/lib/blocks";
 import { backgroundCss } from "@/lib/block-style";
+import { inlineCss, inlineJs } from "@/lib/site-typography";
 import type { PageSettings } from "@/lib/pages";
 
 // The page, assembled from blocks.
@@ -115,14 +116,13 @@ export function SalesPage({
   const js = settings?.customJs.trim();
   return (
     <div>
-      {css && <style dangerouslySetInnerHTML={{ __html: css.replace(/<\//g, "") }} />}
+      {css && <style dangerouslySetInnerHTML={{ __html: inlineCss(css) }} />}
       {ordered.map((row) => (
         <SectionBand key={row.sectionKey} row={row} money={money} cta={cta} />
       ))}
-      {/* Last, so it runs against a page that exists. `</` is stripped because
-          a closing tag inside the source would end the element early and spill
-          the rest of the script onto the page as text. */}
-      {js && <script dangerouslySetInnerHTML={{ __html: js.replace(/<\//g, "<\\/") }} />}
+      {/* Last, so it runs against a page that exists. `</` is treated by the
+          same pair that treats the site-wide custom code — see `inlineCss`. */}
+      {js && <script dangerouslySetInnerHTML={{ __html: inlineJs(js) }} />}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { publicCoverUrl } from "@/lib/media-url";
@@ -38,7 +39,13 @@ export function AppShell({
   settings: Settings;
 }) {
   const pathname = usePathname();
-  const logoUrl = publicCoverUrl(settings.logoPath || null);
+  // A logo path whose file is no longer in the bucket is not an empty path, so
+  // none of the fallbacks below were reachable: `publicCoverUrl` built a URL,
+  // the <img> 404d, and every page on the store drew a broken-image glyph where
+  // the brand goes. The server cannot tell — it holds a path, not a file — so
+  // the browser saying "this did not load" is the only signal there is.
+  const [logoGone, setLogoGone] = useState(false);
+  const logoUrl = logoGone ? null : publicCoverUrl(settings.logoPath || null);
   const shell = settings.siteShell;
   const css = siteShellCss(shell);
 
@@ -48,13 +55,32 @@ export function AppShell({
   // than merely believed.
   const hook = (name: string) => (css ? ` ${name}` : "");
 
+  // The tab is pointed at this same path when the store has not uploaded a
+  // favicon of its own — `lib/site-metadata.ts` falls back from faviconPath to
+  // logoPath — so the file being gone kills the icon too, and a `<link>` in the
+  // head is not something a re-render reaches. Repaired here rather than there
+  // because here is where the 404 is observed; `/icon.svg` is the app's own
+  // mark, the same thing the head already carries when neither path is set.
+  const onLogoMissing = () => {
+    setLogoGone(true);
+    if (settings.faviconPath) return;
+    document
+      .querySelectorAll<HTMLLinkElement>('link[rel~="icon"]')
+      .forEach((l) => (l.href = "/icon.svg"));
+  };
+
   // The uploaded logo when there is one, then whichever fallback the owner
   // chose. Sized by height so a wide wordmark and a square glyph both sit on
   // the same baseline instead of one of them setting the bar height.
   const Mark = ({ className }: { className: string }) =>
     logoUrl ? (
       /* eslint-disable-next-line @next/next/no-img-element */
-      <img src={logoUrl} alt={settings.name} className={`${className} object-contain`} />
+      <img
+        src={logoUrl}
+        alt={settings.name}
+        className={`${className} object-contain`}
+        onError={onLogoMissing}
+      />
     ) : shell.brandFallback === "name" ? (
       <span className={`${className} inline-flex items-center font-display leading-none`}>
         {settings.name}

@@ -1,6 +1,6 @@
 import { SETTINGS_DEFAULTS, type Settings } from "@/lib/settings-schema";
 import { fontFaceCss, familyStack, type FontRow } from "@/lib/fonts";
-import { siteTypographyCss } from "@/lib/site-typography";
+import { inlineCss, inlineJs, siteTypographyCss } from "@/lib/site-typography";
 
 /**
  * The saved brand, as real CSS.
@@ -58,12 +58,15 @@ export function StoreBrand({
     // CSS, which must be able to beat both. Empty until somebody sets something.
     siteTypographyCss(settings.siteTypography),
     rules.length > 0 ? `:root{${rules.join(";")}}` : "",
-    settings.customCss.trim(),
+    // Only the owner's half is treated: everything above it is written by this
+    // codebase out of schema-cleaned values, so passing it through as well
+    // would be a no-op that reads like a doubt.
+    inlineCss(settings.customCss.trim()),
   ]
     .filter(Boolean)
     .join("\n");
 
-  const js = settings.customJs.trim();
+  const js = inlineJs(settings.customJs.trim());
 
   return (
     <>

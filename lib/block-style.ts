@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { readableInk, tint } from "@/lib/color";
+import { familyToken } from "@/lib/fonts-catalogue";
 import { imageSrc, type BandTheme } from "@/lib/page-sections";
 import {
   DEVICE_MAX,
@@ -176,7 +177,7 @@ export function typographyCss(s: BlockStyle): CSSProperties {
   // Named family first, then the page's own, then something that always
   // exists — a face whose file has not arrived must land on a real fallback
   // rather than on nothing.
-  if (s.fontFamily) css.fontFamily = `"${s.fontFamily}", var(--font-body), system-ui, sans-serif`;
+  if (s.fontFamily) css.fontFamily = `${familyToken(s.fontFamily)}, var(--font-body), system-ui, sans-serif`;
   if (s.size !== null) css.fontSize = `${s.size}px`;
   if (s.lineHeight !== null) css.lineHeight = s.lineHeight;
   if (s.letterSpacing !== null) css.letterSpacing = `${s.letterSpacing}px`;
