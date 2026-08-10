@@ -59,6 +59,8 @@ import {
 } from "@/lib/blocks";
 import { DeviceSwitch } from "@/components/admin/device-switch";
 import { BlockTree } from "@/components/admin/block-tree";
+import { TemplateLibrary } from "@/components/admin/template-library";
+import { templateSource, type Template } from "@/lib/templates";
 import { PositionPicker } from "@/components/admin/position-picker";
 import { SectionSettings, type SectionEdit } from "@/components/admin/section-settings";
 import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/lib/undo";
@@ -352,6 +354,31 @@ export function BlockEditor({
     }
   }
 
+  // The library popup, and whether the export has just been copied.
+  const [library, setLibrary] = useState(false);
+  const [exported, setExported] = useState(false);
+
+  /**
+   * Drop a template at the same place a palette click would land a row.
+   *
+   * Fresh ids first — two copies of one template on one page must not share
+   * them — then one insert per block, so a template is nothing the tree has to
+   * know about: after this it is ordinary blocks, exactly as if each had been
+   * placed by hand.
+   */
+  function insertTemplate(t: Template) {
+    const fresh = t.blocks.map(reid);
+    const at = addTarget(blocks, selectedId, "row");
+    const start = at.zone === "root" ? at.index : blocks.length;
+    let next = blocks;
+    fresh.forEach((b, i) => {
+      next = insertBlock(next, b, { zone: "root", index: start + i });
+    });
+    commit(next);
+    if (fresh[0]) setSelectedId(fresh[0].id);
+    setLibrary(false);
+  }
+
   function add(type: BlockType, preset?: Record<string, unknown>) {
     // Merged over the type's own defaults rather than replacing them — a
     // preset says what is different about this way of adding it, not
@@ -434,6 +461,12 @@ export function BlockEditor({
       {/* Rendered at the editor's root and portalled to the body: a menu
           inside a scrolling pane scrolls away from what it belongs to. */}
       <ContextMenu state={menu} onClose={() => setMenu(null)} />
+      <TemplateLibrary
+        open={library}
+        theme={theme}
+        onClose={() => setLibrary(false)}
+        onInsert={insertTemplate}
+      />
       <header className="flex items-center gap-3 border-b border-border bg-surface px-4 py-2.5">
         <strong className="font-display text-sm">Builder</strong>
         <span className="text-sm text-muted">{title}</span>
@@ -447,6 +480,21 @@ export function BlockEditor({
           </IconBtn>
           <IconBtn label="Redo (⇧⌘Z)" onClick={stepForward} disabled={history.future.length === 0}>
             ↷
+          </IconBtn>
+          {/* The other half of the library: this section, read back out as a
+              file for lib/templates/. The export runs the same normalize the
+              save does, so what lands in the file is what a reload would show. */}
+          <IconBtn
+            label={exported ? "Copied — drop it into lib/templates/" : "Copy this section as a template file"}
+            onClick={() => {
+              void navigator.clipboard.writeText(templateSource(title, blocks)).then(() => {
+                setExported(true);
+                setTimeout(() => setExported(false), 2000);
+              });
+            }}
+            disabled={blocks.length === 0}
+          >
+            {exported ? "✓" : "⇪"}
           </IconBtn>
         </div>
         <span className="text-xs text-muted">
@@ -511,6 +559,16 @@ export function BlockEditor({
               aria-label="Search blocks"
               className="w-full rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs outline-none focus:border-primary"
             />
+            {/* The shelf. A whole design at once, where single blocks are
+                added — because "start me off" and "add one more thing" are
+                the same gesture at different sizes. */}
+            <button
+              type="button"
+              onClick={() => setLibrary(true)}
+              className="mt-2 w-full rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted transition-colors hover:border-primary hover:text-primary"
+            >
+              Add from library
+            </button>
           </div>
           {groupedPalette(search, owner).map((g) => (
             <div key={g.title} className="flex flex-col gap-1.5 px-2.5 pb-3 pt-2.5">
