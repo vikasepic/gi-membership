@@ -2,6 +2,7 @@
 
 import { MediaButton } from "@/components/admin/media-modal";
 import { copyToClipboard, readClipboard, onClipboardChange, type Clip } from "@/lib/clipboard";
+import { ContextMenu, menuAt, type MenuState } from "@/components/admin/context-menu";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -154,6 +155,64 @@ export function BlockEditor({
     sync();
     return onClipboardChange(sync);
   }, []);
+
+  const [menu, setMenu] = useState<MenuState>(null);
+
+  /**
+   * Everything you can do to a block, at the cursor.
+   *
+   * The same four things the toolbar offers. A menu that is a subset of the
+   * buttons beside it is a menu people stop opening; one that matches is one
+   * they can rely on.
+   */
+  const blockMenu = (e: React.MouseEvent, block: Block) => {
+    const pasteAfter = () => {
+      if (clip?.kind !== "block") return;
+      const found = findBlock(blocks, block.id);
+      if (!found) return;
+      const copy = reid(normalizeBlocks([clip.data])[0]);
+      if (!copy) return;
+      const target =
+        found.parentId === null
+          ? ({ zone: "root", index: found.index + 1 } as const)
+          : ({
+              zone: "column",
+              rowId: found.parentId,
+              column: found.column ?? 0,
+              index: found.index + 1,
+            } as const);
+      commit(insertBlock(blocks, copy, target));
+      setSelectedId(copy.id);
+    };
+
+    setMenu(
+      menuAt(e, [
+        {
+          label: "Copy",
+          onSelect: () =>
+            copyToClipboard({
+              kind: "block",
+              label: BLOCK_LABEL[block.type] ?? block.type,
+              data: block,
+            }),
+        },
+        {
+          label: clip?.kind === "block" ? `Paste ${clip.label} after` : "Paste",
+          onSelect: pasteAfter,
+          disabled: clip?.kind === "block" ? undefined : "Nothing copied yet",
+        },
+        { label: "Duplicate", onSelect: () => commit(duplicateBlock(blocks, block.id)) },
+        {
+          label: "Delete",
+          danger: true,
+          onSelect: () => {
+            commit(removeBlock(blocks, block.id));
+            setSelectedId(null);
+          },
+        },
+      ]),
+    );
+  };
 
   const [families, setFamilies] = useState<string[]>([]);
   useEffect(() => {
@@ -312,6 +371,9 @@ export function BlockEditor({
     <Dragging.Provider value={dragging}>
     {dragging.label && <DragTile label={dragging.label} type={dragging.type} />}
     <div className="fixed inset-0 z-[100] flex flex-col bg-surface-2">
+      {/* Rendered at the editor's root and portalled to the body: a menu
+          inside a scrolling pane scrolls away from what it belongs to. */}
+      <ContextMenu state={menu} onClose={() => setMenu(null)} />
       <header className="flex items-center gap-3 border-b border-border bg-surface px-4 py-2.5">
         <strong className="font-display text-sm">Builder</strong>
         <span className="text-sm text-muted">{title}</span>
@@ -368,12 +430,15 @@ export function BlockEditor({
             ))}
           </div>
 
+          {/* Rendered once, at the editor's root: a menu inside a scrolling
+              pane is a menu that scrolls away from the thing it belongs to. */}
           {left === "structure" ? (
             <BlockTree
               blocks={blocks}
               selectedId={selectedId}
               device={device}
               onSelectSection={section ? () => setSelectedId(null) : undefined}
+              onContext={blockMenu}
               onSelect={(id) => {
                 setSelectedId(id);
                 // A column has only a Style tab; landing on Content would show
@@ -456,6 +521,7 @@ export function BlockEditor({
               selectedId={selectedId}
               dropAt={dropAt}
               setDropAt={setDropAt}
+              onContext={blockMenu}
               onSelect={(id) => {
                 setSelectedId(id);
                 setTab("content");
@@ -747,6 +813,7 @@ function Zone({
   dropAt,
   setDropAt,
   onSelect,
+  onContext,
   onDrop,
   onDragStart,
   onDragEnd,
@@ -762,6 +829,7 @@ function Zone({
   dropAt: string | null;
   setDropAt: (v: string | null) => void;
   onSelect: (id: string) => void;
+  onContext?: (e: React.MouseEvent, block: Block) => void;
   onDrop: (t: DropTarget) => void;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
@@ -819,6 +887,7 @@ function Zone({
           dropAt={dropAt}
           setDropAt={setDropAt}
           onSelect={onSelect}
+          onContext={onContext}
           onDrop={onDrop}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
@@ -851,6 +920,7 @@ function CanvasBlock({
   dropAt,
   setDropAt,
   onSelect,
+  onContext,
   onDrop,
   onDragStart,
   onDragEnd,
@@ -865,6 +935,7 @@ function CanvasBlock({
   dropAt: string | null;
   setDropAt: (v: string | null) => void;
   onSelect: (id: string) => void;
+  onContext?: (e: React.MouseEvent, block: Block) => void;
   onDrop: (t: DropTarget) => void;
   onDragStart: (id: string) => void;
   onPatch: (id: string, next: Block) => void;
@@ -899,6 +970,13 @@ function CanvasBlock({
       onClick={(e) => {
         e.stopPropagation();
         onSelect(block.id);
+      }}
+      onContextMenu={(e) => {
+        // Select first: every item on the menu acts on the selection, and
+        // right-clicking a block you have not selected should still act on
+        // the one under the cursor.
+        onSelect(block.id);
+        onContext?.(e, block);
       }}
     >
       {dropAt === `${zoneId}:${index}` && <DropLine label={dragLabel} />}
@@ -1027,6 +1105,7 @@ function RowColumns({
   dropAt: string | null;
   setDropAt: (v: string | null) => void;
   onSelect: (id: string) => void;
+  onContext?: (e: React.MouseEvent, block: Block) => void;
   onDrop: (t: DropTarget) => void;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;

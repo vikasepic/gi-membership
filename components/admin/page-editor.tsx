@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { saveSectionAction } from "@/app/admin/pages/actions";
 import { usePresence, PresenceNote } from "@/components/admin/presence";
 import { copyToClipboard, readClipboard, onClipboardChange, type Clip } from "@/lib/clipboard";
+import { sectionClip, pastedSection } from "@/lib/section-clip";
 import { CopyPage } from "@/components/admin/copy-page";
+import { ContextMenu, menuAt, type MenuState } from "@/components/admin/context-menu";
 import type { PageSource } from "@/lib/pages";
 import { SectionBand, type PageMoney } from "@/components/page/sales-page";
 import {
@@ -20,7 +22,7 @@ import { DeviceSwitch } from "@/components/admin/device-switch";
 import { blocksForSection, isUnconverted } from "@/lib/section-to-blocks";
 import { starterBlocks } from "@/lib/page-starter";
 import { warnNotBuyable } from "@/lib/page-buyable";
-import { DEVICE_CANVAS, type Block, type Device } from "@/lib/blocks";
+import { DEVICE_CANVAS, normalizeBlocks, reid, type Block, type Device } from "@/lib/blocks";
 import type { OwnerType } from "@/lib/pages";
 
 // The page editor.
@@ -168,6 +170,25 @@ export function PageEditor({
     return onClipboardChange(sync);
   }, []);
 
+  const [menu, setMenu] = useState<MenuState>(null);
+
+  /** The same three things, whether you right-clicked the rail or the bar. */
+  const sectionMenu = (e: React.MouseEvent, row: SectionRow) =>
+    setMenu(
+      menuAt(e, [
+        { label: "Copy this section", onSelect: () => copyToClipboard(sectionClip(row)) },
+        {
+          label: clip?.kind === "section" ? `Paste ${clip.label} here` : "Paste section",
+          onSelect: () => clip && patch(row.sectionKey, pastedSection(clip, row)),
+          disabled: clip?.kind === "section" ? undefined : "Nothing copied yet",
+        },
+        {
+          label: row.enabled ? "Hide this section" : "Show this section",
+          onSelect: () => patch(row.sectionKey, { enabled: !row.enabled }),
+        },
+      ]),
+    );
+
   return (
     <div className="flex flex-col gap-4">
       {notBuyable && (
@@ -181,6 +202,7 @@ export function PageEditor({
           </p>
         </div>
       )}
+      <ContextMenu state={menu} onClose={() => setMenu(null)} />
       <div className="sticky top-2 z-30 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface/95 px-3 py-2 backdrop-blur">
         <button
           type="button"
@@ -237,6 +259,7 @@ export function PageEditor({
         <SectionRail
           rows={rows}
           openKey={openKey}
+          onContext={sectionMenu}
           dirty={dirty}
           savedAt={savedAt}
           onSelect={setOpenKey}
@@ -250,6 +273,7 @@ export function PageEditor({
             onChange={(next) => patch(openRow.sectionKey, next)}
             device={device}
             clip={clip}
+            onContext={sectionMenu}
           />
         ) : (
           <p className="p-6 text-sm text-muted">Pick a section on the left.</p>
@@ -274,6 +298,7 @@ function SectionRail({
   savedAt,
   onSelect,
   onToggle,
+  onContext,
 }: {
   rows: SectionRow[];
   openKey: string | null;
@@ -281,6 +306,8 @@ function SectionRail({
   savedAt: number | null;
   onSelect: (key: string) => void;
   onToggle: (key: string, enabled: boolean) => void;
+  /** Right-click anywhere on a row, not only on its name. */
+  onContext: (e: React.MouseEvent, row: SectionRow) => void;
 }) {
   return (
     <nav className="flex flex-col border-b border-border lg:border-b-0 lg:border-r" aria-label="Sections">
@@ -295,6 +322,7 @@ function SectionRail({
         return (
           <div
             key={row.sectionKey}
+            onContextMenu={(e) => onContext(e, row)}
             className={`flex items-center gap-2.5 border-b border-border/60 px-3 py-2.5 text-sm last:border-b-0 ${
               on ? "bg-surface-2 shadow-[inset_2px_0_0_var(--primary)]" : "hover:bg-surface-2"
             }`}
@@ -364,12 +392,14 @@ function SectionPanel({
   onChange,
   device,
   clip,
+  onContext,
 }: {
   row: SectionRow;
   money: PageMoney;
   onChange: (next: Partial<SectionRow>) => void;
   device: Device;
   clip: Clip | null;
+  onContext: (e: React.MouseEvent, row: SectionRow) => void;
 }) {
   const def = sectionDef(row.sectionKey)!;
   const content = useMemo<Draft>(
@@ -387,7 +417,10 @@ function SectionPanel({
       {/* One bar: what this section is for, and the way in. The old panel spent
           a 420px column on a purpose sentence, a block count, a hint about
           dragging, a note that changes are kept as you type, and one button. */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-surface-2 px-4 py-2.5">
+      <div
+        onContextMenu={(e) => onContext(e, row)}
+        className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border bg-surface-2 px-4 py-2.5"
+      >
         <b className="text-sm">{def.title}</b>
         {/* Which step of the framework this band is. It is real information and
             it does not belong on twelve rows — "1 + 2, 3 … 9, 9, +, 10, +"
@@ -513,18 +546,6 @@ function BlockCanvasField({
 }
 
 
-/**
- * Copy this section, or paste one over it.
- *
- * A section is its content and its presentation — the band, the accent, the
- * background, the blocks. All of it travels, because a section pasted without
- * its band is a section that looks like a different one.
- *
- * What does NOT travel is which section it is. Pasting a Problem into an
- * Authority slot would leave a band whose name and purpose no longer describe
- * what is in it, so a paste is refused across kinds and says why. The paste
- * button simply does not appear otherwise.
- */
 function SectionClip({
   row,
   clip,
@@ -535,55 +556,29 @@ function SectionClip({
   onChange: (next: Partial<SectionRow>) => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const pasteable = clip?.kind === "section" && clip.sectionKey === row.sectionKey;
 
   return (
     <span className="flex shrink-0 items-center gap-2">
       <button
         type="button"
         onClick={() => {
-          copyToClipboard({
-            kind: "section",
-            label: sectionDef(row.sectionKey)?.title ?? row.sectionKey,
-            sectionKey: row.sectionKey,
-            data: {
-              content: row.content,
-              style: row.style,
-              accent: row.accent,
-              variant: row.variant,
-              background: row.background,
-              cssId: row.cssId,
-              cssClass: row.cssClass,
-            },
-          });
+          copyToClipboard(sectionClip(row));
           setCopied(true);
           window.setTimeout(() => setCopied(false), 2500);
         }}
         className="rounded-md border border-border px-2 py-1 text-[0.66rem] text-muted transition-colors hover:border-fg hover:text-fg"
-        title="Copy this section — paste it into the same section on another page"
+        title="Copy this section — paste it into any section on any page"
       >
         {copied ? "Copied" : "Copy"}
       </button>
-      {pasteable && (
+      {clip?.kind === "section" && (
         <button
           type="button"
-          onClick={() => {
-            const d = clip.data as Partial<SectionRow>;
-            // Nothing is written until Save, like every other edit here.
-            onChange({
-              content: d.content,
-              style: d.style,
-              accent: d.accent ?? null,
-              variant: d.variant ?? null,
-              background: d.background,
-              cssId: d.cssId ?? null,
-              cssClass: d.cssClass ?? null,
-            });
-          }}
+          onClick={() => onChange(pastedSection(clip, row))}
           className="rounded-md border border-primary/50 px-2 py-1 text-[0.66rem] text-primary transition-colors hover:bg-primary/10"
-          title="Replace this section with the copied one"
+          title={`Replace this section with the copied ${clip.label}`}
         >
-          Paste
+          Paste {clip.sectionKey === row.sectionKey ? "" : clip.label}
         </button>
       )}
     </span>

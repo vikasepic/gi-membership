@@ -26,11 +26,14 @@ export function BlockTree({
   device,
   onSelect,
   onSelectSection,
+  onContext,
 }: {
   blocks: Block[];
   selectedId: string | null;
   device: Device;
   onSelect: (id: string) => void;
+  /** Right-click a row for the same menu the canvas gives. */
+  onContext?: (e: React.MouseEvent, block: Block) => void;
   /** Deselect, which is how the band's own settings are reached. */
   onSelectSection?: () => void;
 }) {
@@ -61,7 +64,15 @@ export function BlockTree({
         <li className="px-3 py-2 text-xs text-muted">Nothing in this section yet.</li>
       )}
       {blocks.map((b) => (
-        <Row key={b.id} block={b} depth={0} selectedId={selectedId} device={device} onSelect={onSelect} />
+        <Row
+          key={b.id}
+          block={b}
+          depth={0}
+          selectedId={selectedId}
+          device={device}
+          onSelect={onSelect}
+          onContext={onContext}
+        />
       ))}
     </ul>
   );
@@ -73,12 +84,14 @@ function Row({
   selectedId,
   device,
   onSelect,
+  onContext,
 }: {
   block: Block;
   depth: number;
   selectedId: string | null;
   device: Device;
   onSelect: (id: string) => void;
+  onContext?: (e: React.MouseEvent, block: Block) => void;
 }) {
   const selected = selectedId === block.id;
   const hidden = hiddenAt(block, device);
@@ -90,6 +103,10 @@ function Row({
       <button
         type="button"
         onClick={() => onSelect(block.id)}
+        onContextMenu={(e) => {
+          onSelect(block.id);
+          onContext?.(e, block);
+        }}
         style={{ paddingLeft: 10 + depth * 16 }}
         className={`flex w-full items-center gap-2 border-b border-border py-1.5 pr-2 text-left text-xs ${
           selected ? "bg-primary/12 text-primary" : "text-fg hover:bg-surface-2"
@@ -141,6 +158,7 @@ function Row({
                 selectedId={selectedId}
                 device={device}
                 onSelect={onSelect}
+                onContext={onContext}
               />
             ))
           )}
