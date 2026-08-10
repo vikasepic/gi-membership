@@ -481,11 +481,11 @@ describe("the card layout chooser", () => {
     click(document.querySelector("[data-block]")!);
     const panel = document.querySelectorAll("aside")[1]!;
     return [...panel.querySelectorAll("button")].filter((x) =>
-      ["Tiles", "Rows", "Keep what I have"].includes(label(x)),
+      ["Tiles", "Rows"].includes(label(x)),
     );
   };
 
-  it("offers both looks and a way to keep neither, on the Content tab", () => {
+  it("offers both looks on the Content tab, and no third that does nothing", () => {
     // Rendered, not asserted from the table: a chooser nobody can reach is a
     // table with a test passing over it. The tab is clicked rather than assumed
     // to be the default, or a change of default makes the name a lie.
@@ -493,17 +493,44 @@ describe("the card layout chooser", () => {
     click(document.querySelector("[data-block]")!);
     const tab = [...document.querySelectorAll("aside button")].find((b) => b.textContent === "content")!;
     click(tab);
-    expect(open().map(label)).toEqual(["Tiles", "Rows", "Keep what I have"]);
+    expect(open().map(label)).toEqual(["Tiles", "Rows"]);
+    // The third button used to be "Keep what I have", whose own tooltip read
+    // "Changes nothing". What replaced it is a word saying which one you are on.
+    expect(document.querySelectorAll("aside")[1]!.textContent).not.toContain("Keep what I have");
   });
 
-  it("leaves Undo alone when you press the one that changes nothing", () => {
-    // Its hint says "Changes nothing." It committed the block by identity, so
-    // it added a step to undo — and cleared the redo stack while it was there.
-    mount([cards()]);
+  it("says which layout the block is already on", () => {
+    // The question the third button was badly answering. A block nobody has
+    // adjusted matches neither template, and saying "Custom" is information —
+    // the panel could not answer this at all before.
+    const editor = mount([cards()]);
+    click(document.querySelector("[data-block]")!);
+    expect(document.querySelectorAll("aside")[1]!.textContent).toContain("Custom");
+    click(open()[0]!);
+    expect(editor.blocks[0].props.columns).toBe(4);
+    expect(document.querySelectorAll("aside")[1]!.textContent).toContain("Tiles");
+  });
+
+  it("leaves Undo alone when you press the layout you are already on", () => {
+    // Better than the test it replaces, which pressed a button that could never
+    // change anything. This presses a REAL template twice: the second press
+    // must not add a step to undo, or a chooser people press to compare looks
+    // fills the history with layouts nobody ever saw.
+    const editor = mount([cards()]);
     const undoBtn = () =>
       [...document.querySelectorAll("button")].find((b) => b.getAttribute("aria-label")?.startsWith("Undo"))!;
-    click(open()[2]!);
-    expect(undoBtn().hasAttribute("disabled")).toBe(true);
+    click(open()[0]!);
+    expect(editor.blocks[0].props.columns).toBe(4);
+    click(undoBtn());
+    click(undoBtn());
+    const steps = () => undoBtn().hasAttribute("disabled");
+    expect(steps()).toBe(true);
+    click(open()[0]!);
+    click(open()[0]!);
+    click(undoBtn());
+    // One press back is the block before the template, not between two
+    // identical applications of it.
+    expect(editor.blocks[0].props.columns).toBe(3);
   });
 
   it("applies a look without touching a word on the cards", () => {

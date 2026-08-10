@@ -938,9 +938,22 @@ function IconTile({
   const src = picture ?? (/^https?:\/\//i.test(raw.trim()) ? raw.trim() : null);
 
   const box = num(p.iconBox, 44);
-  const size = num(p.iconSize, 22);
+  // An icon sits INSIDE its tile with air around it; a picture IS the tile.
+  // Drawing an upload at the icon's 22px inside a 44px box is what made an
+  // uploaded illustration look like a stamp in the corner of a coloured
+  // square. An explicit size still wins, for a picture used as an icon.
+  const size = p.iconSize != null ? num(p.iconSize, 22) : media === "image" ? box : 22;
   const shape = str(p.iconShape, "rounded");
-  const fill = str(p.iconBg) || colors.accent;
+  // A picture brings its own background; an icon does not.
+  //
+  // The tile's fill is what gives a monochrome SVG presence — without it a
+  // line drawing floats in the card. Behind an uploaded PNG it is a coloured
+  // square peeking out around the edges of someone's artwork, which is what
+  // it looked like: a terracotta tile behind a pink illustration.
+  //
+  // So the default follows the source, and an explicit iconBg still wins for
+  // anyone who does want a framed picture.
+  const fill = str(p.iconBg) || (media === "image" ? "transparent" : colors.accent);
   return (
     <span
       aria-hidden
@@ -956,8 +969,15 @@ function IconTile({
         width: box,
         height: box,
         borderRadius: shape === "circle" ? 999 : shape === "square" ? 0 : Math.round(box / 4),
+        // Only for a picture: a round tile holding a square upload is a square
+        // upload without it. An inline SVG is already drawn to fit, and adding
+        // this for icons would change the markup of every card that exists —
+        // which the golden tests caught the moment it did.
+        ...(media === "image" ? { overflow: "hidden" as const } : {}),
         background: fill,
-        color: str(p.iconColor) || readableOn(fill),
+        // readableOn cannot answer "what reads on transparent", and an image
+        // does not inherit colour anyway — so only ask when there is a fill.
+        color: str(p.iconColor) || (fill === "transparent" ? undefined : readableOn(fill)),
       }}
     >
       {src ? (

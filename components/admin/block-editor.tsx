@@ -12,6 +12,7 @@ import {
   BLOCK_LABEL,
   BLOCK_ICON,
   CARD_TEMPLATES,
+  matchedCardTemplate,
   columnControls,
   applyCardTemplate,
   groupedPalette,
@@ -729,12 +730,13 @@ export function BlockEditor({
               <div className="flex flex-col overflow-y-auto">
                 {tab === "content" && !column && selected.type === "cards" && (
                   <CardTemplates
+                    block={selected}
                     device={device}
                     onApply={(id) => {
-                      // "Keep what I have" returns the block by identity, and
-                      // committing that anyway pushed an undo step onto a button
-                      // whose hint reads "Changes nothing" — and wiped the redo
-                      // stack while it was there.
+                      // Pressing the template you are already on returns the
+                      // block by identity. Committing that anyway would push an
+                      // undo step for a press that changed nothing, and wipe the
+                      // redo stack while it was there.
                       const next = applyCardTemplate(selected, id);
                       if (next === selected) return;
                       // Its own undo key, so one press is one step back — and a
@@ -1334,10 +1336,27 @@ function DragTile({ label, type }: { label: string; type: BlockType | null }) {
  * A template only ever writes presentation, so there is no confirmation step:
  * the copy on the cards cannot be what it changes.
  */
-function CardTemplates({ device, onApply }: { device: Device; onApply: (id: string) => void }) {
+function CardTemplates({
+  block,
+  device,
+  onApply,
+}: {
+  block: Block;
+  device: Device;
+  onApply: (id: string) => void;
+}) {
+  // Which one you are on, rather than a third button that does nothing. A
+  // block someone has adjusted by hand matches neither, and saying so is
+  // information — "Custom" answers a question the panel could not answer at all.
+  const current = matchedCardTemplate(block);
   return (
     <div className="flex flex-col gap-1.5 border-b border-border px-3 py-2.5">
-      <span className="text-[0.7rem] font-semibold text-fg">Layout</span>
+      <span className="flex items-baseline justify-between gap-2 text-[0.7rem] font-semibold text-fg">
+        Layout
+        <span className="font-normal text-[0.6rem] text-muted">
+          {current ? CARD_TEMPLATES.find((t) => t.id === current)?.label : "Custom"}
+        </span>
+      </span>
       {/* A full-width chooser with previews reads like it applies to the width
           on screen. Only Across differs per device; the rest is one decision
           for the block, and this is where that is said rather than found out. */}
@@ -1351,7 +1370,12 @@ function CardTemplates({ device, onApply }: { device: Device; onApply: (id: stri
             type="button"
             title={t.hint}
             onClick={() => onApply(t.id)}
-            className="flex flex-1 flex-col items-center gap-1 rounded-md border border-border p-1.5 text-[0.6rem] leading-tight text-muted hover:border-primary hover:text-fg"
+            aria-pressed={current === t.id}
+            className={`flex flex-1 flex-col items-center gap-1 rounded-md border p-1.5 text-[0.6rem] leading-tight hover:border-primary hover:text-fg ${
+              current === t.id
+                ? "border-primary bg-primary/8 text-fg"
+                : "border-border text-muted"
+            }`}
           >
             <TemplatePreview id={t.id} />
             <span className="text-center">{t.label}</span>

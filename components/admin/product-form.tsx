@@ -706,11 +706,26 @@ function CheckoutBullets({ initial }: { initial: string[] }) {
       label="Reassurance list"
       hint={
         lines.length === 0
-          ? "Empty — the checkout shows its standard lines: card safety, the refund window, access on payment, and your reply time if Settings gives one."
+          ? "What the checkout says beside the card fields today."
           : "These replace all of those. The trial warning stays either way."
       }
     >
       <div className="flex flex-col gap-2">
+        {/* The standard lines, shown rather than described.
+            This control read as a label with a link: "empty" means "use the
+            standard ones", so no input existed until a button was pressed, and
+            nothing said what pressing it would replace. A field with nothing in
+            it looks broken rather than defaulted. */}
+        {lines.length === 0 && (
+          <ul className="flex list-disc flex-col gap-1 rounded-lg border border-dashed border-border py-2 pl-8 pr-3 text-xs text-muted">
+            <li>Your card details go straight to Stripe. They never reach our servers.</li>
+            <li>
+              The refund window <span className="text-[0.68rem]">(from Settings &rarr; Legal)</span>
+            </li>
+            <li>Access opens the moment the payment clears &mdash; nothing to wait for.</li>
+            <li>Your reply-time promise <span className="text-[0.68rem]">(only if Settings gives one)</span></li>
+          </ul>
+        )}
         {lines.map((line, i) => (
           <span key={i} className="flex items-center gap-2">
             <input
@@ -737,7 +752,7 @@ function CheckoutBullets({ initial }: { initial: string[] }) {
           onClick={() => setLines((ls) => [...ls, ""])}
           className="w-fit rounded-lg border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary"
         >
-          {lines.length === 0 ? "Write your own instead" : "Add a line"}
+          {lines.length === 0 ? "Replace these" : "Add a line"}
         </button>
         {lines.length > 0 && (
           <button

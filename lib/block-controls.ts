@@ -402,12 +402,41 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         hint: "Which of the two fields on each card is shown in the tile.",
         options: [["icon", "Icon"], ["image", "Image"], ["none", "None"]],
       },
-      { kind: "text", key: "title", label: "Card title", hint: "Only shown by the one-card skin — the small heading above the rows." },
-      { kind: "textarea", key: "note", label: "Closing note", rows: 3, hint: "A panel under the rows, in the same card." },
+      // Shown only on the skin that renders them. Every one of these fields was
+      // visible on all five skins with a hint explaining when it applied, which
+      // is a note asking the reader to do the filtering the panel should do —
+      // and on four of the five they stored text nothing ever drew.
+      {
+        kind: "text",
+        key: "title",
+        label: "Card title",
+        hint: "The small heading above the rows.",
+        when: isOneCard,
+      },
+      {
+        kind: "textarea",
+        key: "note",
+        label: "Closing note",
+        rows: 3,
+        hint: "A panel under the rows, in the same card.",
+        when: isOneCard,
+      },
       // Per device: three across is a grid on a laptop and three slivers on a
       // phone, and the container query underneath only knows how wide the band
       // is, not which screen is reading it.
-      { kind: "number", key: "columns", label: "Across", min: 1, max: 4, step: 1, responsive: true },
+      // Hidden on the one-card skin, which stacks its rows inside a single box
+      // by design and has never read this. It was a slider that moved and
+      // changed nothing.
+      {
+        kind: "number",
+        key: "columns",
+        label: "Across",
+        min: 1,
+        max: 4,
+        step: 1,
+        responsive: true,
+        when: (b) => !isOneCard(b),
+      },
       {
         kind: "toggle",
         key: "numbered",
@@ -666,6 +695,19 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
 };
 
 // --- Advanced, identical for every block ------------------------------------
+
+/**
+ * The one-card skin renders its items as compact rows inside a single box.
+ *
+ * It reads a title and a closing note that the other four skins ignore, and it
+ * ignores the column count that the other four read. Naming the question once
+ * keeps the two halves of that from drifting apart. A declaration rather than a
+ * const so it can be used above where it is written, beside the controls it
+ * describes.
+ */
+function isOneCard(b: Block): boolean {
+  return (typeof b.props.skin === "string" ? b.props.skin : "boxed") === "list";
+}
 
 const bgIs = (t: string) => (b: Block) => b.style.background.type === t;
 const colIs = <K extends keyof ColumnLayout>(key: K, v: ColumnLayout[K]) => (b: Block) =>
@@ -1093,15 +1135,30 @@ export const CARD_TEMPLATES: CardTemplate[] = [
       numberStyle: "inline",
     },
   },
-  {
-    // The way out. A row of two previews with no third choice reads as "pick
-    // one", and there has to be a way to look at both and keep what is there.
-    id: "keep",
-    label: "Keep what I have",
-    hint: "Changes nothing.",
-    props: {},
-  },
 ];
+
+/**
+ * Which template this block currently matches, or null for none.
+ *
+ * The picker had a third button labelled "Keep what I have" whose own tooltip
+ * read "Changes nothing" — a control that announces its own uselessness, sitting
+ * beside two that do something. It was there because two buttons with neither
+ * marked reads as "you must pick one".
+ *
+ * Saying which one you are ON answers that properly: nothing to press, and the
+ * question "what am I looking at" gets an answer it never had. Null is a real
+ * state — a block someone has adjusted by hand is on neither template, and
+ * "Custom" is information rather than an instruction.
+ */
+export function matchedCardTemplate(block: Block): string | null {
+  for (const t of CARD_TEMPLATES) {
+    const same = Object.entries(t.props).every(
+      ([k, v]) => JSON.stringify(block.props[k] ?? null) === JSON.stringify(v ?? null),
+    );
+    if (same) return t.id;
+  }
+  return null;
+}
 
 /**
  * Apply a template, or return the block untouched.

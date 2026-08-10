@@ -14,14 +14,18 @@ const ITEMS = [
 const filled = (over: Record<string, unknown> = {}): Block =>
   normalizeBlocks([{ id: "b1", type: "cards", props: { items: ITEMS, ...over } }])[0];
 
-const applied = CARD_TEMPLATES.filter((t) => Object.keys(t.props).length > 0);
+const applied = CARD_TEMPLATES;
 
 describe("what a card template is allowed to touch", () => {
-  it("checks every template but the one that is meant to do nothing", () => {
-    // `applied` filters on empty props, so a real template shipped with
-    // `props: {}` by mistake would be skipped by both tables below while the
-    // suite still read as "every template checked".
-    expect(CARD_TEMPLATES.filter((t) => !applied.includes(t)).map((t) => t.id)).toEqual(["keep"]);
+  it("has no template that does nothing", () => {
+    // There used to be one, labelled "Keep what I have", whose own tooltip read
+    // "Changes nothing" — a button announcing its own uselessness beside two
+    // that work. The picker says which template you are ON instead, so every
+    // entry in this table must now actually set something, or the tables below
+    // would silently skip it while reading as "every template checked".
+    for (const t of CARD_TEMPLATES) {
+      expect([t.id, Object.keys(t.props).length > 0]).toEqual([t.id, true]);
+    }
   });
 
   it.each(applied.map((t) => t.id))("leaves every card untouched: %s", (id) => {
