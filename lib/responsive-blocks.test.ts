@@ -111,10 +111,41 @@ describe("what survives a round trip through the database", () => {
 });
 
 describe("the CSS a block emits", () => {
-  it("hangs off a class derived from the block id", () => {
+  it("hangs off a class derived from the block id, written twice", () => {
+    // The element carries the class once; the rule names it twice. That is the
+    // whole of the specificity fix: 0-2-0 beats the site-wide `:root h1` rules
+    // (0-1-1) that are about to exist, without an !important anywhere.
     const b = heading();
     expect(blockClass(b)).toBe(`bk-${b.id}`);
-    expect(blockRules(b, paper)).toContain(`.bk-${b.id}{`);
+    expect(blockRules(b, paper)).toContain(`.bk-${b.id}.bk-${b.id}{`);
+  });
+
+  it("changes nothing but the selector — every declaration is where it was", () => {
+    // The doubling must be invisible. This block exercises every emitter that
+    // takes the selector: the desktop rule, both media queries, the mobile
+    // padding cap, the row's column rules and the block's own custom CSS. Undo
+    // the doubling textually and what is left is what the single class emitted,
+    // captured before the change.
+    let b = newBlock("row", { props: { widths: [60, 40], gap: 24 } });
+    b.id = "cap2";
+    b = setStyleAt(b, "desktop", { padding: { t: 0, r: 160, b: 0, l: 160, u: "px", link: false } });
+    b = setStyleAt(b, "tablet", { textAlign: "center" });
+    b = setStyleAt(b, "mobile", { transform: "uppercase" });
+    b = { ...b, style: { ...b.style, customCss: "selector h2 { color: red }" } };
+
+    const collapsed = blockRules(b, paper).replaceAll(".bk-cap2.bk-cap2", ".bk-cap2");
+    expect(collapsed).toBe(
+      ".bk-cap2{margin:0px 0px 16px 0px;padding:0px 160px 0px 160px;text-align:left;color:#16181f}" +
+        "@media (max-width:1023px){.bk-cap2{text-align:center}}" +
+        "@media (max-width:767px){.bk-cap2{text-transform:uppercase}}" +
+        "@media (max-width:767px){.bk-cap2{padding-left:min(160px,6vw);padding-right:min(160px,6vw)}}" +
+        ".bk-cap2 > [data-row]{display:flex;flex-wrap:wrap;gap:24px;align-items:stretch}" +
+        ".bk-cap2 > [data-row] > :nth-child(1){min-width:0;width:calc(60% - 9.6px);order:0}" +
+        ".bk-cap2 > [data-row] > :nth-child(2){min-width:0;width:calc(40% - 14.4px);order:1}" +
+        "@media (max-width:767px){.bk-cap2 > [data-row] > :nth-child(1){width:calc(100% - 0px)}" +
+        ".bk-cap2 > [data-row] > :nth-child(2){width:calc(100% - 0px)}}" +
+        ".bk-cap2 h2 { color: red }",
+    );
   });
 
   it("writes one media query per device that overrides something", () => {

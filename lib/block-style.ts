@@ -660,7 +660,11 @@ function deviceCss(block: Block, theme: BandTheme, s: BlockStyle): CSSProperties
  * inherits tablet" means once it is CSS.
  */
 export function blockRules(block: Block, theme: BandTheme): string {
-  const sel = `.${blockClass(block)}`;
+  // The class twice, on purpose — not a typo. One class is 0-1-0, which loses to
+  // any site-wide rule written as `:root h1` (0-1-1); repeating it makes the same
+  // selector 0-2-0 and puts the block back on top. It still matches exactly the
+  // elements one class matched, so nothing here reaches anything new.
+  const sel = `.${blockClass(block)}.${blockClass(block)}`;
   const out: string[] = [];
   const desktop = declarations(deviceCss(block, theme, block.style));
   if (desktop) out.push(`${sel}{${desktop}}`);
