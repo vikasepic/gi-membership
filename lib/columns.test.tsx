@@ -13,6 +13,7 @@ import {
   type Block,
 } from "@/lib/blocks";
 import { blockRules, rowLayout } from "@/lib/block-style";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Blocks } from "@/components/page/blocks";
 import { bandTheme } from "@/lib/page-sections";
@@ -357,5 +358,153 @@ describe("the container settings a row can be given", () => {
     const b = setPropsAt(asStored({ direction: "column" }), "mobile", { direction: "row" });
     const mobile = blockRules(b, paper).split("max-width:767px")[1] ?? "";
     expect(mobile).toContain("flex-direction:revert");
+  });
+});
+
+describe("a container laid out on a grid", () => {
+  const asStored = (props: Record<string, unknown>, cols = 3): Block =>
+    normalizeBlocks([{ id: "b1", type: "row", props, columns: Array.from({ length: cols }, () => []) }])[0];
+  const container = (b: Block) => blockRules(b, paper).match(/> \[data-row\]\{([^}]*)\}/)![1];
+  const grid = (props: Record<string, unknown> = {}, cols = 3) =>
+    asStored({ containerType: "grid", ...props }, cols);
+
+  it("leaves a flex container alone, whatever grid settings are stored beside it", () => {
+    // The whole additive claim in one line: every key this step added can be
+    // sitting in the row's props and the container still emits the four
+    // declarations it emitted before any of them existed.
+    expect(
+      container(
+        asStored({
+          widths: [60, 40],
+          gap: 24,
+          gridColumns: "200px 1fr",
+          gridRows: "1fr 1fr",
+          columnGap: 4,
+          rowGap: 60,
+          autoFlow: "column",
+          justifyItems: "center",
+        }, 2),
+      ),
+    ).toBe("display:flex;flex-wrap:wrap;gap:24px;align-items:stretch");
+  });
+
+  it("gives a stored row the container it already was", () => {
+    expect(asStored({}).props.containerType).toBe("flex");
+  });
+
+  it("lays the same columns out on equal tracks when nobody names any", () => {
+    expect(container(grid())).toContain("grid-template-columns:repeat(3, minmax(0,1fr))");
+    expect(container(grid())).toContain("display:grid");
+  });
+
+  it("reads a bare number as that many equal columns", () => {
+    expect(container(grid({ gridColumns: "4" }))).toContain("grid-template-columns:repeat(4, minmax(0,1fr))");
+  });
+
+  it("takes a track list as typed, in any case", () => {
+    // "200PX 1FR 400PX" is what people type. Rejecting it for its case would be
+    // a field that looks broken on the value the hint itself suggests.
+    const css = container(grid({ gridColumns: "200PX 1FR 400PX", gridRows: "auto minmax(80px,1fr)" }));
+    expect(css).toContain("grid-template-columns:200px 1fr 400px");
+    expect(css).toContain("grid-template-rows:auto minmax(80px,1fr)");
+  });
+
+  it("falls back to equal columns rather than writing a track list it cannot read", () => {
+    expect(container(grid({ gridColumns: "1fr banana" }))).toContain("grid-template-columns:repeat(3, minmax(0,1fr))");
+    // Rows have no equal-track answer — nothing named means the rows size
+    // themselves, which is also the right answer for a list that is not one.
+    expect(container(grid({ gridRows: "banana" }))).not.toContain("grid-template-rows");
+  });
+
+  it("will not let a hostile track string out of its own declaration", () => {
+    // Row props are raw jsonb. `declarations` strips `;{}` after this, which
+    // stops a value ending the rule and does nothing about a url() or an
+    // unbalanced paren swallowing the rest of the stylesheet — so the value is
+    // parsed rather than escaped, and anything unparseable is not written.
+    for (const hostile of [
+      "1fr} body{display:none",
+      "url(https://evil.test/x.css)",
+      "1fr;background:url(https://evil.test/beacon)",
+      "expression(alert(1))",
+      "repeat(9999,1fr)",
+      "minmax(0,url(x))",
+    ]) {
+      const css = blockRules(grid({ gridColumns: hostile }), paper);
+      expect(css, hostile).toContain("grid-template-columns:repeat(3, minmax(0,1fr))");
+      expect(css, hostile).not.toContain("evil.test");
+      expect(css, hostile).not.toContain("expression");
+      expect(css, hostile).not.toContain("9999");
+      expect(css, hostile).not.toContain("body{display:none");
+    }
+  });
+
+  it("caps how many tracks one container may name", () => {
+    // Ten thousand empty tracks is a page that never finishes laying out.
+    expect(container(grid({ gridColumns: "99" }))).toContain("repeat(12, minmax(0,1fr))");
+  });
+
+  it("gives the row gap and the column gap their own numbers", () => {
+    // Row first, then column — the order the `gap` shorthand takes them in.
+    expect(container(grid({ gap: 24, columnGap: 8, rowGap: 40 }))).toContain("gap:40px 8px");
+  });
+
+  it("falls back to the one Gap for whichever half was left unset", () => {
+    expect(container(grid({ gap: 16, columnGap: 48 }))).toContain("gap:16px 48px");
+  });
+
+  it("emits nothing for a flow and a justify nobody changed", () => {
+    const css = container(grid());
+    expect(css).not.toContain("grid-auto-flow");
+    expect(css).not.toContain("justify-items");
+  });
+
+  it("writes the flow and the justify once they are set", () => {
+    const css = container(grid({ autoFlow: "column", justifyItems: "center" }));
+    expect(css).toContain("grid-auto-flow:column");
+    expect(css).toContain("justify-items:center");
+  });
+
+  it("still falls into one column on a phone", () => {
+    // `stack` is the row's oldest promise and a grid does not get to break it.
+    const css = blockRules(grid({ gridColumns: "200px 1fr 400px" }), paper);
+    const mobile = css.split("max-width:767px")[1] ?? "";
+    expect(mobile).toContain("grid-template-columns:minmax(0,1fr)");
+  });
+
+  it("lets the track decide how wide a column is, instead of the flex arithmetic", () => {
+    // A grid's gap lives outside the tracks, so subtracting it here would make
+    // every column narrower than the track it sits in.
+    const l = rowLayout(grid({ gap: 24 }), "desktop");
+    expect(l.columns.map((c) => c.width)).toEqual(["auto", "auto", "auto"]);
+    expect(rowLayout(asStored({ gap: 24 }, 2), "desktop").columns[0].width).toBe("calc(50% - 12px)");
+  });
+
+  it("drops flex-direction, which does nothing to a grid", () => {
+    expect(container(grid({ direction: "column" }))).not.toContain("flex-direction");
+  });
+
+  it("survives a round trip through the database", () => {
+    const before = grid({
+      gridColumns: "200px 1fr",
+      gridRows: "auto",
+      columnGap: 8,
+      rowGap: 40,
+      autoFlow: "column",
+      justifyItems: "center",
+    });
+    expect(normalizeBlocks(JSON.parse(JSON.stringify([before])))[0]).toEqual(before);
+  });
+
+  it("keeps the grid outline out of the page and in the editor", () => {
+    // Scaffolding for whoever is building the page. A dashed box around every
+    // cell of a live sales page is a border nobody asked for.
+    const b = grid();
+    b.columns = [[newBlock("heading", { props: { text: "First" } })], [], []];
+    expect(blockRules(b, paper)).not.toContain("dashed");
+    expect(renderToStaticMarkup(<Blocks blocks={[b]} theme={paper} />)).not.toContain("dashed");
+    // The other half asserted on source: drawing it needs the whole builder
+    // mounted in a DOM, and this file has no jsdom. The claim worth pinning is
+    // that the outline exists on exactly one side of the line.
+    expect(readFileSync("components/admin/block-editor.tsx", "utf8")).toContain("outline-1 outline-dashed");
   });
 });

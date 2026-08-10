@@ -373,6 +373,53 @@ const FLEX_PLACEMENT = [
   "space-evenly",
 ] as const;
 const OVERFLOWS = ["visible", "hidden", "auto"] as const;
+const CONTAINERS = ["flex", "grid"] as const;
+
+/** Whether this container lays its columns out on a grid rather than a flex line. */
+export const rowIsGrid = (block: Block, device: Device = "desktop"): boolean =>
+  oneOf(propsFor(block, device).containerType, CONTAINERS, "flex") === "grid";
+
+/**
+ * A ceiling on how many tracks one container may name.
+ *
+ * Row props are raw jsonb, and `repeat(9999, …)` in a stylesheet is a browser
+ * laying out ten thousand empty tracks on a page nobody can then load.
+ */
+const MAX_GRID_TRACKS = 12;
+
+/** One track: a length, a keyword, or a minmax() of two of those. */
+const TRACK_SIZE = /^(auto|min-content|max-content|\d+(?:\.\d+)?(?:fr|px|%|em|rem|vw|vh))$/i;
+const TRACK_MINMAX = /^minmax\(([^,()]+),([^,()]+)\)$/i;
+
+/**
+ * A stored track list, or the fallback when it is not one.
+ *
+ * This is the only free-text value in the whole schema that becomes a CSS
+ * value, so it is parsed rather than escaped. `declarations` strips `;{}`
+ * afterwards, which stops a value ending the rule — it does not stop
+ * `url(...)`, an `expression(...)`, or an unbalanced paren swallowing the rest
+ * of the stylesheet. Anything that is not a list of recognised tracks is not a
+ * track list, and equal columns are a better answer than a broken page.
+ *
+ * A bare number is the common case — "3" means three equal columns — so it is
+ * read as a count rather than rejected as a length with no unit.
+ */
+export function gridTracks(raw: unknown, fallback: string): string {
+  // Commas may carry spaces: `minmax(100px, 1fr)` is one track, not two.
+  const text = typeof raw === "string" ? raw.trim().replace(/\s*,\s*/g, ",") : "";
+  if (!text) return fallback;
+  if (/^\d{1,2}$/.test(text)) {
+    return `repeat(${Math.min(Math.max(Number(text), 1), MAX_GRID_TRACKS)}, minmax(0,1fr))`;
+  }
+  const tokens = text.split(/\s+/);
+  const ok =
+    tokens.length <= MAX_GRID_TRACKS &&
+    tokens.every((t) => {
+      const mm = TRACK_MINMAX.exec(t);
+      return mm ? TRACK_SIZE.test(mm[1]) && TRACK_SIZE.test(mm[2]) : TRACK_SIZE.test(t);
+    });
+  return ok ? tokens.join(" ").toLowerCase() : fallback;
+}
 
 /**
  * How wide "Boxed" holds a row's columns.
@@ -383,6 +430,45 @@ const OVERFLOWS = ["visible", "hidden", "auto"] as const;
  * without re-boxing every row already saved.
  */
 export const BAND_MEASURE = 1040;
+
+/**
+ * The grid half of a container, as declarations.
+ *
+ * Written as one `gap` shorthand rather than a `row-gap` and a `column-gap`
+ * beside it. The media queries diff against the width above and undo a property
+ * this width does not set — and `column-gap: revert` reverts past the `gap` in
+ * the desktop rule too, so a phone that only changed the row gap would lose the
+ * column gap entirely. One property can only ever be restated, never undone.
+ *
+ * Stacking still decides the track list: a phone that falls into one column has
+ * one track and as many rows as there are columns, which is what the row's
+ * `stack` setting has always meant and what people expect it to keep meaning.
+ */
+function gridContainer(
+  p: Record<string, unknown>,
+  count: number,
+  gap: number,
+  stacked: boolean,
+): CSSProperties {
+  const colGap = typeof p.columnGap === "number" && p.columnGap >= 0 ? p.columnGap : gap;
+  const rowGap = typeof p.rowGap === "number" && p.rowGap >= 0 ? p.rowGap : gap;
+  const css: CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: stacked
+      ? "minmax(0,1fr)"
+      : gridTracks(p.gridColumns, `repeat(${Math.max(count, 1)}, minmax(0,1fr))`),
+    gap: `${rowGap}px ${colGap}px`,
+    alignItems: String(p.verticalAlign ?? "stretch"),
+  };
+  const rows = gridTracks(p.gridRows, "");
+  if (rows) css.gridTemplateRows = rows;
+  // Column flow only: `row` is the CSS default, so emitting it would be a
+  // declaration on every grid container that says nothing.
+  if (oneOf(p.autoFlow, ["row", "column"] as const, "row") === "column") css.gridAutoFlow = "column";
+  const items = oneOf(p.justifyItems, ["", "start", "center", "end", "stretch"] as const, "");
+  if (items) css.justifyItems = items;
+  return css;
+}
 
 export function rowLayout(block: Block, device: Device): RowLayout {
   const p = propsFor(block, device);
@@ -408,16 +494,22 @@ export function rowLayout(block: Block, device: Device): RowLayout {
       ? `${p.minHeight}${p.minHeightUnit === "vh" ? "vh" : "px"}`
       : "";
 
+  const grid = rowIsGrid(block, device);
+
   // Only what was actually set gets a declaration. Emitting a neutral value for
   // each of these instead would put six new properties on every row on every
   // page for nothing, and "renders identically" would stop being provable.
-  const container: CSSProperties = {
-    display: "flex",
-    flexWrap: oneOf(p.wrap, ["wrap", "nowrap"] as const, "wrap"),
-    gap: `${gap}px`,
-    alignItems: String(p.verticalAlign ?? "stretch"),
-  };
-  if (down) container.flexDirection = "column";
+  const container: CSSProperties = grid
+    ? gridContainer(p, block.columns?.length ?? 0, gap, stacksAt(block, device))
+    : {
+        display: "flex",
+        flexWrap: oneOf(p.wrap, ["wrap", "nowrap"] as const, "wrap"),
+        gap: `${gap}px`,
+        alignItems: String(p.verticalAlign ?? "stretch"),
+      };
+  // Direction is the flex half of the pair; on a grid the axis is grid-auto-flow
+  // and `flex-direction` on a grid container does nothing at all.
+  if (down && !grid) container.flexDirection = "column";
   if (justify !== "flex-start") container.justifyContent = justify;
   if (alignContent) container.alignContent = alignContent;
   if (minHeight) container.minHeight = minHeight;
@@ -432,10 +524,15 @@ export function rowLayout(block: Block, device: Device): RowLayout {
     columns: widths.map((w, i) => ({
       // minWidth:0 or a long unbroken word makes the column refuse to shrink.
       minWidth: 0,
+      // A grid item is as wide as its track, and the track list already said how
+      // wide that is. Keeping the flex arithmetic here would make every column
+      // narrower than the track it sits in by the gap it does not have to pay
+      // for — a grid's gap lives outside the tracks.
+      //
       // Down the page the gap runs between the columns, not across them, so
       // there is nothing to subtract — taking it off would leave every stacked
       // column narrower than the width someone typed.
-      width: down ? `${w}%` : `calc(${w}% - ${Math.round((gap * (100 - w)) / 100 * 100) / 100}px)`,
+      width: grid ? "auto" : down ? `${w}%` : `calc(${w}% - ${Math.round((gap * (100 - w)) / 100 * 100) / 100}px)`,
       // Order, not reversed markup: the columns have to stay where they are in
       // the DOM or the editor's drop targets and the reading order move too.
       order: flip ? count - i : i,

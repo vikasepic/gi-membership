@@ -81,6 +81,11 @@ export function scopeOf(c: Control): ControlScope {
 const group = (label: string, when?: (b: Block) => boolean): Control => ({ kind: "group", label, ...(when ? { when } : {}) });
 const style = <T extends Control>(c: T): T => ({ ...c, scope: "style" as const });
 
+// Which half of the container schema a row is showing. Read off desktop props
+// deliberately: Container is not per-device, so there is one answer.
+const isGrid = (b: Block) => b.props.containerType === "grid";
+const notGrid = (b: Block) => !isGrid(b);
+
 // --- shared typography, offered by anything that renders words ---------------
 const TYPOGRAPHY: Control[] = [
   group("Typography"),
@@ -435,7 +440,10 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       // a phone that had fewer of them would have nowhere to put it. What
       // changes per device is how wide they are and what order they come in.
       { kind: "columns", key: "columnCount", label: "Columns", max: MAX_COLUMNS },
-      { kind: "widths", key: "widths", label: "Column widths", responsive: true, hint: "% of the row" },
+      // Hidden on a grid: the track list is the widths there, and two controls
+      // claiming to set one thing is a container drawn one way and edited
+      // another — the same reason `structure` was folded into `widths`.
+      { kind: "widths", key: "widths", label: "Column widths", when: notGrid, responsive: true, hint: "% of the row" },
       {
         kind: "select",
         key: "stack",
@@ -449,6 +457,17 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       },
 
       group("Layout"),
+      // Structural for the same reason the column count is: the two halves of
+      // this schema below are different settings, and a container that was a
+      // grid on a laptop and a flex line on a phone would show the panel one
+      // set and render the other. What varies per device is the tracks.
+      {
+        kind: "select",
+        key: "containerType",
+        label: "Container",
+        options: [["flex", "Flex"], ["grid", "Grid"]],
+        hint: "Grid places the same columns on a track list instead of a flowing line.",
+      },
       // Reversed is still the painting order and not the markup order, so the
       // words on the page stay in the order they are read out and the drop
       // targets stay where they were dropped.
@@ -456,6 +475,7 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         kind: "select",
         key: "direction",
         label: "Direction",
+        when: notGrid,
         responsive: true,
         options: [
           ["row", "Row"],
@@ -496,6 +516,7 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         kind: "select",
         key: "wrap",
         label: "Wrap",
+        when: notGrid,
         responsive: true,
         options: [["wrap", "Wrap"], ["nowrap", "No wrap"]],
         hint: "No wrap keeps every column on one line, however narrow that makes them.",
@@ -507,7 +528,7 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         responsive: true,
         // Hidden with wrapping off because that is the only time it does
         // anything: align-content places the LINES, and there is one line.
-        when: (b) => b.props.wrap !== "nowrap",
+        when: (b) => isGrid(b) || b.props.wrap !== "nowrap",
         options: [
           ["", "Default"],
           ["flex-start", "Start"],
@@ -518,6 +539,51 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
           ["space-evenly", "Space evenly"],
         ],
         hint: "Where the wrapped lines sit, once there is more than one.",
+      },
+
+      // Only shown on a grid, because none of it has any effect on a flex line
+      // — a control that silently does nothing is worse than no control.
+      group("Grid", isGrid),
+      {
+        kind: "text",
+        key: "gridColumns",
+        label: "Columns",
+        when: isGrid,
+        responsive: true,
+        placeholder: "3",
+        hint: "A count for equal columns, or a track list: 200px 1fr 400px. Anything else falls back to equal ones.",
+      },
+      {
+        kind: "text",
+        key: "gridRows",
+        label: "Rows",
+        when: isGrid,
+        responsive: true,
+        placeholder: "auto",
+        hint: "Same again, down the page. Empty lets the rows size themselves.",
+      },
+      { kind: "number", key: "columnGap", label: "Column gap", min: 0, max: 80, step: 4, unit: "px", when: isGrid, responsive: true, hint: "Unset uses the Gap above." },
+      { kind: "number", key: "rowGap", label: "Row gap", min: 0, max: 80, step: 4, unit: "px", when: isGrid, responsive: true, hint: "Unset uses the Gap above." },
+      {
+        kind: "select",
+        key: "autoFlow",
+        label: "Auto flow",
+        when: isGrid,
+        responsive: true,
+        options: [["row", "Row"], ["column", "Column"]],
+        hint: "Which way anything past the named tracks is filled in.",
+      },
+      // The other axis of Align items above, which is align-items on a grid as
+      // well — so it is not repeated here, or one property would have two
+      // controls and the container would be drawn one way and edited another.
+      {
+        kind: "select",
+        key: "justifyItems",
+        label: "Justify items",
+        when: isGrid,
+        responsive: true,
+        options: [["", "Default"], ["start", "Start"], ["center", "Centre"], ["end", "End"], ["stretch", "Stretch"]],
+        hint: "Where the contents sit inside each cell, across the page.",
       },
 
       group("Size"),

@@ -366,6 +366,11 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   // / null / "visible" / "full" are not preferences, they are "as it was". A
   // number or a corner here instead would repaint every row ever saved the
   // moment this line shipped, because normalize spreads these over stored props.
+  //
+  // `containerType` decides which half of the list below is read at all, and it
+  // starts at "flex" for the same reason: a stored row has to keep being the
+  // flex container it has always been, so every grid key beneath it is dead
+  // weight until somebody presses Grid.
   row: {
     verticalAlign: "stretch",
     gap: 24,
@@ -378,6 +383,13 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     minHeightUnit: "px",
     overflow: "visible",
     contentWidth: "full",
+    containerType: "flex",
+    gridColumns: "",
+    gridRows: "",
+    columnGap: null,
+    rowGap: null,
+    autoFlow: "row",
+    justifyItems: "",
   },
   stats: { items: [], layout: "strip" },
   pricing: { items: [], highlightLast: true, totalLabel: "", totalAmount: "" },

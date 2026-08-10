@@ -67,7 +67,7 @@ import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/li
  * except to hand it on.
  */
 const CanvasDevice = createContext<Device>("desktop");
-import { backgroundCss, blockCssAt, columnCss, effectiveWidths, mobilePaddingNotice, rowLayout, stacksAt } from "@/lib/block-style";
+import { backgroundCss, blockCssAt, columnCss, effectiveWidths, mobilePaddingNotice, rowIsGrid, rowLayout, stacksAt } from "@/lib/block-style";
 import { imageSrc } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
 
@@ -1147,6 +1147,12 @@ function RowColumns({
   // about the thing you switched to it to check.
   const layout = rowLayout(block, device);
   const columns = block.columns ?? [];
+  // A grid's cells have no edges of their own, so with a track list wider than
+  // the columns that fill it there is nothing on screen saying where one track
+  // ends and the next begins. Drawn here and nowhere else: it is scaffolding
+  // for the person building the page, and a dashed box on the live page would
+  // be a border nobody asked for.
+  const grid = rowIsGrid(block, device);
   return (
     <div style={layout.container}>
       {columns.map((col, c) => {
@@ -1164,7 +1170,9 @@ function RowColumns({
           className={
             selectedId === colId
               ? "outline outline-2 outline-offset-1 outline-[var(--primary)]"
-              : "hover:outline hover:outline-1 hover:outline-offset-1 hover:outline-[var(--border)]"
+              : grid
+                ? "outline outline-1 outline-dashed outline-[var(--border)]"
+                : "hover:outline hover:outline-1 hover:outline-offset-1 hover:outline-[var(--border)]"
           }
           style={{
             borderColor: theme.rule,
