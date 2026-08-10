@@ -250,7 +250,9 @@ describe("the canvas shows the store's own type", () => {
     // The canvas is 390px wide inside a 1900px window: a max-width query would
     // never match, so the phone view would silently show the desktop type.
     expect(withPreview).not.toContain("@media");
-    expect(withPreview).not.toContain("23px");
+    // The rule, not the number — "1023px and narrower" in the device switch's
+    // tooltip contains "23px" and would match a bare substring.
+    expect(withPreview).not.toContain("h1{font-size:23px}");
   });
 
   it("ships nothing at all when the store has set nothing", () => {

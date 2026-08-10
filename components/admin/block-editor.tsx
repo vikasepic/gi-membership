@@ -48,6 +48,8 @@ import {
   splitColumnId,
   setColumnWidth,
   DEVICE_CANVAS,
+  DEVICE_MAX,
+  SITE_DEFAULTED_KEYS,
   type Block,
   type BlockType,
   type Device,
@@ -1397,15 +1399,36 @@ function ControlField({
 }) {
   if (isGroup(control)) return null;
   const value = readControl(block, control, device);
+  // Only style controls have a wider device to inherit from; a heading's text
+  // is the same words at every width.
+  const at = deviceOf(control, device);
+  const key = control.key.split(".")[0];
+  const set = at !== "desktop" && hasOverride(block, at, key, scopeOf(control));
+
+  // The six keys a narrow width stopped inheriting. Clearing one does NOT give
+  // the width above back — nothing is emitted at all and Site settings is what
+  // is left standing — so the chip must not offer "the desktop value again",
+  // and a field that reads blank here has not lost anything.
+  //
+  // Mobile is the exception to the exception: it does layer on tablet, so a
+  // tablet value is a real fallback and the ordinary wording is correct.
+  const siteDefaulted =
+    scopeOf(control) === "style" && (SITE_DEFAULTED_KEYS as readonly string[]).includes(key);
+  const fallsToSite =
+    at !== "desktop" && siteDefaulted && !(at === "mobile" && hasOverride(block, "tablet", key));
+
+  // Unset is what `baseStyle` gives the key, and it is what the emitter treats
+  // as "say nothing" — so these three are the whole of "the laptop set this".
+  const desktopValue = readControl(block, control, "desktop");
+  const desktopSet = desktopValue !== null && desktopValue !== "" && desktopValue !== "none";
+
   // Said where the number is, not in a console nobody opens.
   const notice =
     "key" in control && control.key === "padding" && device !== "mobile"
       ? mobilePaddingNotice(block)
-      : null;
-  // Only style controls have a wider device to inherit from; a heading's text
-  // is the same words at every width.
-  const at = deviceOf(control, device);
-  const set = at !== "desktop" && hasOverride(block, at, control.key.split(".")[0], scopeOf(control));
+      : fallsToSite && !set && desktopSet
+        ? `The desktop value stops above ${DEVICE_MAX.tablet}px. Site settings → Typography decides this at ${at} width — type here to choose your own.`
+        : null;
   // The label, and the marker saying this control is holding a value for the
   // width being edited. A control that does not say so is one you will change
   // on desktop and wonder why nothing moved.
@@ -1418,7 +1441,11 @@ function ControlField({
         <button
           type="button"
           onClick={onClear}
-          title={`Set for ${at}. Click to use the ${at === "mobile" ? "tablet" : "desktop"} value again.`}
+          title={
+            fallsToSite
+              ? `Set for ${at}. Click to follow Site settings → Typography here again.`
+              : `Set for ${at}. Click to use the ${at === "mobile" ? "tablet" : "desktop"} value again.`
+          }
           className="shrink-0 rounded-full bg-primary/15 px-1.5 text-[0.58rem] leading-4 text-primary hover:bg-primary/25"
           aria-label={`Reset ${control.label} for ${at}`}
         >

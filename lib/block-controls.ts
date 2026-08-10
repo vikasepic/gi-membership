@@ -3,6 +3,7 @@ import {
   MAX_COLUMNS,
   clearAt,
   propsFor,
+  renderedStyle,
   setAt,
   setColumnCount,
   setPropsAt,
@@ -910,12 +911,18 @@ function forBlock(c: Control, block: Block): Control {
   return c;
 }
 
-/** Read a control's current value, following a dotted key such as background.color. */
+/**
+ * Read a control's current value, following a dotted key such as background.color.
+ *
+ * `renderedStyle`, not `styleFor`: what a field shows has to be what the width
+ * beside it draws. They differ for the six keys a narrow width no longer
+ * inherits — see the comment there.
+ */
 export function readControl(block: Block, c: Control, device: Device = "desktop"): unknown {
   if (isGroup(c)) return undefined;
   const root: Record<string, unknown> =
     scopeOf(c) === "style"
-      ? (styleFor(block, deviceOf(c, device)) as unknown as Record<string, unknown>)
+      ? (renderedStyle(block, deviceOf(c, device)) as unknown as Record<string, unknown>)
       : propsFor(block, deviceOf(c, device));
   return c.key.split(".").reduce<unknown>((acc, part) => {
     if (acc === null || acc === undefined || typeof acc !== "object") return undefined;

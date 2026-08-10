@@ -257,6 +257,20 @@ function Inner({
   const s = styleFor(block, at ?? "desktop");
   const p = block.props;
   const c = blockColors(block, theme, s);
+  /**
+   * The block's typography as an ATTRIBUTE, at the width being drawn.
+   *
+   * Spread onto the elements `blockRules` cannot name: TEXT_TAGS is a list of
+   * tags, and most of what a Cards, Stats, Pricing, FAQ or Button block draws
+   * is a `span`, a `div` or a `button`. Without this they would take the
+   * band's default type and nothing typed into the panel would reach them.
+   *
+   * The cost is that on the live page `at` is undefined, so these carry the
+   * DESKTOP values and an attribute outranks every media query — which means
+   * the device switch is inert for exactly those elements. Fixing it needs the
+   * rule to be able to reach them (a class on each, or a `*` arm), not the
+   * removal of this; see the note on TEXT_TAGS.
+   */
   const type = typographyCss(s);
 
   switch (block.type) {

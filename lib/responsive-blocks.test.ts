@@ -7,11 +7,13 @@ import {
   hasOverride,
   newBlock,
   normalizeBlocks,
+  renderedStyle,
   setStyleAt,
   styleFor,
   type Block,
 } from "@/lib/blocks";
 import { blockClass, blockCssAt, blockRules, blockTextRules, customCss } from "@/lib/block-style";
+import { readControl } from "@/lib/block-controls";
 import { bandTheme } from "@/lib/page-sections";
 import { blocksForSection } from "@/lib/section-to-blocks";
 
@@ -47,6 +49,49 @@ describe("what a device inherits", () => {
     b = setStyleAt(b, "desktop", { color: "#990000" });
     expect(styleFor(b, "mobile").color).toBe("#990000");
     expect(styleFor(b, "mobile").size).toBe(28);
+  });
+});
+
+describe("what the inspector is allowed to say a width renders", () => {
+  // `styleFor` layers all six site-defaulted keys and the emitter withdraws
+  // them, so the panel and the canvas beside it answered differently. These
+  // pin the two together: whatever a field shows, the rule for that width has
+  // to carry — and whatever it leaves blank, the rule has to leave out.
+  const sizeControl = { kind: "number", key: "size", label: "Size", scope: "style", min: 10, max: 96, step: 1 } as const;
+
+  it("says nothing at a width the block did not set, however loud the laptop is", () => {
+    const b = setStyleAt(heading(), "desktop", { size: 48 });
+    expect(styleFor(b, "mobile").size).toBe(48); // still layered, for the frame
+    expect(renderedStyle(b, "mobile").size).toBeNull();
+    expect(readControl(b, sizeControl, "mobile")).toBeNull();
+    // And that is exactly what the rule for that width does.
+    expect(blockRules(b, paper)).not.toContain(`@media (max-width:${DEVICE_MAX.mobile}px)`);
+  });
+
+  it("says the value a width did set, whichever width that was", () => {
+    let b = setStyleAt(heading(), "desktop", { size: 48 });
+    b = setStyleAt(b, "tablet", { size: 32 });
+    // Tablet set it; mobile layers on tablet, as the two max-width queries do.
+    expect(renderedStyle(b, "tablet").size).toBe(32);
+    expect(renderedStyle(b, "mobile").size).toBe(32);
+    expect(readControl(b, sizeControl, "desktop")).toBe(48);
+  });
+
+  it("is unchanged for every block migration 0042 pinned", () => {
+    // Production's shape: the value the page already rendered, written down at
+    // both narrow widths. Nothing about the honest read may move these.
+    const b: Block = {
+      ...setStyleAt(heading(), "desktop", { size: 48 }),
+      responsive: { tablet: { style: { size: 48 }, props: {} }, mobile: { style: { size: 48 }, props: {} } },
+    };
+    for (const d of DEVICES) expect(renderedStyle(b, d).size, d).toBe(48);
+    for (const d of DEVICES) expect(readControl(b, sizeControl, d), d).toBe(48);
+  });
+
+  it("leaves every other key layered, because those still inherit", () => {
+    const b = setStyleAt(heading(), "desktop", { color: "#990000", textAlign: "center" });
+    expect(renderedStyle(b, "mobile").color).toBe("#990000");
+    expect(renderedStyle(b, "mobile").textAlign).toBe("center");
   });
 });
 

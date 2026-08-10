@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { BlockEditor } from "@/components/admin/block-editor";
 import { bandTheme } from "@/lib/page-sections";
-import { newBlock, setStyleAt, styleFor, type Block } from "@/lib/blocks";
+import { DEVICE_MAX, newBlock, setStyleAt, styleFor, type Block } from "@/lib/blocks";
 import { controlsFor, isGroup, scopeOf } from "@/lib/block-controls";
 
 // Editing a block at three widths, from the panel rather than from the model.
@@ -137,6 +137,68 @@ describe("what a control writes", () => {
     click(tab("Mobile"));
     click(tab("content"));
     expect(byText("button", "mobile ✕")).toBeFalsy();
+  });
+});
+
+describe("what the panel says a narrow width renders", () => {
+  // The one control appears in two panels and meant two things. In Site
+  // settings the Desktop tab is the base every narrower width inherits; on a
+  // block it is that too — except for the six keys that stopped inheriting,
+  // where a narrow width falls to Site settings instead. The panel used to
+  // report the desktop value at those widths anyway, so the field said 48 while
+  // the canvas beside it drew the site's size. It cannot say that any more.
+  const desktopOnly = () => setStyleAt(newBlock("heading"), "desktop", { size: 48 });
+
+  const sizeField = () => document.querySelector<HTMLInputElement>('input[type="number"]');
+
+  it("leaves the field blank rather than repeating a value the page does not use", () => {
+    mount([desktopOnly()]);
+    selectFirstBlock();
+    click(tab("style"));
+    expect(sizeField()?.value).toBe("48");
+    click(tab("Mobile"));
+    expect(sizeField()?.value).toBe("");
+  });
+
+  it("says where the value comes from instead, so a blank field is not a lost one", () => {
+    mount([desktopOnly()]);
+    selectFirstBlock();
+    click(tab("Mobile"));
+    click(tab("style"));
+    expect(document.body.textContent).toContain("Site settings → Typography decides this at mobile width");
+    expect(document.body.textContent).toContain(`stops above ${DEVICE_MAX.tablet}px`);
+  });
+
+  it("says nothing of the sort for a key that still inherits", () => {
+    mount([setStyleAt(newBlock("heading"), "desktop", { color: "#990000" })]);
+    selectFirstBlock();
+    click(tab("Mobile"));
+    click(tab("style"));
+    expect(document.body.textContent).not.toContain("Site settings → Typography decides");
+  });
+
+  it("keeps quiet on every block migration 0042 pinned — the field is filled in", () => {
+    const b = desktopOnly();
+    mount([{ ...b, responsive: { tablet: { style: { size: 48 }, props: {} }, mobile: { style: { size: 48 }, props: {} } } }]);
+    selectFirstBlock();
+    click(tab("Mobile"));
+    click(tab("style"));
+    expect(sizeField()?.value).toBe("48");
+    expect(document.body.textContent).not.toContain("Site settings → Typography decides");
+  });
+
+  it("offers Site settings, not the desktop value, as what clearing falls to", () => {
+    mount([setStyleAt(desktopOnly(), "mobile", { size: 28 })]);
+    selectFirstBlock();
+    click(tab("Mobile"));
+    click(tab("style"));
+    expect(byText("button", "mobile ✕")?.getAttribute("title")).toContain("Site settings");
+    // A key that does inherit keeps the ordinary wording.
+    mount([setStyleAt(newBlock("heading"), "mobile", { color: "#990000" })]);
+    selectFirstBlock();
+    click(tab("Mobile"));
+    click(tab("style"));
+    expect(byText("button", "mobile ✕")?.getAttribute("title")).toContain("tablet value");
   });
 });
 

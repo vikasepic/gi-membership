@@ -569,7 +569,9 @@ describe("the canvas follows the width being edited", () => {
   it("shows the phone's site type once the canvas is pinned to a phone", () => {
     mountWithPreview([newBlock("heading")]);
     expect(canvas()).toContain("h1{font-size:41px}");
-    expect(canvas()).not.toContain("23px");
+    // Named as the whole rule, not as "23px": the device switch's tooltip says
+    // "1023px and narrower", and a bare substring matches that.
+    expect(canvas()).not.toContain("h1{font-size:23px}");
     toMobile();
     expect(canvas()).toContain("h1{font-size:23px}");
   });

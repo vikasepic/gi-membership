@@ -205,6 +205,24 @@ export const DEVICE_MAX: Record<Device, number | null> = {
   mobile: 767,
 };
 
+/**
+ * What each tab of the device switch governs, in words, off the same numbers.
+ *
+ * One control appears in two panels — the block inspector and Site settings →
+ * Typography — and until this existed each wrote its own copy for it. The site
+ * panel said "Desktop only" about a rule it emits with no media query at all,
+ * which is the opposite of what it does. The shared reading is "this width and
+ * narrower": desktop is the base every narrower width starts from, and a
+ * narrower tab overrides it.
+ *
+ * Derived from DEVICE_MAX so the sentence and the query cannot drift.
+ */
+export const DEVICE_RANGE: Record<Device, string> = {
+  desktop: "every width",
+  tablet: `${DEVICE_MAX.tablet}px and narrower`,
+  mobile: `${DEVICE_MAX.mobile}px and narrower`,
+};
+
 /** How wide the editor canvas renders each device. */
 export const DEVICE_CANVAS: Record<Device, number | null> = {
   desktop: null,
@@ -762,6 +780,34 @@ export function ownTypography(block: Block, device: Device): Partial<BlockStyle>
   if (!r) return {};
   const tablet = ownSeven(r.tablet.style);
   return device === "tablet" ? tablet : { ...tablet, ...ownSeven(r.mobile.style) };
+}
+
+/**
+ * The style this width actually renders — the one a panel may show a person.
+ *
+ * `styleFor` layers every key, including the six that stopped being inherited,
+ * because the frame emitter, the hide flags and the padding cap all still want
+ * the layered answer. The inspector wants a different one: it sits beside a
+ * canvas drawn from `ownTypography`, and for those six keys the two disagree.
+ *
+ * A heading given 48px on a laptop and nothing on a phone renders the SITE's
+ * mobile heading size — that is the whole point of the break — but the Size
+ * field on the Mobile tab was reading `styleFor` and saying 48. Nothing was
+ * wrong with the page; the panel was the only thing lying about it, and the
+ * lie is invisible on any block migration 0042 touched, so it only shows up on
+ * work done since and accumulates.
+ *
+ * Unset is `baseStyle`'s value for the key, which is exactly what the emitter
+ * fills in — `typographyAt` builds its declarations from `baseStyle(own)` —
+ * so a blank field here means the same thing a missing declaration does there.
+ */
+export function renderedStyle(block: Block, device: Device): BlockStyle {
+  if (device === "desktop") return block.style;
+  const own = ownTypography(block, device);
+  const unset = baseStyle();
+  const out = { ...styleFor(block, device) } as Record<string, unknown>;
+  for (const k of SITE_DEFAULTED_KEYS) out[k] = k in own ? own[k] : unset[k];
+  return out as BlockStyle;
 }
 
 /** The props a block has at a given width. */

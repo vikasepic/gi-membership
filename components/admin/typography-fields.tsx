@@ -5,7 +5,7 @@ import { useFormStatus } from "react-dom";
 import { inputClass as input, Field, Group } from "@/components/admin/form-controls";
 import { ConfirmSubmit } from "@/components/admin/confirm-submit";
 import { DeviceSwitch } from "@/components/admin/device-switch";
-import { DEVICE_CANVAS, type Device } from "@/lib/blocks";
+import { DEVICE_CANVAS, DEVICE_RANGE, type Device } from "@/lib/blocks";
 import { HEADING_SIZE } from "@/lib/block-style";
 import {
   PREVIEW_SCOPE,
@@ -199,7 +199,13 @@ export function TypographyFields({
             </p>
           ) : (
           <Group
-            label={`${DEVICE_LABEL[device]} only`}
+            // Not "Desktop only". The desktop pass is emitted with no media
+            // query at all — it is the base every narrower width starts from,
+            // and the two below it are overrides on top. `DEVICE_RANGE` is
+            // built off DEVICE_MAX and is the same sentence the block
+            // inspector uses, so the one control cannot mean two things in the
+            // two panels it appears in.
+            label={`${DEVICE_LABEL[device]} — ${DEVICE_RANGE[device]}`}
             hint="size, line height, letter spacing and word spacing are the only four a width may change"
           >
             <Metric

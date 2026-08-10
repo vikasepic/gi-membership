@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { act } from "react";
 import { HEADING_SIZE } from "@/lib/block-style";
+import { DEVICE_MAX } from "@/lib/blocks";
 import { createRoot } from "react-dom/client";
 import {
   SITE_TYPOGRAPHY_DEFAULTS,
@@ -169,15 +170,23 @@ describe("the Typography panel", () => {
     expect(posted().h2.tablet).toEqual(SITE_TYPOGRAPHY_DEFAULTS.h2.tablet);
   });
 
-  it("labels the per-width group with the width, and names the four that move", () => {
+  // NEW INTENT. This asserted "Desktop only", which was false about the rule
+  // the panel writes: the desktop pass is emitted with NO media query, so it
+  // is the base every narrower width inherits. The same three-tab control
+  // appears in the block inspector meaning "this width and narrower", and one
+  // control that means two things in two panels is the whole defect. The label
+  // now says which widths the tab governs, off DEVICE_MAX, so the sentence
+  // cannot drift from the query.
+  it("labels the per-width group with the widths it governs, and names the four that move", () => {
     mount();
-    expect(document.body.textContent).toContain("Desktop only");
+    expect(document.body.textContent).toContain("Desktop — every width");
+    expect(document.body.textContent).not.toContain("Desktop only");
     expect(document.body.textContent).toContain(
       "size, line height, letter spacing and word spacing are the only four a width may change",
     );
     click(button("Mobile"));
-    expect(document.body.textContent).toContain("Mobile only");
-    expect(document.body.textContent).not.toContain("Desktop only");
+    expect(document.body.textContent).toContain(`Mobile — ${DEVICE_MAX.mobile}px and narrower`);
+    expect(document.body.textContent).not.toContain("Desktop — every width");
   });
 
   it("offers the paragraph gap on Body alone", () => {

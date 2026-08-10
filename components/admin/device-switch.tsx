@@ -1,6 +1,6 @@
 "use client";
 
-import { DEVICES, DEVICE_CANVAS, type Device } from "@/lib/blocks";
+import { DEVICES, DEVICE_CANVAS, DEVICE_RANGE, type Device } from "@/lib/blocks";
 
 // Desktop / Tablet / Mobile, in one control shared by the builder and the
 // section editor. Two copies of this would be two places for the widths to
@@ -57,7 +57,15 @@ export function DeviceSwitch({
             type="button"
             onClick={() => onChange(d)}
             aria-pressed={on}
-            title={width ? `${LABEL[d]} — ${width}px` : `${LABEL[d]} — full width`}
+            // The widths the tab GOVERNS, then the width it previews at. It
+            // used to name the canvas alone — "Tablet — 834px" — which is the
+            // one number in this control that no media query is written
+            // against, and it is the tooltip on the control both panels share.
+            title={
+              width
+                ? `${LABEL[d]} — ${DEVICE_RANGE[d]}, previewed at ${width}px`
+                : `${LABEL[d]} — ${DEVICE_RANGE[d]}`
+            }
             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-colors ${
               on ? "bg-surface font-medium text-fg shadow-sm" : "text-muted hover:text-fg"
             }`}
