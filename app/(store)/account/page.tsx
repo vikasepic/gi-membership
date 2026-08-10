@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout, openBillingPortal } from "./actions";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { purchaseDocsForUser, subscriptionInvoicesForUser } from "@/lib/receipts";
 import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";
@@ -55,11 +54,6 @@ export default async function AccountPage({
         fullName={profile?.fullName ?? ""}
         supportEmail={legal.contactEmail}
       />
-      <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
-        <span className="kicker text-muted">Appearance</span>
-        <ThemeToggle />
-      </section>
-
       <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
         <span className="kicker text-muted">Billing</span>
         {billing === "none" ? (

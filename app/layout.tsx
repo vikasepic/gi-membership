@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
-import { themeInitScript } from "@/components/theme-toggle";
 
 // Inter as its variable font — every weight from one file. Pinned to 600 it
 // had exactly one, so the page builder's Weight control changed a number and
@@ -37,6 +36,11 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: "#FAFAF8",
+  // Tells the browser this document is light, so the parts IT paints — the
+  // scrollbar, a select's dropdown, a date picker — come back light too. Without
+  // it a visitor whose system is dark gets a light page with dark furniture in
+  // the middle of it, which reads as broken rather than as themed.
+  colorScheme: "light",
 };
 
 // Root: fonts, providers, html/body only. Chrome lives per route group —
@@ -44,11 +48,6 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${poppins.variable} h-full`}>
-      <head>
-        {/* Applies a saved dark preference before first paint, so a returning
-            reader never sees a white flash. Must be inline and synchronous. */}
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-      </head>
       <body className="min-h-full">
         <Providers>{children}</Providers>
       </body>
