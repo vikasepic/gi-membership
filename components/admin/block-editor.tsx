@@ -28,6 +28,7 @@ import {
   SEGMENT_ICONS,
   type Control,
 } from "@/lib/block-controls";
+import { canExplode, explodeWarnings, takeApart } from "@/lib/cards-to-blocks";
 import {
   addTarget,
   blockRendersNothing,
@@ -742,6 +743,14 @@ export function BlockEditor({
                   <CardTemplates
                     block={selected}
                     device={device}
+                    canTakeApart={canExplode(blocks, selected.id)}
+                    onTakeApart={() => {
+                      // Its own undo step, and a selection that survives it:
+                      // the block being edited is gone, so keeping it selected
+                      // would leave the panel pointing at nothing.
+                      commit(takeApart(blocks, selected.id), `explode:${selected.id}`);
+                      setSelectedId(null);
+                    }}
                     onApply={(id) => {
                       // Pressing the template you are already on returns the
                       // block by identity. Committing that anyway would push an
@@ -1349,10 +1358,14 @@ function DragTile({ label, type }: { label: string; type: BlockType | null }) {
 function CardTemplates({
   block,
   device,
+  canTakeApart,
+  onTakeApart,
   onApply,
 }: {
   block: Block;
   device: Device;
+  canTakeApart: boolean;
+  onTakeApart: () => void;
   onApply: (id: string) => void;
 }) {
   // Which one you are on, rather than a third button that does nothing. A
@@ -1391,6 +1404,88 @@ function CardTemplates({
             <span className="text-center">{t.label}</span>
           </button>
         ))}
+      </div>
+      <TakeApart block={block} enabled={canTakeApart} onConfirm={onTakeApart} />
+    </div>
+  );
+}
+
+/**
+ * The way out of a preset.
+ *
+ * A layout above is a bundle of settings, and every one of them stays editable
+ * — but the PARTS of a card are fixed at an icon, a title and a body. Nobody
+ * can put a button under the third card and not the others, which is what
+ * "these are templates, not fixed design" was asking for.
+ *
+ * So: the same design, rebuilt out of a container and real blocks. Everything
+ * becomes droppable, removable and reorderable, at the cost of the layout
+ * chooser and the one-place-edits-all convenience above.
+ *
+ * It does not go back. A container cannot be gathered into a cards block
+ * without guessing which blocks were meant to be one card — so this asks first,
+ * and lists what the conversion cannot carry before it runs rather than after.
+ */
+function TakeApart({
+  block,
+  enabled,
+  onConfirm,
+}: {
+  block: Block;
+  enabled: boolean;
+  onConfirm: () => void;
+}) {
+  const [asking, setAsking] = useState(false);
+  const warnings = explodeWarnings(block);
+
+  if (!enabled) {
+    // Silent rather than a disabled button with a tooltip: inside a column this
+    // is not a thing you are being denied, it is a thing that does not apply.
+    return null;
+  }
+
+  if (!asking) {
+    return (
+      <button
+        type="button"
+        onClick={() => setAsking(true)}
+        className="mt-0.5 self-start text-[0.62rem] text-muted underline decoration-dotted underline-offset-2 hover:text-fg"
+      >
+        Take apart into blocks…
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-0.5 flex flex-col gap-1.5 rounded-md border border-border bg-surface-2 p-2 text-[0.62rem] leading-snug">
+      <span className="text-fg">
+        Rebuilds these cards as a container with one column each, so every icon,
+        heading and paragraph becomes a block you can move, restyle or delete —
+        and you can add anything else beside them.
+      </span>
+      <span className="text-muted">You cannot turn them back into cards.</span>
+      {warnings.length > 0 && (
+        <ul className="flex list-disc flex-col gap-0.5 pl-3.5 text-muted">
+          {warnings.map((w) => (
+            <li key={w}>{w}</li>
+          ))}
+        </ul>
+      )}
+      <div className="flex gap-1.5 pt-0.5">
+        <button
+          type="button"
+          onClick={onConfirm}
+          className="rounded bg-primary px-2 py-1 text-[0.62rem] font-medium text-primary-fg hover:bg-primary-hover"
+        >
+          Take apart
+        </button>
+        <button
+          type="button"
+          onClick={() => setAsking(false)}
+          className="rounded px-2 py-1 text-[0.62rem] text-muted hover:text-fg"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   );

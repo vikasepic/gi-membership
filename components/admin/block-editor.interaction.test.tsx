@@ -645,3 +645,72 @@ describe("the canvas measures itself, like the page does", () => {
     expect(grid!.closest(".\\@container")).not.toBeNull();
   });
 });
+
+
+const button = (label: string) =>
+  [...document.querySelectorAll("button")].find((b) => (b.textContent ?? "").trim() === label);
+
+/**
+ * The way out of a preset.
+ *
+ * A layout is a bundle of settings, all editable — but the PARTS of a card are
+ * fixed. This is the button that turns one cards block into a container of real
+ * blocks so anything can be added, removed or reordered.
+ */
+describe("taking a cards block apart", () => {
+  it("asks first, because it does not go back", () => {
+    const editor = mount([newBlock("cards")]);
+    click(document.querySelector('[data-block]')!.querySelector("h3, h2, p, div")!);
+    const open = button("Take apart into blocks…");
+    expect(open, "the way out should be offered on a cards block").toBeTruthy();
+    click(open!);
+    expect(document.body.textContent).toContain("You cannot turn them back into cards");
+    // Still one cards block: asking is not doing.
+    expect(editor.blocks).toHaveLength(1);
+    expect(editor.blocks[0].type).toBe("cards");
+  });
+
+  it("cancelling leaves the block alone", () => {
+    const editor = mount([newBlock("cards")]);
+    click(document.querySelector('[data-block]')!);
+    click(button("Take apart into blocks…")!);
+    click(button("Cancel")!);
+    expect(editor.blocks[0].type).toBe("cards");
+    expect(button("Take apart")).toBeUndefined();
+  });
+
+  it("replaces the block with a container holding one column per card", () => {
+    const editor = mount([newBlock("cards")]);
+    click(document.querySelector('[data-block]')!);
+    click(button("Take apart into blocks…")!);
+    click(button("Take apart")!);
+
+    expect(editor.blocks.every((b) => b.type !== "cards")).toBe(true);
+    const rows = editor.blocks.filter((b) => b.type === "row");
+    expect(rows.length).toBeGreaterThan(0);
+    // Three starter cards, so three columns, each holding real blocks.
+    const cols = rows.flatMap((r) => r.columns ?? []);
+    expect(cols).toHaveLength(3);
+    expect(cols.every((c) => c.some((b) => b.type === "heading"))).toBe(true);
+  });
+
+  it("leaves the panel pointing at something that still exists", () => {
+    // The block being edited is gone. A panel still bound to it would be
+    // editing a block no longer on the page.
+    mount([newBlock("cards")]);
+    click(document.querySelector('[data-block]')!);
+    click(button("Take apart into blocks…")!);
+    click(button("Take apart")!);
+    expect(document.body.textContent).toContain("Select a block to edit it.");
+  });
+
+  it("is one step of undo, not several", () => {
+    const editor = mount([newBlock("cards")]);
+    click(document.querySelector('[data-block]')!);
+    click(button("Take apart into blocks…")!);
+    click(button("Take apart")!);
+    click(document.querySelector('[aria-label="Undo (⌘Z)"]')!);
+    expect(editor.blocks).toHaveLength(1);
+    expect(editor.blocks[0].type).toBe("cards");
+  });
+});
