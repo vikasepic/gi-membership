@@ -1,4 +1,5 @@
 import { normalizeHex, readableInk, tint } from "@/lib/color";
+import { bandInk } from "@/lib/site-typography";
 
 // The ten-section sales page.
 //
@@ -48,18 +49,30 @@ export type BandTheme = {
   muted: string;
 };
 
-export function bandTheme(styleKey: string | null | undefined, accentOverride?: string | null): BandTheme {
+/**
+ * `siteColor` is the body colour from site typography, and it only ever reaches
+ * the light bands — see `bandInk`. Optional so every existing caller, and every
+ * page rendered before the setting exists, gets exactly the theme it got before.
+ */
+export function bandTheme(
+  styleKey: string | null | undefined,
+  accentOverride?: string | null,
+  siteColor?: string | null,
+): BandTheme {
   const s = BAND_STYLES[(styleKey ?? "paper") as BandStyleKey] ?? BAND_STYLES.paper;
   const accent = normalizeHex(accentOverride, s.accent);
+  // The rule and the muted tone are the ink at two alphas, so they follow it
+  // rather than being a second thing to keep in step.
+  const fg = bandInk(s.fg, siteColor);
   return {
     bg: s.bg,
-    fg: s.fg,
+    fg,
     accent,
     onAccent: readableInk(accent),
     panel: s.panel,
     panel2: s.panel2,
-    rule: tint(s.fg, 0.14),
-    muted: tint(s.fg, 0.72),
+    rule: tint(fg, 0.14),
+    muted: tint(fg, 0.72),
   };
 }
 
@@ -643,7 +656,7 @@ export function textOf(content: Record<string, unknown>, key: string): string {
  * blank: this page is reached by buyers, and a half-configured section should
  * read as unfinished copy, not as an empty band.
  */
-export function buildSectionView(row: SectionRow): SectionView | null {
+export function buildSectionView(row: SectionRow, siteColor?: string | null): SectionView | null {
   const def = sectionDef(row.sectionKey);
   if (!def || !row.enabled) return null;
 
@@ -659,7 +672,7 @@ export function buildSectionView(row: SectionRow): SectionView | null {
 
   return {
     def,
-    theme: bandTheme(row.style, row.accent),
+    theme: bandTheme(row.style, row.accent, siteColor),
     variant: row.variant || def.variants?.[0]?.key || "default",
     c,
     stored,
