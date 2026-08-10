@@ -243,7 +243,11 @@ describe("the canvas shows the store's own type", () => {
     // `:root h1` here would restyle the admin around the canvas, including the
     // settings page you would go to to undo it.
     expect(withPreview).not.toContain(":root h1");
-    expect(withPreview).toContain(`class="${PREVIEW_SCOPE} mx-auto`);
+    // The scope lands on the canvas, not on the admin root. Matched as a word
+    // inside the class list rather than a whole literal attribute value —
+    // asserting the exact neighbouring classes made this fail the day the
+    // canvas gained `@container`, which is a layout change, not a leak.
+    expect(withPreview).toMatch(new RegExp(`class="[^"]*\\b${PREVIEW_SCOPE}\\b`));
   });
 
   it("writes the width it is showing, not a media query", () => {

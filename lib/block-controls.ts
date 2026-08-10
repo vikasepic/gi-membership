@@ -427,13 +427,16 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       // Hidden on the one-card skin, which stacks its rows inside a single box
       // by design and has never read this. It was a slider that moved and
       // changed nothing.
+      // A segmented picker rather than a number spinner. "Across: 4" in a
+      // stepper is a value you have to already know exists to go looking for —
+      // the four choices are the whole control, so show all four. `coerce`
+      // turns the option value back into the number the renderer stores.
       {
-        kind: "number",
+        kind: "select",
         key: "columns",
-        label: "Across",
-        min: 1,
-        max: 4,
-        step: 1,
+        label: "In a row",
+        hint: "How many sit side by side. Set it again on tablet and phone if four should become two.",
+        options: [["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]],
         responsive: true,
         when: (b) => !isOneCard(b),
       },

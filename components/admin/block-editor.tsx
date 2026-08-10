@@ -560,8 +560,18 @@ export function BlockEditor({
               while the builder is open its width is the one that wins. The
               preview underneath it is covered anyway. */}
           {previewCss && <style dangerouslySetInnerHTML={{ __html: previewCss }} />}
+          {/* @container, because the page has one and the canvas did not.
+              A cards grid is `grid-cols-1 @xl:grid-cols-[var(--cards)]`, and a
+              container query with no container ancestor never matches — so the
+              editor drew every cards block as a single stacked column no matter
+              which layout was chosen, while the live page laid them out in four.
+              Picking Tiles and being shown a list is the editor lying about the
+              page, which is the one thing it may not do.
+              The width it queries is this element's, and this element is the
+              device canvas — so the phone view now answers the phone's question
+              rather than the laptop's. */}
           <div
-            className={`${PREVIEW_SCOPE} mx-auto w-full transition-[max-width] duration-200`}
+            className={`${PREVIEW_SCOPE} @container mx-auto w-full transition-[max-width] duration-200`}
             style={{ maxWidth: DEVICE_CANVAS[device] ?? 900 }}
           >
             <Zone

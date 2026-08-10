@@ -5,6 +5,7 @@ import {
   BLOCK_CONTROLS,
   BLOCK_LABEL,
   PALETTE,
+  asSegment,
   controlsFor,
   isGroup,
   readControl,
@@ -272,5 +273,45 @@ describe("the tabs a block shows", () => {
     const keys = BLOCK_CONTROLS.image.content.map((c) => (c as { key: string }).key);
     expect(keys).toContain("alt");
     expect(keys.indexOf("alt")).toBeLessThan(keys.indexOf("caption"));
+  });
+});
+
+
+/**
+ * "There is no option to make tiles 2 in a row or 3 in a row" — there was one.
+ * It was a number stepper labelled "Across", which is a control you have to
+ * already know exists before you go looking for it. The four choices ARE the
+ * control, so all four are shown.
+ */
+describe("how many cards sit in a row", () => {
+  const control = () => {
+    const b = newBlock("cards");
+    const { content, style } = controlsFor(b);
+    return [...content, ...style].find((c) => "key" in c && c.key === "columns")!;
+  };
+
+  it("shows every choice instead of hiding them behind a stepper", () => {
+    const c = control();
+    expect(asSegment(c)).toBe(true);
+    expect(c.kind === "select" && c.options.map(([v]) => v)).toEqual(["1", "2", "3", "4"]);
+  });
+
+  it("stores a number, not the option's string", () => {
+    // The renderer does arithmetic on this to build the track list; a "2" that
+    // is a string reaches `repeat(2, ...)` as NaN.
+    const b = writeControl(newBlock("cards"), control(), 2);
+    expect(b.props.columns).toBe(2);
+  });
+
+  it("sets the phone without touching the desktop", () => {
+    const b = writeControl(newBlock("cards"), control(), 1, "mobile");
+    expect(b.responsive?.mobile?.props?.columns).toBe(1);
+    expect(b.props.columns).toBe(3);
+  });
+
+  it("is not offered on the one-card skin, which has no columns", () => {
+    const list = { ...newBlock("cards"), props: { ...newBlock("cards").props, skin: "list" } };
+    const { content, style } = controlsFor(list);
+    expect([...content, ...style].some((c) => "key" in c && c.key === "columns")).toBe(false);
   });
 });

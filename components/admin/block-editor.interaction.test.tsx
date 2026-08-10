@@ -616,3 +616,32 @@ describe("the canvas follows the width being edited", () => {
     expect(canvas()).not.toContain("font-size:48px");
   });
 });
+
+
+/**
+ * The canvas has to ask the same question the page asks.
+ *
+ * A cards grid is `grid-cols-1 @xl:grid-cols-[var(--cards)]` — a container
+ * query. With no container ancestor it never matches, so the editor drew every
+ * cards block as one stacked column whatever layout was chosen, while the live
+ * page laid them out in four. Choosing Tiles and being shown a list is the
+ * editor lying about the page.
+ */
+describe("the canvas measures itself, like the page does", () => {
+  it("is a container query context", () => {
+    mount([newBlock("cards")]);
+    const canvas = document.querySelector("[data-zone]")?.closest(".\\@container");
+    expect(canvas).not.toBeNull();
+  });
+
+  it("puts the cards grid inside it", () => {
+    // The grid and the thing it measures against must be the same subtree, or
+    // the query resolves against something the page does not have.
+    mount([newBlock("cards")]);
+    const grid = [...document.querySelectorAll("div")].find((d) =>
+      d.className.includes("@xl:grid-cols-"),
+    );
+    expect(grid).toBeDefined();
+    expect(grid!.closest(".\\@container")).not.toBeNull();
+  });
+});
