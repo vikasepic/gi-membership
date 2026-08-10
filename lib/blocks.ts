@@ -479,11 +479,82 @@ const TEXT_MEASURE: Partial<Record<BlockType, Partial<BlockStyle>>> = {
   text: { width: "custom", maxWidthValue: 680, maxWidthUnit: "px", blockAlign: "center" },
 };
 
+/**
+ * What a block holds the moment it is dropped, so the design is visible before
+ * a word is typed.
+ *
+ * Separate from DEFAULT_PROPS, and that separation is the whole point:
+ * normalizeBlock spreads DEFAULT_PROPS over every block it READS, so a line of
+ * placeholder prose there would appear on a live sales page anywhere the key
+ * happened to be absent. This map is applied by newBlock alone — at creation,
+ * never on read — so nothing already stored can grow copy nobody wrote.
+ *
+ * Every line is unmistakably a placeholder. This store's rule is that it never
+ * fabricates a trust signal, and starter content is where that rule is easiest
+ * to break by accident: a plausible testimonial with a plausible name, or a
+ * round number beside "customers", is a claim the moment someone forgets to
+ * replace it. So a quote reads as an instruction, a figure is "00", and an
+ * amount is a dash. Someone who ships one of these ships something obviously
+ * unfinished rather than something quietly false.
+ *
+ * Prices are the exception that stays empty: a price card reads the real price
+ * from the offer, and a typed figure would override a fact with a guess.
+ */
+const STARTER_PROPS: Partial<Record<BlockType, Record<string, unknown>>> = {
+  cards: {
+    items: [
+      { title: "The first thing", body: "One sentence about what this is and why it matters.", icon: "", image: "" },
+      { title: "The second thing", body: "One sentence about what this is and why it matters.", icon: "", image: "" },
+      { title: "The third thing", body: "One sentence about what this is and why it matters.", icon: "", image: "" },
+    ],
+  },
+  faq: {
+    items: [
+      { q: "A question someone asks before buying", a: "The answer, in plain words. Short is better than complete." },
+      { q: "The objection you hear most", a: "Name it honestly. A question dodged here is a sale lost later." },
+    ],
+  },
+  iconlist: {
+    items: [
+      { text: "Something they get" },
+      { text: "Something else they get" },
+      { text: "The one that matters most" },
+    ],
+  },
+  stats: {
+    // "00" rather than a number that could survive to a live page. A figure is
+    // the single easiest placeholder to leave in, and the hardest to spot.
+    items: [
+      { value: "00", label: "What this number counts", detail: "" },
+      { value: "00", label: "What this number counts", detail: "" },
+    ],
+  },
+  pricing: {
+    // A dash, not an amount. An amount here is a price claim, and this store
+    // refuses a page that states a figure the checkout will not charge.
+    items: [
+      { label: "What is included", amount: "—" },
+      { label: "The next thing included", amount: "—" },
+    ],
+  },
+  slides: {
+    // Reads as an instruction, not as a customer. A placeholder testimonial
+    // with a plausible name is a fabricated trust signal the moment it ships.
+    items: [
+      {
+        quote: "What a buyer said, in their own words. Replace this with something real or delete the block.",
+        name: "Their name",
+        role: "What they do",
+      },
+    ],
+  },
+};
+
 export function newBlock(type: BlockType, over: Partial<Block> = {}): Block {
   const block: Block = {
     id: newId(),
     type,
-    props: { ...DEFAULT_PROPS[type] },
+    props: { ...DEFAULT_PROPS[type], ...(STARTER_PROPS[type] ?? {}) },
     style: baseStyle(TEXT_MEASURE[type] ?? {}),
     ...over,
   };
