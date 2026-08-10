@@ -301,32 +301,31 @@ const columnStyleAt = (row: Block, index: number, device: Device): BlockStyle =>
  * on it — would start emitting four flex properties it never emitted before,
  * and "the page renders identically" would stop being provable.
  */
-function columnLayoutCss(col: ColumnLayout | undefined, count: number): CSSProperties {
-  if (!col) return {};
+function columnLayoutCss(col: ColumnLayout, count: number): CSSProperties {
   const css: CSSProperties = {};
 
   // A custom width with no number is not a width. The column keeps the one the
   // row already stores for it, the same answer `legacyWidth` gives a block.
-  if (col.width === "custom" && typeof col.widthValue === "number" && col.widthValue > 0) {
-    css.width = `${col.widthValue}${oneOf(col.widthUnit, ["px", "%", "vw"] as const, "px")}`;
+  if (col.colWidth === "custom" && typeof col.colWidthValue === "number" && col.colWidthValue > 0) {
+    css.width = `${col.colWidthValue}${oneOf(col.colWidthUnit, ["px", "%", "vw"] as const, "px")}`;
   }
 
-  const self = oneOf(col.alignSelf, ["", "flex-start", "center", "flex-end", "stretch"] as const, "");
+  const self = oneOf(col.colAlignSelf, ["", "flex-start", "center", "flex-end", "stretch"] as const, "");
   if (self) css.alignSelf = self;
 
   // The row hands every column an `order` already — 0…n-1, or n…1 reversed — so
   // first and last only have to clear those, not reach for a magic 99999.
-  if (col.order === "start") css.order = -1;
-  else if (col.order === "end") css.order = count + 1;
-  else if (col.order === "custom" && typeof col.orderValue === "number") {
-    css.order = Math.round(col.orderValue);
+  if (col.colOrder === "start") css.order = -1;
+  else if (col.colOrder === "end") css.order = count + 1;
+  else if (col.colOrder === "custom" && typeof col.colOrderValue === "number") {
+    css.order = Math.round(col.colOrderValue);
   }
 
-  if (col.size === "grow") css.flexGrow = 1;
-  else if (col.size === "shrink") css.flexShrink = 1;
-  else if (col.size === "custom") {
-    if (typeof col.grow === "number" && col.grow >= 0) css.flexGrow = col.grow;
-    if (typeof col.shrink === "number" && col.shrink >= 0) css.flexShrink = col.shrink;
+  if (col.colSize === "grow") css.flexGrow = 1;
+  else if (col.colSize === "shrink") css.flexShrink = 1;
+  else if (col.colSize === "custom") {
+    if (typeof col.colGrow === "number" && col.colGrow >= 0) css.flexGrow = col.colGrow;
+    if (typeof col.colShrink === "number" && col.colShrink >= 0) css.flexShrink = col.colShrink;
   }
   return css;
 }
@@ -387,8 +386,15 @@ export const rowIsGrid = (block: Block, device: Device = "desktop"): boolean =>
  */
 const MAX_GRID_TRACKS = 12;
 
-/** One track: a length, a keyword, or a minmax() of two of those. */
-const TRACK_SIZE = /^(auto|min-content|max-content|\d+(?:\.\d+)?(?:fr|px|%|em|rem|vw|vh))$/i;
+/**
+ * One track: a length, a keyword, or a minmax() of two of those.
+ *
+ * A bare `0` is allowed alongside them because zero needs no unit and CSS says
+ * so — and `minmax(0,1fr)`, the overflow-safe track this file emits itself, is
+ * otherwise rejected by its own validator and silently replaced with equal
+ * columns.
+ */
+const TRACK_SIZE = /^(auto|min-content|max-content|0|\d+(?:\.\d+)?(?:fr|px|%|em|rem|vw|vh))$/i;
 const TRACK_MINMAX = /^minmax\(([^,()]+),([^,()]+)\)$/i;
 
 /**
@@ -539,7 +545,7 @@ export function rowLayout(block: Block, device: Device): RowLayout {
       // Last, so a column that was given its own width or order overrules the
       // row's — that is the whole point of setting one on the column.
       ...(block.columnStyles?.[i]
-        ? columnLayoutCss(columnStyleAt(block, i, device).col, count)
+        ? columnLayoutCss(columnStyleAt(block, i, device), count)
         : {}),
     })),
   };

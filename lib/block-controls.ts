@@ -362,8 +362,10 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         ],
         addLabel: "Add a card",
       },
-      // Both fields stay on every card. A switch that emptied the one it turns
-      // off would make trying the other look like a way to lose what you typed.
+      // Both fields keep their VALUE on every card whichever of them is shown —
+      // a switch that emptied the one it turns off would make trying the other
+      // look like a way to lose what you typed. Only the row hides, in
+      // `forBlock`, so a card set to Image is not offering a dead SVG box.
       {
         kind: "select",
         key: "media",
@@ -453,7 +455,9 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
           ["tablet", "On tablet and mobile"],
           ["none", "Never — keep them side by side"],
         ],
-        hint: "Setting widths for a device overrides this",
+        // Names neither "Column widths" nor the track list: whichever of the two
+        // this container is showing, an explicit width for that device wins.
+        hint: "A width set for that device overrides this",
       },
 
       group("Layout"),
@@ -498,7 +502,9 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
           ["space-around", "Space around"],
           ["space-evenly", "Space evenly"],
         ],
-        hint: "Along the direction above. It only has room to do anything once the columns leave some.",
+        // Not "the direction above": Direction is hidden on a grid, and a hint
+        // pointing at a control that is not on screen reads as a missing field.
+        hint: "Where the columns sit along the container. It only has room to do anything once they leave some.",
       },
       // The same property Align used to be, renamed rather than joined by a
       // second control: two keys writing align-items is a row drawn one way and
@@ -538,7 +544,9 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
           ["space-around", "Space around"],
           ["space-evenly", "Space evenly"],
         ],
-        hint: "Where the wrapped lines sit, once there is more than one.",
+        // "Lines", not "wrapped lines": on a grid there is no Wrap control at
+        // all, and the lines are the grid's own rows.
+        hint: "Where the lines of columns sit, once there is more than one.",
       },
 
       // Only shown on a grid, because none of it has any effect on a flex line
@@ -547,7 +555,9 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       {
         kind: "text",
         key: "gridColumns",
-        label: "Columns",
+        // Not "Columns": the column count above is already called that, and one
+        // panel with two "Columns" is a container edited by guesswork.
+        label: "Column tracks",
         when: isGrid,
         responsive: true,
         placeholder: "3",
@@ -556,7 +566,7 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       {
         kind: "text",
         key: "gridRows",
-        label: "Rows",
+        label: "Row tracks",
         when: isGrid,
         responsive: true,
         placeholder: "auto",
@@ -630,7 +640,7 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
 
 const bgIs = (t: string) => (b: Block) => b.style.background.type === t;
 const colIs = <K extends keyof ColumnLayout>(key: K, v: ColumnLayout[K]) => (b: Block) =>
-  b.style.col?.[key] === v;
+  b.style[key] === v;
 
 /**
  * What a column can be given.
@@ -654,13 +664,13 @@ export const COLUMN_CONTROLS: Control[] = [
   style({ kind: "select", key: "background.size", label: "Size", options: [["cover", "Cover"], ["contain", "Contain"], ["auto", "Auto"]], when: bgIs("classic") }),
   style({ kind: "position", key: "background.position", label: "Position", when: bgIs("classic") }),
   style({ kind: "select", key: "background.repeat", label: "Repeat", options: [["no-repeat", "No"], ["repeat", "Tile"]], when: bgIs("classic") }),
+  // An image behind words needs the words to stay readable, and a wash is how
+  // that is done without editing the picture. Declared once: two entries sharing
+  // a key are two fields labelled "Darken" and a duplicate React key beside them.
   style({ kind: "number", key: "background.overlay", label: "Darken", min: 0, max: 90, step: 5, unit: "%", when: bgIs("classic") }),
   style({ kind: "color", key: "background.from", label: "Colour one", when: bgIs("gradient") }),
   style({ kind: "color", key: "background.to", label: "Colour two", when: bgIs("gradient") }),
   style({ kind: "number", key: "background.angle", label: "Angle", min: 0, max: 360, step: 15, unit: "°", when: bgIs("gradient") }),
-  // An image behind words needs the words to stay readable, and a wash is how
-  // that is done without editing the picture.
-  style({ kind: "number", key: "background.overlay", label: "Darken", min: 0, max: 90, step: 5, unit: "%", when: bgIs("classic") }),
 
   group("Spacing"),
   style({ kind: "dim", key: "padding", label: "Padding" }),
@@ -672,23 +682,25 @@ export const COLUMN_CONTROLS: Control[] = [
   group("Layout"),
   style({
     kind: "select",
-    key: "col.width",
+    key: "colWidth",
     label: "Width",
     options: [["full", "Full"], ["custom", "Custom"]],
     hint: "Full keeps the share of the row set beside the other columns.",
   }),
-  style({ kind: "number", key: "col.widthValue", label: "Size", min: 1, max: 2000, step: 1, when: colIs("width", "custom") }),
+  // "Custom width", not "Size": the flex sizing below is also a Size, and two
+  // fields with one label in one group is a panel nobody can read.
+  style({ kind: "number", key: "colWidthValue", label: "Custom width", min: 1, max: 2000, step: 1, when: colIs("colWidth", "custom") }),
   style({
     kind: "select",
-    key: "col.widthUnit",
+    key: "colWidthUnit",
     label: "Unit",
     options: [["px", "px"], ["%", "%"], ["vw", "vw"]],
-    when: colIs("width", "custom"),
+    when: colIs("colWidth", "custom"),
     hint: "% is of the row, so it holds up on a phone. vw is of the window.",
   }),
   style({
     kind: "select",
-    key: "col.alignSelf",
+    key: "colAlignSelf",
     label: "Align self",
     options: [
       ["", "Inherit"],
@@ -701,22 +713,43 @@ export const COLUMN_CONTROLS: Control[] = [
   }),
   style({
     kind: "select",
-    key: "col.order",
+    key: "colOrder",
     label: "Order",
     options: [["", "Default"], ["start", "First"], ["end", "Last"], ["custom", "Custom"]],
     hint: "Moves the column on screen only — it stays where it is for a reader.",
   }),
-  style({ kind: "number", key: "col.orderValue", label: "Position", min: -99, max: 99, step: 1, when: colIs("order", "custom") }),
+  style({ kind: "number", key: "colOrderValue", label: "Position", min: -99, max: 99, step: 1, when: colIs("colOrder", "custom") }),
   style({
     kind: "select",
-    key: "col.size",
+    key: "colSize",
     label: "Size",
     options: [["none", "None"], ["grow", "Grow"], ["shrink", "Shrink"], ["custom", "Custom"]],
     hint: "Grow takes the space left over. Shrink gives space up first.",
   }),
-  style({ kind: "number", key: "col.grow", label: "Grow", min: 0, max: 10, step: 1, when: colIs("size", "custom") }),
-  style({ kind: "number", key: "col.shrink", label: "Shrink", min: 0, max: 10, step: 1, when: colIs("size", "custom") }),
+  style({ kind: "number", key: "colGrow", label: "Grow", min: 0, max: 10, step: 1, when: colIs("colSize", "custom") }),
+  style({ kind: "number", key: "colShrink", label: "Shrink", min: 0, max: 10, step: 1, when: colIs("colSize", "custom") }),
 ];
+
+/**
+ * The column panel, with the guards each control declares actually applied.
+ *
+ * `COLUMN_CONTROLS` does not go through `controlsFor` — a column has no content
+ * or advanced tab and no fonts — and every `when` on it was therefore inert:
+ * the panel showed a classic background's fields and a gradient's side by side,
+ * an image picker on a column with no background, and three flex settings on a
+ * grid item that ignores them.
+ */
+const FLEX_ONLY = new Set(["colSize", "colGrow", "colShrink"]);
+
+export function columnControls(col: Block, parentIsGrid: boolean): Control[] {
+  return COLUMN_CONTROLS.filter(
+    (c) =>
+      (!c.when || c.when(col)) &&
+      // flex-grow and flex-shrink do nothing at all to a grid item, and a
+      // control that silently does nothing is worse than no control.
+      !(parentIsGrid && !isGroup(c) && FLEX_ONLY.has(c.key)),
+  );
+}
 
 export const ADVANCED_CONTROLS: Control[] = [
   group("Layout"),
@@ -849,9 +882,25 @@ function withFonts(c: Control, fonts: readonly string[]): Control {
  *  - A max width in per-cent cannot sensibly run to 2000, or the slider spends
  *    nineteen twentieths of its travel on values that overflow the column.
  *  - "Hug content" is offered only to a block already set to it.
+ *  - A card shows the artwork field its Media setting actually renders. A list
+ *    item's fields have no `when` of their own, and the alternative was every
+ *    card carrying an SVG box that nothing on the page reads.
  */
 function forBlock(c: Control, block: Block): Control {
   if (isGroup(c)) return c;
+  if (c.kind === "list" && c.key === "items" && block.type === "cards") {
+    // Defaulted the way the renderer defaults it, or a card saved before the
+    // setting existed would offer the picture field it does not draw.
+    const media = block.props.media ?? "icon";
+    // Neither is hidden at "none": nothing is drawn either way, so there is no
+    // field to call the live one and hiding one would just lose an editor.
+    return {
+      ...c,
+      item: c.item.filter((f) =>
+        f.key === "icon" ? media !== "image" : f.key === "image" ? media !== "icon" : true,
+      ),
+    };
+  }
   if (c.kind === "number" && c.key === "maxWidthValue") {
     return block.style.maxWidthUnit === "%" ? { ...c, max: 100 } : { ...c, max: 1600 };
   }

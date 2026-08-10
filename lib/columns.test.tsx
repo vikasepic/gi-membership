@@ -13,7 +13,6 @@ import {
   type Block,
 } from "@/lib/blocks";
 import { blockRules, rowLayout } from "@/lib/block-style";
-import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Blocks } from "@/components/page/blocks";
 import { bandTheme } from "@/lib/page-sections";
@@ -352,6 +351,15 @@ describe("the container settings a row can be given", () => {
     expect(blockRendersNothing(asStored({ minHeight: 400 }))).toBe(false);
   });
 
+  it("keeps a spacer whose height was only ever set on a phone", () => {
+    // Min height is per device, and reading desktop alone threw the block away
+    // before the media query it correctly emits could ever fire — on the width
+    // the setting is most likely to have been set for.
+    const b = setPropsAt(asStored({}), "mobile", { minHeight: 300 });
+    expect(blockRendersNothing(b)).toBe(false);
+    expect(blockRules(b, paper).split("max-width:767px")[1] ?? "").toContain("min-height:300px");
+  });
+
   it("undoes a property the phone does not set, rather than leaving it standing", () => {
     // A container on a laptop and a row on a phone. Without this the media
     // query says nothing about flex-direction and the phone stays a column.
@@ -407,6 +415,16 @@ describe("a container laid out on a grid", () => {
     const css = container(grid({ gridColumns: "200PX 1FR 400PX", gridRows: "auto minmax(80px,1fr)" }));
     expect(css).toContain("grid-template-columns:200px 1fr 400px");
     expect(css).toContain("grid-template-rows:auto minmax(80px,1fr)");
+  });
+
+  it("accepts the overflow-safe track it writes for itself", () => {
+    // `minmax(0,1fr)` is what this file emits when nobody names a list, and the
+    // validator used to reject it: a bare zero needs no unit, and requiring one
+    // silently replaced the canonical track list with equal columns.
+    expect(container(grid({ gridColumns: "minmax(0, 1fr) 300px" }))).toContain(
+      "grid-template-columns:minmax(0,1fr) 300px",
+    );
+    expect(container(grid({ gridColumns: "0 1fr" }))).toContain("grid-template-columns:0 1fr");
   });
 
   it("falls back to equal columns rather than writing a track list it cannot read", () => {
@@ -502,9 +520,8 @@ describe("a container laid out on a grid", () => {
     b.columns = [[newBlock("heading", { props: { text: "First" } })], [], []];
     expect(blockRules(b, paper)).not.toContain("dashed");
     expect(renderToStaticMarkup(<Blocks blocks={[b]} theme={paper} />)).not.toContain("dashed");
-    // The other half asserted on source: drawing it needs the whole builder
-    // mounted in a DOM, and this file has no jsdom. The claim worth pinning is
-    // that the outline exists on exactly one side of the line.
-    expect(readFileSync("components/admin/block-editor.tsx", "utf8")).toContain("outline-1 outline-dashed");
+    // The editor half is asserted where there is a DOM to draw it in — see
+    // block-editor.interaction. Reading the source for the class name passed a
+    // rename, a reorder and the outline being drawn on every container too.
   });
 });

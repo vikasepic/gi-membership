@@ -79,9 +79,10 @@ describe("the media switch", () => {
     expect(out).not.toContain("<svg");
   });
 
-  it("keeps both fields when it is switched, so neither is lost", () => {
-    // The switch hides; it does not empty. Trying Image and going back has to
-    // return the icon, or the switch is a decision you undo by retyping.
+  it("carries an unused icon back out of the database untouched", () => {
+    // Only what this file can see: normalize does not strip the field the tile
+    // is not drawing. That the SWITCH does not empty it is a property of
+    // writeControl, and is tested where the switch is — block-editor.interaction.
     const b = stored({ items: withImage, media: "image" });
     expect((b.props.items as Record<string, unknown>[])[0].icon).toBe("<svg/>");
   });

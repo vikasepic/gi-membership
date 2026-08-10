@@ -8,6 +8,8 @@ import {
   baseStyle,
   emptyBackground,
   setStyleAt,
+  clearStyleAt,
+  type ColumnLayout,
 } from "@/lib/blocks";
 import { columnCss, backgroundCss, blockRules, rowLayout } from "@/lib/block-style";
 import { bandTheme } from "@/lib/page-sections";
@@ -179,41 +181,38 @@ describe("a column nobody has laid out", () => {
 });
 
 describe("what a column can be told about itself", () => {
-  const withCol = (patch: Partial<ReturnType<typeof baseStyle>["col"]>, index = 0) =>
-    rowLayout(
-      setColumnStyle(row2(), index, baseStyle({ col: { ...baseStyle().col, ...patch } })),
-      "desktop",
-    ).columns[index];
+  const withCol = (patch: Partial<ColumnLayout>, index = 0) =>
+    rowLayout(setColumnStyle(row2(), index, baseStyle(patch)), "desktop").columns[index];
 
   it("takes a width of its own, in the unit it was given", () => {
-    expect(withCol({ width: "custom", widthValue: 320, widthUnit: "px" }).width).toBe("320px");
-    expect(withCol({ width: "custom", widthValue: 40, widthUnit: "vw" }).width).toBe("40vw");
+    expect(withCol({ colWidth: "custom", colWidthValue: 320, colWidthUnit: "px" }).width).toBe("320px");
+    expect(withCol({ colWidth: "custom", colWidthValue: 40, colWidthUnit: "vw" }).width).toBe("40vw");
   });
 
   it("keeps the width the row already stores when Custom has no number", () => {
     // A max-width of nothing collapses a column to nothing. The share the row
     // gave it is the answer that was already there.
-    expect(withCol({ width: "custom", widthValue: null }).width).toBe("calc(50% - 12px)");
+    expect(withCol({ colWidth: "custom", colWidthValue: null }).width).toBe("calc(50% - 12px)");
   });
 
   it("aligns itself against the row", () => {
-    expect(withCol({ alignSelf: "flex-end" }).alignSelf).toBe("flex-end");
-    expect(withCol({ alignSelf: "" }).alignSelf).toBeUndefined();
+    expect(withCol({ colAlignSelf: "flex-end" }).alignSelf).toBe("flex-end");
+    expect(withCol({ colAlignSelf: "" }).alignSelf).toBeUndefined();
   });
 
   it("moves to the front or the back without moving in the markup", () => {
     // The row hands out 0 and 1, so -1 and 3 clear both ends without a magic
     // number — and the DOM order stays what a screen reader follows.
-    expect(withCol({ order: "start" }, 1).order).toBe(-1);
-    expect(withCol({ order: "end" }, 0).order).toBe(3);
-    expect(withCol({ order: "custom", orderValue: 5 }, 0).order).toBe(5);
+    expect(withCol({ colOrder: "start" }, 1).order).toBe(-1);
+    expect(withCol({ colOrder: "end" }, 0).order).toBe(3);
+    expect(withCol({ colOrder: "custom", colOrderValue: 5 }, 0).order).toBe(5);
   });
 
   it("grows into the space left over, or gives it up", () => {
-    expect(withCol({ size: "grow" }).flexGrow).toBe(1);
-    expect(withCol({ size: "shrink" }).flexShrink).toBe(1);
-    expect(withCol({ size: "custom", grow: 2, shrink: 0 })).toMatchObject({ flexGrow: 2, flexShrink: 0 });
-    expect(withCol({ size: "none" }).flexGrow).toBeUndefined();
+    expect(withCol({ colSize: "grow" }).flexGrow).toBe(1);
+    expect(withCol({ colSize: "shrink" }).flexShrink).toBe(1);
+    expect(withCol({ colSize: "custom", colGrow: 2, colShrink: 0 })).toMatchObject({ flexGrow: 2, flexShrink: 0 });
+    expect(withCol({ colSize: "none" }).flexGrow).toBeUndefined();
   });
 
   it("refuses a value nothing in CSS would accept", () => {
@@ -223,7 +222,10 @@ describe("what a column can be told about itself", () => {
       {
         type: "row",
         columns: [[], []],
-        columnStyles: [{ col: { alignSelf: "url(evil)", width: "custom", widthValue: 1, widthUnit: ";}" } }, null],
+        columnStyles: [
+          { colAlignSelf: "url(evil)", colWidth: "custom", colWidthValue: 1, colWidthUnit: ";}" },
+          null,
+        ],
       },
     ])[0];
     const css = rowLayout(evil, "desktop").columns[0];
@@ -233,15 +235,13 @@ describe("what a column can be told about itself", () => {
 });
 
 describe("a column laid out for one device only", () => {
-  const onMobile = (patch: Partial<ReturnType<typeof baseStyle>["col"]>) => {
-    const edited = setStyleAt(columnAsBlock(row2(), 0), "mobile", {
-      col: { ...baseStyle().col, ...patch },
-    });
+  const onMobile = (patch: Partial<ColumnLayout>) => {
+    const edited = setStyleAt(columnAsBlock(row2(), 0), "mobile", patch);
     return setColumnStyle(row2(), 0, edited.style, edited.responsive);
   };
 
   it("says nothing about it at desktop", () => {
-    const r = onMobile({ order: "start" });
+    const r = onMobile({ colOrder: "start" });
     expect(rowLayout(r, "desktop").columns[0].order).toBe(0);
     expect(rowLayout(r, "mobile").columns[0].order).toBe(-1);
   });
@@ -249,17 +249,45 @@ describe("a column laid out for one device only", () => {
   it("reaches the live page as a media query, not a style attribute", () => {
     // A style attribute has no media query, and it would outrank the one this
     // emits anyway — so "first on a phone" would silently never happen.
-    const css = blockRules(onMobile({ order: "start" }), theme);
+    const css = blockRules(onMobile({ colOrder: "start" }), theme);
     expect(css.split("max-width:767px")[1] ?? "").toContain("order:-1");
     expect(css.split("max-width:767px")[0]).not.toContain("order:-1");
   });
 
+  it("keeps a later desktop edit reaching the narrower widths", () => {
+    // The four things a column can be told are four unrelated decisions, so
+    // they are four keys. As ONE `col` object, aligning a column on mobile
+    // snapshotted its width beside it and every desktop width set afterwards
+    // stopped below 768px — with nothing on screen saying so.
+    const row = onMobile({ colAlignSelf: "center" });
+    const desktop = columnAsBlock(row, 0);
+    const wide = setColumnStyle(
+      row,
+      0,
+      { ...desktop.style, colWidth: "custom", colWidthValue: 300 },
+      desktop.responsive,
+    );
+    expect(rowLayout(wide, "desktop").columns[0].width).toBe("300px");
+    expect(rowLayout(wide, "mobile").columns[0]).toMatchObject({ width: "300px", alignSelf: "center" });
+  });
+
+  it("gives one setting back to the wider width without taking the others", () => {
+    // ✕ on a single control. Clearing the whole `col` object took the three
+    // decisions beside it that nobody pressed anything about.
+    const both = setStyleAt(columnAsBlock(row2(), 0), "mobile", { colAlignSelf: "center", colOrder: "start" });
+    const cleared = clearStyleAt(both, "mobile", "colOrder");
+    const row = setColumnStyle(row2(), 0, cleared.style, cleared.responsive);
+    expect(rowLayout(row, "mobile").columns[0].alignSelf).toBe("center");
+    expect(rowLayout(row, "mobile").columns[0].order).toBe(0);
+  });
+
   it("survives a round trip through the database", () => {
-    const back = normalizeBlocks(JSON.parse(JSON.stringify([onMobile({ alignSelf: "center", order: "end" })])));
+    const back = normalizeBlocks(JSON.parse(JSON.stringify([onMobile({ colAlignSelf: "center", colOrder: "end" })])));
     const col = back[0].columnStyles?.[0];
-    expect(col?.responsive?.mobile.style.col).toMatchObject({ alignSelf: "center", order: "end" });
+    expect(col?.responsive?.mobile.style).toMatchObject({ colAlignSelf: "center", colOrder: "end" });
     // Sparse, or every column on every page carries a full copy of a style it
     // never changed — and the next desktop edit stops reaching the phone.
+    expect(Object.keys(col?.responsive?.mobile.style ?? {}).sort()).toEqual(["colAlignSelf", "colOrder"]);
     expect(Object.keys(col?.responsive?.tablet.style ?? {})).toEqual([]);
   });
 

@@ -12,7 +12,7 @@ import {
   BLOCK_LABEL,
   BLOCK_ICON,
   CARD_TEMPLATES,
-  COLUMN_CONTROLS,
+  columnControls,
   applyCardTemplate,
   groupedPalette,
   clearControl,
@@ -325,11 +325,26 @@ export function BlockEditor({
     setTab("content");
   }
 
-  const tabs = column
-    ? { content: [], style: COLUMN_CONTROLS, advanced: [] }
-    : selected
-      ? controlsFor(selected, families)
-      : null;
+  const tabs = !selected
+    ? null
+    : column
+      ? // Through `columnControls`, not COLUMN_CONTROLS raw: the column path
+        // does not go through `controlsFor`, which is the only place a control's
+        // `when` was ever evaluated.
+        { content: [], style: columnControls(selected, rowIsGrid(column.row, device)), advanced: [] }
+      : controlsFor(selected, families);
+
+  /**
+   * Select anything on the canvas or in the tree.
+   *
+   * The tab moves with it, in one place: a column has only a Style tab, and the
+   * two call sites disagreeing meant clicking a column on the canvas landed on
+   * an empty Content panel while clicking the same column in the tree did not.
+   */
+  function select(id: string) {
+    setSelectedId(id);
+    setTab(splitColumnId(id) ? "style" : "content");
+  }
 
   /**
    * One writer for both.
@@ -446,12 +461,7 @@ export function BlockEditor({
               device={device}
               onSelectSection={section ? () => setSelectedId(null) : undefined}
               onContext={blockMenu}
-              onSelect={(id) => {
-                setSelectedId(id);
-                // A column has only a Style tab; landing on Content would show
-                // an empty panel and read as nothing having happened.
-                setTab(splitColumnId(id) ? "style" : "content");
-              }}
+              onSelect={select}
             />
           ) : (
             <>
@@ -529,10 +539,7 @@ export function BlockEditor({
               dropAt={dropAt}
               setDropAt={setDropAt}
               onContext={blockMenu}
-              onSelect={(id) => {
-                setSelectedId(id);
-                setTab("content");
-              }}
+              onSelect={select}
               onDrop={drop}
               onDragEnd={() => setDragging({ label: null, type: null })}
               onDragStart={(id) => {
@@ -690,11 +697,18 @@ export function BlockEditor({
               <div className="flex flex-col overflow-y-auto">
                 {tab === "content" && !column && selected.type === "cards" && (
                   <CardTemplates
-                    onApply={(id) =>
+                    device={device}
+                    onApply={(id) => {
+                      // "Keep what I have" returns the block by identity, and
+                      // committing that anyway pushed an undo step onto a button
+                      // whose hint reads "Changes nothing" — and wiped the redo
+                      // stack while it was there.
+                      const next = applyCardTemplate(selected, id);
+                      if (next === selected) return;
                       // Its own undo key, so one press is one step back — and a
                       // press that follows a slider drag does not fold into it.
-                      applyEdit(applyCardTemplate(selected, id), `template:${selected.id}:${id}`)
-                    }
+                      applyEdit(next, `template:${selected.id}:${id}`);
+                    }}
                   />
                 )}
                 {sections(
@@ -1171,7 +1185,10 @@ function RowColumns({
             selectedId === colId
               ? "outline outline-2 outline-offset-1 outline-[var(--primary)]"
               : grid
-                ? "outline outline-1 outline-dashed outline-[var(--border)]"
+                ? // The dashed box reads as decoration, so it cannot be the only
+                  // cue — on a grid it REPLACED the hover outline, in the mode
+                  // with the most columns to aim at. It recolours instead.
+                  "outline outline-1 outline-dashed outline-[var(--border)] hover:outline-[var(--primary)]"
                 : "hover:outline hover:outline-1 hover:outline-offset-1 hover:outline-[var(--border)]"
           }
           style={{
@@ -1269,10 +1286,16 @@ function DragTile({ label, type }: { label: string; type: BlockType | null }) {
  * A template only ever writes presentation, so there is no confirmation step:
  * the copy on the cards cannot be what it changes.
  */
-function CardTemplates({ onApply }: { onApply: (id: string) => void }) {
+function CardTemplates({ device, onApply }: { device: Device; onApply: (id: string) => void }) {
   return (
     <div className="flex flex-col gap-1.5 border-b border-border px-3 py-2.5">
       <span className="text-[0.7rem] font-semibold text-fg">Layout</span>
+      {/* A full-width chooser with previews reads like it applies to the width
+          on screen. Only Across differs per device; the rest is one decision
+          for the block, and this is where that is said rather than found out. */}
+      {device !== "desktop" && (
+        <span className="text-[0.6rem] leading-tight text-muted">Applies at every width.</span>
+      )}
       <div className="flex gap-1.5">
         {CARD_TEMPLATES.map((t) => (
           <button

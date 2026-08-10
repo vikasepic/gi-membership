@@ -152,6 +152,14 @@ function Row({
               <button
                 type="button"
                 onClick={() => onSelect(colId)}
+                // A column has no duplicate, copy or delete of its own, so there
+                // is no menu to open — but letting the event through pops the
+                // browser's native one over the builder, which is the one menu
+                // that definitely cannot do anything useful here.
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  onSelect(colId);
+                }}
                 style={{ paddingLeft: 10 + (depth + 1) * 16 }}
                 className={`flex w-full items-center gap-2 border-b border-border py-1.5 pr-2 text-left text-[0.66rem] ${
                   selectedId === colId ? "bg-primary/12 text-primary" : "text-muted hover:bg-surface-2"

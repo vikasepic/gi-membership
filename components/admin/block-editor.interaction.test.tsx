@@ -5,6 +5,10 @@ import { createRoot } from "react-dom/client";
 import { BlockEditor } from "@/components/admin/block-editor";
 import { bandTheme } from "@/lib/page-sections";
 import { newBlock, type Block } from "@/lib/blocks";
+import { BLOCK_CONTROLS, writeControl, type Control } from "@/lib/block-controls";
+import { blockRules } from "@/lib/block-style";
+import { Blocks } from "@/components/page/blocks";
+import { renderToStaticMarkup } from "react-dom/server";
 
 const theme = bandTheme("navy");
 
@@ -286,6 +290,10 @@ describe("selecting a column", () => {
     return row;
   };
 
+  // "Column 1 — empty" when it holds nothing, so the label is a prefix.
+  const pickColumn = (n: number) =>
+    click([...document.querySelectorAll("button")].find((b) => b.textContent?.startsWith(`Column ${n}`))!);
+
   it("opens the column's own controls from the tree, not the block's", () => {
     mount([rowOf([newBlock("heading")], [newBlock("text")])]);
     openTree();
@@ -300,8 +308,113 @@ describe("selecting a column", () => {
     expect(panel).toContain("Padding");
     expect(panel).toContain("Corner");
     // If the click had landed on the text block inside it, the panel would
-    // offer the row's own layout instead — the failure this replaces.
-    expect(panel).not.toContain("Vertical align");
+    // offer the row's own layout instead — the failure this replaces. The
+    // control is called "Align items"; the old spelling was renamed and this
+    // assertion had quietly become one no change could fail.
+    expect(panel).not.toContain("Align items");
+  });
+
+  it("opens the same panel when the column is clicked on the canvas", () => {
+    // Two routes to one selection. The canvas one forced the Content tab, and a
+    // column has no Content tab — so the panel came up empty and the click read
+    // as having done nothing.
+    mount([rowOf([], [])]);
+    // The empty space inside a column is the only place a click means the
+    // column, and the hover outline is what marks that element.
+    const col = document.querySelector('[data-block] div[class*="hover:outline-offset-1"]')!;
+    click(col);
+    expect(inspector()).toContain("Column 1");
+    expect(inspector()).toContain("Padding");
+  });
+
+  it("offers a column only the settings its own values make live", () => {
+    // Every `when` on COLUMN_CONTROLS was inert: the panel showed a classic
+    // background's fields beside a gradient's, and a custom width's number on a
+    // column set to Full.
+    mount([rowOf([], [])]);
+    openTree();
+    pickColumn(1);
+    const panel = inspector();
+    expect(panel).not.toContain("Colour one");
+    expect(panel).not.toContain("Custom width");
+    // The width's Unit, which only means anything once Width is Custom.
+    expect(panel).not.toContain("Unit");
+    // Twice was a duplicate React key and two identical fields.
+    expect(panel.split("Darken").length - 1).toBe(0);
+  });
+
+  /**
+   * Set a control in the column's panel and hand back what the row stored.
+   *
+   * Through the panel rather than through `setColumnStyle` directly: the writer
+   * that unwraps a column's edit back onto its row, and the device it writes at,
+   * are both editor code, and nothing else exercises them.
+   */
+  const setInPanel = (editor: { blocks: Block[] }, label: string, value: string) => {
+    const input = document
+      .querySelectorAll("aside")[1]!
+      .querySelector(`input[aria-label="${label} value"]`) as HTMLInputElement;
+    act(() => {
+      // React tracks the DOM value it last wrote, so a plain assignment looks
+      // like no change at all and the event is swallowed.
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    return editor.blocks[0].columnStyles?.[0];
+  };
+
+  const pin = (device: string) =>
+    click([...document.querySelectorAll("button")].find((b) => b.textContent?.trim() === device)!);
+
+  it("writes a column's edit at the width that is pinned, not at desktop", () => {
+    // The panel showed Mobile and wrote desktop, so setting a column's corner on
+    // a phone repainted the laptop.
+    const editor = mount([rowOf([], [])]);
+    openTree();
+    pickColumn(1);
+    pin("Mobile");
+    const stored = setInPanel(editor, "Corner", "24");
+    expect(stored?.responsive?.mobile.style.radius).toBe(24);
+    expect(stored?.radius).toBe(0);
+  });
+
+  it("puts what a column is given on the page, as a rule and not an attribute", () => {
+    // An attribute has no media query and outranks the one the stylesheet emits,
+    // so a column painted on mobile only would never reach a phone.
+    // Filled, or the row renders nothing on a live page and the markup this
+    // asserts on is empty whatever the column was given.
+    const editor = mount([rowOf([{ ...newBlock("heading"), props: { text: "Hi", tag: "h2" } }], [])]);
+    openTree();
+    pickColumn(1);
+    setInPanel(editor, "Corner", "18");
+    const row = editor.blocks[0];
+    // The emitted rules ride along in a <style> element, which is the whole
+    // point — so the attributes are what is checked, with that stripped out.
+    const attributes = renderToStaticMarkup(<Blocks blocks={[row]} theme={theme} />).replace(
+      /<style>[\s\S]*?<\/style>/g,
+      "",
+    );
+    expect(blockRules(row, theme)).toContain("border-radius:18px");
+    expect(attributes).not.toContain("border-radius:18px");
+  });
+
+  it("outlines a grid's cells and only a grid's, and still says they are clickable", () => {
+    // A grid's cells have no edges of their own, so the dashed box is the only
+    // thing saying where a track ends. On a flex line the columns already show
+    // their own width, and outlining those would be a border nobody asked for.
+    const cells = () =>
+      [...document.querySelectorAll('[data-block] div[class*="outline-dashed"]')].map((d) => d.className);
+    const row = rowOf([], []);
+    mount([{ ...row, props: { ...row.props, containerType: "grid" } }]);
+    expect(cells()).toHaveLength(2);
+    // The dashed box reads as decoration, so it cannot also be the only cue
+    // that the thing under the cursor can be selected.
+    expect(cells().every((c) => c.includes("hover:outline-[var(--primary)]"))).toBe(true);
+  });
+
+  it("draws no dashed outline on a flex container", () => {
+    mount([rowOf([], [])]);
+    expect(document.querySelector('[data-block] div[class*="outline-dashed"]')).toBeNull();
   });
 
   it("still right-clicks the blocks inside a column", () => {
@@ -318,15 +431,35 @@ describe("selecting a column", () => {
 });
 
 describe("a card's picture", () => {
+  const withMedia = (media: string) => {
+    const b = newBlock("cards");
+    mount([{ ...b, props: { ...b.props, media, items: [{ title: "a", body: "b", icon: "", image: "" }] } }]);
+    click(document.querySelector("[data-block]")!);
+    return document.querySelectorAll("aside")[1]!;
+  };
+
   it("is chosen from the library, not typed as a path", () => {
     // The one field on a card that names a file. Every other image on this
     // screen has a picker; typing a bucket path is how you get a broken image
     // and no way to tell which character is wrong.
-    const b = newBlock("cards");
-    mount([{ ...b, props: { ...b.props, items: [{ title: "a", body: "b", icon: "", image: "" }] } }]);
-    click(document.querySelector("[data-block]")!);
-    const panel = document.querySelectorAll("aside")[1]!;
+    const panel = withMedia("image");
     expect([...panel.querySelectorAll("button")].map((x) => x.textContent?.trim())).toContain("Select image");
+  });
+
+  it("shows only the artwork field the card actually draws", () => {
+    // Both fields used to sit on every card whichever was in use, so a card set
+    // to Image carried an SVG box nothing on the page reads and nothing said so.
+    expect(withMedia("image").textContent).not.toContain("Icon (SVG or image URL)");
+  });
+
+  it("keeps the other field's value when the switch is thrown", () => {
+    // Hiding the row is not emptying it: switching back has to find what was
+    // typed, or trying the other option is a way to lose work.
+    const b = newBlock("cards");
+    const items = [{ title: "a", body: "b", icon: "<svg/>", image: "" }];
+    const media = (BLOCK_CONTROLS.cards.content.find((c) => "key" in c && c.key === "media") as Control)!;
+    const next = writeControl({ ...b, props: { ...b.props, items } }, media, "image");
+    expect((next.props.items as { icon: string }[])[0].icon).toBe("<svg/>");
   });
 });
 
@@ -353,9 +486,23 @@ describe("the card layout chooser", () => {
 
   it("offers both looks and a way to keep neither, on the Content tab", () => {
     // Rendered, not asserted from the table: a chooser nobody can reach is a
-    // table with a test passing over it.
+    // table with a test passing over it. The tab is clicked rather than assumed
+    // to be the default, or a change of default makes the name a lie.
     mount([cards()]);
+    click(document.querySelector("[data-block]")!);
+    const tab = [...document.querySelectorAll("aside button")].find((b) => b.textContent === "content")!;
+    click(tab);
     expect(open().map(label)).toEqual(["Tiles", "Rows", "Keep what I have"]);
+  });
+
+  it("leaves Undo alone when you press the one that changes nothing", () => {
+    // Its hint says "Changes nothing." It committed the block by identity, so
+    // it added a step to undo — and cleared the redo stack while it was there.
+    mount([cards()]);
+    const undoBtn = () =>
+      [...document.querySelectorAll("button")].find((b) => b.getAttribute("aria-label")?.startsWith("Undo"))!;
+    click(open()[2]!);
+    expect(undoBtn().hasAttribute("disabled")).toBe(true);
   });
 
   it("applies a look without touching a word on the cards", () => {

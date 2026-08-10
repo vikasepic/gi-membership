@@ -77,18 +77,22 @@ export type Background = {
 };
 
 /**
- * How one column sits in the row that holds it.
+ * How one column sits in the row that holds it — the `col*` keys of `BlockStyle`.
  *
- * Only columns read this — every other block stores it and nothing looks at it.
- * It lives on `BlockStyle` rather than in its own place on the row because a
+ * Only columns read them; every other block stores them and nothing looks. They
+ * live on `BlockStyle` rather than in their own place on the row because a
  * column is edited through `columnAsBlock`, and the whole point of that trick
  * is that the ordinary control machinery — `writeControl`, `styleFor`, the
  * per-device overrides, `STYLE_KEYS` — needs no special case. A key outside
  * `baseStyle()` would be dropped by `normalizeOverride`, so "align this column
  * to the top on mobile only" would silently not save.
  *
- * One nested object, the way `background` is, so a dotted control key lands as
- * a single top-level override instead of nine.
+ * Nine flat keys rather than one nested object, which is what they were first.
+ * An override is sparse PER TOP-LEVEL KEY, so a nested object made all nine one
+ * fact: setting align-self on tablet snapshotted the other eight beside it, and
+ * the next desktop edit to the width then never reached tablet again. Clearing
+ * one of them threw the other eight away with it. They are four unrelated
+ * decisions and they have to be four unrelated keys.
  *
  * Every default here is the value that emits no declaration at all: a column
  * nobody has touched has to produce exactly the CSS it produced before any of
@@ -96,29 +100,29 @@ export type Background = {
  */
 export type ColumnLayout = {
   /** `full` leaves the width the row's own arithmetic gives this column. */
-  width: "full" | "custom";
-  widthValue: number | null;
-  widthUnit: "px" | "%" | "vw";
+  colWidth: "full" | "custom";
+  colWidthValue: number | null;
+  colWidthUnit: "px" | "%" | "vw";
   /** Empty means "whatever the row aligns its columns to". */
-  alignSelf: "" | "flex-start" | "center" | "flex-end" | "stretch";
+  colAlignSelf: "" | "flex-start" | "center" | "flex-end" | "stretch";
   /** Empty means "wherever it sits in the row". */
-  order: "" | "start" | "end" | "custom";
-  orderValue: number | null;
-  size: "none" | "grow" | "shrink" | "custom";
-  grow: number | null;
-  shrink: number | null;
+  colOrder: "" | "start" | "end" | "custom";
+  colOrderValue: number | null;
+  colSize: "none" | "grow" | "shrink" | "custom";
+  colGrow: number | null;
+  colShrink: number | null;
 };
 
 export const emptyColumnLayout = (): ColumnLayout => ({
-  width: "full",
-  widthValue: null,
-  widthUnit: "px",
-  alignSelf: "",
-  order: "",
-  orderValue: null,
-  size: "none",
-  grow: null,
-  shrink: null,
+  colWidth: "full",
+  colWidthValue: null,
+  colWidthUnit: "px",
+  colAlignSelf: "",
+  colOrder: "",
+  colOrderValue: null,
+  colSize: "none",
+  colGrow: null,
+  colShrink: null,
 });
 
 /**
@@ -179,9 +183,9 @@ export type BlockStyle = {
   hideDesktop: boolean;
   hideTablet: boolean;
   hideMobile: boolean;
-  /** Columns only — see `ColumnLayout`. Read by `rowLayout`, ignored elsewhere. */
-  col: ColumnLayout;
-};
+  // Plus the nine `col*` keys of ColumnLayout: columns only, read by rowLayout
+  // and ignored everywhere else.
+} & ColumnLayout;
 
 /**
  * The three widths a page is edited at.
@@ -316,7 +320,7 @@ export const baseStyle = (over: Partial<BlockStyle> = {}): BlockStyle => ({
   hideDesktop: false,
   hideTablet: false,
   hideMobile: false,
-  col: emptyColumnLayout(),
+  ...emptyColumnLayout(),
   ...over,
 });
 
@@ -602,20 +606,19 @@ function legacyWidth(
  * "nobody set this" means downstream and a zero here is a real answer: `grow: 0`
  * and `order: 0` both mean something a column may have been given on purpose.
  */
-function normalizeColumnLayout(v: unknown): ColumnLayout {
+function normalizeColumnLayout(v: Record<string, unknown>): ColumnLayout {
   const d = emptyColumnLayout();
-  if (!isRecord(v)) return d;
   const n = (x: unknown): number | null => (typeof x === "number" && Number.isFinite(x) ? x : null);
   return {
-    width: oneOf(v.width, ["full", "custom"] as const, d.width),
-    widthValue: n(v.widthValue),
-    widthUnit: oneOf(v.widthUnit, ["px", "%", "vw"] as const, d.widthUnit),
-    alignSelf: oneOf(v.alignSelf, ["", "flex-start", "center", "flex-end", "stretch"] as const, d.alignSelf),
-    order: oneOf(v.order, ["", "start", "end", "custom"] as const, d.order),
-    orderValue: n(v.orderValue),
-    size: oneOf(v.size, ["none", "grow", "shrink", "custom"] as const, d.size),
-    grow: n(v.grow),
-    shrink: n(v.shrink),
+    colWidth: oneOf(v.colWidth, ["full", "custom"] as const, d.colWidth),
+    colWidthValue: n(v.colWidthValue),
+    colWidthUnit: oneOf(v.colWidthUnit, ["px", "%", "vw"] as const, d.colWidthUnit),
+    colAlignSelf: oneOf(v.colAlignSelf, ["", "flex-start", "center", "flex-end", "stretch"] as const, d.colAlignSelf),
+    colOrder: oneOf(v.colOrder, ["", "start", "end", "custom"] as const, d.colOrder),
+    colOrderValue: n(v.colOrderValue),
+    colSize: oneOf(v.colSize, ["none", "grow", "shrink", "custom"] as const, d.colSize),
+    colGrow: n(v.colGrow),
+    colShrink: n(v.colShrink),
   };
 }
 
@@ -647,7 +650,7 @@ function normalizeStyle(v: unknown): BlockStyle {
     hideDesktop: v.hideDesktop === true,
     hideTablet: v.hideTablet === true,
     hideMobile: v.hideMobile === true,
-    col: normalizeColumnLayout(v.col),
+    ...normalizeColumnLayout(v),
   };
 }
 
@@ -1225,12 +1228,21 @@ export function blockRendersNothing(block: Block): boolean {
     // Never empty: it renders the real price even with nothing typed into it.
     case "pricecard":
       return false;
-    case "row":
+    case "row": {
       // A min height is content of a kind. An empty container set to 400px is a
       // gap somebody asked for, and dropping it is the setting silently failing
       // on the one row it was most likely set on.
-      if (typeof p.minHeight === "number" && p.minHeight > 0) return false;
+      //
+      // Every width, not `block.props`: min height is per device, so a spacer
+      // set only on mobile lives in an override — and reading desktop alone
+      // threw the block away before the media query it emits could ever fire.
+      const tall = DEVICES.some((d) => {
+        const h = propsFor(block, d).minHeight;
+        return typeof h === "number" && h > 0;
+      });
+      if (tall) return false;
       return (block.columns ?? []).every((col) => col.every(blockRendersNothing));
+    }
     case "spacer":
     case "divider":
       return false;
@@ -1257,10 +1269,23 @@ export function edgeIndex(clientY: number, top: number, height: number, index: n
  *
  * A row is the exception: it cannot nest inside a column, so it goes to the
  * end of the canvas rather than silently not appearing.
+ *
+ * A selected COLUMN is not a block, so `findBlock` cannot see it. Without the
+ * second lookup the click fell through to the end of the section: the single
+ * most likely action after selecting an empty column put the block anywhere but
+ * in it, and nothing said why.
  */
 export function addTarget(blocks: Block[], selectedId: string | null, type: BlockType): DropTarget {
   const found = selectedId ? findBlock(blocks, selectedId) : null;
-  if (!found) return { zone: "root", index: blocks.length };
+  if (!found) {
+    const col = selectedId ? splitColumnId(selectedId) : null;
+    const row = col ? findBlock(blocks, col.rowId)?.block : null;
+    const into = row?.columns?.[col?.index ?? -1];
+    if (col && into && type !== "row") {
+      return { zone: "column", rowId: col.rowId, column: col.index, index: into.length };
+    }
+    return { zone: "root", index: blocks.length };
+  }
   if (found.parentId !== null) {
     if (type === "row") return { zone: "root", index: blocks.length };
     return { zone: "column", rowId: found.parentId, column: found.column ?? 0, index: found.index + 1 };

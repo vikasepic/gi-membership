@@ -125,6 +125,30 @@ describe("addTarget — where clicking the palette puts a block", () => {
     expect(addTarget([a], "gone", "text")).toEqual({ zone: "root", index: 1 });
   });
 
+  it("adds into the column itself when the COLUMN is what is selected", () => {
+    // A column is not a block, so findBlock cannot see its id — and the click
+    // fell through to the bottom of the section. Selecting an empty column and
+    // reaching for the palette is the commonest thing anyone does next.
+    const row = newBlock("row");
+    row.columns![1] = [b];
+    expect(addTarget([row], `${row.id}#1`, "button")).toEqual({
+      zone: "column",
+      rowId: row.id,
+      column: 1,
+      index: 1,
+    });
+    expect(addTarget([row], `${row.id}#0`, "button")).toMatchObject({ column: 0, index: 0 });
+  });
+
+  it("still sends a row to the canvas when a column is selected", () => {
+    const row = newBlock("row");
+    expect(addTarget([row], `${row.id}#0`, "row")).toEqual({ zone: "root", index: 1 });
+  });
+
+  it("appends when the selected column belongs to a row that is gone", () => {
+    expect(addTarget([a], "vanished#0", "text")).toEqual({ zone: "root", index: 1 });
+  });
+
   it("the target it returns is one insertBlock actually honours", () => {
     // The two have to agree, or the block goes somewhere other than where the
     // editor just told the user it would.

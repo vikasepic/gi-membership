@@ -17,6 +17,13 @@ const filled = (over: Record<string, unknown> = {}): Block =>
 const applied = CARD_TEMPLATES.filter((t) => Object.keys(t.props).length > 0);
 
 describe("what a card template is allowed to touch", () => {
+  it("checks every template but the one that is meant to do nothing", () => {
+    // `applied` filters on empty props, so a real template shipped with
+    // `props: {}` by mistake would be skipped by both tables below while the
+    // suite still read as "every template checked".
+    expect(CARD_TEMPLATES.filter((t) => !applied.includes(t)).map((t) => t.id)).toEqual(["keep"]);
+  });
+
   it.each(applied.map((t) => t.id))("leaves every card untouched: %s", (id) => {
     // The one thing that must never happen. A chooser people press to see what
     // it does cannot be a chooser that empties the cards, and "it only writes
