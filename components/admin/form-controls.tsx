@@ -64,18 +64,60 @@ export function Group({
   label,
   children,
   hint,
+  changed,
+}: {
+  label: string;
+  children: React.ReactNode;
+  hint?: string;
+  /** How many of this group's settings are no longer at their default. */
+  changed?: number;
+}) {
+  return (
+    // A rule above and a lot of air below it. The group's boundary has to read
+    // louder than the gaps between its own rows, or a panel of thirty fields is
+    // thirty fields rather than five decisions — which is what this was.
+    <section className="border-t border-border pt-7 first:border-t-0 first:pt-0">
+      <div className="flex items-baseline gap-2.5">
+        {/* A heading, not a caption. This was 0.6rem uppercase muted — smaller
+            and lighter than the field labels underneath it, so the weakest
+            thing on screen was the one carrying the structure. */}
+        <h3 className="text-[0.82rem] font-semibold text-fg">{label}</h3>
+        {changed ? (
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[0.62rem] font-medium text-primary">
+            {changed} changed
+          </span>
+        ) : null}
+      </div>
+      {hint && <p className="mt-1 max-w-[62ch] text-xs leading-relaxed text-muted">{hint}</p>}
+      <div className="mt-4 flex flex-col gap-6">{children}</div>
+    </section>
+  );
+}
+
+/**
+ * A named part of a group.
+ *
+ * The level that was missing. "Logo & bar" is two objects with their own
+ * geometry, and "Links" is a list of destinations followed by the type they are
+ * set in — one heading over all of it means the only way to find the bar's
+ * height is to read every row above it.
+ */
+export function Sub({
+  label,
+  children,
+  hint,
 }: {
   label: string;
   children: React.ReactNode;
   hint?: string;
 }) {
   return (
-    <div className="border-b border-border/60 py-4 last:border-b-0 first:pt-1">
-      <span className="mb-2.5 block text-[0.6rem] font-medium uppercase tracking-[0.15em] text-muted">
+    <div>
+      <span className="block text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-muted">
         {label}
       </span>
-      {hint && <p className="-mt-1.5 mb-2.5 text-xs text-muted">{hint}</p>}
-      <div className="flex flex-col gap-3">{children}</div>
+      {hint && <p className="mt-1 max-w-[62ch] text-xs text-muted">{hint}</p>}
+      <div className="mt-2.5 flex flex-col gap-2">{children}</div>
     </div>
   );
 }
