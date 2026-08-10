@@ -30,11 +30,20 @@ export type InstalledFont = { id: string; family: string; source: "google" | "cu
 export function TypographyFields({
   headingFont,
   bodyFont,
+  siteTypography,
   installed,
   errors,
 }: {
   headingFont: string;
   bodyFont: string;
+  /**
+   * The site's own type scale — eleven elements at three widths.
+   *
+   * One JSON field rather than forty inputs, the way the page editor posts a
+   * section's blocks. Nothing here edits it yet, so today it posts back what
+   * it was given; the controls that will change it write to this same input.
+   */
+  siteTypography: unknown;
   installed: InstalledFont[];
   errors: Record<string, string>;
 }) {
@@ -46,6 +55,7 @@ export function TypographyFields({
 
   return (
     <>
+      <input type="hidden" name="siteTypography" value={JSON.stringify(siteTypography)} />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Heading font" hint="titles, and anything set in the display face" error={errors.headingFont}>
           <FontSelect name="headingFont" value={heading} families={families} onChange={setHeading} />

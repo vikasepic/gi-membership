@@ -8,6 +8,7 @@ import { PageSettings } from "@/components/admin/page-settings";
 import { buildBumpView } from "@/lib/bump";
 import { siteUrl } from "@/lib/env";
 import { CopyLink } from "@/components/admin/copy-link";
+import { storePreview } from "@/lib/store-preview";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,13 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
   const offer = await getOfferById(id);
   if (!offer) notFound();
 
-  const [rows, settings, pageSources] = await Promise.all([
+  const [rows, settings, pageSources, preview] = await Promise.all([
     getPageSections("offer", id),
     getPageSettings("offer", id),
     listPageSources(),
+    // The store's fonts and site typography. The admin renders no StoreBrand,
+    // so without this the preview draws in the app's own fonts.
+    storePreview(),
   ]);
   // The price shown on the page comes from the offer, never from a copy field —
   // the same rule as the order bump.
@@ -77,6 +81,7 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
         ownerId={id}
         initial={rows}
         money={{ priceLabel: view.nowLabel, termsLabel: view.termsLabel }}
+        preview={preview}
         liveHref={`/admin/offers/${id}/preview?template=sections`}
       />
         </div>

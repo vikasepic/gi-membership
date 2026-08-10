@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
+import { SITE_TYPOGRAPHY_SCHEMA } from "@/lib/site-typography";
 
 /**
  * Everything that is true of the whole store.
@@ -57,6 +58,13 @@ export const SETTINGS_SCHEMA = z.object({
   // with nothing behind it renders as the fallback and looks like a bug.
   headingFont: z.string().trim().max(60).default(""),
   bodyFont: z.string().trim().max(60).default(""),
+  // One object rather than a field per element per width — eleven elements
+  // times four measurements is a settings table nobody could read, and the
+  // group's form posts it as one JSON string for the same reason the page
+  // editor posts a section's blocks that way. Its schema never throws and
+  // treats every missing key as "inherit", so an empty blob is the store
+  // exactly as it renders today.
+  siteTypography: SITE_TYPOGRAPHY_SCHEMA,
 
   // ---- Legal -------------------------------------------------------------
   legalEntity: z.string().trim().max(160).default(LEGAL_DEFAULTS.legalEntity),
@@ -133,7 +141,7 @@ export const GROUP_FIELDS: Record<SettingsGroupKey, readonly (keyof Settings)[]>
   ],
   identity: ["name", "tagline"],
   brand: ["primaryColor", "deepColor", "logoPath", "faviconPath"],
-  typography: ["headingFont", "bodyFont"],
+  typography: ["headingFont", "bodyFont", "siteTypography"],
   commerce: ["currency", "contactEmail", "replyTime"],
   seo: [
     "metaTitle",

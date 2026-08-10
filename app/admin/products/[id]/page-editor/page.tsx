@@ -8,6 +8,7 @@ import { PageSettings } from "@/components/admin/page-settings";
 import { money } from "@/lib/money";
 import { siteUrl } from "@/lib/env";
 import { CopyLink } from "@/components/admin/copy-link";
+import { storePreview } from "@/lib/store-preview";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,13 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
   const product = await getProductById(id);
   if (!product) notFound();
 
-  const [rows, settings, pageSources] = await Promise.all([
+  const [rows, settings, pageSources, preview] = await Promise.all([
     getPageSections("product", id),
     getPageSettings("product", id),
     listPageSources(),
+    // The store's fonts and site typography. The admin renders no StoreBrand,
+    // so without this the preview draws in the app's own fonts.
+    storePreview(),
   ]);
 
   return (
@@ -73,6 +77,7 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
         ownerId={id}
         initial={rows}
         money={{ priceLabel: money(product.priceCents, product.currency), termsLabel: null }}
+        preview={preview}
         liveHref={`/p/${product.slug}`}
       />
         </div>

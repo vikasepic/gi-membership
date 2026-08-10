@@ -70,6 +70,7 @@ const CanvasDevice = createContext<Device>("desktop");
 import { backgroundCss, blockCssAt, columnCss, effectiveWidths, mobilePaddingNotice, rowIsGrid, rowLayout, stacksAt } from "@/lib/block-style";
 import { imageSrc } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
+import { PREVIEW_SCOPE, siteTypographyCssAt, type SitePreview } from "@/lib/site-typography";
 
 // The builder.
 //
@@ -98,6 +99,7 @@ export function BlockEditor({
   section,
   onChange,
   onClose,
+  preview,
 }: {
   blocks: Block[];
   theme: BandTheme;
@@ -113,6 +115,15 @@ export function BlockEditor({
   section?: SectionEdit;
   onChange: (next: Block[]) => void;
   onClose: () => void;
+  /**
+   * The store's fonts and site typography.
+   *
+   * Without it the canvas shows the fonts the app was built with and none of
+   * the site's own type, so a block that sets no size of its own renders here
+   * at a size no visitor will ever see — which is the one thing a canvas that
+   * renders the live components exists to avoid.
+   */
+  preview?: SitePreview;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("content");
@@ -128,6 +139,20 @@ export function BlockEditor({
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Drawn with the same function the live band uses, so the canvas cannot show
   // one thing and the page another.
+  // The store's type, for the width the canvas is showing. Not media queries:
+  // the canvas is 390px wide inside a 1900px window, so `max-width:767px` never
+  // matches there — the same reason blockCssAt applies a style attribute rather
+  // than emitting rules. Scoped to the canvas class, because these selectors
+  // name elements and the admin's own chrome is made of the same elements.
+  const previewCss = useMemo(
+    () =>
+      preview
+        ? [preview.fontCss, siteTypographyCssAt(preview.typography, device, `.${PREVIEW_SCOPE}`)]
+            .filter(Boolean)
+            .join("\n")
+        : "",
+    [preview, device],
+  );
   const sectionBackdrop = useMemo(() => {
     const bg = section?.background;
     return bg && bg.type !== "none" ? backgroundCss(normalizeBackground(bg), theme) : undefined;
@@ -527,8 +552,13 @@ export function BlockEditor({
           className="min-w-0 overflow-y-auto p-6"
           style={{ background: theme.bg, ...sectionBackdrop }}
         >
+          {/* Later in the document than the section preview's copy of the same
+              rules — this overlay is portalled to the end of the body — so
+              while the builder is open its width is the one that wins. The
+              preview underneath it is covered anyway. */}
+          {previewCss && <style dangerouslySetInnerHTML={{ __html: previewCss }} />}
           <div
-            className="mx-auto w-full transition-[max-width] duration-200"
+            className={`${PREVIEW_SCOPE} mx-auto w-full transition-[max-width] duration-200`}
             style={{ maxWidth: DEVICE_CANVAS[device] ?? 900 }}
           >
             <Zone

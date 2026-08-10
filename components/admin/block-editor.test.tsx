@@ -4,6 +4,7 @@ import { BlockEditor, ImageControl } from "@/components/admin/block-editor";
 import { bandTheme } from "@/lib/page-sections";
 import { PALETTE, BLOCK_LABEL } from "@/lib/block-controls";
 import { addTarget, edgeIndex, insertBlock, moveBlock, newBlock, type Block } from "@/lib/blocks";
+import { PREVIEW_SCOPE, normalizeSiteTypography } from "@/lib/site-typography";
 
 const navy = bandTheme("navy");
 
@@ -210,5 +211,49 @@ describe("the image control keeps a way to get a picture in", () => {
 
   it("previews what is already set", () => {
     expect(render1({ value: "https://x.test/a.jpg" })).toContain('src="https://x.test/a.jpg"');
+  });
+});
+
+describe("the canvas shows the store's own type", () => {
+  const preview = {
+    fontCss: '@font-face{font-family:"Probe";font-style:normal;font-weight:400;src:url("/x.woff2") format("woff2")}',
+    typography: normalizeSiteTypography({
+      h1: { desktop: { size: "41px" }, mobile: { size: "23px" } },
+    }),
+  };
+  const withPreview = renderToStaticMarkup(
+    <BlockEditor
+      blocks={[newBlock("heading")]}
+      theme={navy}
+      title="Hero"
+      onChange={() => {}}
+      onClose={() => {}}
+      preview={preview}
+    />,
+  );
+
+  it("declares the store's faces and the store's type", () => {
+    // Without the faces, a family the store installed renders here as the
+    // fallback — the setting looks broken in the one place it is being set.
+    expect(withPreview).toContain(preview.fontCss);
+    expect(withPreview).toContain(`.${PREVIEW_SCOPE} h1{font-size:41px}`);
+  });
+
+  it("leaves the admin's own chrome alone", () => {
+    // `:root h1` here would restyle the admin around the canvas, including the
+    // settings page you would go to to undo it.
+    expect(withPreview).not.toContain(":root h1");
+    expect(withPreview).toContain(`class="${PREVIEW_SCOPE} mx-auto`);
+  });
+
+  it("writes the width it is showing, not a media query", () => {
+    // The canvas is 390px wide inside a 1900px window: a max-width query would
+    // never match, so the phone view would silently show the desktop type.
+    expect(withPreview).not.toContain("@media");
+    expect(withPreview).not.toContain("23px");
+  });
+
+  it("ships nothing at all when the store has set nothing", () => {
+    expect(shell([newBlock("heading")])).not.toContain("<style");
   });
 });

@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
+  PREVIEW_SCOPE,
   SITE_TYPOGRAPHY_DEFAULTS,
   TYPOGRAPHY_ELEMENTS,
   LIGHT_BAND_INK,
   bandInk,
   normalizeSiteTypography,
   siteTypographyCss,
+  siteTypographyCssAt,
   type SiteTypography,
 } from "@/lib/site-typography";
 import { BAND_STYLES, bandTheme } from "@/lib/page-sections";
@@ -155,6 +157,61 @@ describe("the CSS writer", () => {
       withElement("body", { color: "red;background:url(x)", desktop: { size: "1px}*{color:red" } }),
     );
     expect(css).toBe("");
+  });
+});
+
+describe("the same type inside the admin", () => {
+  const scope = `.${PREVIEW_SCOPE}`;
+
+  it("names the preview's class instead of :root, at the same specificity", () => {
+    const css = siteTypographyCss(
+      withElement("h1", { desktop: { size: "40px" } }),
+      scope,
+    );
+    // 0-1-1 either way, so a block's `.bk-x.bk-x` (0-2-0) still beats it here
+    // exactly as it does on the page.
+    expect(css).toBe(`${scope} h1{font-size:40px}`);
+    expect(css).not.toContain(":root");
+  });
+
+  it("treats the scope element as the preview's body", () => {
+    // A preview has no <body> of its own — `.site-type body` would match
+    // nothing at all and the body settings would silently do nothing.
+    expect(siteTypographyCss(withElement("body", { desktop: { size: "17px" } }), scope)).toBe(
+      `${scope}{font-size:17px}`,
+    );
+    expect(siteTypographyCss(withElement("body", { desktop: { paragraphSpacing: "1em" } }), scope)).toBe(
+      `${scope} p{margin-bottom:1em}`,
+    );
+    expect(siteTypographyCss(withElement("list", { desktop: { size: "15px" } }), scope)).toBe(
+      `${scope} ul, ${scope} ol{font-size:15px}`,
+    );
+  });
+
+  it("writes one width with no media query, wider widths first", () => {
+    // The canvas is 390px wide inside a 1900px window, so no max-width query
+    // fires there. Order is the fallback: a phone that sets only a size still
+    // gets the desktop weight.
+    const t = withElement("h1", {
+      desktop: { size: "48px", lineHeight: "1.1" },
+      tablet: { size: "36px" },
+      mobile: { size: "28px" },
+    });
+    expect(siteTypographyCssAt(t, "mobile", scope)).toBe(
+      `${scope} h1{font-size:48px;line-height:1.1}${scope} h1{font-size:36px}${scope} h1{font-size:28px}`,
+    );
+    expect(siteTypographyCssAt(t, "tablet", scope)).toBe(
+      `${scope} h1{font-size:48px;line-height:1.1}${scope} h1{font-size:36px}`,
+    );
+    expect(siteTypographyCssAt(t, "desktop", scope)).toBe(`${scope} h1{font-size:48px;line-height:1.1}`);
+    expect(siteTypographyCssAt(t, "mobile", scope)).not.toContain("@media");
+  });
+
+  it("still ships nothing when nothing is set", () => {
+    expect(siteTypographyCss(SITE_TYPOGRAPHY_DEFAULTS, scope)).toBe("");
+    for (const device of ["desktop", "tablet", "mobile"] as const) {
+      expect(siteTypographyCssAt(SITE_TYPOGRAPHY_DEFAULTS, device, scope)).toBe("");
+    }
   });
 });
 

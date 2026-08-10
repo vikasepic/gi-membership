@@ -48,6 +48,15 @@ const FIELD_LABELS: Record<string, string> = {
 const labelOf = (f: string | number | symbol) => FIELD_LABELS[String(f)] ?? String(f);
 
 /**
+ * A value as the conflict check can compare it.
+ *
+ * `String(obj)` is "[object Object]" for every object, so the typography blob
+ * would compare equal to any other and two admins editing it would silently
+ * overwrite each other — the exact thing this check exists to stop.
+ */
+const asText = (v: unknown) => (v !== null && typeof v === "object" ? JSON.stringify(v) : String(v ?? ""));
+
+/**
  * Save one group.
  *
  * Only that group's fields are read and written, which is what makes the page
@@ -75,6 +84,22 @@ export async function saveSettingsGroup(
       const value = String(formData.get("name") ?? "").trim();
       if (!value) errors.name = "The store needs a name";
       else patch.name = value;
+      continue;
+    }
+    // The one field that is an object. It posts as JSON from a hidden input,
+    // so it cannot go through `shape.safeParse(raw)` below: that would hand a
+    // string to a schema expecting an object, get back the all-empty default,
+    // and blank the whole store's typography on any save of this group.
+    if (field === "siteTypography") {
+      const raw = formData.get("siteTypography");
+      // Not posted at all means this form never carried it — leave what is
+      // stored alone rather than replacing it with nothing.
+      if (typeof raw !== "string") continue;
+      try {
+        patch.siteTypography = SETTINGS_SCHEMA.shape.siteTypography.parse(JSON.parse(raw));
+      } catch {
+        errors.siteTypography = "The typography could not be read. Reload and try again.";
+      }
       continue;
     }
     const shape = SETTINGS_SCHEMA.shape[field as keyof typeof SETTINGS_SCHEMA.shape];
@@ -109,7 +134,7 @@ export async function saveSettingsGroup(
   if (baseline) {
     const current = await getSettings() as unknown as Record<string, unknown>;
     const moved = fields.filter(
-      (f) => f in baseline && String(current[f as string] ?? "") !== String(baseline[f as string] ?? ""),
+      (f) => f in baseline && asText(current[f as string]) !== asText(baseline[f as string]),
     );
     if (moved.length > 0) {
       return {

@@ -1,5 +1,6 @@
 import { SETTINGS_DEFAULTS, type Settings } from "@/lib/settings-schema";
 import { fontFaceCss, familyStack, type FontRow } from "@/lib/fonts";
+import { siteTypographyCss } from "@/lib/site-typography";
 
 /**
  * The saved brand, as real CSS.
@@ -53,6 +54,9 @@ export function StoreBrand({
     // Faces first: a rule that names a family before its @font-face is declared
     // is a rule the browser resolves to the fallback.
     fonts.length > 0 ? fontFaceCss(fonts, publicBase) : "",
+    // The site's own type, before the variables it reads and before the owner's
+    // CSS, which must be able to beat both. Empty until somebody sets something.
+    siteTypographyCss(settings.siteTypography),
     rules.length > 0 ? `:root{${rules.join(";")}}` : "",
     settings.customCss.trim(),
   ]

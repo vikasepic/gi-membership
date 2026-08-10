@@ -158,6 +158,7 @@ function GroupForm({
         <TypographyFields
           headingFont={settings.headingFont}
           bodyFont={settings.bodyFont}
+          siteTypography={settings.siteTypography}
           installed={fonts}
           errors={errors}
         />

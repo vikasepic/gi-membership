@@ -23,6 +23,7 @@ import { blocksForSection, isUnconverted } from "@/lib/section-to-blocks";
 import { starterBlocks } from "@/lib/page-starter";
 import { warnNotBuyable } from "@/lib/page-buyable";
 import { DEVICE_CANVAS, normalizeBlocks, reid, type Block, type Device } from "@/lib/blocks";
+import { PREVIEW_SCOPE, siteTypographyCssAt, type SitePreview } from "@/lib/site-typography";
 import type { OwnerType } from "@/lib/pages";
 
 // The page editor.
@@ -48,6 +49,7 @@ export function PageEditor({
   money,
   liveHref,
   pageSources = [],
+  preview,
 }: {
   ownerType: OwnerType;
   ownerId: string;
@@ -56,6 +58,8 @@ export function PageEditor({
   liveHref: string;
   /** Other pages that could be used as a template. */
   pageSources?: PageSource[];
+  /** The store's fonts and site typography, so the preview is not a lie. */
+  preview?: SitePreview;
 }) {
   const [rows, setRows] = useState<SectionRow[]>(initial);
   const [openKey, setOpenKey] = useState<string | null>(initial[0]?.sectionKey ?? null);
@@ -66,6 +70,24 @@ export function PageEditor({
   const [savedAt, setSavedAt] = useState<number | null>(null);
 
   const dirtyKeys = Object.keys(dirty).filter((k) => dirty[k]);
+
+  // The store's type, in the admin, reaching only what wears the class — the
+  // admin's own chrome keeps its own.
+  //
+  // Written for the width being previewed rather than as media queries: this
+  // preview is 390px wide inside a 1900px window, so a `max-width:767px` query
+  // would never fire and the phone view would quietly show the desktop type.
+  // The builder writes its own copy of this for the same reason, at whatever
+  // width IT is showing.
+  const previewCss = useMemo(
+    () =>
+      preview
+        ? [preview.fontCss, siteTypographyCssAt(preview.typography, device, `.${PREVIEW_SCOPE}`)]
+            .filter(Boolean)
+            .join("\n")
+        : "",
+    [preview, device],
+  );
 
   /**
    * One save for the whole page.
@@ -191,6 +213,7 @@ export function PageEditor({
 
   return (
     <div className="flex flex-col gap-4">
+      {previewCss && <style dangerouslySetInnerHTML={{ __html: previewCss }} />}
       {notBuyable && (
         <div className="flex flex-col gap-1 rounded-2xl border border-primary/45 bg-primary/5 px-5 py-4">
           <span className="font-medium text-fg">Nothing on this page can be bought</span>
@@ -274,6 +297,7 @@ export function PageEditor({
             device={device}
             clip={clip}
             onContext={sectionMenu}
+            preview={preview}
           />
         ) : (
           <p className="p-6 text-sm text-muted">Pick a section on the left.</p>
@@ -393,6 +417,7 @@ function SectionPanel({
   device,
   clip,
   onContext,
+  preview,
 }: {
   row: SectionRow;
   money: PageMoney;
@@ -400,6 +425,7 @@ function SectionPanel({
   device: Device;
   clip: Clip | null;
   onContext: (e: React.MouseEvent, row: SectionRow) => void;
+  preview?: SitePreview;
 }) {
   const def = sectionDef(row.sectionKey)!;
   const content = useMemo<Draft>(
@@ -453,6 +479,7 @@ function SectionPanel({
             onChange,
           }}
           onChange={(next) => setField("blocks", next)}
+          preview={preview}
         />
 
       </div>
@@ -468,7 +495,7 @@ function SectionPanel({
           </span>
           <div className="overflow-hidden rounded-xl border border-border">
             <div
-              className="mx-auto transition-[max-width] duration-200"
+              className={`${PREVIEW_SCOPE} mx-auto transition-[max-width] duration-200`}
               style={{ maxWidth: DEVICE_CANVAS[device] ?? undefined }}
             >
               <SectionBand row={{ ...row, content }} money={money} preview at={device} />
@@ -499,11 +526,13 @@ function BlockCanvasField({
   title,
   section,
   onChange,
+  preview,
 }: {
   row: SectionRow;
   title: string;
   section: SectionEdit;
   onChange: (next: Block[]) => void;
+  preview?: SitePreview;
 }) {
   const [open, setOpen] = useState(false);
   const view = useMemo(() => buildSectionView(row), [row]);
@@ -539,6 +568,7 @@ function BlockCanvasField({
           section={section}
           onChange={onChange}
           onClose={() => setOpen(false)}
+          preview={preview}
         />
       )}
     </>

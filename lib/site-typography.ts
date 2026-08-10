@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DEVICE_MAX } from "@/lib/blocks";
+import { DEVICE_MAX, type Device } from "@/lib/blocks";
 import { normalizeHex } from "@/lib/color";
 
 /**
@@ -147,6 +147,9 @@ const styleSchema = z.object({
  */
 export const SITE_TYPOGRAPHY_SCHEMA: z.ZodType<SiteTypography, unknown> = z
   .unknown()
+  // Optional so it can be a key in an object schema that is parsed from `{}` —
+  // which is exactly what a store that has never saved settings holds.
+  .optional()
   .transform((v) => {
     const raw = isRecord(v) ? v : {};
     const out = {} as SiteTypography;
@@ -167,21 +170,50 @@ export const SITE_TYPOGRAPHY_DEFAULTS: SiteTypography = normalizeSiteTypography(
 // The CSS writer
 // ---------------------------------------------------------------------------
 
-const SELECTOR: Record<TypographyElement, string> = {
-  body: ":root body",
-  link: ":root a",
-  linkHover: ":root a:hover",
+const TAGS: Record<TypographyElement, readonly string[]> = {
+  body: ["body"],
+  link: ["a"],
+  linkHover: ["a:hover"],
   // Both list kinds, because "list" is one control in the panel and two rules
   // here; each half is 0-1-1 on its own.
-  list: ":root ul, :root ol",
-  blockquote: ":root blockquote",
-  h1: ":root h1",
-  h2: ":root h2",
-  h3: ":root h3",
-  h4: ":root h4",
-  h5: ":root h5",
-  h6: ":root h6",
+  list: ["ul", "ol"],
+  blockquote: ["blockquote"],
+  h1: ["h1"],
+  h2: ["h2"],
+  h3: ["h3"],
+  h4: ["h4"],
+  h5: ["h5"],
+  h6: ["h6"],
 };
+
+/**
+ * The class an admin preview wears.
+ *
+ * These rules cannot be written as `:root h1` inside the admin: they would
+ * restyle the admin's own chrome, including the settings page you would go to
+ * to undo them. Scoped to a class they reach the preview and nothing else, and
+ * `.site-type h1` is 0-1-1 just as `:root h1` is — so the preview and the page
+ * settle the cascade against a block's `.bk-x.bk-x` (0-2-0) identically.
+ */
+export const PREVIEW_SCOPE = "site-type";
+
+/**
+ * What an admin preview needs to render like the store: the faces to draw
+ * with, and the type to draw. Built server-side by `lib/store-preview`; the
+ * shape lives here because the editors that receive it run in the browser.
+ */
+export type SitePreview = { fontCss: string; typography: SiteTypography };
+
+/**
+ * Where the rule applies. `scope` empty means the store itself.
+ *
+ * The store's body rule has to name the element the page inherits from; a
+ * preview has no `<body>` of its own, so the scope element IS its body.
+ */
+function selectorFor(el: TypographyElement, scope: string): string {
+  if (el === "body") return scope || ":root body";
+  return TAGS[el].map((tag) => `${scope || ":root"} ${tag}`).join(", ");
+}
 
 /**
  * Paragraph spacing is the one body measurement that cannot go on `body`.
@@ -189,7 +221,7 @@ const SELECTOR: Record<TypographyElement, string> = {
  * to — and naming `p` is also what puts it above the `[&_p]:mb-3` utility the
  * rich-text block hardcodes.
  */
-const PARAGRAPH_SELECTOR = ":root p";
+const paragraphSelector = (scope: string) => `${scope || ":root"} p`;
 
 const isHeading = (el: TypographyElement) => /^h[1-6]$/.test(el);
 
@@ -205,7 +237,7 @@ function familyValue(family: string, heading: boolean): string {
   return `"${family}", ${base}, system-ui, sans-serif`;
 }
 
-function rulesAt(t: SiteTypography, device: "desktop" | "tablet" | "mobile"): string[] {
+function rulesAt(t: SiteTypography, device: Device, scope: string): string[] {
   const rules: string[] = [];
   for (const el of TYPOGRAPHY_ELEMENTS) {
     const e = t[el];
@@ -226,11 +258,11 @@ function rulesAt(t: SiteTypography, device: "desktop" | "tablet" | "mobile"): st
     if (m.lineHeight) d.push(`line-height:${m.lineHeight}`);
     if (m.letterSpacing) d.push(`letter-spacing:${m.letterSpacing}`);
     if (m.wordSpacing) d.push(`word-spacing:${m.wordSpacing}`);
-    if (d.length > 0) rules.push(`${SELECTOR[el]}{${d.join(";")}}`);
+    if (d.length > 0) rules.push(`${selectorFor(el, scope)}{${d.join(";")}}`);
     // ponytail: paragraphSpacing rides in every element's metrics because one
     // shape is cheaper than two, and is read for body only.
     if (el === "body" && m.paragraphSpacing) {
-      rules.push(`${PARAGRAPH_SELECTOR}{margin-bottom:${m.paragraphSpacing}}`);
+      rules.push(`${paragraphSelector(scope)}{margin-bottom:${m.paragraphSpacing}}`);
     }
   }
   return rules;
@@ -247,11 +279,30 @@ function rulesAt(t: SiteTypography, device: "desktop" | "tablet" | "mobile"): st
  * Tablet before mobile, at the same two widths the block editor uses, so a
  * phone inherits the tablet value the way it does everywhere else.
  */
-export function siteTypographyCss(t: SiteTypography): string {
-  const out = rulesAt(t, "desktop");
+export function siteTypographyCss(t: SiteTypography, scope = ""): string {
+  const out = rulesAt(t, "desktop", scope);
   for (const device of ["tablet", "mobile"] as const) {
-    const inner = rulesAt(t, device).join("");
+    const inner = rulesAt(t, device, scope).join("");
     if (inner) out.push(`@media (max-width:${DEVICE_MAX[device]}px){${inner}}`);
+  }
+  return out.join("");
+}
+
+/**
+ * The same typography as one width sees it, with no media query at all.
+ *
+ * For an editor canvas, which is 390px wide inside a 1900px window: a
+ * `max-width:767px` query never matches there, so the phone view would show
+ * the desktop type and the builder would be lying about the one thing it was
+ * asked to show. Every width up to the chosen one is emitted in order, so a
+ * value the narrower width leaves unset still falls back to the wider one —
+ * which is what the media queries do on the real page.
+ */
+export function siteTypographyCssAt(t: SiteTypography, device: Device, scope = ""): string {
+  const out: string[] = [];
+  for (const d of ["desktop", "tablet", "mobile"] as const) {
+    out.push(...rulesAt(t, d, scope));
+    if (d === device) break;
   }
   return out.join("");
 }
