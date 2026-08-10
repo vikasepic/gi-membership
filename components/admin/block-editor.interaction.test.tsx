@@ -316,3 +316,16 @@ describe("selecting a column", () => {
     expect(menuItems()).toContain("Duplicate");
   });
 });
+
+describe("a card's picture", () => {
+  it("is chosen from the library, not typed as a path", () => {
+    // The one field on a card that names a file. Every other image on this
+    // screen has a picker; typing a bucket path is how you get a broken image
+    // and no way to tell which character is wrong.
+    const b = newBlock("cards");
+    mount([{ ...b, props: { ...b.props, items: [{ title: "a", body: "b", icon: "", image: "" }] } }]);
+    click(document.querySelector("[data-block]")!);
+    const panel = document.querySelectorAll("aside")[1]!;
+    expect([...panel.querySelectorAll("button")].map((x) => x.textContent?.trim())).toContain("Select image");
+  });
+});

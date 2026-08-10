@@ -303,7 +303,28 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   stats: { items: [], layout: "strip" },
   pricing: { items: [], highlightLast: true, totalLabel: "", totalAmount: "" },
   faq: { items: [], layout: "accordion" },
-  cards: { items: [], columns: 3, numbered: false, skin: "boxed", numberStyle: "eyebrow", title: "", note: "" },
+  // Everything after `note` is presentation with no value of its own: null
+  // means "whatever the card already looked like". A number here instead of
+  // null would repaint every card ever saved the moment this line shipped,
+  // because normalize spreads these defaults over every stored block.
+  cards: {
+    items: [],
+    columns: 3,
+    numbered: false,
+    skin: "boxed",
+    numberStyle: "eyebrow",
+    title: "",
+    note: "",
+    media: "icon",
+    iconShape: "rounded",
+    iconPlace: "above",
+    iconBox: null,
+    iconSize: null,
+    iconBg: null,
+    iconColor: null,
+    cardPadding: null,
+    cardGap: null,
+  },
   pricecard: {
     eyebrow: "",
     // Blank means "use the real price from the offer". A typed price is a

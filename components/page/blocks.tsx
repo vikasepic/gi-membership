@@ -4,6 +4,7 @@ import {
   blockColors,
   blockCssAt,
   blockRules,
+  cardsTrack,
   columnCss,
   rowLayout,
   headingTag,
@@ -488,7 +489,6 @@ function Inner({
     case "cards": {
       const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
       if (items.length === 0) return null;
-      const across = Math.min(Math.max(num(p.columns, 3), 1), 4);
       const skin = str(p.skin, "boxed");
 
       // One card holding compact rows, rather than a stack of separate boxes.
@@ -543,7 +543,8 @@ function Inner({
       const numbered = p.numbered === true;
       const circle = str(p.numberStyle, "eyebrow") === "circle";
       const inline = str(p.numberStyle, "eyebrow") === "inline";
-      const cell: React.CSSProperties =
+      const beside = str(p.iconPlace, "above") === "beside";
+      const skinCell: React.CSSProperties =
         skin === "boxed"
           ? { background: c.fill, border: `1px solid ${c.rule}`, borderRadius: 16, padding: "1.35rem 1.4rem" }
           : skin === "tinted"
@@ -551,19 +552,26 @@ function Inner({
             : skin === "bordered"
               ? { border: `1px solid ${c.rule}`, borderRadius: 16, padding: "1.35rem 1.4rem" }
               : {};
+      // Null, not a number, is what "the skin decides" looks like — the four
+      // skins pad differently on purpose and Plain pads not at all, so there is
+      // no single figure that could stand in as a default without repainting
+      // every card already saved.
+      const cell: React.CSSProperties =
+        p.cardPadding == null ? skinCell : { ...skinCell, padding: `${num(p.cardPadding, 0)}px` };
+      const gap = p.cardGap == null ? (inline ? "1.6rem" : "1rem") : `${num(p.cardGap, 0)}px`;
+      // Null means the stylesheet carries it, because Across holds a value per
+      // device — see cardsTrack.
+      const track = cardsTrack(block, at);
+      const grid = { ...(track ? { "--cards": track } : {}), gap } as React.CSSProperties;
 
       // Number before the title, body hanging under the title rather than
       // under the number. That indent is what makes the number read as a label
       // on the card instead of part of the sentence.
       if (inline) {
         return (
-          <div
-            className="grid grid-cols-1 @xl:grid-cols-[var(--cards)]"
-            style={{ "--cards": `repeat(${across}, minmax(0,1fr))`, gap: "1.6rem" } as React.CSSProperties}
-          >
+          <div className="grid grid-cols-1 @xl:grid-cols-[var(--cards)]" style={grid}>
             {items.map((it, i) => (
-              <div key={i} style={cell}>
-                <IconTile icon={str(it.icon)} colors={c} />
+              <Card key={i} style={cell} beside={beside} tile={<IconTile item={it} p={p} colors={c} />}>
                 <div className="flex items-baseline gap-2">
                   {numbered && (
                     <span className="font-display font-bold tabular-nums" style={{ color: c.accent, fontSize: "1rem" }}>
@@ -580,19 +588,15 @@ function Inner({
                 >
                   <Inline html={str(it.body)} />
                 </p>
-              </div>
+              </Card>
             ))}
           </div>
         );
       }
       return (
-        <div
-          className="grid grid-cols-1 @xl:grid-cols-[var(--cards)]"
-          style={{ "--cards": `repeat(${across}, minmax(0,1fr))`, gap: "1rem" } as React.CSSProperties}
-        >
+        <div className="grid grid-cols-1 @xl:grid-cols-[var(--cards)]" style={grid}>
           {items.map((it, i) => (
-            <div key={i} style={cell}>
-              <IconTile icon={str(it.icon)} colors={c} />
+            <Card key={i} style={cell} beside={beside} tile={<IconTile item={it} p={p} colors={c} />}>
               {numbered &&
                 (circle ? (
                   // In the flow, not absolutely positioned. The absolute
@@ -640,7 +644,7 @@ function Inner({
                   {str(it.amount)}
                 </p>
               )}
-            </div>
+            </Card>
           ))}
         </div>
       );
@@ -876,28 +880,102 @@ function Inner({
 }
 
 /**
- * The filled tile an icon sits in.
+ * The filled tile an icon or a picture sits in.
  *
  * A bare glyph on a tinted card disappears; the reference page gives every one
  * a solid rounded square, which is what makes a grid of cards scan.
+ *
+ * Every knob is optional and falls back to the 44px rounded accent tile this
+ * has always drawn — a card saved before any of them existed has to come back
+ * looking the same, and the defaults are what guarantee that.
  */
-function IconTile({ icon, colors }: { icon: string; colors: ReturnType<typeof blockColors> }) {
-  if (!icon.trim()) return null;
-  const isImage = /^https?:\/\//i.test(icon.trim());
+function IconTile({
+  item,
+  p,
+  colors,
+}: {
+  item: Record<string, unknown>;
+  p: Record<string, unknown>;
+  colors: ReturnType<typeof blockColors>;
+}) {
+  const media = str(p.media, "icon");
+  if (media === "none") return null;
+  const raw = str(item.icon);
+  // The library picture is only read when the block is set to Image, and the
+  // pasted icon is only read when it is set to Icon. Switching between them
+  // hides the other one rather than throwing it away, so it is a switch and not
+  // a decision you have to undo by retyping.
+  const picture = media === "image" ? imageSrc(item.image) : null;
+  if (media === "image" ? !picture : !raw.trim()) return null;
+  const src = picture ?? (/^https?:\/\//i.test(raw.trim()) ? raw.trim() : null);
+
+  const box = num(p.iconBox, 44);
+  const size = num(p.iconSize, 22);
+  const shape = str(p.iconShape, "rounded");
+  const fill = str(p.iconBg) || colors.accent;
   return (
     <span
       aria-hidden
-      className="mb-3 grid place-content-center"
-      style={{ width: 44, height: 44, borderRadius: 11, background: colors.accent, color: readableOn(colors.accent) }}
+      className={
+        str(p.iconPlace, "above") === "beside"
+          ? // Beside the copy the tile is a flex sibling, so the bottom margin
+            // that separated it from the title below is now a gap on the wrong
+            // axis, and it must not be squeezed by a long heading.
+            "grid shrink-0 place-content-center"
+          : "mb-3 grid place-content-center"
+      }
+      style={{
+        width: box,
+        height: box,
+        borderRadius: shape === "circle" ? 999 : shape === "square" ? 0 : Math.round(box / 4),
+        background: fill,
+        color: str(p.iconColor) || readableOn(fill),
+      }}
     >
-      {isImage ? (
+      {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={icon.trim()} alt="" style={{ width: 22, height: 22, objectFit: "contain" }} />
+        <img src={src} alt="" style={{ width: size, height: size, objectFit: "contain" }} />
       ) : (
         // Sanitized on save — see sanitizeBlocks.
-        <span style={{ display: "grid", width: 22, height: 22 }} dangerouslySetInnerHTML={{ __html: icon }} />
+        <span style={{ display: "grid", width: size, height: size }} dangerouslySetInnerHTML={{ __html: raw }} />
       )}
     </span>
+  );
+}
+
+/**
+ * One card: its box, its tile, and its copy.
+ *
+ * Written as a component only because "beside" is a different tree rather than
+ * a different class — the tile has to become a flex sibling of a wrapper around
+ * everything else. With the tile above, this renders exactly the plain div the
+ * cards grid always did.
+ */
+function Card({
+  style,
+  tile,
+  beside,
+  children,
+}: {
+  style: React.CSSProperties;
+  tile: React.ReactNode;
+  beside: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={style}>
+      {beside ? (
+        <div className="flex items-start gap-3">
+          {tile}
+          <div className="min-w-0 flex-1">{children}</div>
+        </div>
+      ) : (
+        <>
+          {tile}
+          {children}
+        </>
+      )}
+    </div>
   );
 }
 

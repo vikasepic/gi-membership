@@ -61,7 +61,7 @@ export type Control =
   | (Base & { kind: "number"; min: number; max: number; step: number; unit?: string })
   | (Base & { kind: "color" })
   | (Base & { kind: "dim" })
-  | (Base & { kind: "list"; item: { key: string; label: string; kind: "text" | "textarea" }[]; addLabel: string })
+  | (Base & { kind: "list"; item: { key: string; label: string; kind: "text" | "textarea" | "image" }[]; addLabel: string })
   // Rows only. Both need the block itself — how many columns there are, and how
   // wide each one is — which a key and a value cannot express.
   | (Base & { kind: "columns"; max: number })
@@ -351,12 +351,25 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
           { key: "body", label: "Body", kind: "textarea" },
           { key: "amount", label: "Amount", kind: "text" },
           { key: "icon", label: "Icon (SVG or image URL)", kind: "textarea" },
+          { key: "image", label: "Image", kind: "image" },
         ],
         addLabel: "Add a card",
       },
+      // Both fields stay on every card. A switch that emptied the one it turns
+      // off would make trying the other look like a way to lose what you typed.
+      {
+        kind: "select",
+        key: "media",
+        label: "Media",
+        hint: "Which of the two fields on each card is shown in the tile.",
+        options: [["icon", "Icon"], ["image", "Image"], ["none", "None"]],
+      },
       { kind: "text", key: "title", label: "Card title", hint: "Only shown by the one-card skin — the small heading above the rows." },
       { kind: "textarea", key: "note", label: "Closing note", rows: 3, hint: "A panel under the rows, in the same card." },
-      { kind: "number", key: "columns", label: "Across", min: 1, max: 4, step: 1 },
+      // Per device: three across is a grid on a laptop and three slivers on a
+      // phone, and the container query underneath only knows how wide the band
+      // is, not which screen is reading it.
+      { kind: "number", key: "columns", label: "Across", min: 1, max: 4, step: 1, responsive: true },
       {
         kind: "toggle",
         key: "numbered",
@@ -371,6 +384,23 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         options: [["boxed", "Boxed"], ["tinted", "Tinted"], ["bordered", "Outlined"], ["plain", "Plain"], ["list", "One card, compact rows"]],
       },
       { kind: "select", key: "numberStyle", label: "Number", options: [["eyebrow", "Small, above"], ["inline", "Before the title"], ["circle", "Circle"]] },
+
+      group("Spacing"),
+      // Both empty by default, and empty is not zero. Each skin pads its cards
+      // differently on purpose and Plain pads not at all, so there is no one
+      // figure that could stand here without repainting every card ever saved.
+      { kind: "number", key: "cardPadding", label: "Card padding", min: 0, max: 96, step: 2, unit: "px", hint: "Unset follows the skin." },
+      { kind: "number", key: "cardGap", label: "Gap between cards", min: 0, max: 96, step: 2, unit: "px", hint: "Unset follows the skin." },
+
+      group("Icon tile", (b) => b.props.media !== "none"),
+      { kind: "select", key: "iconShape", label: "Shape", options: [["square", "Square"], ["rounded", "Rounded"], ["circle", "Circle"]], when: (b) => b.props.media !== "none" },
+      { kind: "select", key: "iconPlace", label: "Position", options: [["above", "Above"], ["beside", "Beside"]], when: (b) => b.props.media !== "none" },
+      { kind: "number", key: "iconBox", label: "Tile size", min: 16, max: 160, step: 2, unit: "px", when: (b) => b.props.media !== "none" },
+      { kind: "number", key: "iconSize", label: "Icon size", min: 8, max: 160, step: 2, unit: "px", when: (b) => b.props.media !== "none" },
+      { kind: "color", key: "iconBg", label: "Tile colour", hint: "Unset follows the section's accent.", when: (b) => b.props.media !== "none" },
+      // Only reaches a pasted SVG that draws itself in currentColor, and an
+      // image never. Said here rather than discovered by trying it on a PNG.
+      { kind: "color", key: "iconColor", label: "Icon colour", hint: "Only an SVG using currentColor takes this.", when: (b) => b.props.media === "icon" },
     ],
     style: [...TYPOGRAPHY],
   },

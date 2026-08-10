@@ -464,6 +464,7 @@ export function blockRules(block: Block, theme: BandTheme): string {
   if (capped) out.push(capped);
 
   if (block.type === "row") out.push(...rowRules(block, sel));
+  if (block.type === "cards") out.push(...cardsRules(block, sel));
 
   const custom = customCss(block.style.customCss, sel);
   if (custom) out.push(custom);
@@ -550,6 +551,54 @@ function rowRules(block: Block, sel: string): string[] {
     wider = here;
   }
   return out.filter(Boolean);
+}
+
+/**
+ * How many cards stand across at one width.
+ *
+ * Clamped rather than trusted: block props are raw jsonb and normalize never
+ * validates them, so an import or a hand-written row is one bad value away from
+ * `repeat(NaN,…)`, which drops the grid to a single column with no explanation.
+ */
+export function cardsAcross(block: Block, device: Device): number {
+  const raw = Number(propsFor(block, device).columns);
+  return Math.min(Math.max(Number.isFinite(raw) ? Math.round(raw) : 3, 1), 4);
+}
+
+const cardsTrackAt = (block: Block, device: Device) => `repeat(${cardsAcross(block, device)}, minmax(0,1fr))`;
+
+const acrossIsPerDevice = (block: Block) =>
+  hasOverride(block, "tablet", "columns", "props") || hasOverride(block, "mobile", "columns", "props");
+
+/**
+ * The `--cards` track list to put in the style attribute, or null when the
+ * stylesheet owns it instead.
+ *
+ * "Across" holds a value per device and a media query cannot live in an
+ * attribute — and an attribute would outrank the media query anyway. So a block
+ * whose Across differs on tablet or mobile hands the property over to
+ * `cardsRules` entirely rather than fighting its own inline value. A block
+ * nobody made responsive keeps the attribute it has always had.
+ *
+ * Pinned to a device it always inlines: no rules are emitted there, because a
+ * 390px canvas inside a 1900px window never fires a media query.
+ */
+export function cardsTrack(block: Block, at?: Device): string | null {
+  if (!at && acrossIsPerDevice(block)) return null;
+  return cardsTrackAt(block, at ?? "desktop");
+}
+
+/** Set on the block's own wrapper, so it inherits down to the grid inside. */
+function cardsRules(block: Block, sel: string): string[] {
+  if (!acrossIsPerDevice(block)) return [];
+  let wider = cardsTrackAt(block, "desktop");
+  const out = [`${sel}{--cards:${wider}}`];
+  for (const device of ["tablet", "mobile"] as const) {
+    const here = cardsTrackAt(block, device);
+    if (here !== wider) out.push(`@media (max-width:${DEVICE_MAX[device]}px){${sel}{--cards:${here}}}`);
+    wider = here;
+  }
+  return out;
 }
 
 /** Only what changed, so a media query does not freeze the wider values in. */

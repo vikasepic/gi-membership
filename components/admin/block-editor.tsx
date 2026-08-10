@@ -1621,7 +1621,18 @@ function ControlField({
           {rows.map((row, i) => (
             <div key={i} className="flex flex-col gap-1 rounded-lg border border-border p-2">
               {control.item.map((f) =>
-                f.kind === "textarea" ? (
+                // The same picker every other image on this screen uses, rather
+                // than a box to paste a path into. A card's picture is a file in
+                // the library like any other; typing its path is how you get a
+                // broken image and no idea which character is wrong.
+                f.kind === "image" ? (
+                  <ImageControl
+                    key={f.key}
+                    label={<span className="text-[0.7rem] text-muted">{f.label}</span>}
+                    value={row[f.key] ?? ""}
+                    onChange={(v) => onChange(rows.map((r, j) => (j === i ? { ...r, [f.key]: String(v) } : r)))}
+                  />
+                ) : f.kind === "textarea" ? (
                   <textarea
                     key={f.key}
                     rows={2}
