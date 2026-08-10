@@ -5,6 +5,7 @@ import {
   propsFor,
   setAt,
   setColumnCount,
+  setPropsAt,
   styleFor,
   type Block,
   type BlockType,
@@ -384,6 +385,12 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         options: [["boxed", "Boxed"], ["tinted", "Tinted"], ["bordered", "Outlined"], ["plain", "Plain"], ["list", "One card, compact rows"]],
       },
       { kind: "select", key: "numberStyle", label: "Number", options: [["eyebrow", "Small, above"], ["inline", "Before the title"], ["circle", "Circle"]] },
+      {
+        kind: "toggle",
+        key: "divider",
+        label: "Rule between cards",
+        hint: "A hairline instead of a box, for a list read top to bottom. With more than one across it draws across the rows too.",
+      },
 
       group("Spacing"),
       // Both empty by default, and empty is not zero. Each skin pads its cards
@@ -391,6 +398,7 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       // figure that could stand here without repainting every card ever saved.
       { kind: "number", key: "cardPadding", label: "Card padding", min: 0, max: 96, step: 2, unit: "px", hint: "Unset follows the skin." },
       { kind: "number", key: "cardGap", label: "Gap between cards", min: 0, max: 96, step: 2, unit: "px", hint: "Unset follows the skin." },
+      { kind: "number", key: "cardRadius", label: "Card corner", min: 0, max: 64, step: 1, unit: "px", hint: "Unset follows the skin." },
 
       group("Icon tile", (b) => b.props.media !== "none"),
       { kind: "select", key: "iconShape", label: "Shape", options: [["square", "Square"], ["rounded", "Rounded"], ["circle", "Circle"]], when: (b) => b.props.media !== "none" },
@@ -705,6 +713,106 @@ function setIn(obj: Record<string, unknown>, path: string[], value: unknown): Re
   const child = obj[head];
   const base = child && typeof child === "object" && !Array.isArray(child) ? (child as Record<string, unknown>) : {};
   return { ...obj, [head]: setIn(base, rest, value) };
+}
+
+/**
+ * Finished looks for a Cards block, one press each.
+ *
+ * PRESENTATION ONLY, and that is the contract rather than a description: a
+ * template names no content key, so applying one to a filled block cannot lose
+ * a title, a body, an icon or a picture. A chooser is a thing people press to
+ * see what happens, so pressing it has to be safe.
+ *
+ * Two things a template deliberately does NOT set:
+ * - a colour. Every colour here defaults to null so the band paints it, and a
+ *   template that froze white or a tint would be the one card set on the page
+ *   that ignores its section.
+ * - `media` and `numbered`. Which of the two artwork fields is shown, and
+ *   whether the cards are a numbered sequence, are things somebody decided
+ *   about this content. A layout is not entitled to overrule them.
+ */
+export type CardTemplate = {
+  id: string;
+  label: string;
+  hint: string;
+  /** Desktop props. Empty means the template changes nothing. */
+  props: Record<string, unknown>;
+  /** Per device — Across is the only value that differs by width. */
+  at?: Partial<Record<Exclude<Device, "desktop">, Record<string, unknown>>>;
+};
+
+export const CARD_TEMPLATES: CardTemplate[] = [
+  {
+    id: "tiles",
+    label: "Tiles",
+    hint: "Boxed cards in a grid, icon above the copy. Four across, two on a tablet, one on a phone.",
+    props: {
+      skin: "boxed",
+      columns: 4,
+      cardPadding: 20,
+      cardGap: 16,
+      cardRadius: 12,
+      divider: false,
+      iconShape: "rounded",
+      iconPlace: "above",
+      // Back to null rather than to a figure: null is what "the size it has
+      // always been" means here, and a template's job is to undo the last one.
+      iconBox: null,
+      iconSize: null,
+      iconBg: null,
+      iconColor: null,
+      numberStyle: "eyebrow",
+    },
+    at: { tablet: { columns: 2 }, mobile: { columns: 1 } },
+  },
+  {
+    id: "rows",
+    label: "Rows",
+    hint: "One column, no box, a round icon beside the copy and a hairline between.",
+    props: {
+      skin: "plain",
+      columns: 1,
+      // No box means no padding of its own; the air comes from the gap, which
+      // the divider then mirrors underneath the rule.
+      cardPadding: null,
+      cardGap: 28,
+      cardRadius: null,
+      divider: true,
+      iconShape: "circle",
+      iconPlace: "beside",
+      iconBox: null,
+      iconSize: null,
+      iconBg: null,
+      iconColor: null,
+      numberStyle: "inline",
+    },
+  },
+  {
+    // The way out. A row of two previews with no third choice reads as "pick
+    // one", and there has to be a way to look at both and keep what is there.
+    id: "keep",
+    label: "Keep what I have",
+    hint: "Changes nothing.",
+    props: {},
+  },
+];
+
+/**
+ * Apply a template, or return the block untouched.
+ *
+ * Across is cleared at tablet and mobile unless the template sets it there.
+ * Otherwise "two across on a tablet" survives from the template before it — an
+ * override nothing on screen mentions, on a value the panel shows as one.
+ */
+export function applyCardTemplate(block: Block, id: string): Block {
+  const t = CARD_TEMPLATES.find((x) => x.id === id);
+  if (!t || Object.keys(t.props).length === 0) return block;
+  let out: Block = { ...block, props: { ...block.props, ...t.props } };
+  for (const device of ["tablet", "mobile"] as const) {
+    const at = t.at?.[device];
+    out = at ? setPropsAt(out, device, at) : clearAt(out, device, "columns", "props");
+  }
+  return out;
 }
 
 /** Every block type, in the order the palette offers them. */

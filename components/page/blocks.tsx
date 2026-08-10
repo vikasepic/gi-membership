@@ -556,9 +556,20 @@ function Inner({
       // skins pad differently on purpose and Plain pads not at all, so there is
       // no single figure that could stand in as a default without repainting
       // every card already saved.
-      const cell: React.CSSProperties =
-        p.cardPadding == null ? skinCell : { ...skinCell, padding: `${num(p.cardPadding, 0)}px` };
+      const cell: React.CSSProperties = {
+        ...skinCell,
+        ...(p.cardPadding == null ? {} : { padding: `${num(p.cardPadding, 0)}px` }),
+        ...(p.cardRadius == null ? {} : { borderRadius: num(p.cardRadius, 0) }),
+      };
       const gap = p.cardGap == null ? (inline ? "1.6rem" : "1rem") : `${num(p.cardGap, 0)}px`;
+      // A hairline between cards instead of a box around each. The gap only
+      // opens above the border, so the card repeats it underneath — otherwise
+      // the rule sits hard against the copy below it and reads as a heading
+      // underline for the wrong card.
+      const cellAt = (i: number): React.CSSProperties =>
+        p.divider === true && i > 0
+          ? { ...cell, borderTop: `1px solid ${c.rule}`, paddingTop: gap }
+          : cell;
       // Null means the stylesheet carries it, because Across holds a value per
       // device — see cardsTrack.
       const track = cardsTrack(block, at);
@@ -571,7 +582,7 @@ function Inner({
         return (
           <div className="grid grid-cols-1 @xl:grid-cols-[var(--cards)]" style={grid}>
             {items.map((it, i) => (
-              <Card key={i} style={cell} beside={beside} tile={<IconTile item={it} p={p} colors={c} />}>
+              <Card key={i} style={cellAt(i)} beside={beside} tile={<IconTile item={it} p={p} colors={c} />}>
                 <div className="flex items-baseline gap-2">
                   {numbered && (
                     <span className="font-display font-bold tabular-nums" style={{ color: c.accent, fontSize: "1rem" }}>
@@ -596,7 +607,7 @@ function Inner({
       return (
         <div className="grid grid-cols-1 @xl:grid-cols-[var(--cards)]" style={grid}>
           {items.map((it, i) => (
-            <Card key={i} style={cell} beside={beside} tile={<IconTile item={it} p={p} colors={c} />}>
+            <Card key={i} style={cellAt(i)} beside={beside} tile={<IconTile item={it} p={p} colors={c} />}>
               {numbered &&
                 (circle ? (
                   // In the flow, not absolutely positioned. The absolute

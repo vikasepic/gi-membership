@@ -11,7 +11,9 @@ import { RichText } from "@/components/editor/rich-text";
 import {
   BLOCK_LABEL,
   BLOCK_ICON,
+  CARD_TEMPLATES,
   COLUMN_CONTROLS,
+  applyCardTemplate,
   groupedPalette,
   clearControl,
   controlsFor,
@@ -681,6 +683,15 @@ export function BlockEditor({
                 ))}
               </div>
               <div className="flex flex-col overflow-y-auto">
+                {tab === "content" && !column && selected.type === "cards" && (
+                  <CardTemplates
+                    onApply={(id) =>
+                      // Its own undo key, so one press is one step back — and a
+                      // press that follows a slider drag does not fold into it.
+                      applyEdit(applyCardTemplate(selected, id), `template:${selected.id}:${id}`)
+                    }
+                  />
+                )}
                 {sections(
                   tab === "content" ? tabs.content : tab === "style" ? tabs.style : tabs.advanced,
                 ).map((section, si) => (
@@ -1228,6 +1239,70 @@ function DragTile({ label, type }: { label: string; type: BlockType | null }) {
       <span>{label}</span>
     </div>,
     document.body,
+  );
+}
+
+// --- card templates ---------------------------------------------------------
+
+/**
+ * Two finished looks for a Cards block, and a way to keep neither.
+ *
+ * Drawn rather than described: "Tiles" and "Rows" are words that mean nothing
+ * until you have seen both, and a preview is what turns a chooser into
+ * something you press without reading first. Not a modal on purpose — a
+ * chooser you have to open is one nobody opens, and this sits above the
+ * settings it is a shortcut for, so the connection is visible.
+ *
+ * A template only ever writes presentation, so there is no confirmation step:
+ * the copy on the cards cannot be what it changes.
+ */
+function CardTemplates({ onApply }: { onApply: (id: string) => void }) {
+  return (
+    <div className="flex flex-col gap-1.5 border-b border-border px-3 py-2.5">
+      <span className="text-[0.7rem] font-semibold text-fg">Layout</span>
+      <div className="flex gap-1.5">
+        {CARD_TEMPLATES.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            title={t.hint}
+            onClick={() => onApply(t.id)}
+            className="flex flex-1 flex-col items-center gap-1 rounded-md border border-border p-1.5 text-[0.6rem] leading-tight text-muted hover:border-primary hover:text-fg"
+          >
+            <TemplatePreview id={t.id} />
+            <span className="text-center">{t.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TemplatePreview({ id }: { id: string }) {
+  const box = "h-8 w-full rounded-sm bg-surface-2 p-1";
+  if (id === "tiles")
+    return (
+      <span aria-hidden className={`${box} grid grid-cols-2 gap-0.5`}>
+        {[0, 1, 2, 3].map((i) => (
+          <span key={i} className="rounded-[2px] border border-border" />
+        ))}
+      </span>
+    );
+  if (id === "rows")
+    return (
+      <span aria-hidden className={`${box} flex flex-col justify-between`}>
+        {[0, 1, 2].map((i) => (
+          <span key={i} className={`flex items-center gap-1 ${i ? "border-t border-border pt-0.5" : ""}`}>
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-border" />
+            <span className="h-0.5 flex-1 rounded-full bg-border" />
+          </span>
+        ))}
+      </span>
+    );
+  return (
+    <span aria-hidden className={`${box} grid place-content-center`}>
+      —
+    </span>
   );
 }
 

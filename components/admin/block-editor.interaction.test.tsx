@@ -329,3 +329,58 @@ describe("a card's picture", () => {
     expect([...panel.querySelectorAll("button")].map((x) => x.textContent?.trim())).toContain("Select image");
   });
 });
+
+describe("the card layout chooser", () => {
+  const cards = () => {
+    const b = newBlock("cards");
+    return { ...b, props: { ...b.props, items: [{ title: "a", body: "b", icon: "", image: "" }] } };
+  };
+
+  /**
+   * Select the block and hand back the inspector's template buttons.
+   *
+   * Labelled by the last child rather than the button's own text: the preview
+   * above the label is drawn markup, and the "keep" one draws a dash.
+   */
+  const label = (b: Element) => b.lastElementChild?.textContent?.trim() ?? "";
+  const open = () => {
+    click(document.querySelector("[data-block]")!);
+    const panel = document.querySelectorAll("aside")[1]!;
+    return [...panel.querySelectorAll("button")].filter((x) =>
+      ["Tiles", "Rows", "Keep what I have"].includes(label(x)),
+    );
+  };
+
+  it("offers both looks and a way to keep neither, on the Content tab", () => {
+    // Rendered, not asserted from the table: a chooser nobody can reach is a
+    // table with a test passing over it.
+    mount([cards()]);
+    expect(open().map(label)).toEqual(["Tiles", "Rows", "Keep what I have"]);
+  });
+
+  it("applies a look without touching a word on the cards", () => {
+    const editor = mount([cards()]);
+    click(open()[1]!);
+    expect(editor.blocks[0].props).toMatchObject({ skin: "plain", columns: 1, divider: true });
+    expect(editor.blocks[0].props.items).toEqual([{ title: "a", body: "b", icon: "", image: "" }]);
+  });
+
+  it("is one press to undo", () => {
+    // Applying a template writes a dozen keys. If they landed as a dozen steps,
+    // Ctrl+Z would walk back through a layout nobody ever saw.
+    const editor = mount([cards()]);
+    click(open()[0]!);
+    expect(editor.blocks[0].props.columns).toBe(4);
+    const undo = [...document.querySelectorAll("button")].find(
+      (b) => b.getAttribute("aria-label")?.startsWith("Undo"),
+    )!;
+    click(undo);
+    expect(editor.blocks[0].props.columns).toBe(3);
+  });
+
+  it("does not offer it on a block that has no cards", () => {
+    mount([newBlock("text")]);
+    click(document.querySelector("[data-block]")!);
+    expect(document.querySelectorAll("aside")[1]!.textContent).not.toContain("Keep what I have");
+  });
+});

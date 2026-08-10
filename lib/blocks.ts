@@ -324,6 +324,10 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     iconColor: null,
     cardPadding: null,
     cardGap: null,
+    cardRadius: null,
+    // False, not null: a rule between cards is either there or it is not, and
+    // there is no skin whose corner it could be following instead.
+    divider: false,
   },
   pricecard: {
     eyebrow: "",

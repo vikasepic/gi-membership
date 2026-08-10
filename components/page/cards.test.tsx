@@ -172,6 +172,43 @@ describe("card padding and the gap between cards", () => {
   });
 });
 
+describe("the card corner and the rule between cards", () => {
+  // The style attribute of each card, or "" where the card has none at all —
+  // an unstyled Plain card emits no attribute, which is the thing "changes
+  // nothing" has to keep true.
+  const cells = (props: Record<string, unknown>) =>
+    [...render(stored({ items: ITEMS, ...props })).matchAll(/<div(?: style="([^"]*)")?><span aria-hidden/g)].map(
+      (m) => m[1] ?? "",
+    );
+
+  it("leaves the skin's own corner alone until a figure is typed", () => {
+    expect(cells({ skin: "boxed" })[0]).toContain("border-radius:16px");
+    expect(cells({ skin: "boxed", cardRadius: 12 })[0]).toContain("border-radius:12px");
+  });
+
+  it("takes zero as a real answer, so a boxed card can be square", () => {
+    expect(cells({ skin: "boxed", cardRadius: 0 })[0]).toContain("border-radius:0");
+  });
+
+  it("draws the rule above every card but the first", () => {
+    // Above, not below: a rule under the last card is a line under nothing.
+    const [first, second] = cells({ skin: "plain", divider: true });
+    expect(first).toBe("");
+    expect(second).toContain("border-top:1px solid rgba(22, 24, 31, 0.14)");
+  });
+
+  it("repeats the gap under the rule so the air either side of it matches", () => {
+    // The grid gap only opens ABOVE the border. Without this the rule sits hard
+    // against the copy below and reads as an underline for the wrong card.
+    expect(cells({ skin: "plain", divider: true, cardGap: 28 })[1]).toContain("padding-top:28px");
+    expect(cells({ skin: "plain", divider: true })[1]).toContain("padding-top:1rem");
+  });
+
+  it("changes nothing at all while it is off", () => {
+    expect(cells({ skin: "plain", divider: false })).toEqual(["", ""]);
+  });
+});
+
 describe("how many cards stand across", () => {
   const responsive = (b: Block) => setPropsAt(b, "mobile", { columns: 1 });
 
