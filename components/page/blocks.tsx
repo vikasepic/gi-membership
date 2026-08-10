@@ -105,6 +105,29 @@ export function withLineBreaks(value: string): string {
   return value.replace(BREAK, "\n");
 }
 
+/**
+ * One line of copy that may carry inline markup.
+ *
+ * These fields — a heading, a question, a card's title — used to render as
+ * plain text, so <b>this</b> showed its angle brackets. They are sanitized on
+ * save by sanitizeInlineHtml, which allows what formats and nothing that
+ * executes, so what is stored is already safe to hand to the page.
+ *
+ * Rendered through a real element rather than a fragment because the callers
+ * need to keep their class and style — the block's own rule is what carries
+ * size, weight and colour.
+ */
+function Inline({
+  as: Tag = "span",
+  html,
+  ...rest
+}: {
+  as?: React.ElementType;
+  html: string;
+} & React.HTMLAttributes<HTMLElement>) {
+  return <Tag {...rest} dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
 export function Blocks({
   blocks,
   theme,
@@ -239,9 +262,12 @@ function Inner({
         // Size, weight, line height, tracking and colour all arrive from the
         // block's own rule — including the per-tag default — so that a value
         // set on mobile is not outranked by a utility class here.
-        <Tag className="font-display text-balance" style={{ whiteSpace: "pre-line" }}>
-          {withLineBreaks(str(p.text))}
-        </Tag>
+        <Inline
+          as={Tag}
+          className="font-display text-balance"
+          style={{ whiteSpace: "pre-line" }}
+          html={withLineBreaks(str(p.text))}
+        />
       );
     }
 
@@ -393,7 +419,7 @@ function Inner({
           {items.map((item, i) => (
             <li key={i} className="flex items-start" style={{ gap: `${Math.max(6, num(p.gap, 8))}px` }}>
               <Tick color={c.accent} size={size} />
-              <span>{str(item.text)}</span>
+              <Inline html={str(item.text)} />
             </li>
           ))}
         </ul>
@@ -496,10 +522,10 @@ function Inner({
                     </span>
                   )}
                   <span className="min-w-0">
-                    <span style={{ color: c.fg, fontSize: "0.88rem", ...type }}>{str(it.title)}</span>
+                    <span style={{ color: c.fg, fontSize: "0.88rem", ...type }}><Inline html={str(it.title)} /></span>
                     {str(it.body) && (
                       <span className="mt-0.5 block text-[0.78rem] leading-snug" style={{ color: theme.muted }}>
-                        {str(it.body)}
+                        <Inline html={str(it.body)} />
                       </span>
                     )}
                   </span>
@@ -545,14 +571,14 @@ function Inner({
                     </span>
                   )}
                   <h3 className="font-display font-semibold" style={{ color: c.fg, fontSize: "1.02rem", ...type }}>
-                    {str(it.title)}
+                    <Inline html={str(it.title)} />
                   </h3>
                 </div>
                 <p
                   className="mt-2 text-[0.9rem] leading-relaxed"
                   style={{ color: theme.muted, paddingLeft: numbered ? "1.9rem" : 0 }}
                 >
-                  {str(it.body)}
+                  <Inline html={str(it.body)} />
                 </p>
               </div>
             ))}
@@ -604,10 +630,10 @@ function Inner({
                   ...type,
                 }}
               >
-                {str(it.title)}
+                <Inline html={str(it.title)} />
               </h3>
               <p className="text-[0.88rem] leading-relaxed" style={{ color: theme.muted }}>
-                {str(it.body)}
+                <Inline html={str(it.body)} />
               </p>
               {str(it.amount) && (
                 <p className="mt-3 font-display font-bold" style={{ color: c.fg, fontSize: "1.05rem" }}>
@@ -628,8 +654,8 @@ function Inner({
         <div className="rounded-2xl px-5" style={{ background: c.fill }}>
           {items.map((it, i) => (
             <div key={i} className="py-4" style={i ? { borderTop: `1px solid ${c.rule}` } : undefined}>
-              <div className="text-[0.66rem] uppercase tracking-[0.13em]" style={{ color: theme.muted }}>{str(it.label)}</div>
-              <div className="mt-1 font-display text-[1.3rem] font-bold" style={{ color: c.fg, ...type }}>{str(it.value)}</div>
+              <div className="text-[0.66rem] uppercase tracking-[0.13em]" style={{ color: theme.muted }}><Inline html={str(it.label)} /></div>
+              <div className="mt-1 font-display text-[1.3rem] font-bold" style={{ color: c.fg, ...type }}><Inline html={str(it.value)} /></div>
               {str(it.detail) && (
                 <div className="mt-1 text-[0.8rem] leading-snug" style={{ color: theme.muted, whiteSpace: "pre-line" }}>
                   {withLineBreaks(str(it.detail))}
@@ -648,8 +674,8 @@ function Inner({
               className="pr-6"
               style={i ? { borderLeft: `1px solid ${c.rule}`, paddingLeft: "1.5rem" } : undefined}
             >
-              <div className="font-display text-[1.15rem] font-bold" style={{ color: c.fg, ...type }}>{str(it.value)}</div>
-              <div className="mt-0.5 text-[0.78rem]" style={{ color: theme.muted }}>{str(it.label)}</div>
+              <div className="font-display text-[1.15rem] font-bold" style={{ color: c.fg, ...type }}><Inline html={str(it.value)} /></div>
+              <div className="mt-0.5 text-[0.78rem]" style={{ color: theme.muted }}><Inline html={str(it.label)} /></div>
               {str(it.detail) && (
                 <div className="mt-0.5 text-[0.74rem]" style={{ color: theme.muted, whiteSpace: "pre-line" }}>
                   {withLineBreaks(str(it.detail))}
@@ -686,7 +712,7 @@ function Inner({
                   ...type,
                 }}
               >
-                <span className={ours ? "font-semibold" : undefined}>{str(it.label)}</span>
+                <span className={ours ? "font-semibold" : undefined}><Inline html={str(it.label)} /></span>
                 {str(it.note) && <span className="text-[0.8rem]" style={{ color: theme.muted }}>{str(it.note)}</span>}
                 <span className="ml-auto font-display font-bold">{ourAmount(i, str(it.amount))}</span>
               </div>
@@ -717,10 +743,10 @@ function Inner({
             {items.map((it, i) => (
               <div key={i}>
                 <h3 className="font-display font-semibold" style={{ color: c.fg, fontSize: "0.98rem", ...type }}>
-                  {str(it.q)}
+                  <Inline html={str(it.q)} />
                 </h3>
                 <p className="mt-1.5 text-[0.88rem] leading-relaxed" style={{ color: theme.muted }}>
-                  {str(it.a)}
+                  <Inline html={str(it.a)} />
                 </p>
               </div>
             ))}
@@ -744,7 +770,7 @@ function Inner({
                 className="flex cursor-pointer items-start gap-3 font-display font-semibold"
                 style={{ color: c.fg, fontSize: "0.98rem", ...type }}
               >
-                <span className="min-w-0 flex-1">{str(it.q)}</span>
+                <span className="min-w-0 flex-1"><Inline html={str(it.q)} /></span>
                 <span
                   aria-hidden
                   className="shrink-0 transition-transform group-open:rotate-45"
@@ -754,7 +780,7 @@ function Inner({
                 </span>
               </summary>
               <p className="mt-2 max-w-[68ch] text-[0.9rem] leading-relaxed" style={{ color: theme.muted }}>
-                {str(it.a)}
+                <Inline html={str(it.a)} />
               </p>
             </details>
           ))}

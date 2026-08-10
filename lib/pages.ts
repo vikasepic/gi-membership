@@ -1,6 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
+import { sanitizeSectionContent } from "@/lib/sanitize-html";
 import { camelize } from "@/lib/case";
 import { normalizeHex } from "@/lib/color";
 import { normalizeBackground, type Background } from "@/lib/blocks";
@@ -32,8 +33,19 @@ export async function getPageSections(owner: OwnerType, ownerId: string): Promis
     .order("position");
   if (error) throw new Error(`getPageSections: ${error.message}`);
 
+  // Sanitized on the way OUT as well as in.
+  //
+  // Saving already sanitizes, but that only covers rows written through the
+  // editor. A row that arrives any other way — an older page from before a
+  // field rendered its markup, a direct write, an import — would otherwise be
+  // handed to the page exactly as stored. Headings and card titles render
+  // their HTML now, so "exactly as stored" is the difference between a bold
+  // word and a script tag on a live sales page. Verified by putting one there.
   const stored = new Map(
-    camelize<SectionRow[]>(data ?? []).map((r) => [r.sectionKey, r]),
+    camelize<SectionRow[]>(data ?? []).map((r) => [
+      r.sectionKey,
+      { ...r, content: sanitizeSectionContent((r.content ?? {}) as Record<string, unknown>) },
+    ]),
   );
   // Merge onto the canonical list rather than returning what happens to be in
   // the table: a section added to the code later must appear on existing pages.

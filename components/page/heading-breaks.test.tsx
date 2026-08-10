@@ -32,16 +32,18 @@ describe("a line break in a heading", () => {
   });
 });
 
-describe("what it must not become", () => {
-  it("does not start rendering HTML", () => {
-    // A heading that ran arbitrary markup would be a way to put a script on a
-    // live sales page. Breaks are honoured; everything else stays text.
-    const out = heading("<script>alert(1)</script>");
-    expect(out).not.toContain("<script>");
-    expect(out).toContain("&lt;script&gt;");
+describe("the markup a heading may carry", () => {
+  it("renders a bold tag as bold", () => {
+    expect(heading("<b>loud</b>")).toContain("<b>loud</b>");
   });
 
-  it("does not turn a bold tag into markup", () => {
-    expect(heading("<b>loud</b>")).not.toContain("<b>loud</b>");
+  it("renders a span, which is how a word takes its own colour", () => {
+    expect(heading('<span style="color:#b4472b">this</span>')).toContain("<span");
   });
+
+  // A heading that ran ARBITRARY markup would be a way to put a script on a
+  // live sales page. That is still true — which is why the guard moved to the
+  // save, where sanitizeInlineHtml strips anything that executes, rather than
+  // living in the renderer where it also stripped the formatting people want.
+  // See lib/sanitize-inline.test.ts for the guarantee itself.
 });

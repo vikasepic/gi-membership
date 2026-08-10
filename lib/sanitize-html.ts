@@ -1,31 +1,99 @@
 import sanitize from "sanitize-html";
 import { normalizeBlocks, type Block } from "@/lib/blocks";
 
+/**
+ * The tags a person writing copy is allowed to use.
+ *
+ * Everything that formats and nothing that executes. This list used to be much
+ * shorter for rich text — no span, no <b>, no <i>, no class or style — while
+ * the HTML block, on the same public page, allowed all of them. One policy for
+ * admin-authored markup is easier to reason about than two, and the shorter one
+ * was not buying any safety the longer one gives away: neither permits a
+ * script, an iframe, an event handler or a url() in a style.
+ */
+const RICH_TAGS = [
+  "p", "br", "hr", "span", "div", "section", "article",
+  "h1", "h2", "h3", "h4", "h5", "h6",
+  "strong", "b", "em", "i", "u", "s", "small", "sub", "sup", "mark", "abbr",
+  "ul", "ol", "li", "dl", "dt", "dd",
+  "blockquote", "code", "pre", "figure", "figcaption",
+  "a", "img", "picture", "source",
+  "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", "colgroup", "col",
+];
+
+/** Inline only. A <ul> inside an <h1> is not a heading with a list in it. */
+const INLINE_TAGS = [
+  "span", "br", "strong", "b", "em", "i", "u", "s", "small", "sub", "sup",
+  "mark", "abbr", "code", "a",
+];
+
+const ATTRIBUTES: sanitize.IOptions["allowedAttributes"] = {
+  "*": ["class", "id", "style", "title", "dir", "lang"],
+  a: ["href", "target", "rel"],
+  img: ["src", "alt", "width", "height", "loading", "title"],
+  source: ["srcset", "media", "type"],
+  td: ["colspan", "rowspan"],
+  th: ["colspan", "rowspan", "scope"],
+  col: ["span"],
+  abbr: ["title"],
+};
+
+// No `style` values that can fetch: url() in a style attribute is a request to
+// somewhere, which is a leak even when it is not a script.
+const STYLES: sanitize.IOptions["allowedStyles"] = {
+  "*": {
+    color: [/^[^;{}()]+$/],
+    "background-color": [/^[^;{}()]+$/],
+    "text-align": [/^(left|right|center|justify)$/],
+    "text-decoration": [/^[a-z\s-]+$/],
+    "font-size": [/^\d+(\.\d+)?(px|rem|em|%)$/],
+    "font-style": [/^(normal|italic|oblique)$/],
+    "font-weight": [/^(\d{3}|bold|normal)$/],
+    "font-family": [/^[^;{}()]+$/],
+    "letter-spacing": [/^-?\d+(\.\d+)?(px|rem|em)$/],
+    "line-height": [/^\d+(\.\d+)?(px|rem|em|%)?$/],
+    margin: [/^[\d\s.a-z%-]+$/],
+    padding: [/^[\d\s.a-z%]+$/],
+    width: [/^\d+(\.\d+)?(px|rem|em|%)$/],
+    "max-width": [/^\d+(\.\d+)?(px|rem|em|%)$/],
+    "border-radius": [/^[\d\s.a-z%]+$/],
+  },
+};
+
+const BASE: sanitize.IOptions = {
+  allowedAttributes: ATTRIBUTES,
+  allowedStyles: STYLES,
+  allowedSchemes: ["http", "https", "mailto", "tel"],
+  allowedSchemesAppliedToAttributes: ["href", "src"],
+  allowProtocolRelative: false,
+  transformTags: {
+    a: sanitize.simpleTransform("a", { rel: "noopener noreferrer" }),
+  },
+};
+
 // WYSIWYG body is authored in admin and rendered to students — the one place
 // arbitrary HTML enters the app. Sanitize on SAVE (server side) so stored
 // content is always safe, regardless of what the editor or a paste produced.
 export function sanitizeBodyHtml(dirty: string): string {
   if (!dirty) return "";
-  return sanitize(dirty, {
-    allowedTags: [
-      "p", "br", "h2", "h3", "h4",
-      "strong", "em", "u", "s",
-      "ul", "ol", "li",
-      "blockquote", "code", "pre",
-      "a", "img", "hr",
-    ],
-    allowedAttributes: {
-      a: ["href", "target", "rel"],
-      img: ["src", "alt", "title"],
-    },
-    // http/https only, plus our own relative gated media paths.
-    allowedSchemes: ["http", "https", "mailto"],
-    allowedSchemesAppliedToAttributes: ["href", "src"],
-    allowProtocolRelative: false,
-    transformTags: {
-      a: sanitize.simpleTransform("a", { rel: "noopener noreferrer" }),
-    },
-  });
+  return sanitize(dirty, { ...BASE, allowedTags: RICH_TAGS });
+}
+
+/**
+ * A heading, a question, a card's title — one line of copy that may want a word
+ * emphasised, coloured or set in another face.
+ *
+ * These fields rendered as plain text, so typing <b>this</b> showed the angle
+ * brackets. They accept markup now, but only the inline kind: a block tag
+ * inside a heading produces invalid HTML that browsers repair by moving the
+ * content out of the heading, which is a layout no one asked for.
+ *
+ * A disallowed tag loses its tags and keeps its words, so nothing a person
+ * typed ever disappears.
+ */
+export function sanitizeInlineHtml(dirty: string): string {
+  if (!dirty) return "";
+  return sanitize(dirty, { ...BASE, allowedTags: INLINE_TAGS });
 }
 
 /**
@@ -43,56 +111,56 @@ export function sanitizeBodyHtml(dirty: string): string {
  */
 export function sanitizeBlockHtml(dirty: string): string {
   if (!dirty) return "";
-  return sanitize(dirty, {
-    allowedTags: [
-      "p", "br", "hr", "span", "div", "section", "article",
-      "h1", "h2", "h3", "h4", "h5", "h6",
-      "strong", "b", "em", "i", "u", "s", "small", "sub", "sup",
-      "ul", "ol", "li", "dl", "dt", "dd",
-      "blockquote", "code", "pre", "figure", "figcaption",
-      "a", "img", "picture", "source",
-      "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption", "colgroup", "col",
-    ],
-    allowedAttributes: {
-      "*": ["class", "id", "style", "title", "dir", "lang"],
-      a: ["href", "target", "rel"],
-      img: ["src", "alt", "width", "height", "loading"],
-      source: ["srcset", "media", "type"],
-      td: ["colspan", "rowspan"],
-      th: ["colspan", "rowspan", "scope"],
-      col: ["span"],
-    },
-    // No `style` values that can fetch: url() in a style attribute is a
-    // request to somewhere, which is a leak even when it is not a script.
-    allowedStyles: {
-      "*": {
-        color: [/^[^;{}()]+$/],
-        "background-color": [/^[^;{}()]+$/],
-        "text-align": [/^(left|right|center|justify)$/],
-        "font-size": [/^\d+(\.\d+)?(px|rem|em|%)$/],
-        "font-weight": [/^(\d{3}|bold|normal)$/],
-        margin: [/^[\d\s.a-z%]+$/],
-        padding: [/^[\d\s.a-z%]+$/],
-        width: [/^\d+(\.\d+)?(px|rem|em|%)$/],
-        "max-width": [/^\d+(\.\d+)?(px|rem|em|%)$/],
-        "border-radius": [/^[\d\s.a-z%]+$/],
-      },
-    },
-    allowedSchemes: ["http", "https", "mailto", "tel"],
-    allowedSchemesAppliedToAttributes: ["href", "src"],
-    allowProtocolRelative: false,
-    transformTags: {
-      a: sanitize.simpleTransform("a", { rel: "noopener noreferrer" }),
-    },
-  });
+  return sanitize(dirty, { ...BASE, allowedTags: RICH_TAGS });
 }
 
 /** Sanitize every string in a block tree that reaches the page as markup. */
+/**
+ * The short fields that reach the page as markup.
+ *
+ * Each of these rendered as plain text, so a person who typed <b>this</b> saw
+ * the angle brackets. Sanitized on save like everything else, which is what
+ * lets the renderer hand them to the page as HTML.
+ *
+ * Every one of them is one line of copy, so they take the inline policy: a
+ * heading containing a <ul> is not a heading with a list in it, it is a
+ * browser quietly moving the list out of the heading.
+ */
+const INLINE_FIELDS: Record<string, string[]> = {
+  heading: ["text"],
+  button: ["text"],
+};
+
+/** The same, for the objects inside a list-shaped prop. */
+const INLINE_ITEM_FIELDS: Record<string, { prop: string; keys: string[] }> = {
+  faq: { prop: "items", keys: ["q", "a"] },
+  iconlist: { prop: "items", keys: ["text"] },
+  cards: { prop: "items", keys: ["title", "body"] },
+  stats: { prop: "items", keys: ["value", "label"] },
+  steps: { prop: "items", keys: ["title", "body"] },
+  slides: { prop: "items", keys: ["quote", "name", "role"] },
+};
+
 export function sanitizeBlocks(blocks: Block[]): Block[] {
   return blocks.map((b) => {
     const props = { ...b.props };
     if (b.type === "text") props.html = sanitizeBodyHtml(String(props.html ?? ""));
     if (b.type === "html") props.code = sanitizeBlockHtml(String(props.code ?? ""));
+
+    for (const key of INLINE_FIELDS[b.type] ?? []) {
+      if (typeof props[key] === "string") props[key] = sanitizeInlineHtml(props[key] as string);
+    }
+    const list = INLINE_ITEM_FIELDS[b.type];
+    if (list && Array.isArray(props[list.prop])) {
+      props[list.prop] = (props[list.prop] as Record<string, unknown>[]).map((it) => {
+        if (!it || typeof it !== "object") return it;
+        const next = { ...it };
+        for (const k of list.keys) {
+          if (typeof next[k] === "string") next[k] = sanitizeInlineHtml(next[k] as string);
+        }
+        return next;
+      });
+    }
     // A card icon is pasted SVG, which is markup someone authored — the same
     // risk as the HTML block, in a field that does not look like one.
     if (b.type === "cards" && Array.isArray(props.items)) {

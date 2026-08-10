@@ -62,8 +62,11 @@ describe("heading", () => {
     expect(render([make("heading", { tag: "h1" }, { size: 20 })])).toContain("font-size:20px");
   });
 
-  it("escapes its text rather than rendering it as markup", () => {
-    expect(render([make("heading", { text: "<img src=x onerror=alert(1)>" })])).not.toContain("<img");
+  it("renders the inline markup it was given", () => {
+    // A heading may emphasise a word, colour it, or set it in another face.
+    // What reaches here has already been through sanitizeInlineHtml on save —
+    // the same boundary the text and html blocks have always relied on.
+    expect(render([make("heading", { text: "Stop <b>guessing</b>" })])).toContain("<b>guessing</b>");
   });
 });
 
