@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { normalizeBlocks, newBlock, setStyleAt } from "@/lib/blocks";
-import { blockWrapperCss, blockRules } from "@/lib/block-style";
+import { blockWrapperCss, blockRules, mobilePaddingNotice } from "@/lib/block-style";
 import { bandTheme } from "@/lib/page-sections";
 import { controlsFor, isGroup } from "@/lib/block-controls";
 
@@ -97,19 +97,19 @@ describe("side padding on a phone", () => {
   it("caps what the phone inherited, so it cannot eat the screen", () => {
     // 160px each side leaves 70px of column on a 390px handset.
     const css = blockRules(pad(160, 160), paper);
-    expect(css).toContain("padding-left:min(160px,6vw)");
-    expect(css).toContain("padding-right:min(160px,6vw)");
+    expect(css).toContain("padding-left:min(160px,5vw)");
+    expect(css).toContain("padding-right:min(160px,5vw)");
   });
 
   it("leaves a padding that already fits alone", () => {
-    expect(blockRules(pad(16, 16), paper)).not.toContain("6vw");
+    expect(blockRules(pad(16, 16), paper)).not.toContain("5vw");
   });
 
   it("does not touch top and bottom, which no screen is short of", () => {
     const tall = normalizeBlocks([
       { id: "b1", type: "text", props: {}, style: { padding: { t: 200, r: 0, b: 200, l: 0, u: "px", link: false } } },
     ])[0];
-    expect(blockRules(tall, paper)).not.toContain("6vw");
+    expect(blockRules(tall, paper)).not.toContain("5vw");
   });
 
   it("respects a padding set at mobile on purpose", () => {
@@ -117,7 +117,15 @@ describe("side padding on a phone", () => {
     const b = setStyleAt(pad(160, 160), "mobile", {
       padding: { t: 0, r: 40, b: 0, l: 40, u: "px", link: false },
     });
-    expect(blockRules(b, paper)).not.toContain("6vw");
+    expect(blockRules(b, paper)).not.toContain("5vw");
+  });
+
+  it("tells the panel the same number the CSS uses", () => {
+    // The whole point of the notice is to say what happened to the number
+    // somebody typed. A notice quoting a different ceiling than the rule emits
+    // is worse than no notice at all.
+    expect(mobilePaddingNotice(pad(160, 160))).toContain("5%");
+    expect(blockRules(pad(160, 160), paper)).toContain("5vw");
   });
 });
 

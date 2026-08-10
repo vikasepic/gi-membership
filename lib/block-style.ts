@@ -849,6 +849,13 @@ export function blockRules(block: Block, theme: BandTheme): string {
  */
 export const MOBILE_SIDE_PADDING_MAX = 24;
 
+/**
+ * The ceiling the phone gives way to, as a share of the screen. Named rather
+ * than typed into the template because the notice in the panel quotes it: a
+ * panel that says one number while the CSS does another is worse than either.
+ */
+export const MOBILE_SIDE_PADDING_VW = 5;
+
 export function mobilePaddingCap(block: Block, sel: string): string {
   const p = styleFor(block, "mobile").padding;
   // A percentage or em already scales with something; only a fixed length is
@@ -857,8 +864,9 @@ export function mobilePaddingCap(block: Block, sel: string): string {
   if (hasOverride(block, "mobile", "padding")) return "";
 
   const decls: string[] = [];
-  if (p.l > MOBILE_SIDE_PADDING_MAX) decls.push(`padding-left:min(${p.l}px,6vw)`);
-  if (p.r > MOBILE_SIDE_PADDING_MAX) decls.push(`padding-right:min(${p.r}px,6vw)`);
+  const vw = `${MOBILE_SIDE_PADDING_VW}vw`;
+  if (p.l > MOBILE_SIDE_PADDING_MAX) decls.push(`padding-left:min(${p.l}px,${vw})`);
+  if (p.r > MOBILE_SIDE_PADDING_MAX) decls.push(`padding-right:min(${p.r}px,${vw})`);
   if (decls.length === 0) return "";
   return `@media (max-width:${DEVICE_MAX.mobile}px){${sel}{${decls.join(";")}}}`;
 }
@@ -875,7 +883,7 @@ export function mobilePaddingNotice(block: Block): string | null {
   if (p.u !== "px" || hasOverride(block, "mobile", "padding")) return null;
   const worst = Math.max(p.l, p.r);
   if (worst <= MOBILE_SIDE_PADDING_MAX) return null;
-  return `${worst}px of side padding would leave almost no room on a phone, so it is capped there. Set a padding on mobile to choose your own.`;
+  return `${worst}px of side padding would leave almost no room on a phone, so it is capped at ${MOBILE_SIDE_PADDING_VW}% of the screen there. Set a padding on mobile to choose your own.`;
 }
 
 /**

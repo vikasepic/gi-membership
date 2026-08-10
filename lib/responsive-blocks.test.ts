@@ -147,7 +147,7 @@ describe("the CSS a block emits", () => {
       ".bk-cap2{margin:0px 0px 16px 0px;padding:0px 160px 0px 160px;text-align:left;color:#16181f}" +
         "@media (max-width:1023px){.bk-cap2{text-align:center}}" +
         "@media (max-width:767px){.bk-cap2{text-transform:uppercase}}" +
-        "@media (max-width:767px){.bk-cap2{padding-left:min(160px,6vw);padding-right:min(160px,6vw)}}" +
+        "@media (max-width:767px){.bk-cap2{padding-left:min(160px,5vw);padding-right:min(160px,5vw)}}" +
         ".bk-cap2 > [data-row]{display:flex;flex-wrap:wrap;gap:24px;align-items:stretch}" +
         ".bk-cap2 > [data-row] > :nth-child(1){min-width:0;width:calc(60% - 9.6px);order:0}" +
         ".bk-cap2 > [data-row] > :nth-child(2){min-width:0;width:calc(40% - 14.4px);order:1}" +
