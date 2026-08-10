@@ -118,6 +118,26 @@ const oneOf = (values: readonly string[]) =>
 const nested = <T extends z.ZodType>(schema: T) =>
   z.unknown().optional().transform((v) => schema.parse(isRecord(v) ? v : {}));
 
+const METRIC_PATTERN: Record<keyof TypographyMetrics, RegExp> = {
+  size: SIZE,
+  lineHeight: LINE,
+  letterSpacing: SPACE,
+  wordSpacing: SPACE,
+  paragraphSpacing: SIZE,
+};
+
+/**
+ * Whether the schema will keep this value.
+ *
+ * The panel needs to say "that will be dropped" while it is being typed, and
+ * the only rule it can honestly say it against is the one the save acts on.
+ * A second copy of these regexes in the form is a copy that drifts, and what
+ * drift produces here is a value that vanishes on save without a word.
+ */
+export function metricIsValid(field: keyof TypographyMetrics, raw: string): boolean {
+  return METRIC_PATTERN[field].test(raw.trim().toLowerCase());
+}
+
 const metricsSchema = z.object({
   size: matching(SIZE),
   lineHeight: matching(LINE),

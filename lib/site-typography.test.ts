@@ -5,6 +5,7 @@ import {
   TYPOGRAPHY_ELEMENTS,
   LIGHT_BAND_INK,
   bandInk,
+  metricIsValid,
   normalizeSiteTypography,
   siteTypographyCss,
   siteTypographyCssAt,
@@ -57,6 +58,40 @@ describe("the typography model", () => {
     // The ones that were legal are still there.
     expect(t.h1.desktop.lineHeight).toBe("1.4");
     expect(t.h1.desktop.letterSpacing).toBe("-1px");
+  });
+});
+
+describe("the panel's own validity check", () => {
+  // The panel says "that will be dropped" while a value is being typed, and it
+  // has to say it against the rule the save acts on. These are the cases where
+  // a second, hand-written copy of the regexes would quietly disagree.
+  const CASES: [keyof typeof SITE_TYPOGRAPHY_DEFAULTS.body.desktop, string, boolean][] = [
+    ["size", "18px", true],
+    ["size", "1.2rem", true],
+    ["size", "18", false],
+    ["size", "18 px", false],
+    ["size", "-18px", false],
+    ["lineHeight", "1.5", true],
+    ["lineHeight", "24px", true],
+    ["lineHeight", "-1", false],
+    ["letterSpacing", "-0.02em", true],
+    ["letterSpacing", "0.5", false],
+    ["wordSpacing", "2px", true],
+    ["paragraphSpacing", "1rem", true],
+    ["paragraphSpacing", "1", false],
+  ];
+
+  it.each(CASES)("agrees with the schema about %s = %s", (field, raw, valid) => {
+    expect(metricIsValid(field, raw)).toBe(valid);
+    // The schema is the authority: what it keeps is what the panel must call
+    // valid, and what it blanks is what the panel must warn about.
+    const kept = normalizeSiteTypography({ body: { desktop: { [field]: raw } } }).body.desktop[field];
+    expect(kept !== "").toBe(valid);
+  });
+
+  it("calls empty valid, because empty is how a field says inherit", () => {
+    expect(metricIsValid("size", "")).toBe(true);
+    expect(metricIsValid("size", "   ")).toBe(true);
   });
 });
 

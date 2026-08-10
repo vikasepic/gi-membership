@@ -14,6 +14,10 @@ import { readFileSync } from "node:fs";
  */
 const CLIENT_FILES = [
   "components/admin/settings-screen.tsx",
+  // The Typography panel reads the type model and the block system's heading
+  // scale. Neither is server-only today, and this is the line that says so if
+  // one of them ever grows a database client.
+  "components/admin/typography-fields.tsx",
   "components/app-shell.tsx",
 ];
 
