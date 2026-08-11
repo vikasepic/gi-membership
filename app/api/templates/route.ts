@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/admin-guard";
-import { listSavedTemplates } from "@/lib/templates-store";
+import { listSavedTemplates, listGlobalBlocks } from "@/lib/templates-store";
 
 // The saved half of the library, for the popup inside the builder.
+//
+// Both shelves, in one list. They are told apart by their id — a saved design
+// is `template:<uuid>`, a global is `global:<uuid>` — because the popup has to
+// know which one it is holding: adding a template copies it, adding a global
+// links to it.
 //
 // The built-ins are in code and the popup imports them directly; these live in
 // the database and cannot be. One fetch when the popup opens rather than
@@ -15,7 +20,8 @@ import { listSavedTemplates } from "@/lib/templates-store";
 export async function GET() {
   if (!(await getAdminUser())) return NextResponse.json({ templates: [] }, { status: 403 });
   try {
-    return NextResponse.json({ templates: await listSavedTemplates() });
+    const [saved, globals] = await Promise.all([listSavedTemplates(), listGlobalBlocks()]);
+    return NextResponse.json({ templates: [...saved, ...globals] });
   } catch {
     // The popup still has its built-ins, so a failure here narrows the shelf
     // rather than emptying it.

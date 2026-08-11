@@ -25,6 +25,10 @@ import { TemplatePreview } from "@/components/admin/template-preview";
  * So: the tile fits the whole design, height included, and a click opens it
  * large. Adding is now a separate, deliberate press.
  */
+/** A design pages link to rather than copy. The id says so — see toTemplate. */
+const isGlobal = (t: Template) => t.id.startsWith("global:");
+const GLOBAL_GROUP = "Global blocks";
+
 export function TemplateLibrary({
   open,
   theme,
@@ -79,7 +83,13 @@ export function TemplateLibrary({
 
   // Saved first: a design this store made is more likely to be the one being
   // reached for than one that ships with the app.
-  const all = [...saved, ...listTemplates()];
+  //
+  // Globals get their own group whatever they were filed under, because the
+  // group is the only warning you get before pressing Add: everything else on
+  // this shelf makes a copy, and these do not.
+  const all = [...saved, ...listTemplates()].map((t) =>
+    isGlobal(t) ? { ...t, group: GLOBAL_GROUP } : t,
+  );
   const groups = [...new Set(all.map((t) => t.group))];
   const showing = group ? all.filter((t) => t.group === group) : all;
 
@@ -146,6 +156,14 @@ export function TemplateLibrary({
                   </button>
                   <div className="flex items-center gap-2 border-t border-border px-2.5 py-1.5">
                     <span className="truncate text-xs text-fg">{t.name}</span>
+                    {isGlobal(t) && (
+                      <span
+                        title="Linked, not copied — editing it changes every page using it"
+                        className="shrink-0 rounded-full border border-border px-1.5 py-px text-[0.6rem] text-muted"
+                      >
+                        Linked
+                      </span>
+                    )}
                     <div className="ml-auto flex shrink-0 gap-1">
                       <button
                         type="button"
@@ -159,7 +177,7 @@ export function TemplateLibrary({
                         onClick={() => onInsert(t)}
                         className="rounded-full bg-primary px-2.5 py-0.5 text-[0.66rem] font-medium text-primary-fg hover:bg-primary-hover"
                       >
-                        Add
+                        {isGlobal(t) ? "Link" : "Add"}
                       </button>
                     </div>
                   </div>
@@ -198,17 +216,23 @@ function BigPreview({
         >
           ← All designs
         </button>
-        {template.band && (
+        {isGlobal(template) ? (
           <span className="text-[0.66rem] text-muted">
-            Adding this also sets the band it was drawn on.
+            Linked, not copied. Editing this design changes every page using it.
           </span>
+        ) : (
+          template.band && (
+            <span className="text-[0.66rem] text-muted">
+              Adding this also sets the band it was drawn on.
+            </span>
+          )
         )}
         <button
           type="button"
           onClick={onAdd}
           className="ml-auto rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-fg hover:bg-primary-hover"
         >
-          Add to this section
+          {isGlobal(template) ? "Link into this section" : "Add to this section"}
         </button>
       </footer>
     </div>

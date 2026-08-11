@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import { normalizeBlocks } from "@/lib/blocks";
-import { deleteTemplate, saveTemplate } from "@/lib/templates-store";
+import { deleteTemplate, saveTemplate, updateGlobalBlocks } from "@/lib/templates-store";
 import type { TemplateBand } from "@/lib/templates/template";
 
 // Saving a design the owner built, and removing one they no longer want.
@@ -47,7 +47,39 @@ export async function saveTemplateAction(_prev: Result, formData: FormData): Pro
       group: String(formData.get("group") ?? "").trim() || null,
       blocks,
       band: (jsonObject(formData.get("band")) as TemplateBand | null) ?? null,
+      // Which shelf. Anything unrecognised is a plain template, which is the
+      // safe answer: a copy is nobody's dependency.
+      kind: String(formData.get("kind") ?? "") === "global" ? "global" : "template",
     });
+    revalidatePath("/admin/templates");
+    return { id };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "That did not save." };
+  }
+}
+
+/**
+ * Save a global design edited from inside the builder.
+ *
+ * Its own action rather than a flag on the one above, because it means
+ * something different: this writes to a row other pages are reading, so the
+ * next render of every one of them changes. Nothing is revalidated here beyond
+ * the templates screen — the pages using it are dynamic and read the design
+ * fresh, and listing them to revalidate would be the same walk the delete
+ * guard does, on every keystroke-adjacent save.
+ */
+export async function saveGlobalBlocksAction(_prev: Result, formData: FormData): Promise<Result> {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return { error: "Nothing to save to." };
+  let blocks;
+  try {
+    blocks = normalizeBlocks(JSON.parse(String(formData.get("blocks") ?? "[]")));
+  } catch {
+    return { error: "That design could not be read." };
+  }
+  try {
+    await updateGlobalBlocks(id, blocks);
     revalidatePath("/admin/templates");
     return { id };
   } catch (err) {

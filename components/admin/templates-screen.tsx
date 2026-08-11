@@ -8,6 +8,7 @@ import { bandTheme, normalizeSectionLayout, type BandStyleKey } from "@/lib/page
 import { newBlock, type Block } from "@/lib/blocks";
 import type { Template, TemplateBand } from "@/lib/templates/template";
 import type { SitePreview } from "@/lib/site-typography";
+import type { TemplateKind } from "@/lib/templates-store";
 
 // The templates screen.
 //
@@ -28,14 +29,24 @@ type Draft = {
   group: string;
   blocks: Block[];
   band: TemplateBand | null;
+  /** Which shelf it belongs to. Decided when it is created, not later. */
+  kind: TemplateKind;
 };
+
+type Saved = Template & { savedId: string; updatedAt: string };
 
 export function TemplatesScreen({
   saved,
+  globals = [],
+  usage = {},
   builtIns,
   preview,
 }: {
-  saved: (Template & { savedId: string; updatedAt: string })[];
+  saved: Saved[];
+  /** The designs pages link to rather than copy. Their own shelf, deliberately. */
+  globals?: Saved[];
+  /** How many sections point at each global, by id. */
+  usage?: Record<string, number>;
   builtIns: Template[];
   preview?: SitePreview;
 }) {
@@ -43,20 +54,22 @@ export function TemplatesScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const startNew = () =>
+  const startNew = (kind: TemplateKind = "template") =>
     setDraft({
       savedId: null,
       name: "",
-      group: "Saved",
+      group: kind === "global" ? "Global" : "Saved",
       // One heading, so the canvas is not empty and the first thing you do is
       // type rather than decide which block to add.
       blocks: [newBlock("heading")],
       band: null,
+      kind,
     });
 
-  const edit = (t: Template, savedId: string | null) =>
+  const edit = (t: Template, savedId: string | null, kind: TemplateKind = "template") =>
     setDraft({
       savedId,
+      kind,
       // A built-in opens as "Centred hero copy", because saving it makes a new
       // row rather than editing the file — and two things called the same
       // thing on one shelf is a shelf you cannot use.
@@ -76,6 +89,7 @@ export function TemplatesScreen({
     fd.append("group", draft.group);
     fd.append("blocks", JSON.stringify(draft.blocks));
     fd.append("band", draft.band ? JSON.stringify(draft.band) : "");
+    fd.append("kind", draft.kind);
     const res = await saveTemplateAction({}, fd);
     setBusy(false);
     if (res.error) {
@@ -113,7 +127,7 @@ export function TemplatesScreen({
           </span>
           <button
             type="button"
-            onClick={startNew}
+            onClick={() => startNew()}
             className="ml-auto rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-fg hover:bg-primary-hover"
           >
             New design
@@ -135,6 +149,49 @@ export function TemplatesScreen({
                 onDelete={() => remove(t.savedId, t.name)}
               />
             ))}
+          </div>
+        )}
+      </section>
+
+      {/* The other shelf, and the difference is the whole point: inserting one
+          of these drops a LINK. Editing it changes every page that has it. */}
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="font-display text-lg">Global blocks</h2>
+          <span className="text-xs text-muted">
+            Linked, not copied — editing one changes every page using it
+          </span>
+          <button
+            type="button"
+            onClick={() => startNew("global")}
+            className="ml-auto rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-fg hover:bg-primary-hover"
+          >
+            New global block
+          </button>
+        </div>
+        {globals.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-border p-6 text-sm text-muted">
+            None yet. A global block is for the thing that appears on many pages and should only
+            ever be written once — a guarantee, a footer, the bio.
+          </p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {globals.map((t) => {
+              const used = usage[t.savedId] ?? 0;
+              return (
+                <TemplateCard
+                  key={t.savedId}
+                  template={t}
+                  subtitle={
+                    used === 0
+                      ? "Not used yet"
+                      : `On ${used} section${used === 1 ? "" : "s"} — editing changes them all`
+                  }
+                  onEdit={() => edit(t, t.savedId, "global")}
+                  onDelete={() => remove(t.savedId, t.name)}
+                />
+              );
+            })}
           </div>
         )}
       </section>

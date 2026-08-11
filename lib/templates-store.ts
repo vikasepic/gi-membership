@@ -143,6 +143,35 @@ export async function saveTemplate(input: SaveTemplateInput): Promise<string> {
 }
 
 /**
+ * Rewrite a global design's own blocks, and nothing else.
+ *
+ * The builder's "Edit this design" panel edits a design it does not own — it
+ * has the blocks and the name, but never the group or the band. Routing that
+ * through `saveTemplate` would mean sending back fields the panel never showed,
+ * and the first one it got wrong would silently reset. So: one column.
+ *
+ * Sanitized on the same path a page save uses. These blocks reach a live sales
+ * page the moment anything pointing here is rendered.
+ */
+export async function updateGlobalBlocks(id: string, input: Block[]): Promise<void> {
+  const clean = sanitizeSectionContent({ blocks: input });
+  const blocks = normalizeBlocks(clean.blocks);
+  if (blocks.length === 0) throw new Error("A design with nothing in it would empty every page using it.");
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("templates")
+    .update({ blocks })
+    .eq("id", id)
+    .eq("store_id", await getStoreId())
+    // Only a global. A plain template has copies out in the world that this
+    // would not reach, so editing one through here would look like it worked.
+    .eq("kind", "global")
+    .select("id");
+  if (error) throw new Error(`updateGlobalBlocks: ${error.message}`);
+  if (!data || data.length === 0) throw new Error("That design is not there any more.");
+}
+
+/**
  * The designs a page points at, ready for the renderer.
  *
  * One query for the whole page rather than one per pointer: a page with a

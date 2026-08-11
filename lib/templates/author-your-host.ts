@@ -1,4 +1,4 @@
-import { col, make, rowOf, type Template } from "./template";
+import { make, rowOf, type Template } from "./template";
 
 // "Your Host" — the off-white band with the two figures in a panel.
 //

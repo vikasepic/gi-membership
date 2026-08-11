@@ -432,6 +432,32 @@ export function BlockEditor({
    * placed by hand.
    */
   function insertTemplate(t: Template) {
+    // A global is LINKED, not copied: what lands on the page is a pointer at
+    // the row, so editing the design later changes this page too. Its blocks
+    // are not copied in — they are resolved on read, which is the only way one
+    // edit can reach pages nobody opens.
+    //
+    // Nor does a global bring a band. A copy may set the ground it was drawn
+    // on because the page then owns every part of it; a link may not, because
+    // the band would be written into THIS page and never change again — a
+    // silent half-link is worse than no link at all.
+    if (t.id.startsWith("global:")) {
+      const pointer = newBlock("global");
+      const linked: Block = {
+        ...pointer,
+        props: { ...pointer.props, globalId: t.id.slice("global:".length) },
+      };
+      const at = addTarget(blocks, selectedId, "row");
+      commit(
+        insertBlock(blocks, linked, {
+          zone: "root",
+          index: at.zone === "root" ? at.index : blocks.length,
+        }),
+      );
+      setSelectedId(linked.id);
+      setLibrary(false);
+      return;
+    }
     // The band comes with the design. A template is blocks, and blocks cannot
     // paint the ground they stand on — so until the section grew a width and a
     // colour of its own, "now set the background to #e9dde6" was a step in a

@@ -16,7 +16,8 @@ import {
   buildSectionView,
   type BandStyleKey,
 } from "@/lib/page-sections";
-import { BlockEditor } from "@/components/admin/block-editor";
+import { BlockEditor, type GlobalIndex } from "@/components/admin/block-editor";
+import { saveGlobalBlocksAction } from "@/app/admin/templates/actions";
 import type { SectionEdit } from "@/components/admin/section-settings";
 import { DeviceSwitch } from "@/components/admin/device-switch";
 import { blocksForSection, isUnconverted } from "@/lib/section-to-blocks";
@@ -547,6 +548,39 @@ function BlockCanvasField({
   owner: OwnerType;
 }) {
   const [open, setOpen] = useState(false);
+  // The global designs this store has, so a pointer on the canvas draws what it
+  // points at rather than a placeholder. Fetched when the builder opens rather
+  // than on mount: a page with twelve sections has twelve of these launchers,
+  // and eleven of them are never opened.
+  //
+  // Deliberately NOT threaded down from the server. The nested editor inside
+  // the builder — the one that edits a global's own blocks — must be given no
+  // index at all, so a pointer inside a global stays a pointer. Fetching here,
+  // at the one launcher a page opens, keeps that distinction where it is
+  // readable.
+  const [globals, setGlobals] = useState<GlobalIndex>(new Map());
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    void fetch("/api/templates")
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((j: { templates?: { id: string; name: string; blocks: Block[] }[] }) => {
+        if (!alive) return;
+        setGlobals(
+          new Map(
+            (j.templates ?? [])
+              .filter((t) => t.id.startsWith("global:"))
+              .map((t) => [t.id.slice("global:".length), { name: t.name, blocks: t.blocks }]),
+          ),
+        );
+      })
+      // A canvas that could not read them draws pointers as pointers, which is
+      // honest — and not a reason to refuse to open the builder.
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [open]);
   const view = useMemo(() => buildSectionView(row), [row]);
   // Stored blocks if there are any; otherwise the section's typed content,
   // converted. That conversion is what makes this one editor rather than two.
@@ -582,6 +616,21 @@ function BlockCanvasField({
           onClose={() => setOpen(false)}
           preview={preview}
           owner={owner}
+          globals={globals}
+          onSaveGlobal={async (id, next) => {
+            const fd = new FormData();
+            fd.append("id", id);
+            fd.append("blocks", JSON.stringify(next));
+            const res = await saveGlobalBlocksAction({}, fd);
+            if (res.error) throw new Error(res.error);
+            // Keep the canvas showing what was just saved. Without this the
+            // nested editor closes onto the copy it was opened with, and the
+            // design appears to have reverted.
+            setGlobals((prev) => {
+              const was = prev.get(id);
+              return was ? new Map(prev).set(id, { ...was, blocks: next }) : prev;
+            });
+          }}
         />
       )}
     </>
