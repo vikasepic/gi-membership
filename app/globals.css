@@ -180,6 +180,66 @@ h1, h2, h3, h4 {
   letter-spacing: -0.02em;
 }
 
+/* Headings typed inside a rich-text block.
+
+   The rule above gives them the display face and a weight, and deliberately no
+   size — Tailwind's preflight has already reset every heading to
+   `font-size: inherit`, so an H2 written in the editor came out bold at body
+   size. It read as a bold paragraph, which is exactly what it looked like.
+
+   In `@layer base`, and scoped through `:is()` so the whole rule stays at one
+   class plus one element. Site settings → Typography emits unlayered
+   `:root h2 { font-size: … }` for anything the owner has actually set, and an
+   unlayered rule beats a layered one whatever the specificity — so this is the
+   default that appears when nothing is set, and gets out of the way the moment
+   something is. Tailwind's own utilities are layered later than base, so a
+   `text-sm` on a heading still wins too.
+
+   The sizes are HEADING_SIZE from lib/block-style.ts, so a heading block set to
+   H2 and an H2 typed into a paragraph are the same size. A test compares the
+   two lists — they cannot drift apart quietly. */
+@layer base {
+  .rich :is(h1, h2, h3, h4, h5, h6) {
+    margin-top: 1.4em;
+    margin-bottom: 0.4em;
+    font-family: var(--font-heading), system-ui, sans-serif;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  /* Nothing above the first heading: the block's own margin already put it
+     there, and a leading 1.4em reads as a broken gap at the top of a box. */
+  .rich > :is(h1, h2, h3, h4, h5, h6):first-child {
+    margin-top: 0;
+  }
+  .rich h1 { font-size: clamp(2.3rem, 5.6vw, 4.2rem); }
+  .rich h2 { font-size: clamp(1.7rem, 3.4vw, 2.4rem); }
+  .rich h3 { font-size: 1.12rem; }
+  .rich h4 { font-size: 1.02rem; }
+  .rich h5 { font-size: 0.94rem; }
+  .rich h6 { font-size: 0.84rem; }
+
+  /* The rest of what rich text is made of. These lived as arbitrary variants on
+     the page's own wrapper, which meant the EDITOR had none of them: its
+     surface carried a class with no rules behind it at all, so a bulleted list
+     typed in the inspector showed as lines with no bullets and an H2 showed as
+     a bold paragraph. One class now dresses both, so the box you type in and
+     the page you get cannot disagree about what you wrote. */
+  .rich p { margin-bottom: 0.75rem; }
+  .rich :is(ul, ol) { padding-left: 1.5rem; margin-bottom: 0.75rem; }
+  .rich ul { list-style: disc; }
+  .rich ol { list-style: decimal; }
+  .rich li { margin-bottom: 0.25rem; }
+  .rich a { text-decoration: underline; }
+  .rich blockquote {
+    border-left: 2px solid currentColor;
+    padding-left: 1rem;
+    opacity: 0.85;
+  }
+  /* Nothing hangs below the last line: the block's own margin owns that gap,
+     and doubling it is what makes a text block look mis-spaced. */
+  .rich > :last-child { margin-bottom: 0; }
+}
+
 /* Small-caps editorial kicker/label. */
 .kicker {
   font-family: var(--font-heading), system-ui, sans-serif;

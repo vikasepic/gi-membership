@@ -39,7 +39,7 @@ export function RichText({
     editorProps: {
       attributes: {
         class:
-          "prose-editor min-h-48 w-full rounded-xl border border-border bg-surface px-3.5 py-3 text-sm outline-none focus:border-primary",
+          "rich min-h-48 w-full rounded-xl border border-border bg-surface px-3.5 py-3 text-sm outline-none focus:border-primary",
       },
     },
   });

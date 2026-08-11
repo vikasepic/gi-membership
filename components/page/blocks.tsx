@@ -289,7 +289,10 @@ function Inner({
     case "text":
       return (
         <div
-          className="[&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:pl-4 [&_h3]:mb-1 [&_h3]:mt-4 [&_h3]:font-display [&_h3]:font-semibold [&_li]:mb-1 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:mb-3 [&_ul]:list-disc [&_ul]:pl-6"
+          // `rich` carries the heading scale — see app/globals.css. The h3
+          // arbitrary variants that used to be here did the same job for one
+          // level out of six, and set no size even for that one.
+          className="rich"
           dangerouslySetInnerHTML={{ __html: str(p.html) }}
         />
       );
