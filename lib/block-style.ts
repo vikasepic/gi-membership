@@ -32,6 +32,26 @@ export function dimCss(d: Dim): string {
   return `${d.t}${d.u} ${d.r}${d.u} ${d.b}${d.u} ${d.l}${d.u}`;
 }
 
+/**
+ * The cast shadow, or null where there is none to cast.
+ *
+ * All three numbers zero is nothing — an offset of nothing blurred by nothing
+ * draws no pixels whatever the colour — so it returns null rather than a
+ * `box-shadow` that costs a repaint and shows nothing.
+ *
+ * A shadow with no colour of its own follows the band, the same way ink and
+ * outlines do. It has to be derived at render rather than frozen when the block
+ * was made: a card that cast a dark shadow on paper would otherwise keep
+ * casting it after the section was switched to Navy, where it is invisible.
+ */
+function shadowCss(
+  s: { shadowX: number; shadowY: number; shadowBlur: number; shadowColor: string | null },
+  theme: BandTheme,
+): string | null {
+  if (!s.shadowX && !s.shadowY && !s.shadowBlur) return null;
+  return `${s.shadowX}px ${s.shadowY}px ${s.shadowBlur}px ${s.shadowColor ?? theme.rule}`;
+}
+
 export function backgroundCss(bg: Background, theme: BandTheme): CSSProperties {
   if (bg.type === "classic") {
     const css: CSSProperties = {};
@@ -231,6 +251,14 @@ function wrapperCssFrom(block: Block, s: BlockStyle, theme: BandTheme): CSSPrope
     css.border = `${s.borderWidth}px solid ${s.borderColor ?? theme.rule}`;
     if (s.radius) css.borderRadius = `${s.radius}px`;
   }
+  const shadow = shadowCss(s, theme);
+  if (shadow) {
+    css.boxShadow = shadow;
+    // A shadow is cast by the box's edge, so it needs the corner even when
+    // nothing is painted inside — an unfilled bordered card with a hard offset
+    // would otherwise cast a square shadow behind a rounded outline.
+    if (s.radius) css.borderRadius = `${s.radius}px`;
+  }
   // Position too, or the number does nothing: z-index is ignored on a static
   // box. Only when one was actually set, so nothing that has never been
   // stacked starts creating a stacking context and changing what paints over
@@ -410,8 +438,14 @@ export function columnCss(
   // A column can be outlined too — two boxed figures side by side is a row of
   // two columns, not a block that has to grow an option.
   if (s.borderWidth > 0) css.border = `${s.borderWidth}px solid ${s.borderColor ?? theme.rule}`;
+  const shadow = shadowCss(s, theme);
+  if (shadow) css.boxShadow = shadow;
   // Only where a background was actually set: a corner on a transparent column
   // rounds nothing, and clipping content that overflows would be a surprise.
+  //
+  // Never with a shadow: `overflow: hidden` clips the box's own children, not
+  // its shadow, but the two together are the shape a card wants and the clip
+  // is what stops a rounded column's fill squaring off at the corners.
   if (s.background.type !== "none" && s.radius) css.overflow = "hidden";
   // A column can be told to sit on top of its neighbour, which is what an
   // overlapping card actually is. Without it the only lever was source order,

@@ -221,6 +221,26 @@ export type BlockStyle = {
   /** Null takes the band's own hairline, so an outline follows its section. */
   borderColor: string | null;
   /**
+   * A cast shadow, as four flat numbers rather than one nested value.
+   *
+   * Flat because the inspector's controls are keyed one to a field: a nested
+   * `{x,y,blur,colour}` would need a control kind of its own that nothing else
+   * would ever use, and the four keys read the same in the panel.
+   *
+   * All-zero is no shadow, which is what every block had before this existed —
+   * an offset of nothing blurred by nothing is invisible either way, so there
+   * is no state this rules out.
+   *
+   * Blur zero with an offset is the hard-edged shadow — a second card peeking
+   * out from behind the first. That shape had no answer but Custom CSS, which
+   * is invisible to every control, so the panel then disagreed with the page.
+   */
+  shadowX: number;
+  shadowY: number;
+  shadowBlur: number;
+  /** Null takes the band's ink at low opacity, so a shadow follows its section. */
+  shadowColor: string | null;
+  /**
    * What sits on top of what, when two things overlap.
    *
    * Null means "wherever paint order puts it", which is what everything did
@@ -394,6 +414,10 @@ export const baseStyle = (over: Partial<BlockStyle> = {}): BlockStyle => ({
   radius: 0,
   borderWidth: 0,
   borderColor: null,
+  shadowX: 0,
+  shadowY: 0,
+  shadowBlur: 0,
+  shadowColor: null,
   zIndex: null,
   cssId: "",
   cssClass: "",
@@ -816,6 +840,12 @@ function normalizeStyle(v: unknown): BlockStyle {
     // border, it is a block nobody can see past.
     borderWidth: Math.max(0, Math.min(24, num(v.borderWidth, d.borderWidth))),
     borderColor: colorOrNull(v.borderColor),
+    // Offsets may go either way — a shadow up and to the left is what an
+    // overlapping card casts — so these clamp symmetrically. Blur cannot.
+    shadowX: Math.max(-64, Math.min(64, num(v.shadowX, d.shadowX))),
+    shadowY: Math.max(-64, Math.min(64, num(v.shadowY, d.shadowY))),
+    shadowBlur: Math.max(0, Math.min(128, num(v.shadowBlur, d.shadowBlur))),
+    shadowColor: colorOrNull(v.shadowColor),
     // Null stays null: "nobody set this" and "sit at 0" are different answers,
     // and 0 is a real one — it is how you put something back UNDER a sibling
     // that has been given a positive one.
