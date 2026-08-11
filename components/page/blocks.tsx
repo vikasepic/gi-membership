@@ -162,6 +162,16 @@ export function Blocks({
  */
 function flow(blocks: Block[], theme: BandTheme, money?: BlockMoney, cta?: CtaRender, at?: Device): React.ReactNode[] {
   const out: React.ReactNode[] = [];
+  // Every block carries a bottom margin, which is the only thing separating one
+  // from the next — nothing here has a container gap. The last one has nothing
+  // below it to be separated from, so its margin is dead space at the foot of
+  // the section or inside the bottom of a column, and it is what made a card
+  // look as though its padding was uneven.
+  //
+  // Read off the array rather than counted during the loop: both callers filter
+  // out the blocks that render nothing before getting here, so the last entry
+  // is the last thing on screen and not an empty block holding the position.
+  const lastId = blocks.length > 0 ? blocks[blocks.length - 1].id : null;
   for (let i = 0; i < blocks.length; ) {
     if (blocks[i].type === "button" && blocks[i + 1]?.type === "button") {
       let j = i;
@@ -169,13 +179,23 @@ function flow(blocks: Block[], theme: BandTheme, money?: BlockMoney, cta?: CtaRe
       out.push(
         <div key={blocks[i].id} className="flex flex-wrap items-center gap-3">
           {blocks.slice(i, j).map((b) => (
-            <BlockNode key={b.id} block={b} theme={theme} money={money} cta={cta} at={at} />
+            <BlockNode key={b.id} block={b} theme={theme} money={money} cta={cta} at={at} last={b.id === lastId} />
           ))}
         </div>,
       );
       i = j;
     } else {
-      out.push(<BlockNode key={blocks[i].id} block={blocks[i]} theme={theme} money={money} cta={cta} at={at} />);
+      out.push(
+        <BlockNode
+          key={blocks[i].id}
+          block={blocks[i]}
+          theme={theme}
+          money={money}
+          cta={cta}
+          at={at}
+          last={blocks[i].id === lastId}
+        />,
+      );
       i++;
     }
   }
@@ -188,12 +208,15 @@ function BlockNode({
   money,
   cta,
   at,
+  last,
 }: {
   block: Block;
   theme: BandTheme;
   money?: BlockMoney;
   cta?: CtaRender;
   at?: Device;
+  /** Nothing follows it, so its bottom margin separates it from nothing. */
+  last?: boolean;
 }) {
   // An unfilled block would otherwise emit a wrapper carrying its padding and
   // margin — a gap on the page that nobody placed.
@@ -204,14 +227,22 @@ function BlockNode({
   // media query anyway. Pinned to a device it is the attribute — plus the one
   // half an attribute cannot express, the rule that names the text inside the
   // block so the preview's own `.site-type h2` does not beat it there.
-  const rules = at ? blockTextRules(block, at) : blockRules(block, theme);
+  const base = at ? blockTextRules(block, at) : blockRules(block, theme);
+  // Appended last, at the same specificity as the rule it corrects and after
+  // that rule's own media queries, so it wins on order rather than by shouting.
+  // A per-device margin override would otherwise put the gap back on a phone.
+  const rules = last && !at ? `${base}.${blockClass(block)}.${blockClass(block)}{margin-bottom:0}` : base;
   return (
     <>
       {rules && <style dangerouslySetInnerHTML={{ __html: rules }} />}
       <div
         id={s.cssId || undefined}
         className={[blockClass(block), s.cssClass].filter(Boolean).join(" ")}
-        style={at ? blockCssAt(block, theme, at) : undefined}
+        // Pinned to a device the look is an attribute, so the correction has to
+        // be one too — the editor canvas draws through this path.
+        style={
+          at ? (last ? { ...blockCssAt(block, theme, at), marginBottom: 0 } : blockCssAt(block, theme, at)) : undefined
+        }
         hidden={at ? hiddenAt(block, at) : undefined}
       >
         <Inner block={block} theme={theme} money={money} cta={cta} at={at} />

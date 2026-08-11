@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Blocks } from "@/components/page/blocks";
 import { blockRules } from "@/lib/block-style";
 import { bandTheme } from "@/lib/page-sections";
-import { normalizeBlocks, setPropsAt, type Block } from "@/lib/blocks";
+import { normalizeBlocks, setPropsAt, setStyleAt, type Block } from "@/lib/blocks";
 
 // The cards block, and the settings added to it after pages were already using
 // it. Every one of those settings is null or a "as it was" default, and this
@@ -16,7 +16,29 @@ const theme = bandTheme("paper");
 const stored = (props: Record<string, unknown>): Block =>
   normalizeBlocks([{ id: "b1", type: "cards", props }])[0];
 
-const render = (b: Block) => renderToStaticMarkup(<Blocks blocks={[b]} theme={theme} />);
+/**
+ * The goldens below are the card block and nothing else, byte for byte.
+ *
+ * The last block in a flow now has its bottom margin zeroed — it separates
+ * itself from nothing, and that dead space is what made the foot of a section
+ * look mis-padded. A fixture of one block is always the last block, so these
+ * would all have had to be re-baselined to keep passing, which is the one thing
+ * a golden must never be asked to do.
+ *
+ * So the fixture gets a sibling after it and the sibling's markup is cut back
+ * off. The card is then rendered exactly as a card in the middle of a page is,
+ * the strings below are untouched from the original capture, and the trailing
+ * margin has its own test rather than being folded into these.
+ */
+const TAIL_ID = "tail-sentinel";
+const render = (b: Block) => {
+  const tail = normalizeBlocks([{ id: TAIL_ID, type: "spacer", props: { height: 8 } }]);
+  const out = renderToStaticMarkup(<Blocks blocks={[b, ...tail]} theme={theme} />);
+  const cut = out.indexOf(`<style>.bk-${TAIL_ID}`);
+  if (cut === -1) throw new Error("the sentinel did not render — the cut below is measuring nothing");
+  // Everything before the sibling, plus the wrapper's own closing tag.
+  return `${out.slice(0, cut)}</div>`;
+};
 
 const ITEMS = [
   { title: "One", body: "First", amount: "£9", icon: '<svg viewBox="0 0 2 2"><path d="M0 0"/></svg>' },
@@ -280,6 +302,59 @@ describe("the gap between a card's title and its text", () => {
     // `?? ` on a falsy number is the classic way this control would silently
     // refuse the one value someone reaches for it to set.
     expect(withGap({ cardTextGap: 0 })).toContain("margin-bottom:0");
+  });
+});
+
+/**
+ * Every block carries a bottom margin, and nothing that stacks blocks has a
+ * container gap — so that margin is the only thing separating one from the
+ * next. The last one has nothing below it to be separated from, and the 16px
+ * it kept was dead space at the foot of a section and inside the bottom of a
+ * column, which is what made a card's padding look uneven.
+ */
+describe("the last block in a flow", () => {
+  const two = () => [
+    stored({ items: ITEMS }),
+    normalizeBlocks([{ id: "b2", type: "spacer", props: { height: 8 } }])[0],
+  ];
+
+  it("has no bottom margin", () => {
+    const out = renderToStaticMarkup(<Blocks blocks={two()} theme={theme} />);
+    expect(out).toContain(".bk-b2.bk-b2{margin-bottom:0}");
+  });
+
+  it("leaves every earlier block's margin alone", () => {
+    const out = renderToStaticMarkup(<Blocks blocks={two()} theme={theme} />);
+    expect(out).not.toContain(".bk-b1.bk-b1{margin-bottom:0}");
+    expect(out).toContain(".bk-b1.bk-b1{margin:0px 0px 16px 0px");
+  });
+
+  it("corrects the last VISIBLE block, not the last stored one", () => {
+    // A trailing empty block renders nothing at all. If the count were taken
+    // before that was known, the correction would land on a block nobody sees
+    // and the real last one would keep its gap.
+    const blocks = [
+      stored({ items: ITEMS }),
+      normalizeBlocks([{ id: "ghost", type: "text", props: { html: "" } }])[0],
+    ];
+    const out = renderToStaticMarkup(<Blocks blocks={blocks} theme={theme} />);
+    expect(out).not.toContain("bk-ghost");
+    expect(out).toContain(".bk-b1.bk-b1{margin-bottom:0}");
+  });
+
+  it("wins over a per-device margin, which would put the gap back on a phone", () => {
+    // Appended after the block's own media queries, at the same specificity,
+    // so order decides. Written before them it would lose on mobile only.
+    const b = setStyleAt(stored({ items: ITEMS }), "mobile", {
+      margin: { t: 0, r: 0, b: 40, l: 0, u: "px", link: false },
+    });
+    const out = renderToStaticMarkup(<Blocks blocks={[b]} theme={theme} />);
+    const style = out.slice(out.indexOf("<style>"), out.indexOf("</style>"));
+    // The override really is there — otherwise the ordering below compares
+    // against nothing and passes for the wrong reason.
+    expect(style).toContain("@media");
+    expect(style).toContain("40px");
+    expect(style.lastIndexOf("margin-bottom:0")).toBeGreaterThan(style.indexOf("@media"));
   });
 });
 });
