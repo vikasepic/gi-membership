@@ -188,14 +188,32 @@ export default async function Home() {
 
       {/* Subscription offers, presented as products in their own right. These
           are the highest-value thing the store sells and were reachable only as
-          a checkout bump — invisible to anyone not already buying something. */}
-      {subscriptions.map((offer) => (
-        <SubscriptionSection
-          key={offer.id}
-          offer={offer}
-          owned={ownedOfferIds.has(offer.id)}
-        />
-      ))}
+          a checkout bump — invisible to anyone not already buying something.
+
+          The heading belongs to the GROUP, not to each offer. It used to live
+          inside the per-offer component, so a store with four memberships said
+          "Keep going · Membership" four times down one page and emitted four
+          identical h2s — which reads as the page having restarted, and tells a
+          screen reader the same thing. */}
+      {subscriptions.length > 0 && (
+        <section className="flex flex-col gap-7">
+          <div className="flex items-baseline justify-between border-b border-border pb-4">
+            <h2 className="text-xl md:text-2xl">Keep going</h2>
+            <span className="kicker text-muted">
+              {subscriptions.length === 1 ? "Membership" : "Memberships"}
+            </span>
+          </div>
+          <div className="flex flex-col gap-10">
+            {subscriptions.map((offer) => (
+              <SubscriptionSection
+                key={offer.id}
+                offer={offer}
+                owned={ownedOfferIds.has(offer.id)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -210,12 +228,10 @@ async function SubscriptionSection({ offer, owned }: { offer: Offer; owned: bool
   const href = await offerHref(offer);
   const trial = offer.trialDays ?? 0;
   return (
+    // No heading of its own: the group above carries it, and the offer's own
+    // headline below is the h3 under it. The anchor stays — it is what a link
+    // to a specific membership targets.
     <section id={`offer-${offer.key}`} className="flex flex-col gap-7">
-      <div className="flex items-baseline justify-between border-b border-border pb-4">
-        <h2 className="text-xl md:text-2xl">Keep going</h2>
-        <span className="kicker text-muted">Membership</span>
-      </div>
-
       <div className="grid grid-cols-1 gap-8 rounded-3xl border border-border bg-surface p-7 md:grid-cols-12 md:gap-10 md:p-10">
         <div className="flex flex-col gap-5 md:col-span-7">
           <div className="flex flex-wrap items-center gap-3">
