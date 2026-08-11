@@ -5,6 +5,7 @@ import { getOffer, getOfferByKey } from "@/lib/store";
 import { ownershipFor } from "@/lib/checkout";
 import { isOfferEligible } from "@/lib/offers";
 import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
+import { resolveGlobals } from "@/lib/templates-store";
 import { SalesPage } from "@/components/page/sales-page";
 import { money } from "@/lib/money";
 import { TrackView } from "@/components/track-view";
@@ -40,6 +41,8 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
     getPageSections("offer", offer.id),
     getPageSettings("offer", offer.id),
   ]);
+  // Whatever this page points at, in one query — see the product page.
+  const globals = await resolveGlobals(rows);
   const view = buildBumpView(offer);
   // This page's own second price, if it has one. Bumps and upsells read theirs
   // from the product that places them; a page standing alone has no product.
@@ -70,6 +73,7 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
       <SalesPage
         rows={rows}
         settings={settings}
+        globals={globals}
         money={{
           // The headline price, not the charge today. During a trial those
           // differ, and the card says "After the trial" above it.

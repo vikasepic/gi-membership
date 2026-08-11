@@ -1,6 +1,6 @@
 import { Blocks, type CtaRender } from "@/components/page/blocks";
 import type { StoreRender } from "@/components/page/storefront-blocks";
-import { blocksForSection } from "@/lib/section-to-blocks";
+import { blocksForSection, type GlobalBlocks } from "@/lib/section-to-blocks";
 import {
   BAND_PAD_X,
   BAND_PAD_Y_MD,
@@ -116,6 +116,7 @@ export function SectionBand({
   at,
   /** The storefront's live data. Only the home page has any. */
   store,
+  globals,
 }: {
   row: SectionRow;
   money: PageMoney;
@@ -124,10 +125,18 @@ export function SectionBand({
   preview?: boolean;
   at?: Device;
   store?: StoreRender;
+  /**
+   * The designs this page points at, by id.
+   *
+   * Absent expands nothing, which is what the builder wants: it draws a
+   * pointer itself, as a linked card. A page being read by a visitor always
+   * passes one.
+   */
+  globals?: GlobalBlocks;
 }) {
   const view = buildSectionView(row);
   if (!view) return null;
-  const blocks = blocksForSection(view);
+  const blocks = blocksForSection(view, globals);
   // An unwritten band is absent, not empty. The editor still shows it, because
   // that is where you go to fill it in.
   if (blocks.length === 0 && !preview) return null;
@@ -149,12 +158,15 @@ export function SalesPage({
   money,
   cta,
   settings,
+  globals,
 }: {
   rows: SectionRow[];
   money: PageMoney;
   cta?: CtaRender;
   /** Page-level custom code, from the editor's Page settings panel. */
   settings?: PageSettings;
+  /** The designs this page points at. See SectionBand. */
+  globals?: GlobalBlocks;
 }) {
   const ordered = [...rows].sort((a, b) => a.position - b.position);
   const css = settings?.customCss.trim();
@@ -163,7 +175,7 @@ export function SalesPage({
     <div>
       {css && <style dangerouslySetInnerHTML={{ __html: inlineCss(css) }} />}
       {ordered.map((row) => (
-        <SectionBand key={row.sectionKey} row={row} money={money} cta={cta} />
+        <SectionBand key={row.sectionKey} row={row} money={money} cta={cta} globals={globals} />
       ))}
       {/* Last, so it runs against a page that exists. `</` is treated by the
           same pair that treats the site-wide custom code — see `inlineCss`. */}

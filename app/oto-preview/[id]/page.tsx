@@ -4,6 +4,7 @@ import { getOffer } from "@/lib/store";
 import { previewUpsellAlt } from "@/lib/checkout";
 import { immediateChargeCents } from "@/lib/offers";
 import { otoComponentFor } from "@/components/oto/registry";
+import { resolveGlobals } from "@/lib/templates-store";
 import { SectionsOto } from "@/components/oto/sections-template";
 import { getPageSections } from "@/lib/pages";
 import type { OtoView } from "@/components/oto/shell";
@@ -69,7 +70,9 @@ export default async function OtoPreviewFrame({
   // component map cannot supply — so it is resolved here rather than
   // pretending every template has the same shape.
   if ((template || offer.otoTemplate) === "sections") {
-    return <SectionsOto view={view} rows={await getPageSections("offer", offer.id)} />;
+    const rows = await getPageSections("offer", offer.id);
+    // Whatever this page points at, in one query — see the product page.
+    return <SectionsOto view={view} rows={rows} globals={await resolveGlobals(rows)} />;
   }
 
   const Template = otoComponentFor({ template: template || offer.otoTemplate, offerKey: offer.key });

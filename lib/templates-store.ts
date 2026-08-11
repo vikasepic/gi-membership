@@ -3,9 +3,9 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
 import { normalizeBlocks, type Block } from "@/lib/blocks";
-import { normalizeSectionLayout, layoutIsDefault } from "@/lib/page-sections";
+import { normalizeSectionLayout, layoutIsDefault, type SectionRow } from "@/lib/page-sections";
 import { slugify } from "@/lib/slug";
-import { globalIdsIn } from "@/lib/section-to-blocks";
+import { globalIdsIn, type GlobalBlocks } from "@/lib/section-to-blocks";
 import type { Template, TemplateBand } from "@/lib/templates/template";
 
 // Templates the owner saved, as opposed to the ones that ship in code.
@@ -140,6 +140,43 @@ export async function saveTemplate(input: SaveTemplateInput): Promise<string> {
   const { data, error } = await db.from("templates").insert(row).select("id").single();
   if (error) throw new Error(`saveTemplate: ${error.message}`);
   return String(data.id);
+}
+
+/**
+ * The designs a page points at, ready for the renderer.
+ *
+ * One query for the whole page rather than one per pointer: a page with a
+ * global header, footer and guarantee would otherwise be three round trips
+ * before it could draw, on every request.
+ *
+ * Only rows that are actually globals resolve. A pointer at a row that has
+ * since become a plain template resolves to nothing, and a pointer to nothing
+ * renders nothing — the same answer a deleted design gets, which is the only
+ * answer that keeps a live page whole.
+ */
+export async function resolveGlobals(rows: SectionRow[]): Promise<GlobalBlocks> {
+  const ids = [
+    ...new Set(
+      rows.flatMap((row) => {
+        const content = row.content as { blocks?: unknown } | null;
+        return Array.isArray(content?.blocks) ? globalIdsIn(normalizeBlocks(content.blocks)) : [];
+      }),
+    ),
+  ];
+  if (ids.length === 0) return new Map();
+
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("templates")
+    .select("id, blocks")
+    .eq("store_id", await getStoreId())
+    .eq("kind", "global")
+    .in("id", ids);
+  // A page that cannot read its globals still renders everything else. The
+  // alternative — throwing — takes down a sales page because a shared footer
+  // could not be fetched.
+  if (error) return new Map();
+  return new Map((data ?? []).map((row) => [String(row.id), normalizeBlocks(row.blocks)]));
 }
 
 /** Where a global design is currently pointed at from. */

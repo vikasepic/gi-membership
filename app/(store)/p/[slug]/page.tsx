@@ -9,6 +9,7 @@ import { money } from "@/lib/money";
 import { TrackView } from "@/components/track-view";
 import { BuyLink } from "@/components/buy-link";
 import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
+import { resolveGlobals } from "@/lib/templates-store";
 import { SalesPage } from "@/components/page/sales-page";
 
 const TYPE_LABEL: Record<CourseType, string> = {
@@ -47,6 +48,10 @@ export default async function ProductPage({
       getPageSections("product", product.id),
       getPageSettings("product", product.id),
     ]);
+    // Whatever this page points at, in one query. A pointer whose design has
+    // gone resolves to nothing and renders nothing, so the page is shorter
+    // rather than broken.
+    const globals = await resolveGlobals(rows);
     return (
       // Full-bleed: the bands run edge to edge, which the padded store shell
       // would otherwise inset. -mx cancels the shell's own gutter.
@@ -69,6 +74,7 @@ export default async function ProductPage({
         <SalesPage
           rows={rows}
           settings={settings}
+          globals={globals}
           money={{ priceLabel: money(product.priceCents, product.currency), termsLabel: null }}
           cta={(label) => (
             <BuyLink

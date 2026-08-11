@@ -2,6 +2,7 @@ import { OtoActions, type OtoView } from "@/components/oto/shell";
 import { OtoStickyBar } from "@/components/oto/sticky-bar";
 import { SalesPage } from "@/components/page/sales-page";
 import type { SectionRow } from "@/lib/page-sections";
+import type { GlobalBlocks } from "@/lib/section-to-blocks";
 import { money } from "@/lib/money";
 
 /**
@@ -13,7 +14,16 @@ import { money } from "@/lib/money";
  * Accepting stays the shell's: layout is the section's business, the money path
  * is not. The button label is editable and the action behind it is not.
  */
-export function SectionsOto({ view, rows }: { view: OtoView; rows: SectionRow[] }) {
+export function SectionsOto({
+  view,
+  rows,
+  globals,
+}: {
+  view: OtoView;
+  rows: SectionRow[];
+  /** The designs this page points at. See SectionBand. */
+  globals?: GlobalBlocks;
+}) {
   const { offer, altOffer: alt } = view;
   const priceLabel = money(view.chargeNowCents, offer.currency);
 
@@ -21,6 +31,7 @@ export function SectionsOto({ view, rows }: { view: OtoView; rows: SectionRow[] 
     <div className="pb-28">
       <SalesPage
         rows={rows}
+        globals={globals}
         money={{
           // The headline price. `priceLabel` here was the charge-now figure,
           // which is $0 through a trial — see PageMoney.
