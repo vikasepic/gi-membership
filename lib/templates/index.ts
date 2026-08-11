@@ -20,6 +20,12 @@ import { template as listRuled } from "./list-ruled";
 import { template as confirmationBox } from "./confirmation-box";
 import { template as faqAccordion } from "./faq-accordion";
 import { template as faqOpenColumns } from "./faq-open-columns";
+import { template as curriculumDays } from "./curriculum-days";
+import { template as bonusPanel } from "./bonus-panel";
+import { template as guaranteePanel } from "./guarantee-panel";
+import { template as howItWorksStages } from "./how-it-works-stages";
+import { template as pricingBestValue } from "./pricing-best-value";
+import { template as comparisonColumns } from "./comparison-columns";
 
 export { templateSource, type Template } from "./template";
 
@@ -36,6 +42,12 @@ const BUILT_INS: Template[] = [
   confirmationBox,
   faqAccordion,
   faqOpenColumns,
+  curriculumDays,
+  bonusPanel,
+  guaranteePanel,
+  howItWorksStages,
+  pricingBestValue,
+  comparisonColumns,
   hero,
   featureCards,
   benefitColumns,
