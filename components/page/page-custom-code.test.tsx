@@ -54,4 +54,29 @@ describe("page-level custom code", () => {
     const js = "document.querySelectorAll('a').forEach(function (a) { a.dataset.x = 1 })";
     expect(render({ customCss: "", customJs: js })).toContain(js);
   });
+
+  /**
+   * "Where do I add an external library?" — the panel now answers it, and this
+   * is the answer working. The custom-code box is the INSIDE of a script tag,
+   * so a `<script src>` typed there is not JavaScript; appending one is.
+   */
+  it("lets custom JavaScript load a library from a CDN", () => {
+    const js = [
+      'const s = document.createElement("script");',
+      's.src = "https://cdn.example.com/library.js";',
+      "document.head.appendChild(s);",
+    ].join("\n");
+    const out = render({ customCss: "", customJs: js });
+    // Survives verbatim: nothing in it needs escaping, so nothing is escaped.
+    expect(out).toContain('s.src = "https://cdn.example.com/library.js";');
+    expect(out).toContain("document.head.appendChild(s)");
+  });
+
+  it("still refuses to let a pasted closing tag end the script early", () => {
+    // The same guard, checked against the shape someone reaches for when they
+    // are trying to paste a tag in rather than append one.
+    const out = render({ customCss: "", customJs: '// </script><img src=x onerror=alert(1)>' });
+    expect(out).not.toContain("</script><img");
+    expect(out).toContain("<\\/script>");
+  });
 });

@@ -439,11 +439,33 @@ function AdvancedFields({ s, errors }: FieldsProps) {
       </Field>
       <Field
         label="Site-wide JavaScript"
-        hint="runs on every store page — a mistake here breaks all of them"
+        hint="the inside of a script tag — runs on every store page, so a mistake here breaks all of them"
         error={errors.customJs}
       >
         <textarea name="customJs" defaultValue={s.customJs} rows={6} className={`${input} font-mono text-xs`} />
       </Field>
+      {/* The question this panel could not answer. A `<script>` tag typed in
+          the box above is not JavaScript and does nothing, and the HTML block
+          strips script tags because it renders stored content on a public page.
+          Neither is going to change — so say what DOES work, here, where the
+          question gets asked. */}
+      <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-2 px-3 py-2.5">
+        <span className="text-xs font-medium">To load a library from a CDN</span>
+        <p className="text-xs text-muted">
+          A <code className="font-mono">&lt;script&gt;</code> tag does not work above — that box is
+          already inside one — and the HTML block removes script tags on purpose. Add the library
+          from JavaScript instead:
+        </p>
+        <pre className="overflow-x-auto rounded-md bg-surface px-2.5 py-2 font-mono text-[0.68rem] leading-relaxed">{`const s = document.createElement("script");
+s.src = "https://cdn.example.com/library.js";
+s.async = true;
+s.onload = () => { /* the library is ready — use it here */ };
+document.head.appendChild(s);`}</pre>
+        <p className="text-xs text-muted">
+          Anything the library needs goes in <code className="font-mono">onload</code>: the script
+          above runs before the file has finished downloading.
+        </p>
+      </div>
       <p className="text-xs text-muted">
         Neither of these runs in the admin, so a broken snippet can always be removed from here.
       </p>
