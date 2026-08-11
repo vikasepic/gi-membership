@@ -10,12 +10,14 @@ import { template as faq } from "./faq";
 import { template as callToAction } from "./call-to-action";
 import { template as authorMostReviewed } from "./author-most-reviewed";
 import { template as authorAbout } from "./author-about";
+import { template as authorOneDecision } from "./author-one-decision";
 
 export { templateSource, type Template } from "./template";
 
 const BUILT_INS: Template[] = [
   authorMostReviewed,
   authorAbout,
+  authorOneDecision,
   hero,
   featureCards,
   benefitColumns,
