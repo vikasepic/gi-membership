@@ -3,9 +3,11 @@ import { newBlock, normalizeBlocks, setColumnCount, baseStyle, type Block } from
 import { blockCssAt, columnCss } from "@/lib/block-style";
 import { bandTheme } from "@/lib/page-sections";
 
-// The shadow, which exists because six of the reference designs cast one and
-// the only way to draw it was Custom CSS — invisible to every control, so the
-// inspector then disagreed with the page about what the block looked like.
+// The box a block draws around itself: its border's edges, and its shadow.
+//
+// Both exist because the reference designs need them and Custom CSS was the
+// only way to draw either — and Custom CSS is invisible to every control, so
+// the inspector then disagrees with the page about what the block looks like.
 
 const paper = bandTheme("paper");
 const navy = bandTheme("navy");
@@ -72,6 +74,70 @@ describe("a block's shadow", () => {
     // Blur cannot go negative; the offsets can, because a shadow cast up and to
     // the left is what an overlapping card does.
     expect(back.style.shadowBlur).toBe(0);
+  });
+});
+
+describe("which edges a border is drawn on", () => {
+  it("emits the shorthand it always emitted when it is all four", () => {
+    // Every border ever saved is in this state. A different property name here
+    // would repaint nothing and still break every byte-for-byte golden.
+    const css = blockCssAt(withStyle({ borderWidth: 1, borderColor: "#dddddd" }), paper);
+    expect(css.border).toBe("1px solid #dddddd");
+    expect(css.borderLeft).toBeUndefined();
+  });
+
+  it("draws one edge, which is what a rule between things is", () => {
+    // The hairline separating two figures in a counter strip: a border on the
+    // left of every figure but the first.
+    const css = blockCssAt(
+      withStyle({ borderWidth: 1, borderColor: "#9a9a9a", borderSides: "left" }),
+      paper,
+    );
+    expect(css.borderLeft).toBe("1px solid #9a9a9a");
+    expect(css.border).toBeUndefined();
+    expect(css.borderRight).toBeUndefined();
+  });
+
+  it("draws a pair", () => {
+    const css = blockCssAt(withStyle({ borderWidth: 2, borderSides: "y", borderColor: "#000000" }), paper);
+    expect(css.borderTop).toBe("2px solid #000000");
+    expect(css.borderBottom).toBe("2px solid #000000");
+    expect(css.borderLeft).toBeUndefined();
+  });
+
+  it("draws nothing at all when the width is zero, whichever edge is named", () => {
+    const css = blockCssAt(withStyle({ borderWidth: 0, borderSides: "bottom" }), paper);
+    expect(css.borderBottom).toBeUndefined();
+    expect(css.border).toBeUndefined();
+  });
+
+  it("follows the band when it names no colour", () => {
+    const block = withStyle({ borderWidth: 1, borderSides: "bottom" });
+    expect(blockCssAt(block, paper).borderBottom).toContain(paper.rule);
+    expect(blockCssAt(block, navy).borderBottom).toContain(navy.rule);
+  });
+
+  it("reads back as it was written", () => {
+    const [back] = normalizeBlocks([withStyle({ borderWidth: 3, borderSides: "left" })]);
+    expect(back.style.borderSides).toBe("left");
+    // An edge nobody understands is a box, not a crash.
+    const [bad] = normalizeBlocks([withStyle({ borderWidth: 3, borderSides: "diagonal" })]);
+    expect(bad.style.borderSides).toBe("all");
+  });
+
+  it("works on a column, where the counter strip's rules actually live", () => {
+    const row = setColumnCount(newBlock("row"), 3);
+    const withRules: Block = {
+      ...row,
+      columnStyles: [
+        baseStyle(),
+        baseStyle({ borderWidth: 1, borderSides: "left", borderColor: "#9a9a9a" }),
+        baseStyle({ borderWidth: 1, borderSides: "left", borderColor: "#9a9a9a" }),
+      ],
+    };
+    expect(columnCss(withRules, 0, paper).borderLeft).toBeUndefined();
+    expect(columnCss(withRules, 1, paper).borderLeft).toBe("1px solid #9a9a9a");
+    expect(columnCss(withRules, 2, paper).borderLeft).toBe("1px solid #9a9a9a");
   });
 });
 

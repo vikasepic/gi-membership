@@ -818,6 +818,22 @@ export const COLUMN_CONTROLS: Control[] = [
   style({ kind: "number", key: "radius", label: "Corner", min: 0, max: 60, step: 2, unit: "px" }),
   style({ kind: "number", key: "borderWidth", label: "Border", min: 0, max: 24, step: 1, unit: "px", hint: "0 is no line." }),
   style({ kind: "color", key: "borderColor", label: "Border colour", hint: "Unset follows the band.", when: (b) => b.style.borderWidth > 0 }),
+  style({
+    kind: "select",
+    key: "borderSides",
+    label: "Edges",
+    options: [
+      ["all", "All four"],
+      ["top", "Top"],
+      ["right", "Right"],
+      ["bottom", "Bottom"],
+      ["left", "Left"],
+      ["x", "Left and right"],
+      ["y", "Top and bottom"],
+    ],
+    hint: "One edge is a rule between things rather than a box around one.",
+    when: (b) => b.style.borderWidth > 0,
+  }),
 
   // Offset first, blur second, because the two shapes people actually want are
   // told apart by the blur: leave it at 0 and the offset draws a hard second
@@ -1010,6 +1026,22 @@ export const ADVANCED_CONTROLS: Control[] = [
   group("Border"),
   style({ kind: "number", key: "borderWidth", label: "Border", min: 0, max: 24, step: 1, unit: "px", hint: "0 is no line." }),
   style({ kind: "color", key: "borderColor", label: "Colour", hint: "Unset follows the band's own hairline.", when: (b) => b.style.borderWidth > 0 }),
+  style({
+    kind: "select",
+    key: "borderSides",
+    label: "Edges",
+    options: [
+      ["all", "All four"],
+      ["top", "Top"],
+      ["right", "Right"],
+      ["bottom", "Bottom"],
+      ["left", "Left"],
+      ["x", "Left and right"],
+      ["y", "Top and bottom"],
+    ],
+    hint: "One edge is a rule between things rather than a box around one.",
+    when: (b) => b.style.borderWidth > 0,
+  }),
 
   // On the column too, for the same reason the border is: a set of cards side
   // by side is a row of columns, and the card is the column.

@@ -33,6 +33,37 @@ export function dimCss(d: Dim): string {
 }
 
 /**
+ * The border, written onto whichever edges it was asked for.
+ *
+ * "all" emits the `border` shorthand it always emitted, character for
+ * character, so every block and column already saved renders the identical
+ * style attribute — which the byte-for-byte goldens check.
+ */
+function borderCss(
+  s: { borderWidth: number; borderColor: string | null; borderSides: BlockStyle["borderSides"] },
+  theme: BandTheme,
+): CSSProperties {
+  if (s.borderWidth <= 0) return {};
+  const line = `${s.borderWidth}px solid ${s.borderColor ?? theme.rule}`;
+  switch (s.borderSides) {
+    case "top":
+      return { borderTop: line };
+    case "right":
+      return { borderRight: line };
+    case "bottom":
+      return { borderBottom: line };
+    case "left":
+      return { borderLeft: line };
+    case "x":
+      return { borderLeft: line, borderRight: line };
+    case "y":
+      return { borderTop: line, borderBottom: line };
+    default:
+      return { border: line };
+  }
+}
+
+/**
  * The cast shadow, or null where there is none to cast.
  *
  * All three numbers zero is nothing — an offset of nothing blurred by nothing
@@ -248,7 +279,7 @@ function wrapperCssFrom(block: Block, s: BlockStyle, theme: BandTheme): CSSPrope
   // way ink and fills do — so a bordered box stays visible when the section
   // preset underneath it changes.
   if (s.borderWidth > 0) {
-    css.border = `${s.borderWidth}px solid ${s.borderColor ?? theme.rule}`;
+    Object.assign(css, borderCss(s, theme));
     if (s.radius) css.borderRadius = `${s.radius}px`;
   }
   const shadow = shadowCss(s, theme);
@@ -437,7 +468,7 @@ export function columnCss(
   if (s.radius) css.borderRadius = `${s.radius}px`;
   // A column can be outlined too — two boxed figures side by side is a row of
   // two columns, not a block that has to grow an option.
-  if (s.borderWidth > 0) css.border = `${s.borderWidth}px solid ${s.borderColor ?? theme.rule}`;
+  if (s.borderWidth > 0) Object.assign(css, borderCss(s, theme));
   const shadow = shadowCss(s, theme);
   if (shadow) css.boxShadow = shadow;
   // Only where a background was actually set: a corner on a transparent column

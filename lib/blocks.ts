@@ -221,6 +221,17 @@ export type BlockStyle = {
   /** Null takes the band's own hairline, so an outline follows its section. */
   borderColor: string | null;
   /**
+   * Which edges the border is drawn on.
+   *
+   * "all" is what a border has always been and stays the default, so nothing
+   * saved moves. The other values exist because a rule BETWEEN things is the
+   * commonest use of a border and a box was the only shape available: the
+   * hairlines separating figures in a counter strip, the cross through a
+   * two-by-two grid, the coloured edge under a card. Each of those was a box
+   * drawn on four sides where one was wanted.
+   */
+  borderSides: "all" | "top" | "right" | "bottom" | "left" | "x" | "y";
+  /**
    * A cast shadow, as four flat numbers rather than one nested value.
    *
    * Flat because the inspector's controls are keyed one to a field: a nested
@@ -414,6 +425,7 @@ export const baseStyle = (over: Partial<BlockStyle> = {}): BlockStyle => ({
   radius: 0,
   borderWidth: 0,
   borderColor: null,
+  borderSides: "all",
   shadowX: 0,
   shadowY: 0,
   shadowBlur: 0,
@@ -840,6 +852,11 @@ function normalizeStyle(v: unknown): BlockStyle {
     // border, it is a block nobody can see past.
     borderWidth: Math.max(0, Math.min(24, num(v.borderWidth, d.borderWidth))),
     borderColor: colorOrNull(v.borderColor),
+    borderSides: oneOf(
+      v.borderSides,
+      ["all", "top", "right", "bottom", "left", "x", "y"] as const,
+      d.borderSides,
+    ),
     // Offsets may go either way — a shadow up and to the left is what an
     // overlapping card casts — so these clamp symmetrically. Blur cannot.
     shadowX: Math.max(-64, Math.min(64, num(v.shadowX, d.shadowX))),
