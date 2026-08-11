@@ -444,6 +444,11 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     minHeightUnit: "px",
     overflow: "visible",
     contentWidth: "full",
+    // Null, so a row that has always been boxed at the page measure keeps
+    // being boxed at the page measure. A number here would renarrow every
+    // stored row the moment this shipped.
+    contentMaxWidth: null,
+    contentMaxWidthUnit: "px",
     containerType: "flex",
     gridColumns: "",
     gridRows: "",

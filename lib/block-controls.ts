@@ -719,7 +719,30 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         label: "Content width",
         responsive: true,
         options: [["full", "Full"], ["boxed", "Boxed"]],
-        hint: "Boxed holds the columns to the page's measure and centres them.",
+        hint: "Boxed holds the columns to a measure and centres them.",
+      },
+      // The same pair the section's Width panel offers, one level down: a
+      // measure you can actually set, and a unit for it. Boxed meant 1040 and
+      // only 1040 before this, which on a full-width band left no way to
+      // narrow the content at all.
+      {
+        kind: "number",
+        key: "contentMaxWidth",
+        label: "Measure",
+        responsive: true,
+        min: 1,
+        max: 2400,
+        step: 20,
+        when: (b) => String(b.props.contentWidth ?? "full") === "boxed",
+        hint: "Blank is the page's own measure.",
+      },
+      {
+        kind: "select",
+        key: "contentMaxWidthUnit",
+        label: "Unit",
+        responsive: true,
+        options: [["px", "px"], ["%", "%"]],
+        when: (b) => String(b.props.contentWidth ?? "full") === "boxed",
       },
       {
         kind: "select",

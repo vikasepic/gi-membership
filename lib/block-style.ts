@@ -593,7 +593,17 @@ export function rowLayout(block: Block, device: Device): RowLayout {
   if (minHeight) container.minHeight = minHeight;
   if (overflow !== "visible") container.overflow = overflow;
   if (p.contentWidth === "boxed") {
-    container.maxWidth = `${BAND_MEASURE}px`;
+    // The measure is the container's own, not a constant it can only read.
+    // Boxed used to mean 1040px and nothing else, so on a full-width band the
+    // one control that could narrow the content was a number nobody could
+    // reach — the same complaint the section's Width panel answered, one level
+    // down. Blank still means the page's measure.
+    const n = p.contentMaxWidth;
+    const unit = p.contentMaxWidthUnit === "%" ? "%" : "px";
+    container.maxWidth =
+      typeof n === "number" && Number.isFinite(n) && n > 0
+        ? `${Math.min(n, unit === "%" ? 100 : 2400)}${unit}`
+        : `${BAND_MEASURE}px`;
     container.marginInline = "auto";
   }
 
