@@ -10,13 +10,16 @@
 import {
   baseStyle,
   dim,
+  emptyBackground,
   newBlock,
   normalizeBlocks,
   setColumnCount,
   type Block,
   type BlockStyle,
+  type Background,
   type BlockType,
   type ColumnStyle,
+  type ResponsiveStyle,
 } from "@/lib/blocks";
 import { slugify } from "@/lib/slug";
 import type { SectionLayout } from "@/lib/page-sections";
@@ -71,8 +74,49 @@ export function make(
  * for a block in a stack of blocks, and on a column it is a 16px gap under
  * every column that nobody asked for.
  */
-export const col = (over: Partial<BlockStyle> = {}): ColumnStyle =>
-  baseStyle({ margin: dim(0, 0, 0, 0), ...over });
+export const col = (
+  over: Partial<BlockStyle> & { responsive?: ResponsiveStyle } = {},
+): ColumnStyle => {
+  // Split out rather than passed through: `baseStyle` takes a style, and the
+  // overrides are a sibling of the style rather than part of it. Left in, they
+  // would be dropped by normalize and "align this column to the top on mobile"
+  // would silently not save — the same trap `columnAsBlock` splits them for.
+  const { responsive, ...style } = over;
+  const base = baseStyle({ margin: dim(0, 0, 0, 0), ...style });
+  return responsive ? { ...base, responsive } : base;
+};
+
+/**
+ * A flat colour behind a block or a column.
+ *
+ * Through `emptyBackground` rather than a literal, so a template picks up
+ * every field a background grows later at its own default — a hand-written
+ * object here would be missing them and fail to typecheck the day one is
+ * added, which is the good outcome, but it would also silently mean "none"
+ * for anything normalize spreads rather than requires.
+ */
+export const fill = (color: string): Background => ({
+  ...emptyBackground(),
+  type: "classic",
+  color,
+});
+
+/**
+ * Per-device overrides, with the device you did not mention left alone.
+ *
+ * `ResponsiveStyle` names both widths because an override is read by layering
+ * mobile over tablet over desktop, and a missing key there would be ambiguous
+ * between "same as tablet" and "nothing set". Most of a template's overrides
+ * only touch one width, so this fills the other with the empty patch — which
+ * layers to exactly the desktop value.
+ */
+export const at = (over: {
+  tablet?: { style?: Partial<BlockStyle>; props?: Record<string, unknown> };
+  mobile?: { style?: Partial<BlockStyle>; props?: Record<string, unknown> };
+}): ResponsiveStyle => ({
+  tablet: { style: over.tablet?.style ?? {}, props: over.tablet?.props ?? {} },
+  mobile: { style: over.mobile?.style ?? {}, props: over.mobile?.props ?? {} },
+});
 
 /** A row holding these columns, widths even, props merged over the row's own. */
 export function rowOf(columns: Block[][], props: Record<string, unknown> = {}): Block {

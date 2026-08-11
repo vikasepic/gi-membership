@@ -14,6 +14,12 @@ import { template as authorOneDecision } from "./author-one-decision";
 import { template as authorFunnels } from "./author-funnels";
 import { template as authorNotStudied } from "./author-not-studied";
 import { template as authorYourHost } from "./author-your-host";
+import { template as proofCounter } from "./proof-counter";
+import { template as gridQuadrant } from "./grid-quadrant";
+import { template as listRuled } from "./list-ruled";
+import { template as confirmationBox } from "./confirmation-box";
+import { template as faqAccordion } from "./faq-accordion";
+import { template as faqOpenColumns } from "./faq-open-columns";
 
 export { templateSource, type Template } from "./template";
 
@@ -24,6 +30,12 @@ const BUILT_INS: Template[] = [
   authorFunnels,
   authorNotStudied,
   authorYourHost,
+  proofCounter,
+  gridQuadrant,
+  listRuled,
+  confirmationBox,
+  faqAccordion,
+  faqOpenColumns,
   hero,
   featureCards,
   benefitColumns,
