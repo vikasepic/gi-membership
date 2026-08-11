@@ -22,7 +22,7 @@ import { DeviceSwitch } from "@/components/admin/device-switch";
 import { blocksForSection, isUnconverted } from "@/lib/section-to-blocks";
 import { starterBlocks } from "@/lib/page-starter";
 import { warnNotBuyable } from "@/lib/page-buyable";
-import { DEVICE_CANVAS, normalizeBlocks, reid, type Block, type Device } from "@/lib/blocks";
+import { DEVICE_CANVAS, type Block, type Device } from "@/lib/blocks";
 import { PREVIEW_SCOPE, siteTypographyCssAt, type SitePreview } from "@/lib/site-typography";
 import type { OwnerType } from "@/lib/pages";
 

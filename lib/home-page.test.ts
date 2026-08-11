@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import {
   HOME_SECTIONS,
   HOME_SECTION_KEYS,
-  SECTIONS,
   SECTION_KEYS,
   defaultRows,
   sectionDef,

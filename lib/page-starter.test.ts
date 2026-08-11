@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { starterBlocks } from "@/lib/page-starter";
-import { SECTIONS, sectionDef } from "@/lib/page-sections";
+import { SECTIONS } from "@/lib/page-sections";
+
 import { normalizeBlocks, walkBlocks, type Block } from "@/lib/blocks";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
 

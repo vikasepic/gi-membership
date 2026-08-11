@@ -9,7 +9,7 @@ import {
 import { requireAdmin } from "@/lib/admin-guard";
 import { setProductCourses } from "@/lib/courses";
 import { blocksPublish, PUBLISH_WITHOUT_COURSE_ERROR, parseProductForm } from "@/lib/product-rules";
-import { validateUpload, uploadProductCover, pickedFile } from "@/lib/media";
+import { pickedFile } from "@/lib/media";
 
 // Errors are keyed by field so the form can show each one next to its own input
 // and never reload. `_form` carries anything not tied to a single field.

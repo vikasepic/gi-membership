@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   BLOCK_TYPES,
   MAX_DEPTH,
-  ROW_STRUCTURES,
   baseStyle,
   blockRendersNothing,
   blocksAreEmpty,

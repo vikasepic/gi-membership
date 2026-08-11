@@ -195,17 +195,6 @@ describe("what it sends", () => {
 });
 
 describe("dragging sends a finished position", () => {
-  const drag = (fromSel: string, toSel: string) => {
-    const from = document.querySelectorAll(fromSel);
-    const to = document.querySelectorAll(toSel);
-    act(() => {
-      const dt = { effectAllowed: "", setData() {}, getData() { return ""; } };
-      from[0].dispatchEvent(Object.assign(new Event("dragstart", { bubbles: true }), { dataTransfer: dt }));
-      to[0].dispatchEvent(Object.assign(new Event("dragover", { bubbles: true, cancelable: true }), { dataTransfer: dt }));
-      to[0].dispatchEvent(Object.assign(new Event("drop", { bubbles: true, cancelable: true }), { dataTransfer: dt }));
-    });
-  };
-
   it("sends the destination chapter and index for a lesson", () => {
     mount(REAL);
     const lessons = [...document.querySelectorAll("ul > li")];

@@ -13,7 +13,6 @@ import {
 
 const paper = bandTheme("paper");
 const navy = bandTheme("navy");
-const plum = bandTheme("plum");
 
 const withStyle = (type: Parameters<typeof newBlock>[0], patch: Record<string, unknown>): Block => {
   const b = newBlock(type);

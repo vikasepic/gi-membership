@@ -269,8 +269,11 @@ export function OtoMedia({ offer, className = "" }: { offer: Offer; className?: 
     );
   }
   if (offer.imageUrl) {
-    /* eslint-disable-next-line @next/next/no-img-element */
     return (
+      // An offer's image is an arbitrary URL from the database, not a build-time
+      // asset, so next/image would need a remote pattern per host nobody can
+      // enumerate ahead of time.
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={offer.imageUrl}
         alt=""

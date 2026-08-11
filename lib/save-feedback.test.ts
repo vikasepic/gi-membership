@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import {
-  OFFER_FIELD_TABS,
   PRODUCT_FIELD_TABS,
   summarise,
   tabToShow,

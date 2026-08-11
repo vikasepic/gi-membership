@@ -1,7 +1,6 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { saveSection, getPageSections, StaleSectionError } from "@/lib/pages";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getStoreId } from "@/lib/store";
 
 // Real Postgres. Skips without a service-role key — a public URL cannot write.
 const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
