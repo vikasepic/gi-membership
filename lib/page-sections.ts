@@ -663,6 +663,8 @@ export type SectionRow = {
   background?: unknown;
   cssId?: string | null;
   cssClass?: string | null;
+  /** How wide the band holds its content, and how much air. Null is built-in. */
+  layout?: unknown;
   /**
    * When this row was last written, as the editor last read it.
    *
@@ -688,6 +690,71 @@ export type SectionView = {
    */
   stored: Record<string, unknown>;
 };
+
+// ---------------------------------------------------------------------------
+// How a band holds its content
+// ---------------------------------------------------------------------------
+
+/** The measure a band caps its content at, when it caps it at all. */
+export const BAND_WIDTH = 1040;
+
+/** The air a band has always had: 24px at the sides, 48 top and bottom (64 at md). */
+export const BAND_PAD_X = 24;
+export const BAND_PAD_Y = 48;
+export const BAND_PAD_Y_MD = 64;
+
+/**
+ * How wide a band holds its content, and how much air it sits in.
+ *
+ * `boxed` is what every band did before this existed: capped at 1040px and
+ * centred. `full` lets the content reach the screen edge, which is what a
+ * design with a full-bleed ground actually needs — the alternative was a
+ * negative margin on a block, and a negative margin is a trick that leaves an
+ * unexplained number in the inspector.
+ *
+ * Every field is nullable and null means "as it always was", so a band nobody
+ * has touched renders byte-identical CSS to the one it rendered yesterday.
+ * That is the only safe way to add a layout knob to pages that are live.
+ */
+export type SectionWidth = "boxed" | "full" | "custom";
+
+export type SectionLayout = {
+  width: SectionWidth;
+  /** The cap, for `custom`. Ignored by the other two. */
+  maxWidth: number | null;
+  /** Side padding. Null keeps the built-in 24px. Zero is a real answer. */
+  padX: number | null;
+  /** Top and bottom padding. Null keeps the built-in 48/64. Zero is real. */
+  padY: number | null;
+};
+
+export const defaultSectionLayout = (): SectionLayout => ({
+  width: "boxed",
+  maxWidth: null,
+  padX: null,
+  padY: null,
+});
+
+export function normalizeSectionLayout(value: unknown): SectionLayout {
+  const d = defaultSectionLayout();
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return d;
+  const v = value as Record<string, unknown>;
+  // Nullable numbers stay null rather than falling back: null means "the
+  // built-in", and 0 is a different, deliberate answer — a band with no air.
+  const num = (x: unknown): number | null =>
+    typeof x === "number" && Number.isFinite(x) && x >= 0 ? x : null;
+  return {
+    width:
+      v.width === "full" || v.width === "custom" || v.width === "boxed" ? v.width : d.width,
+    maxWidth: num(v.maxWidth),
+    padX: num(v.padX),
+    padY: num(v.padY),
+  };
+}
+
+/** True when a stored layout says nothing the built-in does not already say. */
+export const layoutIsDefault = (l: SectionLayout): boolean =>
+  l.width === "boxed" && l.maxWidth === null && l.padX === null && l.padY === null;
 
 /**
  * Turn a stored image value into something an `<img>` can use.

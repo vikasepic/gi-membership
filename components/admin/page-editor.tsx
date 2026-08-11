@@ -115,6 +115,7 @@ export function PageEditor({
       fd.append("background", row.background ? JSON.stringify(row.background) : "");
       fd.append("cssId", row.cssId ?? "");
       fd.append("cssClass", row.cssClass ?? "");
+      fd.append("layout", row.layout ? JSON.stringify(row.layout) : "");
       fd.append("content", JSON.stringify({ ...def?.defaults, ...(row.content as Draft) }));
       // What this editor loaded. The write refuses a row that has moved since,
       // so the second of two people on one section is told rather than
@@ -482,6 +483,7 @@ function SectionPanel({
             background: (row.background as never) ?? null,
             cssId: row.cssId ?? null,
             cssClass: row.cssClass ?? null,
+            layout: row.layout ?? null,
             variants: def.variants,
             onChange,
           }}

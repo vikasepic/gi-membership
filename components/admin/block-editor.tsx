@@ -45,6 +45,7 @@ import {
   evenWidths,
   hasOverride,
   normalizeBackground,
+  emptyBackground,
   columnAsBlock,
   setColumnStyle,
   splitColumnId,
@@ -73,8 +74,8 @@ import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/li
  * except to hand it on.
  */
 const CanvasDevice = createContext<Device>("desktop");
-import { backgroundCss, blockClass, blockCssAt, blockTextRules, columnCss, columnOwnWidth, effectiveWidths, mobilePaddingNotice, rowIsGrid, rowLayout, stacksAt } from "@/lib/block-style";
-import { imageSrc } from "@/lib/page-sections";
+import { backgroundCss, blockClass, blockCssAt, blockCustomRules, blockTextRules, columnCss, columnOwnWidth, effectiveWidths, mobilePaddingNotice, rowIsGrid, rowLayout, stacksAt } from "@/lib/block-style";
+import { imageSrc, normalizeSectionLayout } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
 import { PREVIEW_SCOPE, siteTypographyCssAt, type SitePreview } from "@/lib/site-typography";
 
@@ -367,6 +368,19 @@ export function BlockEditor({
    * placed by hand.
    */
   function insertTemplate(t: Template) {
+    // The band comes with the design. A template is blocks, and blocks cannot
+    // paint the ground they stand on — so until the section grew a width and a
+    // colour of its own, "now set the background to #e9dde6" was a step in a
+    // document, which is a step nobody performs. One press, one design.
+    if (t.band && section) {
+      const patch: Record<string, unknown> = {};
+      if (t.band.style) patch.style = t.band.style;
+      if (t.band.color !== undefined) {
+        patch.background = { ...emptyBackground(), type: "classic", color: t.band.color };
+      }
+      if (t.band.layout) patch.layout = { ...normalizeSectionLayout(section.layout), ...t.band.layout };
+      if (Object.keys(patch).length > 0) section.onChange(patch);
+    }
     const fresh = t.blocks.map(reid);
     const at = addTarget(blocks, selectedId, "row");
     const start = at.zone === "root" ? at.index : blocks.length;
@@ -1109,7 +1123,16 @@ function CanvasBlock({
   const { label: dragLabel } = useContext(Dragging);
   const selected = selectedId === block.id;
   const empty = blockRendersNothing(block);
-  const textRules = blockTextRules(block, device);
+  // The block's own typography AND its hand-written CSS.
+  //
+  // Custom CSS used to be emitted by `blockRules` alone, which only the live
+  // page reaches — the canvas renders pinned to a device and takes
+  // `blockTextRules`, which carries type and ink and nothing else. So every
+  // Custom CSS rule was invisible here: a button given a gradient showed as
+  // the flat band accent in the builder and as the gradient to a buyer. The
+  // canvas exists to be what the page is; a rule it silently drops is the one
+  // thing it may not do.
+  const textRules = blockTextRules(block, device) + blockCustomRules(block);
 
   /** Above or below, decided by which half of the block the cursor is in. */
   function edge(e: React.DragEvent<HTMLDivElement>): number {

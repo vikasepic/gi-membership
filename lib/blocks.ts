@@ -198,6 +198,22 @@ export type BlockStyle = {
   color: string | null;
   background: Background;
   radius: number;
+  /**
+   * What sits on top of what, when two things overlap.
+   *
+   * Null means "wherever paint order puts it", which is what everything did
+   * before this existed. It has to be settable because paint order is not
+   * something an author can see or reason about — and worse, it does not
+   * survive the trip into the editor: the builder wraps every block in its own
+   * positioned chrome, and a positioned element paints above a non-positioned
+   * one whatever the source order says. So a card lying over a photograph
+   * looked right on the page and inverted in the builder, with no control
+   * anywhere to say which was meant.
+   *
+   * A number here also makes the block a positioned element, because z-index
+   * on a static box does nothing at all.
+   */
+  zIndex: number | null;
   cssId: string;
   cssClass: string;
   /** Hand-written CSS for this block. `selector` stands for the block itself. */
@@ -354,6 +370,7 @@ export const baseStyle = (over: Partial<BlockStyle> = {}): BlockStyle => ({
   color: null,
   background: emptyBackground(),
   radius: 0,
+  zIndex: null,
   cssId: "",
   cssClass: "",
   customCss: "",
@@ -759,6 +776,10 @@ function normalizeStyle(v: unknown): BlockStyle {
     color: colorOrNull(v.color),
     background: normalizeBackground(v.background),
     radius: num(v.radius, d.radius),
+    // Null stays null: "nobody set this" and "sit at 0" are different answers,
+    // and 0 is a real one — it is how you put something back UNDER a sibling
+    // that has been given a positive one.
+    zIndex: typeof v.zIndex === "number" && Number.isFinite(v.zIndex) ? v.zIndex : null,
     cssId: str(v.cssId).trim(),
     cssClass: str(v.cssClass).trim(),
     customCss: str(v.customCss),

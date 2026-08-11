@@ -19,6 +19,30 @@ import {
   type ColumnStyle,
 } from "@/lib/blocks";
 import { slugify } from "@/lib/slug";
+import type { SectionLayout } from "@/lib/page-sections";
+
+/**
+ * The band a design was drawn on.
+ *
+ * A template is blocks, and blocks live inside the section's own column — so
+ * the ground a design stands on has never been the template's to give. That
+ * left "set the section background to #e9dde6 yourself" as a step in a
+ * document, which is a step nobody performs. Now that a section stores its
+ * colour, its width and its air, a design can carry the band it was drawn for
+ * and the insert can set it.
+ *
+ * Every field is optional: a template that says nothing about the band is
+ * dropped onto whatever band is already there, which is what the generic
+ * starters want.
+ */
+export type TemplateBand = {
+  /** A preset key — "paper", "navy". The ink comes with it. */
+  style?: string;
+  /** A colour over the preset, for the grounds no preset has. */
+  color?: string | null;
+  /** How wide the band holds the design, and how much air. */
+  layout?: Partial<SectionLayout>;
+};
 
 export type Template = {
   id: string;
@@ -26,6 +50,8 @@ export type Template = {
   /** The heading it files under in the library popup. */
   group: string;
   blocks: Block[];
+  /** The band this design was drawn on, applied when it is inserted. */
+  band?: TemplateBand;
 };
 
 /** A block with its props and style adjusted, the way the palette presets do. */

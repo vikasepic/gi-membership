@@ -14,6 +14,9 @@ import {
   BAND_STYLE_KEYS,
   sectionDef,
   defaultRows,
+  layoutIsDefault,
+  normalizeSectionLayout,
+  type SectionLayout,
   type SectionRow,
 } from "@/lib/page-sections";
 
@@ -41,7 +44,7 @@ export async function getPageSections(owner: OwnerType, ownerId: string): Promis
   const db = createServiceClient();
   const { data, error } = await db
     .from("page_sections")
-    .select("section_key, position, enabled, style, accent, variant, content, background, css_id, css_class, updated_at")
+    .select("section_key, position, enabled, style, accent, variant, content, background, css_id, css_class, layout, updated_at")
     .eq("owner_type", owner)
     .eq("owner_id", ownerId)
     .order("position");
@@ -94,6 +97,8 @@ export type SectionInput = {
   /** A DOM id for this band, so a button can link to #it. */
   cssId?: string | null;
   cssClass?: string | null;
+  /** How wide the band holds its content, and how much air. */
+  layout?: SectionLayout | null;
 };
 
 /**
@@ -186,6 +191,14 @@ export async function saveSection(
           : null,
       css_id: cssIdent(input.cssId),
       css_class: cssClasses(input.cssClass),
+      // Stored only once it says something. A band left at the built-in
+      // measure keeps a null here, so "never touched" and "deliberately
+      // boxed at 1040 with the standard air" stay distinguishable — and the
+      // renderer can go on emitting the classes it always did.
+      layout: (() => {
+        const l = normalizeSectionLayout(input.layout);
+        return layoutIsDefault(l) ? null : l;
+      })(),
       updated_at: new Date().toISOString(),
   };
 
@@ -475,7 +488,7 @@ export async function copyPage(
 
   const { data: source, error } = await db
     .from("page_sections")
-    .select("section_key, position, enabled, style, accent, variant, content, background, css_id, css_class")
+    .select("section_key, position, enabled, style, accent, variant, content, background, css_id, css_class, layout")
     .eq("owner_type", from.ownerType)
     .eq("owner_id", from.ownerId);
   if (error) throw new Error(`copyPage read: ${error.message}`);

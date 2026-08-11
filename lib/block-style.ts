@@ -220,6 +220,14 @@ function wrapperCssFrom(block: Block, s: BlockStyle, theme: BandTheme): CSSPrope
     css.marginLeft = "auto";
   }
   if (s.background.type !== "none" && s.radius) css.borderRadius = `${s.radius}px`;
+  // Position too, or the number does nothing: z-index is ignored on a static
+  // box. Only when one was actually set, so nothing that has never been
+  // stacked starts creating a stacking context and changing what paints over
+  // what elsewhere on the page.
+  if (s.zIndex !== null) {
+    css.position = "relative";
+    css.zIndex = s.zIndex;
+  }
   return css;
 }
 
@@ -391,6 +399,13 @@ export function columnCss(
   // Only where a background was actually set: a corner on a transparent column
   // rounds nothing, and clipping content that overflows would be a surprise.
   if (s.background.type !== "none" && s.radius) css.overflow = "hidden";
+  // A column can be told to sit on top of its neighbour, which is what an
+  // overlapping card actually is. Without it the only lever was source order,
+  // and source order reverses inside the editor's own chrome.
+  if (s.zIndex !== null) {
+    css.position = "relative";
+    css.zIndex = s.zIndex;
+  }
   return css;
 }
 
@@ -777,6 +792,19 @@ function ruleFor(selector: string, css: CSSProperties): string {
  * would otherwise win. Without this the builder shows the site's heading size
  * while the page a buyer gets shows the block's.
  */
+/**
+ * A block's hand-written CSS, scoped to the block, on its own.
+ *
+ * `blockRules` already folds this in for the live page. The editor canvas
+ * renders pinned to a device, so it never calls that — which meant Custom CSS
+ * applied to a visitor and to nobody editing. Exported separately rather than
+ * inlined there so the two callers share one scoping rule; a second copy of
+ * the `selector` substitution is how the editor and the page drift apart.
+ */
+export function blockCustomRules(block: Block): string {
+  return customCss(block.style.customCss, `.${blockClass(block)}.${blockClass(block)}`);
+}
+
 export function blockTextRules(block: Block, device: Device): string {
   const sel = `.${blockClass(block)}.${blockClass(block)} :where(${TEXT_TAGS})`;
   return ruleFor(sel, { ...typographyAt(ownTypography(block, device)), ...ownInk(block, device) });

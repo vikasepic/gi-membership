@@ -1,7 +1,16 @@
 import { Blocks, type CtaRender } from "@/components/page/blocks";
 import type { StoreRender } from "@/components/page/storefront-blocks";
 import { blocksForSection } from "@/lib/section-to-blocks";
-import { buildSectionView, type SectionRow, type SectionView } from "@/lib/page-sections";
+import {
+  BAND_PAD_X,
+  BAND_PAD_Y_MD,
+  BAND_WIDTH,
+  buildSectionView,
+  layoutIsDefault,
+  normalizeSectionLayout,
+  type SectionRow,
+  type SectionView,
+} from "@/lib/page-sections";
 import { normalizeBackground, type Device } from "@/lib/blocks";
 import { backgroundCss } from "@/lib/block-style";
 import { inlineCss, inlineJs } from "@/lib/site-typography";
@@ -47,25 +56,57 @@ function Band({
   background,
   cssId,
   cssClass,
+  layout,
   children,
 }: {
   view: SectionView;
   background?: unknown;
   cssId?: string | null;
   cssClass?: string | null;
+  layout?: unknown;
   children: React.ReactNode;
 }) {
   // Over the band's own colour, not instead of it: an image that has not
   // arrived yet leaves the preset showing rather than a white void.
   const bg = background ? normalizeBackground(background) : null;
   const painted = bg && bg.type !== "none" ? backgroundCss(bg, view.theme) : null;
+
+  // A band that says nothing about its layout keeps the classes it has always
+  // had, character for character. The style attribute only appears once
+  // somebody has actually set something — otherwise `py-12 md:py-16` would be
+  // replaced by a single flat number and every live page would shift.
+  const l = normalizeSectionLayout(layout);
+  const custom = !layoutIsDefault(l);
+  const pad: React.CSSProperties = {};
+  if (l.padX !== null) pad.paddingInline = `${l.padX}px`;
+  if (l.padY !== null) pad.paddingBlock = `${l.padY}px`;
+  const inner: React.CSSProperties =
+    l.width === "full"
+      ? {}
+      : { maxWidth: `${l.width === "custom" && l.maxWidth ? l.maxWidth : BAND_WIDTH}px`, marginInline: "auto" };
+
   return (
     <section
       id={cssId || undefined}
-      className={`@container px-6 py-12 md:py-16 ${cssClass ?? ""}`}
-      style={{ background: view.theme.bg, color: view.theme.fg, ...painted }}
+      className={`@container ${custom ? "" : "px-6 py-12 md:py-16"} ${cssClass ?? ""}`}
+      style={{
+        background: view.theme.bg,
+        color: view.theme.fg,
+        // Only when the band was given a layout: the classes above are the
+        // built-in, and a value here would outrank the md: breakpoint they use.
+        ...(custom
+          ? {
+              paddingInline: `${l.padX ?? BAND_PAD_X}px`,
+              paddingBlock: `${l.padY ?? BAND_PAD_Y_MD}px`,
+            }
+          : {}),
+        ...pad,
+        ...painted,
+      }}
     >
-      <div className="mx-auto w-full max-w-[1040px]">{children}</div>
+      <div className="w-full" style={inner}>
+        {children}
+      </div>
     </section>
   );
 }
@@ -97,7 +138,13 @@ export function SectionBand({
   // that is where you go to fill it in.
   if (blocks.length === 0 && !preview) return null;
   return (
-    <Band view={view} background={row.background} cssId={row.cssId} cssClass={row.cssClass}>
+    <Band
+      view={view}
+      background={row.background}
+      cssId={row.cssId}
+      cssClass={row.cssClass}
+      layout={row.layout}
+    >
       <Blocks blocks={blocks} theme={view.theme} money={money} cta={cta} store={store} at={at} />
     </Band>
   );

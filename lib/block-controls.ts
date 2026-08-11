@@ -786,6 +786,19 @@ export const COLUMN_CONTROLS: Control[] = [
   group("Spacing"),
   style({ kind: "dim", key: "padding", label: "Padding" }),
   style({ kind: "number", key: "radius", label: "Corner", min: 0, max: 60, step: 2, unit: "px" }),
+  // Which column lies on top where two of them overlap. Blank leaves it to
+  // paint order, which is what it was before — and paint order is exactly what
+  // cannot be relied on, because the editor wraps every block in positioned
+  // chrome and reverses it.
+  style({
+    kind: "number",
+    key: "zIndex",
+    label: "Layer",
+    min: -10,
+    max: 100,
+    step: 1,
+    hint: "Higher sits on top. Blank leaves it to the order they are in.",
+  }),
 
   // How the column sits in its row, as opposed to what is drawn on it. Every
   // default here emits no CSS, so a column that already had a background keeps
@@ -866,6 +879,16 @@ export const ADVANCED_CONTROLS: Control[] = [
   group("Layout"),
   style({ kind: "dim", key: "margin", label: "Margin" }),
   style({ kind: "dim", key: "padding", label: "Padding" }),
+  // What lies on top of what. Same reasoning as the column's — see there.
+  style({
+    kind: "number",
+    key: "zIndex",
+    label: "Layer",
+    min: -10,
+    max: 100,
+    step: 1,
+    hint: "Higher sits on top. Blank leaves it to the order they are in.",
+  }),
   // Two choices, because there are two things anyone wants: the whole column,
   // or a number. "Hug content" is a third answer to a question nobody asked of
   // a paragraph. It is added back by `forBlock` for the few blocks already

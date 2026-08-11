@@ -25,6 +25,7 @@ export const template: Template = {
   id: "author-about",
   name: "Author — about the author",
   group: "Author",
+  band: { style: "paper", color: "#f6f6f6", layout: { width: "boxed" } },
   blocks: [
     {
       ...rowOf(
@@ -116,6 +117,13 @@ export const template: Template = {
       columnStyles: [
         null,
         col({
+          // The card lies ON the photograph, said out loud. It used to rest on
+          // paint order alone — a later sibling paints later — which holds on
+          // the page and REVERSES in the builder, where every block is wrapped
+          // in positioned chrome. So the design was right for a buyer and
+          // wrong for the person editing it, with no control anywhere to say
+          // which was meant.
+          zIndex: 1,
           background: {
             type: "classic",
             color: "#ffffff",

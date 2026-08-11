@@ -2,24 +2,29 @@ import { col, make, rowOf, type Template } from "./template";
 
 // "Learn From One of the Most Reviewed Business Coaches in the World".
 //
-// Band: Paper, with the section background set to #e9dde6.
+// The band comes with the design: Paper, painted #e9dde6, boxed, with the
+// vertical air taken off. That last part is what makes the figure stand ON the
+// band's bottom edge rather than float above it.
 //
-// The lilac is the band's, not the template's. A blocks-only template lives
-// inside the section's 1040px column and cannot paint to the screen edge, so
-// the ground has to come from the section — which is why the photograph is a
-// keyed PNG with a real alpha channel rather than the screenshot's baked
-// lilac. Baked, it matches on exactly one band colour and shows its seams on
-// every other.
+// It used to be a -64px margin on the row, cancelling the section's own
+// `md:py-16` from the inside. It worked, and it left a negative number in the
+// inspector that nobody typed and nothing explained — reported, rightly, as
+// "unwanted margin". The air now comes off the band, where it belongs, and
+// each column puts back the padding it wants: the words get their 48px, the
+// photograph gets 48 at the top and none at the bottom, so it meets the edge.
 //
-// The picture stands ON the bottom edge: the row carries -64px of bottom
-// margin, which is precisely the section's own `md:py-16`, and the column is
-// aligned to the end so the figure grows downward into it. Below 768px that
-// padding is 48px AND the columns have stacked, so the bleed is cleared —
-// left in, it would pull the photograph over the first paragraph.
+// The photograph is a keyed PNG with a real alpha channel rather than the
+// screenshot's baked lilac. Baked, it matches on exactly one band colour and
+// shows its seams on every other.
 export const template: Template = {
   id: "author-most-reviewed",
   name: "Author — most reviewed",
   group: "Author",
+  band: {
+    style: "paper",
+    color: "#e9dde6",
+    layout: { width: "boxed", padY: 0 },
+  },
   blocks: [
     {
       ...rowOf(
@@ -32,16 +37,16 @@ export const template: Template = {
                 ratio: "auto",
                 maxWidth: 100,
               }),
-              // Stacked, the figure has the whole 834px column to fill and a
-              // head-to-waist portrait at that size is a poster, not a
-              // portrait. Centred and held to just over half the width it
-              // keeps the proportion it has beside the words.
+              // Stacked, the figure has the whole column to fill, and a
+              // head-to-waist portrait at that size is a poster. Centred and
+              // held to just over half the width it keeps the proportion it
+              // has beside the words.
               //
               // Through the STYLE width, not the image's own `maxWidth` prop:
               // the live renderer reads `block.props` directly and never calls
               // `propsFor`, so a per-device prop override is honoured only
-              // where CSS can carry it — rows and cards. Set as a prop here it
-              // looks right in the editor and does nothing for a visitor.
+              // where CSS can carry it. Set as a prop it looks right in the
+              // editor and does nothing for a visitor.
               responsive: {
                 tablet: {
                   style: {
@@ -113,30 +118,23 @@ export const template: Template = {
             ),
           ],
         ],
-        // Stacks at tablet, not only on a phone. Side by side at 834px the
-        // eight paragraphs run far taller than the figure, and a column
+        // Stacks at tablet, not only on a phone: side by side at 834px the
+        // eight paragraphs run far taller than the figure, and the column
         // aligned to the bottom then leaves a hand's depth of empty lilac
         // above it — the design reads as a mistake at exactly the width most
         // people hold.
         { widths: [44, 56], gap: 40, verticalAlign: "stretch", stack: "tablet" },
       ),
-      style: {
-        ...make("row").style,
-        margin: { t: 0, r: 0, b: -64, l: 0, u: "px", link: false },
-      },
-      responsive: {
-        // The bleed goes with the side-by-side layout. Once the columns stack,
-        // the photograph is above the words and -64px would pull it onto them.
-        tablet: {
-          style: { margin: { t: 0, r: 0, b: 0, l: 0, u: "px", link: false } },
-          props: {},
-        },
-        mobile: {
-          style: { margin: { t: 0, r: 0, b: 0, l: 0, u: "px", link: false } },
-          props: {},
-        },
-      },
-      columnStyles: [col({ colAlignSelf: "flex-end" }), null],
+      columnStyles: [
+        // The photograph's column: air above, none below, so the figure meets
+        // the band's edge. This is the -64px margin, said honestly.
+        col({
+          colAlignSelf: "flex-end",
+          padding: { t: 48, r: 0, b: 0, l: 0, u: "px", link: false },
+        }),
+        // The words keep the air the band gave up.
+        col({ padding: { t: 48, r: 0, b: 48, l: 0, u: "px", link: false } }),
+      ],
     },
   ],
 };

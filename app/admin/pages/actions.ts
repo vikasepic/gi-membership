@@ -29,11 +29,18 @@ export type SectionSaveState = {
  * and refusing the whole save over it would lose the section's copy with it.
  */
 function parseBackground(value: FormDataEntryValue | null) {
+  return parseJsonObject(value);
+}
+
+/** A JSON object off the form, or nothing. Never a guess, never a throw. */
+function parseJsonObject(value: FormDataEntryValue | null) {
   const raw = String(value ?? "").trim();
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
-    return typeof parsed === "object" && parsed !== null ? (parsed as never) : null;
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as never)
+      : null;
   } catch {
     return null;
   }
@@ -87,6 +94,14 @@ export async function saveSectionAction(
       content: sanitizeSectionContent(content),
     // Empty means the band's preset alone.
     background: parseBackground(formData.get("background")),
+    // The editor has been sending these since section attributes shipped and
+    // saveSection has been writing them, but nothing read them off the form in
+    // between — so a CSS id or class typed on a band was dropped on the way to
+    // the database and came back empty on reload. Same parser as the
+    // background: anything unreadable is nothing, never a guess.
+    cssId: String(formData.get("cssId") ?? "").trim() || null,
+    cssClass: String(formData.get("cssClass") ?? "").trim() || null,
+    layout: parseJsonObject(formData.get("layout")),
     },
     // What the editor loaded. The write refuses to land on a row that has
     // moved since, so two people on one section cannot silently overwrite

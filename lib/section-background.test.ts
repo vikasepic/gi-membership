@@ -15,7 +15,14 @@ describe("a band with a picture behind it", () => {
     // An image that has not arrived yet leaves the preset showing rather than
     // a white void, and the ink is still the band's, so the words survive it.
     const src = readFileSync("components/page/sales-page.tsx", "utf8");
-    expect(src).toContain("background: view.theme.bg, color: view.theme.fg, ...painted");
+    // Order, not formatting: the band's ground and ink go on first and the
+    // picture is spread over them, so an image that is slow or missing leaves
+    // the preset showing. Written as a literal one-liner this broke the moment
+    // the band grew a second style — a test that fails on a line break is a
+    // test that gets deleted rather than read.
+    expect(src).toMatch(
+      /background:\s*view\.theme\.bg[\s\S]*color:\s*view\.theme\.fg[\s\S]*\.\.\.painted/,
+    );
   });
 
   it("draws nothing when there is nothing set", () => {

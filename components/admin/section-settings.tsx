@@ -1,6 +1,16 @@
 "use client";
 
-import { BAND_STYLES, BAND_STYLE_KEYS, type BandStyleKey } from "@/lib/page-sections";
+import {
+  BAND_PAD_X,
+  BAND_PAD_Y,
+  BAND_PAD_Y_MD,
+  BAND_STYLES,
+  BAND_STYLE_KEYS,
+  BAND_WIDTH,
+  normalizeSectionLayout,
+  type BandStyleKey,
+  type SectionLayout,
+} from "@/lib/page-sections";
 import { emptyBackground, type Background } from "@/lib/blocks";
 import { MediaButton } from "@/components/admin/media-modal";
 import { PositionPicker } from "@/components/admin/position-picker";
@@ -15,9 +25,47 @@ export type SectionEdit = {
   background?: Background | null;
   cssId?: string | null;
   cssClass?: string | null;
+  /** How wide the band holds its content, and how much air. */
+  layout?: unknown;
   variants?: { key: string; label: string }[];
   onChange: (patch: Record<string, unknown>) => void;
 };
+
+/**
+ * A number that can be blank.
+ *
+ * Blank is not zero here — it means "keep the built-in", and zero means "none
+ * at all". A field that turned an empty box into 0 would silently strip a
+ * band's air the first time somebody cleared it to look at the placeholder.
+ */
+function NumberField({
+  value,
+  placeholder,
+  unit,
+  onChange,
+}: {
+  value: number | null;
+  placeholder: string;
+  unit: string;
+  onChange: (n: number | null) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="number"
+        min={0}
+        value={value ?? ""}
+        placeholder={placeholder}
+        onChange={(e) => {
+          const raw = e.target.value.trim();
+          onChange(raw === "" ? null : Math.max(0, Number(raw)));
+        }}
+        className="w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-fg"
+      />
+      <span className="text-[0.62rem] text-muted">{unit}</span>
+    </div>
+  );
+}
 
 /**
  * The band itself, edited from inside the builder.
@@ -34,6 +82,14 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
   // whole object — a sparse patch would leave half a background behind.
   const setBg = (patch: Partial<Background>) =>
     section.onChange({ background: { ...bg, ...patch } });
+
+  // One patch shape for the layout too: the whole object goes back, so a
+  // sparse patch cannot leave half a layout behind — the same rule the
+  // background above follows, and for the same reason.
+  const layout = normalizeSectionLayout(section.layout);
+  const setLayout = (patch: Partial<SectionLayout>) =>
+    section.onChange({ layout: { ...layout, ...patch } });
+
   return (
     <div className="flex flex-col">
       <div className="border-b border-border px-3 py-2">
@@ -66,6 +122,77 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
           </div>
         </details>
       )}
+
+      {/* Width and air, on the band itself.
+          Until this existed the only way to reach past the 1040px measure was
+          a negative margin on a block inside it — which works, and leaves a
+          number nobody typed sitting in the inspector for the next person to
+          puzzle over. A design whose ground runs to the screen edge is a
+          property of the band, so it is set on the band. */}
+      <details open className="insp-section border-b border-border">
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-[0.7rem] font-semibold text-fg [&::-webkit-details-marker]:hidden">
+          <span className="text-[0.55rem] text-muted">▶</span> Width
+        </summary>
+        <div className="flex flex-col gap-3 px-3 pb-3 pt-1">
+          <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
+            <span className="text-xs text-fg">Content</span>
+            <div className="flex overflow-hidden rounded-lg border border-border">
+              {(["boxed", "full", "custom"] as const).map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setLayout({ width: w })}
+                  className={`flex-1 px-2 py-1.5 text-[0.68rem] capitalize transition-colors ${
+                    layout.width === w ? "bg-primary/10 font-medium text-primary" : "text-muted hover:text-fg"
+                  }`}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-[0.62rem] leading-snug text-muted">
+            {layout.width === "full"
+              ? "Content reaches the screen edge. Side padding still applies — set it to 0 for a true bleed."
+              : layout.width === "custom"
+                ? "Capped at the measure below and centred."
+                : `Capped at ${BAND_WIDTH}px and centred, the way every band has been.`}
+          </p>
+          {layout.width === "custom" && (
+            <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
+              <span className="text-xs text-fg">Measure</span>
+              <NumberField
+                value={layout.maxWidth}
+                placeholder={String(BAND_WIDTH)}
+                unit="px"
+                onChange={(n) => setLayout({ maxWidth: n })}
+              />
+            </div>
+          )}
+          <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
+            <span className="text-xs text-fg">Side padding</span>
+            <NumberField
+              value={layout.padX}
+              placeholder={String(BAND_PAD_X)}
+              unit="px"
+              onChange={(n) => setLayout({ padX: n })}
+            />
+          </div>
+          <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
+            <span className="text-xs text-fg">Top &amp; bottom</span>
+            <NumberField
+              value={layout.padY}
+              placeholder={`${BAND_PAD_Y}–${BAND_PAD_Y_MD}`}
+              unit="px"
+              onChange={(n) => setLayout({ padY: n })}
+            />
+          </div>
+          <p className="text-[0.62rem] leading-snug text-muted">
+            Blank keeps the built-in air. 0 removes it — which is what a
+            photograph standing on the band&rsquo;s edge needs.
+          </p>
+        </div>
+      </details>
 
       <details open className="insp-section border-b border-border">
         <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-[0.7rem] font-semibold text-fg [&::-webkit-details-marker]:hidden">
