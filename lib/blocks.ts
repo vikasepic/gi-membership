@@ -48,6 +48,16 @@ export const BLOCK_TYPES = [
   "catalog",
   "memberships",
   "featured",
+  // A pointer at a design kept elsewhere, so editing that design changes every
+  // page pointing at it. It draws NOTHING itself — the resolve step replaces it
+  // with the blocks it names before anything renders.
+  //
+  // A type rather than a field on every block, and the template brief's rule
+  // about not adding block types is met rather than broken: this one is
+  // structural, not a design. The alternatives are worse — a reference on the
+  // section row makes a whole band global or none of it, and a `globalId` on
+  // every block puts a field on thousands of blocks that almost none use.
+  "global",
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];
@@ -521,6 +531,10 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     note: "",
     secureNote: "",
   },
+  // The id of the design this stands in for, and nothing else. A pointer has
+  // no typography and no spacing of its own — whatever it points at brings
+  // those with it.
+  global: { globalId: "" },
 };
 
 /** A stable id. Prefixed so a malformed id in stored JSON is obvious. */
@@ -1505,6 +1519,14 @@ export function blockRendersNothing(block: Block): boolean {
     case "memberships":
     case "featured":
       return false;
+    // A pointer draws nothing. That looks wrong until you follow the order:
+    // the resolve step replaces a placeholder with the blocks it names BEFORE
+    // anything renders, so a live page never asks this about a working link.
+    // What is left to ask about is an unexpanded one — no map, or a design
+    // that has been deleted — and a pointer to nothing is nothing, which is
+    // how a broken link leaves no gap on the page.
+    case "global":
+      return true;
   }
 }
 

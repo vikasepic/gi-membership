@@ -5,6 +5,7 @@ import { sanitizeSectionContent } from "@/lib/sanitize-html";
 import { normalizeBlocks, type Block } from "@/lib/blocks";
 import { normalizeSectionLayout, layoutIsDefault } from "@/lib/page-sections";
 import { slugify } from "@/lib/slug";
+import { globalIdsIn } from "@/lib/section-to-blocks";
 import type { Template, TemplateBand } from "@/lib/templates/template";
 
 // Templates the owner saved, as opposed to the ones that ship in code.
@@ -14,9 +15,19 @@ import type { Template, TemplateBand } from "@/lib/templates/template";
 // in, normalized on the way out, and never trusted in between. A row someone
 // wrote by hand has to be survivable by the reader.
 
+/**
+ * Which kind of saved design a row is.
+ *
+ * `template` is a copy taken once: inserting it drops blocks the page owns.
+ * `global` stays linked: the page stores a pointer, and editing the design
+ * changes every page pointing at it.
+ */
+export type TemplateKind = "template" | "global";
+
 export type SavedTemplate = Template & {
   /** Only a saved one has this. A built-in has no row to update. */
   savedId: string;
+  kind: TemplateKind;
   updatedAt: string;
 };
 
@@ -24,11 +35,15 @@ export type SavedTemplate = Template & {
 function toTemplate(row: Record<string, unknown>): SavedTemplate {
   const name = String(row.name ?? "").trim() || "Untitled";
   const band = row.band && typeof row.band === "object" ? (row.band as TemplateBand) : undefined;
+  const kind: TemplateKind = row.kind === "global" ? "global" : "template";
   return {
     // Prefixed, so a saved design and a built-in can never collide on id —
-    // the popup keys off it and `listTemplates` hands back one list.
-    id: `saved:${String(row.id)}`,
+    // the popup keys off it and `listTemplates` hands back one list. The
+    // prefix names the kind too, so a card knows what it is holding without a
+    // second lookup.
+    id: `${kind}:${String(row.id)}`,
     savedId: String(row.id),
+    kind,
     name,
     group: String(row["group"] ?? "").trim() || "Saved",
     blocks: normalizeBlocks(row.blocks),
@@ -37,23 +52,27 @@ function toTemplate(row: Record<string, unknown>): SavedTemplate {
   };
 }
 
-export async function listSavedTemplates(): Promise<SavedTemplate[]> {
+export async function listSavedTemplates(kind: TemplateKind = "template"): Promise<SavedTemplate[]> {
   const db = createServiceClient();
   const { data, error } = await db
     .from("templates")
-    .select("id, name, \"group\", blocks, band, updated_at")
+    .select("id, name, \"group\", blocks, band, kind, updated_at")
     .eq("store_id", await getStoreId())
+    .eq("kind", kind)
     .order("group")
     .order("name");
   if (error) throw new Error(`listSavedTemplates: ${error.message}`);
   return (data ?? []).map(toTemplate);
 }
 
+/** The designs pages link to, rather than copy. */
+export const listGlobalBlocks = () => listSavedTemplates("global");
+
 export async function getSavedTemplate(id: string): Promise<SavedTemplate | null> {
   const db = createServiceClient();
   const { data, error } = await db
     .from("templates")
-    .select("id, name, \"group\", blocks, band, updated_at")
+    .select("id, name, \"group\", blocks, band, kind, updated_at")
     .eq("store_id", await getStoreId())
     .eq("id", id)
     .maybeSingle();
@@ -68,6 +87,8 @@ export type SaveTemplateInput = {
   group?: string | null;
   blocks: Block[];
   band?: TemplateBand | null;
+  /** Defaults to a copy-once template, which is what everything was. */
+  kind?: TemplateKind;
 };
 
 /**
@@ -101,6 +122,7 @@ export async function saveTemplate(input: SaveTemplateInput): Promise<string> {
     group: (input.group ?? "").trim() || "Saved",
     blocks,
     band: storedBand,
+    kind: input.kind ?? "template",
   };
 
   if (input.id) {
@@ -120,8 +142,62 @@ export async function saveTemplate(input: SaveTemplateInput): Promise<string> {
   return String(data.id);
 }
 
+/** Where a global design is currently pointed at from. */
+export type GlobalUsage = { owner: string; ownerId: string; sectionKey: string };
+
+/**
+ * Every section pointing at this design.
+ *
+ * Walked in application code rather than asked of Postgres. The obvious query
+ * — `content @> '{"blocks":[{"props":{"globalId":"…"}}]}'` — only matches a
+ * pointer at the TOP of a section: jsonb containment does not reach into a
+ * row's columns. A global dropped inside a two-column row would be invisible
+ * to it, and the delete below would cheerfully remove something live pages
+ * were using. `walkBlocks` already descends into columns; this is a handful of
+ * rows for one store, and correctness is worth more than a clever query.
+ */
+export async function globalUsage(id: string): Promise<GlobalUsage[]> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("page_sections")
+    .select("owner_type, owner_id, section_key, content")
+    .eq("store_id", await getStoreId());
+  if (error) throw new Error(`globalUsage: ${error.message}`);
+  const out: GlobalUsage[] = [];
+  for (const row of data ?? []) {
+    const content = row.content as { blocks?: unknown } | null;
+    if (!content || !Array.isArray(content.blocks)) continue;
+    if (globalIdsIn(normalizeBlocks(content.blocks)).includes(id)) {
+      out.push({
+        owner: String(row.owner_type),
+        ownerId: String(row.owner_id),
+        sectionKey: String(row.section_key),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Remove a design, unless pages are pointing at it.
+ *
+ * A template can always go — inserting one made a copy, so nothing downstream
+ * depends on the row. A global cannot, because deleting it would shorten
+ * whatever pages link to it. The refusal names them, so the fix is obvious:
+ * remove it from those pages, or unlink them.
+ */
 export async function deleteTemplate(id: string): Promise<void> {
   const db = createServiceClient();
+  const existing = await getSavedTemplate(id);
+  if (existing?.kind === "global") {
+    const used = await globalUsage(id);
+    if (used.length > 0) {
+      const where = [...new Set(used.map((u) => `${u.owner} ${u.ownerId} (${u.sectionKey})`))];
+      throw new Error(
+        `Still used on ${used.length} section${used.length === 1 ? "" : "s"}: ${where.join(", ")}. Remove it there, or unlink those pages first.`,
+      );
+    }
+  }
   const { error } = await db
     .from("templates")
     .delete()

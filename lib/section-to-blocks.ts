@@ -1,4 +1,13 @@
-import { newBlock, normalizeBlocks, widthsOf, type Block, type BlockType, type RowStructure } from "@/lib/blocks";
+import {
+  newBlock,
+  normalizeBlocks,
+  reid,
+  walkBlocks,
+  widthsOf,
+  type Block,
+  type BlockType,
+  type RowStructure,
+} from "@/lib/blocks";
 import { listOf, textOf, type SectionDef, type SectionView } from "@/lib/page-sections";
 
 // Turning a section's typed content into blocks.
@@ -510,18 +519,73 @@ export function sectionToBlocks(def: SectionDef, c: Record<string, unknown>): Bl
  * back to the conversion, so every existing page is already a block page — it
  * simply has not been saved as one yet.
  */
-export function blocksForSection(view: SectionView): Block[] {
+export function blocksForSection(view: SectionView, globals?: GlobalBlocks): Block[] {
   const saved = view.stored.blocks;
   // Normalized, not cast. These rows were written before today's BlockStyle
   // existed, so a cast promises fields that are not in them — and the first
   // renderer to read a new one unguarded takes the page down. Saving already
   // normalizes; reading has to as well, or every field added from here on is
   // a live incident waiting for the next deploy.
-  if (Array.isArray(saved) && saved.length > 0) return normalizeBlocks(saved);
+  if (Array.isArray(saved) && saved.length > 0) return expandGlobals(normalizeBlocks(saved), globals);
   // From what was STORED, not from the defaults merged over it. A default is
   // guidance; converting it would hand someone a canvas full of placeholder
   // prose to delete before they could start.
   return sectionToBlocks(view.def, view.stored);
+}
+
+/** The designs a page points at, by id. Absent means expand nothing. */
+export type GlobalBlocks = Map<string, Block[]>;
+
+/** The id a placeholder points at, or null for anything else. */
+export const globalIdOf = (b: Block): string | null =>
+  b.type === "global" && typeof b.props.globalId === "string" && b.props.globalId.trim()
+    ? b.props.globalId.trim()
+    : null;
+
+/** Every design id a page points at, including inside a row's columns. */
+export function globalIdsIn(blocks: Block[]): string[] {
+  return [...new Set(walkBlocks(blocks).map(globalIdOf).filter((id): id is string => !!id))];
+}
+
+/**
+ * Placeholders replaced by the designs they name.
+ *
+ * The stored JSON always keeps the placeholder — expanding on read and saving
+ * the result would break every link the first time a page was saved. This runs
+ * at render, on the way out.
+ *
+ * With no map nothing expands, which is what every existing caller does and
+ * what the builder wants: it draws the placeholder itself, as a linked card.
+ *
+ * A pointer at something missing produces no blocks at all rather than an
+ * error or a gap. A design deleted out from under a page is a page that is
+ * shorter, not a page that is broken.
+ *
+ * Ids are made fresh on the way in. Two pages showing one design would
+ * otherwise both render its ids, which is harmless — they are different
+ * documents — but the same design twice on ONE page would put a duplicate id
+ * in the DOM, and then selecting or deleting either finds only the first.
+ *
+ * One level only. A design that itself contains a placeholder leaves that
+ * placeholder unexpanded, which renders nothing — a bounded answer rather than
+ * a recursion that a cycle could take a page down with.
+ */
+export function expandGlobals(blocks: Block[], globals?: GlobalBlocks): Block[] {
+  if (!globals || globals.size === 0) return blocks;
+  const out: Block[] = [];
+  for (const block of blocks) {
+    const id = globalIdOf(block);
+    if (id === null) {
+      out.push(
+        block.columns
+          ? { ...block, columns: block.columns.map((col) => expandGlobals(col, globals)) }
+          : block,
+      );
+      continue;
+    }
+    for (const inner of globals.get(id) ?? []) out.push(reid(inner));
+  }
+  return out;
 }
 
 /** True when this section is still showing converted content rather than saved blocks. */

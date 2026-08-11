@@ -162,6 +162,10 @@ const IMAGE_RATIOS: [string, string][] = [["auto", "Original — no crop"], ...R
 export type BlockControls = { content: Control[]; style: Control[] };
 
 export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
+  // A pointer has nothing of its own to style — whatever it points at brings
+  // its own typography, spacing and band. The builder shows a panel of its own
+  // for one of these: what it is linked to, edit it globally, or unlink.
+  global: { content: [], style: [] },
   heading: {
     content: [
       { kind: "textarea", key: "text", label: "Heading", rows: 2 },
@@ -1434,6 +1438,8 @@ export const PALETTE_GROUPS: { title: string; types: string[] }[] = [
 
 /** One glyph per block type, so you learn the shapes and stop reading. */
 export const BLOCK_ICON: Record<BlockType, string> = {
+  // Two links of a chain — the same idea the Unlink button undoes.
+  global: "M9.5 13.5a4 4 0 0 1 0-5.7l2.1-2.1a4 4 0 0 1 5.7 5.7l-1 1-1.4-1.4 1-1a2 2 0 0 0-2.9-2.9l-2.1 2.1a2 2 0 0 0 0 2.9l-1.4 1.4Zm5 -3a4 4 0 0 1 0 5.7l-2.1 2.1a4 4 0 0 1-5.7-5.7l1-1 1.4 1.4-1 1a2 2 0 0 0 2.9 2.9l2.1-2.1a2 2 0 0 0 0-2.9l1.4-1.4Z",
   catalog: "M3 4h8v7H3V4Zm10 0h8v7h-8V4ZM3 13h8v7H3v-7Zm10 0h8v7h-8v-7Z",
   memberships: "M3 6h18v12H3V6Zm2 2v8h14V8H5Zm2 2h6v2H7v-2Zm0 3h4v2H7v-2Z",
   featured: "M12 2.6l2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9l6.1-.8L12 2.6Z",

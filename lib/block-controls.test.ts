@@ -28,7 +28,13 @@ describe("every block type is covered", () => {
   });
 
   it("is offered in the palette", () => {
-    expect([...new Set(PALETTE.map((p) => p.type))].sort()).toEqual([...BLOCK_TYPES].sort());
+    // Except the pointer. You do not drag a global block in from the palette —
+    // an empty one would point at nothing and draw nothing, which is a block
+    // that looks broken the moment it is placed. You get one by inserting a
+    // global design from the library, which is the only way it can arrive
+    // knowing what it points at.
+    const offered = [...new Set(PALETTE.map((p) => p.type))].sort();
+    expect(offered).toEqual([...BLOCK_TYPES].filter((t) => t !== "global").sort());
   });
 
   it("is offered more than once only where the second entry presets something", () => {
@@ -254,9 +260,19 @@ describe("the tabs a block shows", () => {
   });
 
   it("gives every block at least one thing to edit in Content", () => {
+    // The pointer again, and for the same reason a spacer has no style tab: it
+    // has nothing of its own. Whatever it points at brings its own typography,
+    // spacing and band, and the builder shows it a panel of its own — what it
+    // is linked to, edit that design, or unlink.
     for (const t of BLOCK_TYPES) {
+      if (t === "global") continue;
       expect(editable(controlsFor(newBlock(t)).content).length, t).toBeGreaterThan(0);
     }
+  });
+
+  it("gives the pointer nothing to edit, because it has nothing of its own", () => {
+    expect(editable(controlsFor(newBlock("global")).content)).toEqual([]);
+    expect(editable(controlsFor(newBlock("global")).style)).toEqual([]);
   });
 
   it("offers the heading its tag, which is the control that looked broken before", () => {
