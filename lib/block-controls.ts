@@ -468,6 +468,11 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "number", key: "cardPadding", label: "Card padding", min: 0, max: 96, step: 2, unit: "px", hint: "Unset follows the skin." },
       { kind: "number", key: "cardGap", label: "Gap between cards", min: 0, max: 96, step: 2, unit: "px", hint: "Unset follows the skin." },
       { kind: "number", key: "cardRadius", label: "Card corner", min: 0, max: 64, step: 1, unit: "px", hint: "Unset follows the skin." },
+      // The one gap inside a card, as opposed to the gap between cards above.
+      // Labelled by the two things it separates rather than by the box it is
+      // in, because "Text gap" in a panel that already has three gaps says
+      // nothing about which one it moves.
+      { kind: "number", key: "cardTextGap", label: "Title to text", min: 0, max: 48, step: 1, unit: "px", hint: "Unset follows the skin." },
 
       group("Icon tile", (b) => b.props.media !== "none"),
       { kind: "select", key: "iconShape", label: "Shape", options: [["square", "Square"], ["rounded", "Rounded"], ["circle", "Circle"]], when: (b) => b.props.media !== "none" },

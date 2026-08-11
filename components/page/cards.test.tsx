@@ -249,4 +249,37 @@ describe("how many cards stand across", () => {
     expect(render(stored({ items: ITEMS, columns: "banana" }))).toContain("--cards:repeat(3,");
     expect(render(stored({ items: ITEMS, columns: 99 }))).toContain("--cards:repeat(4,");
   });
+
+/**
+ * The one gap inside a card, as opposed to the gap between cards.
+ *
+ * Unset has to keep drawing exactly what each layout drew before it existed —
+ * the stacked and inline layouts do not agree on that number, and a single new
+ * default would have moved every card block on the site.
+ */
+describe("the gap between a card's title and its text", () => {
+  const withGap = (over: Record<string, unknown>) =>
+    render(stored({ items: [{ title: "One", body: "First" }], ...over }));
+
+  it("moves the stacked layout's title", () => {
+    expect(withGap({ cardTextGap: 24 })).toContain("margin-bottom:24px");
+  });
+
+  it("moves the inline layout's text", () => {
+    const out = withGap({ cardTextGap: 24, numbered: true, numberStyle: "eyebrow", skin: "inline" });
+    expect(out).toMatch(/margin-top:24px|margin-bottom:24px/);
+  });
+
+  it("leaves both alone when it is unset", () => {
+    const out = withGap({});
+    expect(out).toContain("margin-bottom:.4rem");
+    expect(out).not.toContain("margin-bottom:0px");
+  });
+
+  it("accepts zero, which is a decision and not an unset", () => {
+    // `?? ` on a falsy number is the classic way this control would silently
+    // refuse the one value someone reaches for it to set.
+    expect(withGap({ cardTextGap: 0 })).toContain("margin-bottom:0");
+  });
+});
 });

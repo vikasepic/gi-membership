@@ -588,6 +588,10 @@ function Inner({
       // device — see cardsTrack.
       const track = cardsTrack(block, at);
       const grid = { ...(track ? { "--cards": track } : {}), gap } as React.CSSProperties;
+      // The gap between a card's title and its body. Unset keeps exactly what
+      // each layout already drew — the two differ, and a single new default
+      // here would move every card block on the site.
+      const textGap = p.cardTextGap != null ? num(p.cardTextGap, 6) : null;
 
       // Number before the title, body hanging under the title rather than
       // under the number. That indent is what makes the number read as a label
@@ -608,8 +612,16 @@ function Inner({
                   </h3>
                 </div>
                 <p
-                  className="mt-2 text-[0.9rem] leading-relaxed"
-                  style={{ color: theme.muted, paddingLeft: numbered ? "1.9rem" : 0 }}
+                  // The class stays when nothing is set, so a card block saved
+                  // before this control existed renders the identical markup —
+                  // which the golden test checks byte for byte, and caught when
+                  // this first shipped as an inline `marginTop: 8`.
+                  className={`${textGap == null ? "mt-2 " : ""}text-[0.9rem] leading-relaxed`}
+                  style={{
+                    color: theme.muted,
+                    paddingLeft: numbered ? "1.9rem" : 0,
+                    ...(textGap == null ? {} : { marginTop: textGap }),
+                  }}
                 >
                   <Inline html={str(it.body)} />
                 </p>
@@ -655,7 +667,7 @@ function Inner({
                   color: c.fg,
                   fontSize: "1.02rem",
                   marginTop: numbered && !circle ? ".45rem" : 0,
-                  marginBottom: ".4rem",
+                  marginBottom: textGap ?? ".4rem",
                   ...type,
                 }}
               >
