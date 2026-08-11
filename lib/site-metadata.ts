@@ -20,7 +20,7 @@ export function storeMetadata(s: Settings): Metadata {
   // 16px and invisible against a dark tab strip. A logo is wide and a favicon
   // is square, and no code here can tell whether an uploaded file is one or the
   // other without a storage round trip on every render — so it stops guessing.
-  // Unset means no `icons` key at all, and Next's own app/icon.svg stands,
+  // Unset means no `icons` key at all, and Next's own app/icon.png stands,
   // which is the store's actual mark.
   //
   // A path, not a file: nothing here can tell that the object behind it was

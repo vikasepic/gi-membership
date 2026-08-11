@@ -31,7 +31,7 @@ describe("what the browser tab is pointed at", () => {
 
   it("says nothing at all when no favicon is set", () => {
     // Not an empty icons object: any `icons` key overrides Next's own
-    // app/icon.svg, so the way to keep the store's mark is silence.
+    // app/icon.png, so the way to keep the store's mark is silence.
     expect(storeMetadata(settings({ logoPath: "wordmark.svg" })).icons).toBeUndefined();
   });
 

@@ -59,7 +59,7 @@ export function AppShell({
   // no favicon was uploaded, so a deleted logo killed the icon too and had to
   // be repaired from here — a `<link>` already in the head is not something a
   // re-render reaches. `lib/site-metadata.ts` no longer falls back to the logo,
-  // so the tab is either an uploaded favicon or the app's own /icon.svg, and
+  // so the tab is either an uploaded favicon or the app's own /icon.png, and
   // neither has anything to do with this file being gone.
   const onLogoMissing = () => setLogoGone(true);
 
