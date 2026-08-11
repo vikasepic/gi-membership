@@ -1,4 +1,4 @@
-import { at, col, fill, make, rowOf, type Template } from "./template";
+import { col, make, rowOf, type Template } from "./template";
 
 // The bonus panel: a plum block, the offer on the left, four lilac rows on the
 // right, each with a mark.

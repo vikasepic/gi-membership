@@ -26,6 +26,11 @@ import { template as guaranteePanel } from "./guarantee-panel";
 import { template as howItWorksStages } from "./how-it-works-stages";
 import { template as pricingBestValue } from "./pricing-best-value";
 import { template as comparisonColumns } from "./comparison-columns";
+import { template as chatQuotes } from "./chat-quotes";
+import { template as bannerNavyFacts } from "./banner-navy-facts";
+import { template as bannerLightPackage } from "./banner-light-package";
+import { template as bannerImageOptin } from "./banner-image-optin";
+import { template as bannerEnrolCountdown } from "./banner-enrol-countdown";
 
 export { templateSource, type Template } from "./template";
 
@@ -48,6 +53,11 @@ const BUILT_INS: Template[] = [
   howItWorksStages,
   pricingBestValue,
   comparisonColumns,
+  chatQuotes,
+  bannerNavyFacts,
+  bannerLightPackage,
+  bannerImageOptin,
+  bannerEnrolCountdown,
   hero,
   featureCards,
   benefitColumns,
