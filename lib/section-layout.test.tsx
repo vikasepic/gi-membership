@@ -6,6 +6,7 @@ import {
   normalizeSectionLayout,
   layoutIsDefault,
   BAND_WIDTH,
+  SECTION_LIMITS,
   type SectionRow,
 } from "@/lib/page-sections";
 import { newBlock } from "@/lib/blocks";
@@ -74,5 +75,47 @@ describe("reading a stored layout", () => {
 
   it("refuses a negative measure rather than emitting one", () => {
     expect(normalizeSectionLayout({ width: "custom", maxWidth: -40 }).maxWidth).toBeNull();
+  });
+
+  it("clamps a slipped keystroke instead of emitting it", () => {
+    // A typed 100343 in Top & bottom really did produce a band a hundred
+    // thousand pixels tall. The control caps it now, and so does the reader —
+    // a value can arrive from stored JSON without passing the control at all.
+    expect(normalizeSectionLayout({ width: "boxed", padY: 100343 }).padY).toBe(
+      SECTION_LIMITS.pad.px,
+    );
+    expect(normalizeSectionLayout({ width: "custom", maxWidth: 99999 }).maxWidth).toBe(
+      SECTION_LIMITS.maxWidth.px,
+    );
+  });
+
+  it("keeps per cent as per cent", () => {
+    const l = normalizeSectionLayout({ width: "custom", maxWidth: 90, maxWidthUnit: "%", padX: 5, padXUnit: "%" });
+    expect(l.maxWidthUnit).toBe("%");
+    expect(l.padXUnit).toBe("%");
+    expect(l.padX).toBe(5);
+  });
+});
+
+describe("the band's box", () => {
+  it("emits the unit that was chosen", () => {
+    const html = band({
+      width: "custom",
+      maxWidth: 90,
+      maxWidthUnit: "%",
+      padX: 4,
+      padXUnit: "%",
+      padY: 40,
+      padYUnit: "px",
+    });
+    expect(html).toContain("max-width:90%");
+    expect(html).toMatch(/padding-inline:\s*4%/);
+    expect(html).toMatch(/padding-block:\s*40px/);
+  });
+
+  it("caps a percentage measure at the screen", () => {
+    expect(normalizeSectionLayout({ width: "custom", maxWidth: 400, maxWidthUnit: "%" }).maxWidth).toBe(
+      SECTION_LIMITS.maxWidth["%"],
+    );
   });
 });

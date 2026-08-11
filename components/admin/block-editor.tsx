@@ -75,7 +75,7 @@ import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/li
  */
 const CanvasDevice = createContext<Device>("desktop");
 import { backgroundCss, blockClass, blockCssAt, blockCustomRules, blockTextRules, columnCss, columnOwnWidth, effectiveWidths, mobilePaddingNotice, rowIsGrid, rowLayout, stacksAt } from "@/lib/block-style";
-import { imageSrc, normalizeSectionLayout } from "@/lib/page-sections";
+import { imageSrc, normalizeSectionLayout, sectionBox } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
 import { PREVIEW_SCOPE, siteTypographyCssAt, type SitePreview } from "@/lib/site-typography";
 
@@ -652,10 +652,26 @@ export function BlockEditor({
               The width it queries is this element's, and this element is the
               device canvas — so the phone view now answers the phone's question
               rather than the laptop's. */}
+          {/* Two boxes, the same two the page has: the outer one is the band
+              (it is what @container measures, and what carries the band's own
+              padding), the inner one is the measure the content is held to.
+              The canvas drew a single box and ignored the section's layout
+              entirely — so Width, Measure and the paddings wrote values that
+              the page honoured and the builder did not, which reads as "these
+              settings don't work" because from in here they didn't. */}
           <div
             className={`${PREVIEW_SCOPE} @container mx-auto w-full transition-[max-width] duration-200`}
-            style={{ maxWidth: DEVICE_CANVAS[device] ?? 900 }}
+            style={{
+              // Desktop takes the whole pane rather than a 900px stand-in.
+              // The page's own measure is 1040, so a canvas capped at 900 was
+              // always narrower than the thing it was previewing: a row set to
+              // Boxed looked identical to Full, because both were being cut
+              // off by the canvas before either could reach its own limit.
+              maxWidth: DEVICE_CANVAS[device] ?? undefined,
+              ...sectionBox(section?.layout).outer,
+            }}
           >
+          <div className="w-full" style={sectionBox(section?.layout).inner}>
             <Zone
               blocks={blocks}
               theme={theme}
@@ -699,6 +715,7 @@ export function BlockEditor({
                 )}
               </div>
             )}
+          </div>
           </div>
         </div>
 

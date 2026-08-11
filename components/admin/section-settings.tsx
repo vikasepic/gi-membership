@@ -1,15 +1,14 @@
 "use client";
 
 import {
-  BAND_PAD_X,
-  BAND_PAD_Y,
-  BAND_PAD_Y_MD,
   BAND_STYLES,
   BAND_STYLE_KEYS,
   BAND_WIDTH,
+  SECTION_LIMITS,
   normalizeSectionLayout,
   type BandStyleKey,
   type SectionLayout,
+  type SectionUnit,
 } from "@/lib/page-sections";
 import { emptyBackground, type Background } from "@/lib/blocks";
 import { MediaButton } from "@/components/admin/media-modal";
@@ -40,29 +39,75 @@ export type SectionEdit = {
  */
 function NumberField({
   value,
-  placeholder,
   unit,
+  max,
+  placeholder,
   onChange,
+  onUnit,
 }: {
   value: number | null;
+  unit: SectionUnit;
+  max: number;
   placeholder: string;
-  unit: string;
   onChange: (n: number | null) => void;
+  onUnit: (u: SectionUnit) => void;
 }) {
   return (
     <div className="flex items-center gap-1.5">
+      {/* Slider AND a number you can type, the same pair every other measure
+          in this builder offers — a slider alone cannot reliably hit 40, and a
+          number alone cannot be explored. The cap is what stops a slipped
+          keystroke becoming a hundred-thousand-pixel band. */}
+      <input
+        type="range"
+        aria-label={placeholder}
+        className="min-w-0 flex-1 accent-[var(--primary)]"
+        min={0}
+        max={max}
+        step={unit === "%" ? 1 : 4}
+        value={value ?? 0}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
       <input
         type="number"
+        aria-label={`${placeholder} value`}
         min={0}
+        max={max}
         value={value ?? ""}
-        placeholder={placeholder}
+        placeholder="—"
         onChange={(e) => {
           const raw = e.target.value.trim();
-          onChange(raw === "" ? null : Math.max(0, Number(raw)));
+          onChange(raw === "" ? null : Math.max(0, Math.min(max, Number(raw))));
         }}
-        className="w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-fg"
+        className="w-12 shrink-0 rounded border border-border bg-surface px-1 py-1 text-center text-[0.68rem] tabular-nums outline-none focus:border-primary"
       />
-      <span className="text-[0.62rem] text-muted">{unit}</span>
+      {/* px or per cent, on every measure. A band that should hold to a share
+          of the screen cannot say so in pixels. */}
+      <div className="flex shrink-0 overflow-hidden rounded border border-border">
+        {(["px", "%"] as const).map((u) => (
+          <button
+            key={u}
+            type="button"
+            onClick={() => onUnit(u)}
+            className={`px-1.5 py-1 text-[0.62rem] ${
+              unit === u ? "bg-primary/10 font-medium text-primary" : "text-muted hover:text-fg"
+            }`}
+          >
+            {u}
+          </button>
+        ))}
+      </div>
+      {/* Clearing is how a measure goes back to the built-in, so it has to be
+          reachable — not only settable. */}
+      <button
+        type="button"
+        aria-label={`Reset ${placeholder}`}
+        title="Back to the built-in"
+        onClick={() => onChange(null)}
+        className="shrink-0 rounded px-0.5 text-[0.62rem] text-muted hover:text-fg"
+      >
+        ✕
+      </button>
     </div>
   );
 }
@@ -163,9 +208,11 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
               <span className="text-xs text-fg">Measure</span>
               <NumberField
                 value={layout.maxWidth}
-                placeholder={String(BAND_WIDTH)}
-                unit="px"
+                unit={layout.maxWidthUnit}
+                max={SECTION_LIMITS.maxWidth[layout.maxWidthUnit]}
+                placeholder="Measure"
                 onChange={(n) => setLayout({ maxWidth: n })}
+                onUnit={(u) => setLayout({ maxWidthUnit: u, maxWidth: null })}
               />
             </div>
           )}
@@ -173,18 +220,22 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
             <span className="text-xs text-fg">Side padding</span>
             <NumberField
               value={layout.padX}
-              placeholder={String(BAND_PAD_X)}
-              unit="px"
+              unit={layout.padXUnit}
+              max={SECTION_LIMITS.pad[layout.padXUnit]}
+              placeholder="Side padding"
               onChange={(n) => setLayout({ padX: n })}
+              onUnit={(u) => setLayout({ padXUnit: u, padX: null })}
             />
           </div>
           <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
             <span className="text-xs text-fg">Top &amp; bottom</span>
             <NumberField
               value={layout.padY}
-              placeholder={`${BAND_PAD_Y}–${BAND_PAD_Y_MD}`}
-              unit="px"
+              unit={layout.padYUnit}
+              max={SECTION_LIMITS.pad[layout.padYUnit]}
+              placeholder="Top and bottom padding"
               onChange={(n) => setLayout({ padY: n })}
+              onUnit={(u) => setLayout({ padYUnit: u, padY: null })}
             />
           </div>
           <p className="text-[0.62rem] leading-snug text-muted">

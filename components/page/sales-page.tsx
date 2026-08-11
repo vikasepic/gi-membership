@@ -4,10 +4,10 @@ import { blocksForSection } from "@/lib/section-to-blocks";
 import {
   BAND_PAD_X,
   BAND_PAD_Y_MD,
-  BAND_WIDTH,
   buildSectionView,
   layoutIsDefault,
   normalizeSectionLayout,
+  sectionBox,
   type SectionRow,
   type SectionView,
 } from "@/lib/page-sections";
@@ -77,13 +77,7 @@ function Band({
   // replaced by a single flat number and every live page would shift.
   const l = normalizeSectionLayout(layout);
   const custom = !layoutIsDefault(l);
-  const pad: React.CSSProperties = {};
-  if (l.padX !== null) pad.paddingInline = `${l.padX}px`;
-  if (l.padY !== null) pad.paddingBlock = `${l.padY}px`;
-  const inner: React.CSSProperties =
-    l.width === "full"
-      ? {}
-      : { maxWidth: `${l.width === "custom" && l.maxWidth ? l.maxWidth : BAND_WIDTH}px`, marginInline: "auto" };
+  const box = sectionBox(layout);
 
   return (
     <section
@@ -96,15 +90,15 @@ function Band({
         // built-in, and a value here would outrank the md: breakpoint they use.
         ...(custom
           ? {
-              paddingInline: `${l.padX ?? BAND_PAD_X}px`,
-              paddingBlock: `${l.padY ?? BAND_PAD_Y_MD}px`,
+              paddingInline: `${BAND_PAD_X}px`,
+              paddingBlock: `${BAND_PAD_Y_MD}px`,
+              ...box.outer,
             }
           : {}),
-        ...pad,
         ...painted,
       }}
     >
-      <div className="w-full" style={inner}>
+      <div className="w-full" style={box.inner}>
         {children}
       </div>
     </section>

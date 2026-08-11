@@ -718,43 +718,100 @@ export const BAND_PAD_Y_MD = 64;
  */
 export type SectionWidth = "boxed" | "full" | "custom";
 
+/** Every measure here can be absolute or relative. % is of the viewport. */
+export type SectionUnit = "px" | "%";
+
+/** What a value may be, so a typo cannot produce a 100343px band. */
+export const SECTION_LIMITS = {
+  maxWidth: { px: 2400, "%": 100 },
+  pad: { px: 200, "%": 25 },
+} as const;
+
 export type SectionLayout = {
   width: SectionWidth;
   /** The cap, for `custom`. Ignored by the other two. */
   maxWidth: number | null;
+  maxWidthUnit: SectionUnit;
   /** Side padding. Null keeps the built-in 24px. Zero is a real answer. */
   padX: number | null;
+  padXUnit: SectionUnit;
   /** Top and bottom padding. Null keeps the built-in 48/64. Zero is real. */
   padY: number | null;
+  padYUnit: SectionUnit;
 };
 
 export const defaultSectionLayout = (): SectionLayout => ({
   width: "boxed",
   maxWidth: null,
+  maxWidthUnit: "px",
   padX: null,
+  padXUnit: "px",
   padY: null,
+  padYUnit: "px",
 });
+
+/** A measure with its unit, ready for a style declaration. */
+export const sectionSize = (n: number | null, unit: SectionUnit): string | undefined =>
+  n === null ? undefined : `${n}${unit}`;
 
 export function normalizeSectionLayout(value: unknown): SectionLayout {
   const d = defaultSectionLayout();
   if (typeof value !== "object" || value === null || Array.isArray(value)) return d;
   const v = value as Record<string, unknown>;
+  const unit = (x: unknown): SectionUnit => (x === "%" ? "%" : "px");
   // Nullable numbers stay null rather than falling back: null means "the
   // built-in", and 0 is a different, deliberate answer — a band with no air.
-  const num = (x: unknown): number | null =>
-    typeof x === "number" && Number.isFinite(x) && x >= 0 ? x : null;
+  //
+  // Clamped, because these land in a style attribute and a slip of the
+  // keyboard should not be able to make a band a hundred thousand pixels tall.
+  // A typed 100343 became exactly that before this clamp existed.
+  const num = (x: unknown, cap: number): number | null =>
+    typeof x === "number" && Number.isFinite(x) && x >= 0 ? Math.min(x, cap) : null;
+  const maxWidthUnit = unit(v.maxWidthUnit);
+  const padXUnit = unit(v.padXUnit);
+  const padYUnit = unit(v.padYUnit);
   return {
     width:
       v.width === "full" || v.width === "custom" || v.width === "boxed" ? v.width : d.width,
-    maxWidth: num(v.maxWidth),
-    padX: num(v.padX),
-    padY: num(v.padY),
+    maxWidth: num(v.maxWidth, SECTION_LIMITS.maxWidth[maxWidthUnit]),
+    maxWidthUnit,
+    padX: num(v.padX, SECTION_LIMITS.pad[padXUnit]),
+    padXUnit,
+    padY: num(v.padY, SECTION_LIMITS.pad[padYUnit]),
+    padYUnit,
   };
 }
 
 /** True when a stored layout says nothing the built-in does not already say. */
 export const layoutIsDefault = (l: SectionLayout): boolean =>
   l.width === "boxed" && l.maxWidth === null && l.padX === null && l.padY === null;
+
+/**
+ * The band's box, as CSS — one answer for the page and for the builder canvas.
+ *
+ * Exported because the canvas was drawing its own box and ignoring this
+ * entirely: the Width controls wrote values that the page honoured and the
+ * builder did not, so setting a measure appeared to do nothing at all in the
+ * one place you set it from. Two implementations of "how wide is this band" is
+ * how that happens; there is now one.
+ */
+export function sectionBox(layout: unknown): { outer: React.CSSProperties; inner: React.CSSProperties } {
+  const l = normalizeSectionLayout(layout);
+  const outer: React.CSSProperties = {};
+  if (l.padX !== null) outer.paddingInline = sectionSize(l.padX, l.padXUnit);
+  if (l.padY !== null) outer.paddingBlock = sectionSize(l.padY, l.padYUnit);
+  const inner: React.CSSProperties =
+    l.width === "full"
+      ? {}
+      : {
+          maxWidth:
+            l.width === "custom" && l.maxWidth !== null
+              ? sectionSize(l.maxWidth, l.maxWidthUnit)
+              : `${BAND_WIDTH}px`,
+          marginInline: "auto",
+        };
+  return { outer, inner };
+}
 
 /**
  * Turn a stored image value into something an `<img>` can use.
