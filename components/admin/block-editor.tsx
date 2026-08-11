@@ -62,6 +62,7 @@ import { DeviceSwitch } from "@/components/admin/device-switch";
 import { BlockTree } from "@/components/admin/block-tree";
 import { TemplateLibrary } from "@/components/admin/template-library";
 import { templateSource, type Template } from "@/lib/templates";
+import { saveTemplateAction } from "@/app/admin/templates/actions";
 import { PositionPicker } from "@/components/admin/position-picker";
 import { SectionSettings, type SectionEdit } from "@/components/admin/section-settings";
 import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/lib/undo";
@@ -358,6 +359,43 @@ export function BlockEditor({
   // The library popup, and whether the export has just been copied.
   const [library, setLibrary] = useState(false);
   const [exported, setExported] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  /**
+   * Keep this section as a design, under a name.
+   *
+   * The band goes with it — colour, width and air — because that is what made
+   * the difference between a template that looks like the screenshot and one
+   * that needs a paragraph of instructions afterwards.
+   */
+  async function saveAsTemplate() {
+    if (blocks.length === 0 || saving) return;
+    const name = window.prompt("Name this design", title)?.trim();
+    if (!name) return;
+    setSaving(true);
+    const bg = section?.background;
+    const fd = new FormData();
+    fd.append("name", name);
+    fd.append("group", "Saved");
+    fd.append("blocks", JSON.stringify(blocks));
+    fd.append(
+      "band",
+      JSON.stringify({
+        style: section?.style ?? "paper",
+        color: bg && bg.type === "classic" ? (bg.color ?? null) : null,
+        layout: normalizeSectionLayout(section?.layout),
+      }),
+    );
+    const res = await saveTemplateAction({}, fd);
+    setSaving(false);
+    if (res.error) {
+      window.alert(res.error);
+      return;
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  }
 
   /**
    * Drop a template at the same place a palette click would land a row.
@@ -494,6 +532,16 @@ export function BlockEditor({
           </IconBtn>
           <IconBtn label="Redo (⇧⌘Z)" onClick={stepForward} disabled={history.future.length === 0}>
             ↷
+          </IconBtn>
+          {/* Keep this section as a design, on the shelf, for any page.
+              The clipboard export beside it is for a design that should ship
+              in code; this is for one that belongs to this store. */}
+          <IconBtn
+            label={saved ? "Saved to Templates" : "Save this section as a template"}
+            onClick={() => void saveAsTemplate()}
+            disabled={blocks.length === 0 || saving}
+          >
+            {saved ? "✓" : "＋"}
           </IconBtn>
           {/* The other half of the library: this section, read back out as a
               file for lib/templates/. The export runs the same normalize the

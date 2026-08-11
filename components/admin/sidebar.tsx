@@ -29,6 +29,8 @@ const ICON = {
   members: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5Z",
   apps: "M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z",
   errors: "M12 2 1 21h22L12 2Zm1 15h-2v-2h2v2Zm0-4h-2V9h2v4Z",
+  // A page with its bands stacked up — what a template is a piece of.
+  templates: "M4 3h16v4H4V3Zm0 6h7v12H4V9Zm9 0h7v5h-7V9Zm0 7h7v5h-7v-5Z",
   settings:
     "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9 4-2-1.2.3-2.3-2.2-.8-.7-2.2-2.3.3L12 3.8 10.9 5.8l-2.3-.3-.7 2.2-2.2.8.3 2.3L3.8 12l2.2 1.2-.3 2.3 2.2.8.7 2.2 2.3-.3 1.1 2 1.1-2 2.3.3.7-2.2 2.2-.8-.3-2.3L21 12Z",
 } as const;
@@ -46,6 +48,9 @@ function groups(c: NavCounts): { title: string; items: Item[] }[] {
         { href: "/admin/courses", label: "Courses", icon: ICON.courses, badge: n(c.courses) },
         { href: "/admin/offers", label: "Offers", icon: ICON.offers, badge: n(c.offers) },
         { href: "/admin/media", label: "Media", icon: ICON.media, badge: n(c.media) },
+        // Beside Media, because it is the same kind of thing: a shelf of
+        // material a page is assembled from, rather than a thing being sold.
+        { href: "/admin/templates", label: "Templates", icon: ICON.templates },
       ],
     },
     {
