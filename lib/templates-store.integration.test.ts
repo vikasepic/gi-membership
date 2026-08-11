@@ -4,6 +4,10 @@ import { getStoreId } from "@/lib/store";
 import { listSavedTemplates, saveTemplate, deleteTemplate, getSavedTemplate } from "@/lib/templates-store";
 import { newBlock } from "@/lib/blocks";
 
+// Needs a real database. Skipped rather than failed without one, so the suite
+// still runs on a machine that has never started Supabase.
+const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 // Designs the owner saves. A template is page content stored somewhere else,
 // so it gets page content's rules: sanitized in, normalized out, never trusted
 // in between.
@@ -18,7 +22,7 @@ const wipe = async () => {
   await db.from("templates").delete().eq("store_id", await getStoreId());
 };
 
-describe("saved templates", () => {
+describe.skipIf(!canRun)("saved templates", () => {
   beforeEach(wipe);
 
   it("comes back as what went in", async () => {
