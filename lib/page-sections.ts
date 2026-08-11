@@ -694,11 +694,19 @@ export type SectionView = {
  *
  * Uploads store a bucket path; a pasted address stays a full URL. Accepting
  * both means switching to uploads did not invalidate anything already set.
+ *
+ * A leading slash is the third kind: a file this app ships from `/public`.
+ * Built-in templates need it — their imagery is version controlled beside the
+ * template that references it, and a bucket path would name an object that
+ * exists in one store's bucket and nowhere else, so the same template file
+ * would render a broken image on every other install. A stored bucket path
+ * never begins with a slash, so nothing already saved changes meaning.
  */
 export function imageSrc(value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
   const v = value.trim();
   if (/^https?:\/\//i.test(v)) return v;
+  if (v.startsWith("/")) return v;
   return `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}/storage/v1/object/public/public-media/${v}`;
 }
 

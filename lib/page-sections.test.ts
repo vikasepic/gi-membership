@@ -313,6 +313,13 @@ describe("imageSrc", () => {
   it("returns nothing for an empty or non-string value", () => {
     for (const v of ["", "   ", null, undefined, 42, {}]) expect(imageSrc(v)).toBeNull();
   });
+
+  it("leaves an app-shipped path alone", () => {
+    // What a built-in template references. Sent through the bucket it would
+    // name an object no store has, so every install but one draws a broken
+    // image from a file that is sitting right there in /public.
+    expect(imageSrc("/templates/author/coach-lilac.png")).toBe("/templates/author/coach-lilac.png");
+  });
 });
 
 describe("layout variants that actually differ", () => {

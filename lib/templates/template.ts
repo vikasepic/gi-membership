@@ -8,12 +8,15 @@
 // block tree is ever written by hand.
 
 import {
+  baseStyle,
+  dim,
   newBlock,
   normalizeBlocks,
   setColumnCount,
   type Block,
   type BlockStyle,
   type BlockType,
+  type ColumnStyle,
 } from "@/lib/blocks";
 import { slugify } from "@/lib/slug";
 
@@ -34,6 +37,16 @@ export function make(
   const b = newBlock(type);
   return { ...b, props: { ...b.props, ...props }, style: { ...b.style, ...style } };
 }
+
+/**
+ * One column's style — how it sits in the row, and what it paints.
+ *
+ * Margin starts at zero rather than `baseStyle`'s 16px bottom: that default is
+ * for a block in a stack of blocks, and on a column it is a 16px gap under
+ * every column that nobody asked for.
+ */
+export const col = (over: Partial<BlockStyle> = {}): ColumnStyle =>
+  baseStyle({ margin: dim(0, 0, 0, 0), ...over });
 
 /** A row holding these columns, widths even, props merged over the row's own. */
 export function rowOf(columns: Block[][], props: Record<string, unknown> = {}): Block {

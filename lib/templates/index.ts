@@ -8,10 +8,20 @@ import { template as featureCards } from "./feature-cards";
 import { template as benefitColumns } from "./benefit-columns";
 import { template as faq } from "./faq";
 import { template as callToAction } from "./call-to-action";
+import { template as authorMostReviewed } from "./author-most-reviewed";
+import { template as authorAbout } from "./author-about";
 
 export { templateSource, type Template } from "./template";
 
-const BUILT_INS: Template[] = [hero, featureCards, benefitColumns, faq, callToAction];
+const BUILT_INS: Template[] = [
+  authorMostReviewed,
+  authorAbout,
+  hero,
+  featureCards,
+  benefitColumns,
+  faq,
+  callToAction,
+];
 
 export function listTemplates(): Template[] {
   return BUILT_INS;
