@@ -1,4 +1,5 @@
 import { Blocks, type CtaRender } from "@/components/page/blocks";
+import type { StoreRender } from "@/components/page/storefront-blocks";
 import { blocksForSection } from "@/lib/section-to-blocks";
 import { buildSectionView, type SectionRow, type SectionView } from "@/lib/page-sections";
 import { normalizeBackground, type Device } from "@/lib/blocks";
@@ -78,6 +79,8 @@ export function SectionBand({
   preview,
   /** Editor only: render as this width sees it, rather than as the window does. */
   at,
+  /** The storefront's live data. Only the home page has any. */
+  store,
 }: {
   row: SectionRow;
   money: PageMoney;
@@ -85,6 +88,7 @@ export function SectionBand({
   cta?: CtaRender;
   preview?: boolean;
   at?: Device;
+  store?: StoreRender;
 }) {
   const view = buildSectionView(row);
   if (!view) return null;
@@ -94,7 +98,7 @@ export function SectionBand({
   if (blocks.length === 0 && !preview) return null;
   return (
     <Band view={view} background={row.background} cssId={row.cssId} cssClass={row.cssClass}>
-      <Blocks blocks={blocks} theme={view.theme} money={money} cta={cta} at={at} />
+      <Blocks blocks={blocks} theme={view.theme} money={money} cta={cta} store={store} at={at} />
     </Band>
   );
 }

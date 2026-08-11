@@ -20,6 +20,7 @@ type Item = { href: string; label: string; badge?: string; warn?: boolean; icon:
 // One glyph per destination, so navigating becomes recognising a shape rather
 // than reading nine words. It is also what makes the collapsed rail possible.
 const ICON = {
+  home: "M12 3 3 10.2V21h6v-6h6v6h6V10.2L12 3Z",
   products: "M4 5h16v14H4V5Zm2 2v10h12V7H6Z",
   courses: "M4 4h16v3H4V4Zm0 5h16v11H4V9Z",
   offers: "M12 2 3 6v6c0 5 3.8 9.4 9 10 5.2-.6 9-5 9-10V6l-9-4Z",
@@ -38,6 +39,9 @@ function groups(c: NavCounts): { title: string; items: Item[] }[] {
     {
       title: "Catalogue",
       items: [
+        // First, because it is the page a visitor lands on and the only one of
+        // these that is a page rather than a list of things.
+        { href: "/admin/home", label: "Home page", icon: ICON.home },
         { href: "/admin", label: "Products", icon: ICON.products, badge: n(c.products) },
         { href: "/admin/courses", label: "Courses", icon: ICON.courses, badge: n(c.courses) },
         { href: "/admin/offers", label: "Offers", icon: ICON.offers, badge: n(c.offers) },

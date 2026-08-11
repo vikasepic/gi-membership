@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { BlockEditor, ImageControl } from "@/components/admin/block-editor";
 import { bandTheme } from "@/lib/page-sections";
 import { PALETTE, BLOCK_LABEL } from "@/lib/block-controls";
+import { STOREFRONT_TYPES } from "@/lib/blocks";
 import { addTarget, edgeIndex, insertBlock, moveBlock, newBlock, type Block } from "@/lib/blocks";
 import { PREVIEW_SCOPE, normalizeSiteTypography } from "@/lib/site-typography";
 
@@ -19,8 +20,13 @@ describe("the builder shell", () => {
   });
 
   it("offers every block in the palette", () => {
+    // The shell defaults to a product page, whose tray is everything except the
+    // three storefront blocks — those need live store data no other page has.
     const out = shell([]);
-    for (const p of PALETTE) expect(out).toContain(p.label);
+    for (const p of PALETTE) {
+      if (STOREFRONT_TYPES.includes(p.type)) expect(out, p.label).not.toContain(p.label);
+      else expect(out, p.label).toContain(p.label);
+    }
   });
 
   it("tells you what to do when the canvas is empty", () => {

@@ -1,5 +1,11 @@
 import { blockRendersNothing, styleFor, type Block, type Device } from "@/lib/blocks";
 import {
+  CatalogBlock,
+  FeaturedBlock,
+  MembershipsBlock,
+  type StoreRender,
+} from "@/components/page/storefront-blocks";
+import {
   blockClass,
   blockColors,
   blockCssAt,
@@ -134,12 +140,21 @@ export function Blocks({
   theme,
   money,
   cta,
+  store,
   at,
 }: {
   blocks: Block[];
   theme: BandTheme;
   money?: BlockMoney;
   cta?: CtaRender;
+  /**
+   * The catalogue, the memberships and who owns what, already resolved.
+   *
+   * Supplied by the storefront and by nothing else. Absent — every sales page —
+   * the three storefront blocks draw nothing, which is what a Catalogue block
+   * pasted onto a product page should do.
+   */
+  store?: StoreRender;
   /**
    * Render as this device would see it, rather than letting the viewport
    * decide. For a preview pane narrower than the window, where the real media
@@ -149,7 +164,7 @@ export function Blocks({
 }) {
   const showing = blocks.filter((b) => !blockRendersNothing(b));
   if (showing.length === 0) return null;
-  return <div className="mt-7 flex flex-col">{flow(showing, theme, money, cta, at)}</div>;
+  return <div className="mt-7 flex flex-col">{flow(showing, theme, money, cta, store, at)}</div>;
 }
 
 /**
@@ -160,7 +175,7 @@ export function Blocks({
  * each is still selected, dragged and styled on its own; only the rendering
  * puts a run of them on one row.
  */
-function flow(blocks: Block[], theme: BandTheme, money?: BlockMoney, cta?: CtaRender, at?: Device): React.ReactNode[] {
+function flow(blocks: Block[], theme: BandTheme, money?: BlockMoney, cta?: CtaRender, store?: StoreRender, at?: Device): React.ReactNode[] {
   const out: React.ReactNode[] = [];
   // Every block carries a bottom margin, which is the only thing separating one
   // from the next — nothing here has a container gap. The last one has nothing
@@ -179,7 +194,7 @@ function flow(blocks: Block[], theme: BandTheme, money?: BlockMoney, cta?: CtaRe
       out.push(
         <div key={blocks[i].id} className="flex flex-wrap items-center gap-3">
           {blocks.slice(i, j).map((b) => (
-            <BlockNode key={b.id} block={b} theme={theme} money={money} cta={cta} at={at} last={b.id === lastId} />
+            <BlockNode key={b.id} block={b} theme={theme} money={money} cta={cta} store={store} at={at} last={b.id === lastId} />
           ))}
         </div>,
       );
@@ -192,6 +207,7 @@ function flow(blocks: Block[], theme: BandTheme, money?: BlockMoney, cta?: CtaRe
           theme={theme}
           money={money}
           cta={cta}
+          store={store}
           at={at}
           last={blocks[i].id === lastId}
         />,
@@ -207,6 +223,7 @@ function BlockNode({
   theme,
   money,
   cta,
+  store,
   at,
   last,
 }: {
@@ -214,6 +231,7 @@ function BlockNode({
   theme: BandTheme;
   money?: BlockMoney;
   cta?: CtaRender;
+  store?: StoreRender;
   at?: Device;
   /** Nothing follows it, so its bottom margin separates it from nothing. */
   last?: boolean;
@@ -245,7 +263,7 @@ function BlockNode({
         }
         hidden={at ? hiddenAt(block, at) : undefined}
       >
-        <Inner block={block} theme={theme} money={money} cta={cta} at={at} />
+        <Inner block={block} theme={theme} money={money} cta={cta} store={store} at={at} />
       </div>
     </>
   );
@@ -274,12 +292,14 @@ function Inner({
   theme,
   money,
   cta,
+  store,
   at,
 }: {
   block: Block;
   theme: BandTheme;
   money?: BlockMoney;
   cta?: CtaRender;
+  store?: StoreRender;
   at?: Device;
 }) {
   const s = styleFor(block, at ?? "desktop");
@@ -327,6 +347,31 @@ function Inner({
           dangerouslySetInnerHTML={{ __html: str(p.html) }}
         />
       );
+
+    // Live store data. Without a `store` payload — every sales page — these
+    // draw nothing at all rather than an empty heading or a box with a rule in
+    // it, because a Catalogue block pasted onto a product page is a mistake and
+    // should look like nothing rather than like a broken section.
+    case "catalog":
+      return store ? (
+        <CatalogBlock
+          store={store}
+          title={str(p.title)}
+          columns={num(p.columns, 3)}
+          limit={num(p.limit, 0)}
+          showPrice={p.showPrice !== false}
+        />
+      ) : null;
+
+    case "memberships":
+      return store ? (
+        <MembershipsBlock store={store} title={str(p.title)} showOwned={p.showOwned !== false} />
+      ) : null;
+
+    case "featured":
+      return store ? (
+        <FeaturedBlock store={store} title={str(p.title)} note={str(p.note)} />
+      ) : null;
 
     case "image": {
       const src = imageSrc(str(p.url));
@@ -944,7 +989,7 @@ function Inner({
               // actually reach the phone.
               style={at ? { ...layout?.columns[i], ...columnCss(block, i, theme, at) } : undefined}
             >
-              {flow(col.filter((child) => !blockRendersNothing(child)), theme, money, cta, at)}
+              {flow(col.filter((child) => !blockRendersNothing(child)), theme, money, cta, store, at)}
             </div>
           ))}
         </div>

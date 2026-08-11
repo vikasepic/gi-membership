@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 
 const src = readFileSync("app/(store)/page.tsx", "utf8");
+const card = readFileSync("components/page/storefront-blocks.tsx", "utf8");
 
 /**
  * A section heading belongs to the group, not to each item in it.
@@ -24,20 +25,20 @@ describe("the storefront's section headings", () => {
     expect(src.split(">Keep going<").length - 1).toBe(1);
   });
 
-  it("keeps it out of the per-offer component", () => {
-    const heading = src.indexOf(">Keep going<");
-    const perOffer = src.indexOf("function SubscriptionSection");
-    expect(perOffer, "SubscriptionSection should still exist").toBeGreaterThan(-1);
-    expect(heading, "the heading sits above the per-offer component").toBeLessThan(perOffer);
+  it("keeps it out of the per-offer card", () => {
+    // The card is shared now — the storefront draws it and so does the
+    // Memberships block. A heading inside it would repeat in both.
+    expect(card).toContain("export function MembershipCard");
+    expect(card).not.toContain("Keep going");
   });
 
   it("still gives every membership its own anchor", () => {
     // The heading moved out; the link target must not have gone with it.
-    expect(src).toContain("id={`offer-${offer.key}`}");
+    expect(card).toContain("id={`offer-${offer.key}`}");
   });
 
   it("does not print the group heading when there are no memberships", () => {
     // An empty rule and a bordered heading over nothing is worse than silence.
-    expect(src).toContain("subscriptions.length > 0");
+    expect(src).toContain("memberships.length > 0");
   });
 });

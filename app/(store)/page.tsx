@@ -1,6 +1,4 @@
 import { COVER_ASPECT } from "@/lib/cover";
-import Link from "next/link";
-import { BuyLink } from "@/components/buy-link";
 import { offerHref } from "@/lib/offer-link";
 import { ProductCard, type CatalogItem } from "@/components/product-card";
 import { listPublishedProducts, listSubscriptionOffers } from "@/lib/store";
@@ -8,8 +6,14 @@ import { viewerOwnership, accessHrefForProduct } from "@/lib/library";
 import { isOfferEligible } from "@/lib/offers";
 import { productDisplay, type ProductDisplay } from "@/lib/courses";
 import { publicCoverUrl } from "@/lib/media";
-import type { Product, Offer } from "@/lib/types";
+import type { Product } from "@/lib/types";
 import { money } from "@/lib/money";
+import { getPageSections } from "@/lib/pages";
+import { getStoreId } from "@/lib/store";
+import { blocksForSection } from "@/lib/section-to-blocks";
+import { buildSectionView } from "@/lib/page-sections";
+import { SectionBand } from "@/components/page/sales-page";
+import { MembershipCard, type MembershipView, type StoreRender } from "@/components/page/storefront-blocks";
 
 // Storefront labels for each course type. Mirrors the catalog card.
 const BADGE_LABEL: Record<NonNullable<CatalogItem["type"]>, string> = {
@@ -38,7 +42,7 @@ function toCard(
   };
 }
 
-export default async function Home() {
+async function StoreData() {
   const products = await listPublishedProducts();
   const featured = products[0];
   // Anonymous visitors own nothing, so this is an empty set and the store
@@ -74,6 +78,102 @@ export default async function Home() {
   const fromPrice =
     products.length > 0 ? Math.min(...products.map((p) => p.priceCents)) : 0;
 
+  return {
+    products,
+    featured,
+    featuredOwned,
+    featuredBadge,
+    featuredCover,
+    featuredHref,
+    subscriptions,
+    ownedOfferIds,
+    ownedIds,
+    display,
+    coverFor,
+    accessHrefs,
+    fromPrice,
+  };
+}
+
+/**
+ * The storefront.
+ *
+ * Two paths, and the second one is the safety net. A store that has built a
+ * home page in the editor gets the bands it built; a store that has not gets
+ * exactly the page it had before any of this existed. Nothing about the second
+ * path changed, so switching the feature on is a decision somebody makes rather
+ * than something that happens to them on a deploy.
+ */
+export default async function Home() {
+  const d = await StoreData();
+
+  // Resolved here rather than in the blocks: an offer's link depends on whether
+  // it has a sales page, which is a query, and a renderer that can do queries
+  // is a renderer that does them once per card.
+  const memberships: MembershipView[] = await Promise.all(
+    d.subscriptions.map(async (offer) => ({
+      offer,
+      href: await offerHref(offer),
+      owned: d.ownedOfferIds.has(offer.id),
+    })),
+  );
+  const store: StoreRender = {
+    products: d.products.map((p) =>
+      toCard(p, d.display.get(p.id) ?? null, d.coverFor(p), d.ownedIds.has(p.id), d.accessHrefs.get(p.id)),
+    ),
+    memberships,
+    featured: d.featured
+      ? toCard(d.featured, d.display.get(d.featured.id) ?? null, d.featuredCover, d.featuredOwned, d.featuredHref)
+      : null,
+  };
+
+  const rows = await getPageSections("store", await getStoreId());
+  // "Built" means a band with something in it. A row can exist with nothing on
+  // it — opening the editor and closing it writes one — and a page of empty
+  // bands must not replace the storefront with a blank screen.
+  const built = rows.some((row) => {
+    const view = buildSectionView(row);
+    return view ? blocksForSection(view).length > 0 : false;
+  });
+
+  if (built) {
+    return (
+      <div className="flex flex-col">
+        {rows.map((row) => (
+          <SectionBand
+            key={row.sectionKey}
+            row={row}
+            money={{ priceLabel: null, termsLabel: null }}
+            store={store}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return <DefaultHome d={d} memberships={memberships} />;
+}
+
+function DefaultHome({
+  d,
+  memberships,
+}: {
+  d: Awaited<ReturnType<typeof StoreData>>;
+  memberships: MembershipView[];
+}) {
+  const {
+    products,
+    featured,
+    featuredOwned,
+    featuredBadge,
+    featuredCover,
+    featuredHref,
+    ownedIds,
+    display,
+    coverFor,
+    accessHrefs,
+    fromPrice,
+  } = d;
   return (
     <div className="flex flex-col gap-16 md:gap-24">
       {/* Hero — asymmetric editorial split on desktop, stacked on mobile. */}
@@ -195,21 +295,17 @@ export default async function Home() {
           "Keep going · Membership" four times down one page and emitted four
           identical h2s — which reads as the page having restarted, and tells a
           screen reader the same thing. */}
-      {subscriptions.length > 0 && (
+      {memberships.length > 0 && (
         <section className="flex flex-col gap-7">
           <div className="flex items-baseline justify-between border-b border-border pb-4">
             <h2 className="text-xl md:text-2xl">Keep going</h2>
             <span className="kicker text-muted">
-              {subscriptions.length === 1 ? "Membership" : "Memberships"}
+              {memberships.length === 1 ? "Membership" : "Memberships"}
             </span>
           </div>
           <div className="flex flex-col gap-10">
-            {subscriptions.map((offer) => (
-              <SubscriptionSection
-                key={offer.id}
-                offer={offer}
-                owned={ownedOfferIds.has(offer.id)}
-              />
+            {memberships.map((m) => (
+              <MembershipCard key={m.offer.id} view={m} />
             ))}
           </div>
         </section>
@@ -218,88 +314,3 @@ export default async function Home() {
   );
 }
 
-// A subscription told as a product: what it is, what you get, what it costs,
-// and what happens next. Deliberately not a ProductCard — a card in a grid says
-// "one of several things to browse", and this is the opposite of that.
-async function SubscriptionSection({ offer, owned }: { offer: Offer; owned: boolean }) {
-  // Resolved here rather than in the button: the sales page is the argument
-  // for the price, and a button that skips it drops a reader onto a payment
-  // form with nothing to have convinced them.
-  const href = await offerHref(offer);
-  const trial = offer.trialDays ?? 0;
-  return (
-    // No heading of its own: the group above carries it, and the offer's own
-    // headline below is the h3 under it. The anchor stays — it is what a link
-    // to a specific membership targets.
-    <section id={`offer-${offer.key}`} className="flex flex-col gap-7">
-      <div className="grid grid-cols-1 gap-8 rounded-3xl border border-border bg-surface p-7 md:grid-cols-12 md:gap-10 md:p-10">
-        <div className="flex flex-col gap-5 md:col-span-7">
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="kicker rounded-full bg-primary px-2.5 py-1 text-primary-fg">
-              {offer.name.split("—")[0].trim()}
-            </span>
-            {trial > 0 && (
-              <span className="kicker rounded-full border border-border px-2.5 py-1 text-navy">
-                {trial} days free
-              </span>
-            )}
-          </div>
-
-          <h3 className="text-2xl leading-tight text-balance md:text-3xl">{offer.headline}</h3>
-          {offer.description && <p className="max-w-prose text-muted">{offer.description}</p>}
-
-          {offer.bullets.length > 0 && (
-            <ul className="flex flex-col gap-2.5 pt-1">
-              {offer.bullets.map((b) => (
-                <li key={b} className="flex items-start gap-3 text-sm">
-                  <span aria-hidden className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                  <span>{b}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="flex flex-col justify-between gap-6 border-t border-border pt-7 md:col-span-5 md:border-l md:border-t-0 md:pl-10 md:pt-0">
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-baseline gap-2">
-              <span className="font-display text-4xl">
-                {money(offer.priceCents, offer.currency)}
-              </span>
-              {offer.interval && <span className="text-muted">/{offer.interval}</span>}
-            </div>
-            {/* Say the charge out loud. A trial that bills silently on day 8 is
-                the single most complained-about pattern in subscriptions. */}
-            <p className="text-sm text-muted">
-              {trial > 0
-                ? `Free for ${trial} days, then ${money(offer.priceCents, offer.currency)} each ${offer.interval}. Cancel any time before then and you pay nothing.`
-                : `Billed every ${offer.interval}. Cancel any time.`}
-            </p>
-          </div>
-
-          {owned ? (
-            <div className="flex flex-col gap-2">
-              <span className="kicker text-plum">Active</span>
-              <Link
-                href="/library"
-                className="w-fit rounded-full border border-border px-6 py-3 font-medium transition-colors hover:border-primary"
-              >
-                Open your library →
-              </Link>
-            </div>
-          ) : (
-            <BuyLink
-              href={href}
-              valueCents={offer.priceCents}
-              currency={offer.currency}
-              contentId={offer.key}
-              className="w-fit rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover"
-            >
-              {offer.acceptLabel}
-            </BuyLink>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}

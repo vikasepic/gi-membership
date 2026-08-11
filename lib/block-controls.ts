@@ -1,6 +1,7 @@
 import {
   BLOCK_TYPES,
   MAX_COLUMNS,
+  STOREFRONT_TYPES,
   clearAt,
   propsFor,
   renderedStyle,
@@ -258,6 +259,37 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "number", key: "gap", label: "Gap", min: 0, max: 40, step: 2, unit: "px" },
       ...TYPOGRAPHY,
     ],
+  },
+
+  catalog: {
+    content: [
+      { kind: "text", key: "title", label: "Heading", hint: "Left empty there is no heading — the products start straight away." },
+      { kind: "number", key: "columns", label: "In a row", min: 1, max: 4, step: 1, responsive: true },
+      { kind: "number", key: "limit", label: "How many", min: 0, max: 24, step: 1, hint: "0 shows everything published." },
+      { kind: "toggle", key: "showPrice", label: "Show the price" },
+    ],
+    style: [],
+  },
+
+  memberships: {
+    content: [
+      { kind: "text", key: "title", label: "Heading", hint: "Left empty there is no heading." },
+      {
+        kind: "toggle",
+        key: "showOwned",
+        label: "Show ones they have",
+        hint: "On, a member sees their subscription marked Active with a link into it. Off, it is hidden from them — never re-offered either way.",
+      },
+    ],
+    style: [],
+  },
+
+  featured: {
+    content: [
+      { kind: "text", key: "title", label: "Heading" },
+      { kind: "text", key: "note", label: "Line under it" },
+    ],
+    style: [],
   },
 
   slides: {
@@ -1218,7 +1250,27 @@ export const PALETTE: { type: BlockType; label: string; props?: Record<string, u
   { type: "spacer", label: "Spacer" },
   { type: "divider", label: "Divider" },
   { type: "html", label: "HTML" },
+  // Storefront only. `paletteFor` keeps them off every other page — a product's
+  // own sales page embedding the whole catalogue is a way out of the page it is
+  // selling from.
+  { type: "catalog", label: "Catalogue" },
+  { type: "memberships", label: "Memberships" },
+  { type: "featured", label: "Featured" },
 ];
+
+/**
+ * The palette for one kind of page.
+ *
+ * The storefront blocks read live data — the catalogue, the subscriptions, who
+ * owns what — and the home page is the only page that supplies it. Offering
+ * them elsewhere would put a block in the tray that renders nothing wherever it
+ * is dropped, which is a worse answer than not offering it.
+ */
+export function paletteFor(owner: "product" | "offer" | "store"): typeof PALETTE {
+  return owner === "store"
+    ? PALETTE
+    : PALETTE.filter((p) => !STOREFRONT_TYPES.includes(p.type));
+}
 
 /**
  * Which selects are better as a row of buttons than as a dropdown.
@@ -1310,10 +1362,14 @@ export const PALETTE_GROUPS: { title: string; types: string[] }[] = [
   { title: "Basic", types: ["Heading", "Text", "Image", "Video", "Buy button", "Button", "List", "Slides"] },
   { title: "Layout", types: ["Container", "Divider", "Spacer"] },
   { title: "Sales", types: ["Cards", "Figures", "Price card", "Price table", "FAQ", "HTML"] },
+  { title: "Storefront", types: ["Catalogue", "Memberships", "Featured"] },
 ];
 
 /** One glyph per block type, so you learn the shapes and stop reading. */
 export const BLOCK_ICON: Record<BlockType, string> = {
+  catalog: "M3 4h8v7H3V4Zm10 0h8v7h-8V4ZM3 13h8v7H3v-7Zm10 0h8v7h-8v-7Z",
+  memberships: "M3 6h18v12H3V6Zm2 2v8h14V8H5Zm2 2h6v2H7v-2Zm0 3h4v2H7v-2Z",
+  featured: "M12 2.6l2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9l6.1-.8L12 2.6Z",
   heading: "M4 4h2v7h8V4h2v16h-2v-7H6v7H4V4Z",
   text: "M3 5h18v2H3V5Zm0 5h18v2H3v-2Zm0 5h12v2H3v-2Z",
   image: "M4 5h16v14H4V5Zm2 2v7l3.5-3.5L13 14l3-3 2 2V7H6Z",
@@ -1333,9 +1389,15 @@ export const BLOCK_ICON: Record<BlockType, string> = {
 };
 
 /** The palette in groups, matched by label so the order of PALETTE still rules. */
-export function groupedPalette(query = ""): { title: string; items: typeof PALETTE }[] {
+export function groupedPalette(
+  query = "",
+  /** Which page's tray this is. The storefront blocks are offered on one page. */
+  owner: "product" | "offer" | "store" = "product",
+): { title: string; items: typeof PALETTE }[] {
   const q = query.trim().toLowerCase();
-  const match = (p: (typeof PALETTE)[number]) => !q || p.label.toLowerCase().includes(q);
+  const offered = paletteFor(owner);
+  const match = (p: (typeof PALETTE)[number]) =>
+    offered.includes(p) && (!q || p.label.toLowerCase().includes(q));
   const placed = new Set<string>();
   const out = PALETTE_GROUPS.map((g) => {
     const items = g.types

@@ -8,15 +8,26 @@ import { normalizeBackground, normalizeBlocks, type Background, type Block } fro
 import { priceProblems } from "@/lib/page-price-truth";
 import { realPriceLabel } from "@/lib/page-money";
 import {
+  HOME_SECTIONS,
   SECTIONS,
-  SECTION_KEYS,
   BAND_STYLE_KEYS,
   sectionDef,
   defaultRows,
   type SectionRow,
 } from "@/lib/page-sections";
 
-export type OwnerType = "product" | "offer";
+/**
+ * Whose page this is.
+ *
+ * "store" is the storefront's own home page. It has exactly one row in the
+ * table, keyed by the store id, and it reads a different band list — see
+ * HOME_SECTIONS. Everything else about it is a page like any other, which is
+ * the point: one editor, one renderer, one save path.
+ */
+export type OwnerType = "product" | "offer" | "store";
+
+/** The band list a page of this kind is made of. */
+export const sectionsFor = (owner: OwnerType) => (owner === "store" ? HOME_SECTIONS : SECTIONS);
 
 /**
  * The sections for one page, in order.
@@ -51,7 +62,7 @@ export async function getPageSections(owner: OwnerType, ownerId: string): Promis
   );
   // Merge onto the canonical list rather than returning what happens to be in
   // the table: a section added to the code later must appear on existing pages.
-  return defaultRows().map((d) => stored.get(d.sectionKey) ?? d);
+  return defaultRows(sectionsFor(owner)).map((d) => stored.get(d.sectionKey) ?? d);
 }
 
 /** True when anyone has configured this page at all. */
@@ -141,7 +152,15 @@ export async function saveSection(
   const def = sectionDef(sectionKey);
   if (!def) throw new Error(`unknown section: ${sectionKey}`);
 
-  const position = SECTION_KEYS.indexOf(def.key);
+  // Ordered within its OWN list. `SECTION_KEYS.indexOf` answered -1 for every
+  // storefront band, which would have stacked all four at the same position and
+  // let the database decide the order of the home page.
+  const list = sectionsFor(owner);
+  const position = list.findIndex((d) => d.key === def.key);
+  // And a band belongs to one kind of page. Without this, a product page could
+  // be saved with a "Browse" band and the storefront with a "Guarantee" — rows
+  // that no editor would ever show again and no renderer knows what to do with.
+  if (position < 0) throw new Error(`section ${def.key} does not belong to a ${owner} page`);
   const style = BAND_STYLE_KEYS.includes(input.style as never) ? input.style : def.defaultStyle;
   const variant = def.variants?.some((v) => v.key === input.variant) ? input.variant : null;
 
@@ -237,7 +256,10 @@ async function updateIfUnchanged(
 export async function seedPage(owner: OwnerType, ownerId: string): Promise<void> {
   const db = createServiceClient();
   const storeId = await getStoreId();
-  const rows = SECTIONS.map((def, i) => ({
+  // The band list this kind of page is made of. Hardcoding SECTIONS here would
+  // have seeded a storefront with Problem, Guarantee and Proof — rows no home
+  // page renders and no editor offers.
+  const rows = sectionsFor(owner).map((def, i) => ({
     store_id: storeId,
     owner_type: owner,
     owner_id: ownerId,
@@ -397,6 +419,13 @@ export async function copyPage(
 ): Promise<number> {
   if (from.ownerType === to.ownerType && from.ownerId === to.ownerId) {
     throw new Error("That is the same page.");
+  }
+  // A sales page and the storefront are made of different bands, so there is no
+  // row-for-row copy between them: every section would land on a key the other
+  // page has never heard of. Said here rather than discovered as a constraint
+  // violation halfway through the write.
+  if ((from.ownerType === "store") !== (to.ownerType === "store")) {
+    throw new Error("The home page and a sales page are built from different sections, so one cannot be copied onto the other.");
   }
   const db = createServiceClient();
   const storeId = await getStoreId();

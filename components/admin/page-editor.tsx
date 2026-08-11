@@ -297,6 +297,7 @@ export function PageEditor({
           <SectionPanel
             row={openRow}
             money={money}
+            owner={ownerType}
             onChange={(next) => patch(openRow.sectionKey, next)}
             device={device}
             clip={clip}
@@ -422,6 +423,7 @@ function SectionPanel({
   clip,
   onContext,
   preview,
+  owner,
 }: {
   row: SectionRow;
   money: PageMoney;
@@ -430,6 +432,7 @@ function SectionPanel({
   clip: Clip | null;
   onContext: (e: React.MouseEvent, row: SectionRow) => void;
   preview?: SitePreview;
+  owner: OwnerType;
 }) {
   const def = sectionDef(row.sectionKey)!;
   const content = useMemo<Draft>(
@@ -484,6 +487,7 @@ function SectionPanel({
           }}
           onChange={(next) => setField("blocks", next)}
           preview={preview}
+          owner={owner}
         />
 
       </div>
@@ -531,12 +535,15 @@ function BlockCanvasField({
   section,
   onChange,
   preview,
+  owner,
 }: {
   row: SectionRow;
   title: string;
   section: SectionEdit;
   onChange: (next: Block[]) => void;
   preview?: SitePreview;
+  /** Passed through to the tray: the storefront blocks are one page's only. */
+  owner: OwnerType;
 }) {
   const [open, setOpen] = useState(false);
   const view = useMemo(() => buildSectionView(row), [row]);
@@ -573,6 +580,7 @@ function BlockCanvasField({
           onChange={onChange}
           onClose={() => setOpen(false)}
           preview={preview}
+          owner={owner}
         />
       )}
     </>

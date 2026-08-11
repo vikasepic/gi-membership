@@ -35,9 +35,31 @@ export const BLOCK_TYPES = [
   // The price panel. It appears twice on the reference page and it is where
   // the money actually is.
   "pricecard",
+  // The storefront's three living parts.
+  //
+  // They are blocks rather than fixed sections so the home page can decide what
+  // it has and in what order — which is the whole point — but they cannot be
+  // built out of other blocks: each one reads the catalogue and the viewer's
+  // ownership, and the ownership check is what stops the store offering someone
+  // a thing they already pay for. That check lives in code and stays there.
+  //
+  // They render to nothing anywhere the data is not supplied, which is every
+  // sales page. See STOREFRONT_TYPES.
+  "catalog",
+  "memberships",
+  "featured",
 ] as const;
 
 export type BlockType = (typeof BLOCK_TYPES)[number];
+
+/**
+ * Blocks that draw live store data rather than what someone typed.
+ *
+ * Offered on the home page and nowhere else: a product's own sales page
+ * embedding the whole catalogue is a way out of the page you are selling from,
+ * and a memberships list on an upsell competes with the offer being made.
+ */
+export const STOREFRONT_TYPES: readonly BlockType[] = ["catalog", "memberships", "featured"];
 
 export type Unit = "px" | "em" | "%" | "rem";
 export type Dim = { t: number; r: number; b: number; l: number; u: Unit; link: boolean };
@@ -420,6 +442,9 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   // means "whatever the card already looked like". A number here instead of
   // null would repaint every card ever saved the moment this line shipped,
   // because normalize spreads these defaults over every stored block.
+  catalog: { title: "", limit: 0, columns: 3, showPrice: true },
+  memberships: { title: "", showOwned: true },
+  featured: { title: "", note: "" },
   cards: {
     items: [],
     columns: 3,
@@ -1423,6 +1448,15 @@ export function blockRendersNothing(block: Block): boolean {
     }
     case "spacer":
     case "divider":
+      return false;
+    // Their content is the catalogue, which this function cannot see. Deciding
+    // here would drop a Catalogue block from the editor for a store that
+    // happens to have no products yet — and it would stay dropped after the
+    // first one was published. The renderer draws nothing when there is
+    // nothing, which is the same answer at the only moment it can be right.
+    case "catalog":
+    case "memberships":
+    case "featured":
       return false;
   }
 }

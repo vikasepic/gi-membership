@@ -104,7 +104,13 @@ export type SectionKey =
   | "guarantee"
   | "faq"
   | "cta"
-  | "footer";
+  | "footer"
+  // The storefront's own bands. Not part of a sales page, and a sales page
+  // never offers them — see HOME_SECTIONS.
+  | "welcome"
+  | "browse"
+  | "membership"
+  | "closing";
 
 export type SectionDef = {
   key: SectionKey;
@@ -568,8 +574,72 @@ export const SECTIONS: SectionDef[] = [
   },
 ];
 
+/**
+ * The storefront's bands.
+ *
+ * A separate list from SECTIONS, because a home page is not a sales letter:
+ * "Problem" and "Guarantee" are the wrong questions to ask about a shop front,
+ * and a store owner opening the home page should not have to skip past ten
+ * sections that do not apply.
+ *
+ * No typed `fields` on any of them. Sales sections carry a form of named boxes
+ * because those pages were typed before they were built; these are blocks from
+ * the first day, so the band is a background and an on/off switch and the
+ * content is whatever someone puts in it.
+ *
+ * Four bands rather than one, so the page can alternate grounds the way the
+ * sales pages do, and rather than ten, so the list is a shape you can hold in
+ * your head. Each is named for what it is for; none of them has to be used.
+ */
+export const HOME_SECTIONS: SectionDef[] = [
+  {
+    key: "welcome",
+    n: "1",
+    title: "Welcome",
+    purpose: "What this store is, to someone who has just arrived and knows nothing about it.",
+    shape: "Blocks. Usually a heading, a line under it, and a button.",
+    defaultStyle: "cream",
+    fields: [],
+    defaults: {},
+  },
+  {
+    key: "browse",
+    n: "2",
+    title: "Browse",
+    purpose: "What is for sale. The catalogue block belongs here.",
+    shape: "Blocks. The Catalogue block draws every published product.",
+    defaultStyle: "paper",
+    fields: [],
+    defaults: {},
+  },
+  {
+    key: "membership",
+    n: "3",
+    title: "Memberships",
+    purpose: "The subscriptions, for a reader who wants more than one thing.",
+    shape: "Blocks. The Memberships block draws every subscription offer.",
+    defaultStyle: "cream",
+    fields: [],
+    defaults: {},
+  },
+  {
+    key: "closing",
+    n: "4",
+    title: "Closing",
+    purpose: "Anything after the shelves — a promise, a note, a last word.",
+    shape: "Blocks.",
+    defaultStyle: "sand",
+    fields: [],
+    defaults: {},
+  },
+];
+
 export const SECTION_KEYS = SECTIONS.map((s) => s.key);
-const BY_KEY = new Map(SECTIONS.map((s) => [s.key, s]));
+export const HOME_SECTION_KEYS = HOME_SECTIONS.map((s) => s.key);
+
+// Both lists, because `sectionDef` is asked about a key by the editor, the
+// clipboard and the save without any of them knowing which page it came from.
+const BY_KEY = new Map([...SECTIONS, ...HOME_SECTIONS].map((s) => [s.key, s]));
 export const sectionDef = (key: string): SectionDef | undefined => BY_KEY.get(key as SectionKey);
 
 // ---------------------------------------------------------------------------
@@ -684,8 +754,8 @@ export function buildSectionView(row: SectionRow): SectionView | null {
 
 
 /** The rows a brand-new page starts with. */
-export function defaultRows(): SectionRow[] {
-  return SECTIONS.map((def, i) => ({
+export function defaultRows(list: SectionDef[] = SECTIONS): SectionRow[] {
+  return list.map((def, i) => ({
     sectionKey: def.key,
     position: i,
     enabled: true,

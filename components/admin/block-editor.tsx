@@ -104,10 +104,19 @@ export function BlockEditor({
   onChange,
   onClose,
   preview,
+  owner = "product",
 }: {
   blocks: Block[];
   theme: BandTheme;
   title: string;
+  /**
+   * Which kind of page this band belongs to.
+   *
+   * Only the tray reads it: Catalogue, Memberships and Featured draw live store
+   * data that no page but the storefront supplies, so offering them elsewhere
+   * would put blocks in the tray that render nothing wherever they are dropped.
+   */
+  owner?: "product" | "offer" | "store";
   /**
    * The band this content stands on.
    *
@@ -503,7 +512,7 @@ export function BlockEditor({
               className="w-full rounded-lg border border-border bg-surface-2 px-2.5 py-1.5 text-xs outline-none focus:border-primary"
             />
           </div>
-          {groupedPalette(search).map((g) => (
+          {groupedPalette(search, owner).map((g) => (
             <div key={g.title} className="flex flex-col gap-1.5 px-2.5 pb-3 pt-2.5">
               <span className="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-muted">
                 {g.title}
@@ -541,7 +550,7 @@ export function BlockEditor({
               </div>
             </div>
           ))}
-          {groupedPalette(search).length === 0 && (
+          {groupedPalette(search, owner).length === 0 && (
             <p className="px-3 py-2 text-xs text-muted">Nothing called that.</p>
           )}
             </>

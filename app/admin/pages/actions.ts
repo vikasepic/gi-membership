@@ -8,6 +8,12 @@ import { sanitizeSectionContent } from "@/lib/sanitize-html";
 import { priceProblems, priceProblemMessage } from "@/lib/page-price-truth";
 import { realPriceLabel } from "@/lib/page-money";
 
+/** Where this page is edited in the admin. */
+const adminPathFor = (owner: OwnerType, ownerId: string) =>
+  owner === "store"
+    ? "/admin/home"
+    : `/admin/${owner === "offer" ? "offers" : "products"}/${ownerId}/page`;
+
 export type SectionSaveState = {
   error?: string;
   savedKey?: string;
@@ -48,7 +54,7 @@ export async function saveSectionAction(
   const owner = String(formData.get("ownerType") ?? "") as OwnerType;
   const ownerId = String(formData.get("ownerId") ?? "");
   const sectionKey = String(formData.get("sectionKey") ?? "");
-  if (owner !== "product" && owner !== "offer") return { error: "Bad owner." };
+  if (owner !== "product" && owner !== "offer" && owner !== "store") return { error: "Bad owner." };
   if (!ownerId || !sectionDef(sectionKey)) return { error: "Unknown section." };
 
   let content: Record<string, unknown> = {};
@@ -96,7 +102,10 @@ export async function saveSectionAction(
     return { error: err instanceof Error ? err.message : "Could not save." };
   }
 
-  revalidatePath(`/admin/${owner === "offer" ? "offers" : "products"}/${ownerId}/page`);
+  revalidatePath(adminPathFor(owner, ownerId));
+  // The storefront IS a page, so saving one of its bands has to clear it. The
+  // two lines below cover sales pages and the upsell and reach neither.
+  if (owner === "store") revalidatePath("/", "layout");
   revalidatePath("/p", "layout");
   revalidatePath("/checkout/oto");
   return { savedKey: sectionKey, updatedAt };
@@ -108,7 +117,7 @@ export async function enablePageAction(formData: FormData): Promise<void> {
   const ownerId = String(formData.get("ownerId") ?? "");
   if ((owner !== "product" && owner !== "offer") || !ownerId) return;
   await seedPage(owner, ownerId);
-  revalidatePath(`/admin/${owner === "offer" ? "offers" : "products"}/${ownerId}/page`);
+  revalidatePath(adminPathFor(owner, ownerId));
 }
 
 export type ImageUploadState = { ok?: boolean; path?: string; error?: string };
@@ -131,7 +140,7 @@ export async function savePageSettingsAction(
 
   const owner = String(formData.get("ownerType") ?? "") as OwnerType;
   const ownerId = String(formData.get("ownerId") ?? "");
-  if (owner !== "product" && owner !== "offer") return { error: "Bad owner." };
+  if (owner !== "product" && owner !== "offer" && owner !== "store") return { error: "Bad owner." };
   if (!ownerId) return { error: "Unknown page." };
 
   try {
@@ -164,14 +173,14 @@ export async function copyPageAction(
   const owner = String(formData.get("ownerType") ?? "") as OwnerType;
   const ownerId = String(formData.get("ownerId") ?? "");
   const [fromType, fromId] = String(formData.get("from") ?? "").split(":");
-  if (owner !== "product" && owner !== "offer") return { error: "Bad owner." };
+  if (owner !== "product" && owner !== "offer" && owner !== "store") return { error: "Bad owner." };
   if ((fromType !== "product" && fromType !== "offer") || !fromId) {
     return { error: "Choose a page to copy from." };
   }
 
   try {
     const n = await copyPage({ ownerType: fromType, ownerId: fromId }, { ownerType: owner, ownerId });
-    revalidatePath(`/admin/${owner === "offer" ? "offers" : "products"}/${ownerId}/page`);
+    revalidatePath(adminPathFor(owner, ownerId));
     revalidatePath("/p", "layout");
     return { message: `${n} sections copied. Reload to edit them.` };
   } catch (e) {
