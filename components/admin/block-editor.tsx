@@ -6,7 +6,7 @@ import { ContextMenu, menuAt, type MenuState } from "@/components/admin/context-
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BlockBody } from "@/components/page/blocks";
+import { BlockBody, Blocks } from "@/components/page/blocks";
 import { RichText } from "@/components/editor/rich-text";
 import {
   BLOCK_LABEL,
@@ -75,6 +75,17 @@ import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/li
  * except to hand it on.
  */
 const CanvasDevice = createContext<Device>("desktop");
+
+/**
+ * The designs this page points at, by id — name included, because the panel
+ * has to say what a block is linked TO.
+ *
+ * Context rather than a prop for the same reason the device is: it would
+ * otherwise be threaded through Zone, CanvasBlock and RowColumns, none of
+ * which have any use for it except to hand it on.
+ */
+export type GlobalIndex = Map<string, { name: string; blocks: Block[] }>;
+const Globals = createContext<GlobalIndex>(new Map());
 import { backgroundCss, blockClass, blockCssAt, blockCustomRules, blockTextRules, columnCss, columnOwnWidth, effectiveWidths, mobilePaddingNotice, rowIsGrid, rowLayout, stacksAt } from "@/lib/block-style";
 import { imageSrc, normalizeSectionLayout, sectionBox } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
@@ -109,6 +120,8 @@ export function BlockEditor({
   onClose,
   preview,
   owner = "product",
+  globals,
+  onSaveGlobal,
 }: {
   blocks: Block[];
   theme: BandTheme;
@@ -141,6 +154,19 @@ export function BlockEditor({
    * renders the live components exists to avoid.
    */
   preview?: SitePreview;
+  /**
+   * The global designs this page points at.
+   *
+   * Absent means a canvas that draws pointers as pointers — which is what the
+   * nested editor below wants, since a design containing a pointer is exactly
+   * the one level this does not resolve.
+   */
+  globals?: GlobalIndex;
+  /**
+   * Save a global design's own blocks. Absent hides "Edit globally", so the
+   * button is missing rather than present and broken.
+   */
+  onSaveGlobal?: (id: string, blocks: Block[]) => Promise<void>;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("content");
@@ -431,6 +457,40 @@ export function BlockEditor({
     setLibrary(false);
   }
 
+  /** The design being edited through this page, if the panel opened one. */
+  const [editingGlobal, setEditingGlobal] = useState<{ id: string; name: string; blocks: Block[] } | null>(null);
+  const index = globals ?? new Map();
+
+  /**
+   * Keep what this page has now, and stop receiving changes.
+   *
+   * The pointer is replaced, IN THIS PAGE ONLY, by the design's blocks under
+   * fresh ids. From here they are ordinary blocks the page owns. One way: to
+   * go back you insert the global again, which is a smaller surprise than a
+   * re-link that silently discards whatever was edited in the meantime.
+   */
+  function unlink(block: Block) {
+    const id = typeof block.props.globalId === "string" ? block.props.globalId : "";
+    const linked = index.get(id);
+    if (!linked) return;
+    const found = findBlock(blocks, block.id);
+    if (!found) return;
+    if (
+      !window.confirm(
+        `Unlink “${linked.name}”?\n\nThis page keeps what it has now and stops receiving changes. Every other page using it is untouched.`,
+      )
+    ) {
+      return;
+    }
+    const copies = linked.blocks.map(reid);
+    let next = removeBlock(blocks, block.id);
+    copies.forEach((b: Block, i: number) => {
+      next = insertBlock(next, b, { zone: "root", index: found.index + i });
+    });
+    commit(next);
+    setSelectedId(copies[0]?.id ?? null);
+  }
+
   function add(type: BlockType, preset?: Record<string, unknown>) {
     // Merged over the type's own defaults rather than replacing them — a
     // preset says what is different about this way of adding it, not
@@ -507,7 +567,30 @@ export function BlockEditor({
 
   const overlay = (
     <CanvasDevice.Provider value={device}>
+    <Globals.Provider value={index}>
     <Dragging.Provider value={dragging}>
+    {/* The design itself, opened from a page that shows it.
+        A second editor over the first rather than a trip to another screen,
+        because the model chosen was "edit anywhere, changes everywhere" — and
+        the thing being edited is the design, so the editor that edits designs
+        is the honest one to open. It is given no index of its own, which is
+        what stops a design containing a pointer from being edited three levels
+        deep: that pointer draws as a pointer, and the resolve step expands one
+        level anyway. */}
+    {editingGlobal && (
+      <BlockEditor
+        blocks={editingGlobal.blocks}
+        theme={theme}
+        title={`${editingGlobal.name} — used on every page that links to it`}
+        onChange={(next) => setEditingGlobal({ ...editingGlobal, blocks: next })}
+        onClose={() => {
+          const pending = editingGlobal;
+          setEditingGlobal(null);
+          void onSaveGlobal?.(pending.id, pending.blocks);
+        }}
+        preview={preview}
+      />
+    )}
     {dragging.label && <DragTile label={dragging.label} type={dragging.type} />}
     <div className="fixed inset-0 z-[100] flex flex-col bg-surface-2">
       {/* Rendered at the editor's root and portalled to the body: a menu
@@ -769,7 +852,25 @@ export function BlockEditor({
 
         {/* Inspector */}
         <aside className="flex min-h-0 flex-col overflow-hidden border-l border-border bg-surface">
-          {!selected || !tabs ? (
+          {selected && selected.type === "global" ? (
+            // A pointer has nothing of its own to edit, so the usual tabs would
+            // be three empty panels. What it has instead is a relationship, and
+            // the two things you can do about one.
+            <LinkedPanel
+              name={index.get(String(selected.props.globalId ?? ""))?.name ?? null}
+              canEdit={!!onSaveGlobal && index.has(String(selected.props.globalId ?? ""))}
+              onEdit={() => {
+                const id = String(selected.props.globalId ?? "");
+                const linked = index.get(id);
+                if (linked) setEditingGlobal({ id, name: linked.name, blocks: linked.blocks });
+              }}
+              onUnlink={() => unlink(selected)}
+              onDelete={() => {
+                commit(removeBlock(blocks, selected.id));
+                setSelectedId(null);
+              }}
+            />
+          ) : !selected || !tabs ? (
             // Nothing selected is not nothing to edit — it is the band. Which is
             // also what clicking away from a block already means.
             section ? (
@@ -978,6 +1079,7 @@ export function BlockEditor({
       </div>
     </div>
     </Dragging.Provider>
+    </Globals.Provider>
     </CanvasDevice.Provider>
   );
 
@@ -1289,6 +1391,8 @@ function CanvasBlock({
               onDragEnd={onDragEnd}
               onPatch={onPatch}
             />
+          ) : block.type === "global" ? (
+            <LinkedBlock block={block} theme={theme} device={device} />
           ) : empty ? (
             <p className="rounded border border-dashed px-3 py-4 text-center text-xs" style={{ color: theme.muted, borderColor: theme.rule }}>
               Empty {BLOCK_LABEL[block.type].toLowerCase()} — it will not show on the page until you fill it in.
@@ -1317,6 +1421,133 @@ function CanvasBlock({
  * change during typing re-renders the node and the caret jumps to the start.
  * Rich text stays in the panel, where that editor owns its own selection.
  */
+/**
+ * What a linked block offers instead of controls.
+ *
+ * Three facts and two decisions: what it is linked to, that editing it reaches
+ * every page, and — if this page needs to differ — that unlinking is how, and
+ * what unlinking costs.
+ */
+function LinkedPanel({
+  name,
+  canEdit,
+  onEdit,
+  onUnlink,
+  onDelete,
+}: {
+  name: string | null;
+  canEdit: boolean;
+  onEdit: () => void;
+  onUnlink: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 p-3">
+      <div>
+        <strong className="font-display text-sm">Linked block</strong>
+        <p className="mt-0.5 text-[0.68rem] text-muted">
+          {name ? (
+            <>
+              This page shows <strong className="text-fg">{name}</strong>, which is kept in
+              Templates.
+            </>
+          ) : (
+            "This points at a design that is no longer here, so it shows nothing on the page."
+          )}
+        </p>
+      </div>
+
+      {canEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-fg hover:bg-primary-hover"
+        >
+          Edit this design
+        </button>
+      )}
+      {canEdit && (
+        <p className="text-[0.62rem] leading-snug text-muted">
+          Editing changes it everywhere it is used, not only here.
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={onUnlink}
+        className="rounded-full border border-border px-3 py-1.5 text-xs text-muted hover:border-fg hover:text-fg"
+      >
+        Unlink from this page
+      </button>
+      <p className="text-[0.62rem] leading-snug text-muted">
+        Keeps what is here now as ordinary blocks this page owns, and stops
+        receiving changes. Other pages are untouched.
+      </p>
+
+      <button
+        type="button"
+        onClick={onDelete}
+        className="self-start rounded px-1 text-[0.66rem] text-muted hover:text-[#b3261e]"
+      >
+        Remove it from this page
+      </button>
+    </div>
+  );
+}
+
+/**
+ * A pointer, drawn as the design it points at.
+ *
+ * The same `Blocks` a visitor gets, so what is on the canvas is what the page
+ * shows — and marked, because the one thing worse than not seeing a shared
+ * block is not knowing a block is shared before you change it.
+ *
+ * Nothing inside is editable here. The page holds a pointer, and a pointer has
+ * no typography; the design's own content is edited through the panel, which
+ * is the only place a change can honestly say it reaches every page.
+ */
+function LinkedBlock({
+  block,
+  theme,
+  device,
+}: {
+  block: Block;
+  theme: BandTheme;
+  device: Device;
+}) {
+  const globals = useContext(Globals);
+  const id = typeof block.props.globalId === "string" ? block.props.globalId : "";
+  const linked = globals.get(id);
+
+  if (!linked) {
+    // Either the design was deleted, or this canvas was given no index — the
+    // nested editor does exactly that. Said plainly rather than drawn as an
+    // empty block, because "nothing here" and "pointing at something gone" are
+    // different problems with different fixes.
+    return (
+      <p
+        className="rounded border border-dashed px-3 py-4 text-center text-xs"
+        style={{ color: theme.muted, borderColor: theme.rule }}
+      >
+        {id
+          ? "Linked to a design that is no longer here — it shows nothing on the page."
+          : "Linked to nothing."}
+      </p>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <span className="absolute -top-2 right-0 z-10 rounded bg-primary/90 px-1.5 text-[0.6rem] leading-4 text-primary-fg">
+        ⛓ {linked.name}
+      </span>
+      <div className="pointer-events-none">
+        <Blocks blocks={linked.blocks} theme={theme} at={device} />
+      </div>
+    </div>
+  );
+}
+
 function Editable({
   block,
   theme,
