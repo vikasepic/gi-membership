@@ -150,7 +150,24 @@ export async function saveSettingsGroup(
   // be reported as one.
   const baseline = parseBaseline(formData.get("_baseline"));
   if (baseline) {
-    const current = await getSettings() as unknown as Record<string, unknown>;
+    // Every other failure in this action comes back as a message on the form.
+    // This read did not: a database hiccup here threw out of the action and put
+    // the whole admin on the error page, losing whatever was typed — for a
+    // check whose only job is to protect someone ELSE's edit. A read that fails
+    // means the conflict question cannot be answered, and the honest answer to
+    // that is to say so, not to take the page down.
+    let current: Record<string, unknown>;
+    try {
+      current = (await getSettings()) as unknown as Record<string, unknown>;
+    } catch {
+      return {
+        group,
+        errors: {
+          _form:
+            "Could not check whether anyone else has changed these while you had them open, so nothing was saved. Try again — your changes are still on screen.",
+        },
+      };
+    }
     const moved = fields.filter(
       (f) => f in baseline && asText(current[f as string]) !== asText(baseline[f as string]),
     );

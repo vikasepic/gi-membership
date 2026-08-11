@@ -19,6 +19,7 @@ import { SITE_TYPOGRAPHY_DEFAULTS } from "@/lib/site-typography";
  */
 
 let stored: Settings = { ...SETTINGS_DEFAULTS, name: "Greater Inside" };
+let readFails = false;
 const saved = vi.fn(async (_p: Partial<Settings>) => {});
 const families = vi.fn(async () => ["Lora"]);
 
@@ -29,7 +30,10 @@ vi.mock("@/lib/settings", async () => {
   const schema = await import("@/lib/settings-schema");
   return {
     ...schema,
-    getSettings: async () => stored,
+    getSettings: async () => {
+      if (readFails) throw new Error("connection reset");
+      return stored;
+    },
     saveSettings: (p: Partial<Settings>) => saved(p),
   };
 });
@@ -51,6 +55,7 @@ const patchOf = () => saved.mock.calls.at(-1)?.[0] as Partial<Settings>;
 
 beforeEach(() => {
   stored = { ...SETTINGS_DEFAULTS, name: "Greater Inside" };
+  readFails = false;
   saved.mockClear();
   families.mockClear();
   families.mockImplementation(async () => ["Lora"]);
@@ -152,5 +157,30 @@ describe("saving one settings group", () => {
     expect(res.saved).toBe(true);
     expect(patchOf().siteShell?.barColor).toBe("");
     expect(SETTINGS_SCHEMA.shape.siteShell).toBeTruthy();
+  });
+
+  /**
+   * The conflict check reads the stored settings to compare against. That read
+   * was the one failure in this action that threw rather than reporting: a
+   * database hiccup took the whole admin to the error page and lost whatever
+   * had been typed — for a check whose only purpose is to protect someone
+   * else's edit.
+   */
+  it("reports a failed conflict check instead of taking the page down", async () => {
+    readFails = true;
+    const shell = { ...SITE_SHELL_DEFAULTS, footerLogoHeight: "40px" };
+    const out = await saveSettingsGroup({}, form("shell", { siteShell: JSON.stringify(shell) }));
+    expect(out.errors?._form).toContain("nothing was saved");
+    expect(out.group).toBe("shell");
+    // And it really did not save. Reporting a problem while writing anyway
+    // would be the worse half of both behaviours.
+    expect(saved).not.toHaveBeenCalled();
+  });
+
+  it("saves a footer logo height", async () => {
+    const shell = { ...SITE_SHELL_DEFAULTS, footerLogoHeight: "40px" };
+    const out = await saveSettingsGroup({}, form("shell", { siteShell: JSON.stringify(shell) }));
+    expect(out.saved).toBe(true);
+    expect((patchOf().siteShell as { footerLogoHeight: string }).footerLogoHeight).toBe("40px");
   });
 });
