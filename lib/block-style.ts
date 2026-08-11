@@ -1028,7 +1028,11 @@ function rowRules(block: Block, sel: string, theme: BandTheme): string[] {
  */
 export function cardsAcross(block: Block, device: Device): number {
   const raw = Number(propsFor(block, device).columns);
-  return Math.min(Math.max(Number.isFinite(raw) ? Math.round(raw) : 3, 1), 4);
+  // Six, the same ceiling a row of columns has. Four is the right limit for
+  // cards with words in them and the wrong one for a strip of logos, which is
+  // a grid of six small pictures and nothing else — capped at four it wrapped
+  // 4 + 2 and stopped reading as one row of marks.
+  return Math.min(Math.max(Number.isFinite(raw) ? Math.round(raw) : 3, 1), 6);
 }
 
 const cardsTrackAt = (block: Block, device: Device) => `repeat(${cardsAcross(block, device)}, minmax(0,1fr))`;

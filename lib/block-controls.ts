@@ -468,7 +468,10 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         key: "columns",
         label: "In a row",
         hint: "How many sit side by side. Set it again on tablet and phone if four should become two.",
-        options: [["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"]],
+        // Up to six, the ceiling a row of columns already has. Five and six
+        // are for a strip of marks rather than for cards with words in them —
+        // capped at four, a row of six logos wrapped 4 + 2.
+        options: [["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"], ["6", "6"]],
         responsive: true,
         when: (b) => !isOneCard(b),
       },
@@ -1346,7 +1349,11 @@ export const SEGMENT_ICONS: Record<string, Record<string, string>> = {
   },
 };
 
-export const SEGMENT_MAX = 4;
+// Six, since "In a row" now offers six. The count was never the real limit —
+// the two length rules below are, and they are what stopped "Stretch / Top /
+// Middle / Bottom" rendering as "Bottc". Six single digits total six
+// characters, which is a third of what already fits.
+export const SEGMENT_MAX = 6;
 
 /**
  * A row of buttons only where the words actually fit in one.

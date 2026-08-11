@@ -269,7 +269,10 @@ describe("how many cards stand across", () => {
     // Block props are raw jsonb and normalize never validates them; repeat(NaN)
     // drops the grid to one column and explains nothing.
     expect(render(stored({ items: ITEMS, columns: "banana" }))).toContain("--cards:repeat(3,");
-    expect(render(stored({ items: ITEMS, columns: 99 }))).toContain("--cards:repeat(4,");
+    // Six, the ceiling a row of columns already has. Four was right while
+    // cards meant cards with words in them; a strip of six logos is also a
+    // cards block, and capped at four it wrapped 4 + 2.
+    expect(render(stored({ items: ITEMS, columns: 99 }))).toContain("--cards:repeat(6,");
   });
 
 /**

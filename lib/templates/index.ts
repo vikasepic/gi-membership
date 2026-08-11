@@ -11,6 +11,9 @@ import { template as callToAction } from "./call-to-action";
 import { template as authorMostReviewed } from "./author-most-reviewed";
 import { template as authorAbout } from "./author-about";
 import { template as authorOneDecision } from "./author-one-decision";
+import { template as authorFunnels } from "./author-funnels";
+import { template as authorNotStudied } from "./author-not-studied";
+import { template as authorYourHost } from "./author-your-host";
 
 export { templateSource, type Template } from "./template";
 
@@ -18,6 +21,9 @@ const BUILT_INS: Template[] = [
   authorMostReviewed,
   authorAbout,
   authorOneDecision,
+  authorFunnels,
+  authorNotStudied,
+  authorYourHost,
   hero,
   featureCards,
   benefitColumns,

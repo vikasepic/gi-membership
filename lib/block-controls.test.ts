@@ -293,7 +293,16 @@ describe("how many cards sit in a row", () => {
   it("shows every choice instead of hiding them behind a stepper", () => {
     const c = control();
     expect(asSegment(c)).toBe(true);
-    expect(c.kind === "select" && c.options.map(([v]) => v)).toEqual(["1", "2", "3", "4"]);
+    expect(c.kind === "select" && c.options.map(([v]) => v)).toEqual([
+      "1",
+      "2",
+      "3",
+      "4",
+      // Five and six are for a strip of marks rather than cards with words in
+      // them — the same ceiling MAX_COLUMNS gives a row.
+      "5",
+      "6",
+    ]);
   });
 
   it("stores a number, not the option's string", () => {

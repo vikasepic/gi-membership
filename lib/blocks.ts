@@ -474,6 +474,9 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     skin: "boxed",
     numberStyle: "eyebrow",
     title: "",
+    // The caption above a grid of cards — a strip of logos and what it is.
+    // Separate from `title`, which only the list skin has ever drawn.
+    caption: "",
     note: "",
     media: "icon",
     iconShape: "rounded",

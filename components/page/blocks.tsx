@@ -718,6 +718,28 @@ function Inner({
         );
       }
       return (
+        <>
+          {/* The group's own caption, above its cards.
+              "A titled panel of logos" — a caption and a row of marks inside
+              one box — was a container inside a container, which this tree
+              does not do. One line here makes it a block instead of a nesting
+              problem. Inline markup, because the captions people write are
+              half italic.
+
+              Its own prop rather than reusing `title`: only the list skin ever
+              drew that, so grid blocks saved years ago can be carrying one
+              nobody has seen. Reading it here would print a forgotten string
+              onto a live page — which is precisely what the byte-for-byte
+              test caught. Nothing stored has a `caption`, so nothing stored
+              changes. */}
+          {str(p.caption) && (
+            <Inline
+              as="p"
+              className="mb-3 text-[0.82rem]"
+              style={{ color: theme.muted }}
+              html={str(p.caption)}
+            />
+          )}
         <div className="grid grid-cols-1 @xl:grid-cols-[var(--cards)]" style={grid}>
           {items.map((it, i) => (
             <Card key={i} style={cellAt(i)} beside={beside} tile={<IconTile item={it} p={p} colors={c} />}>
@@ -771,6 +793,7 @@ function Inner({
             </Card>
           ))}
         </div>
+        </>
       );
     }
 
