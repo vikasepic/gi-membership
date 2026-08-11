@@ -182,7 +182,7 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
           <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
             <span className="text-xs text-fg">Content</span>
             <div className="flex overflow-hidden rounded-lg border border-border">
-              {(["boxed", "full", "custom"] as const).map((w) => (
+              {(["boxed", "full"] as const).map((w) => (
                 <button
                   key={w}
                   type="button"
@@ -198,45 +198,73 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
           </div>
           <p className="text-[0.62rem] leading-snug text-muted">
             {layout.width === "full"
-              ? "Content reaches the screen edge. Side padding still applies — set it to 0 for a true bleed."
-              : layout.width === "custom"
-                ? "Capped at the measure below and centred."
-                : `Capped at ${BAND_WIDTH}px and centred, the way every band has been.`}
+              ? "Content reaches the screen edge. Padding still applies — set the sides to 0 for a true bleed."
+              : "Capped at the measure below and centred."}
           </p>
-          {layout.width === "custom" && (
+          {layout.width === "boxed" && (
             <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
               <span className="text-xs text-fg">Measure</span>
               <NumberField
                 value={layout.maxWidth}
                 unit={layout.maxWidthUnit}
                 max={SECTION_LIMITS.maxWidth[layout.maxWidthUnit]}
-                placeholder="Measure"
+                placeholder={`Measure — blank is ${BAND_WIDTH}`}
                 onChange={(n) => setLayout({ maxWidth: n })}
                 onUnit={(u) => setLayout({ maxWidthUnit: u, maxWidth: null })}
               />
             </div>
           )}
-          <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
-            <span className="text-xs text-fg">Side padding</span>
-            <NumberField
-              value={layout.padX}
-              unit={layout.padXUnit}
-              max={SECTION_LIMITS.pad[layout.padXUnit]}
-              placeholder="Side padding"
-              onChange={(n) => setLayout({ padX: n })}
-              onUnit={(u) => setLayout({ padXUnit: u, padX: null })}
-            />
-          </div>
-          <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
-            <span className="text-xs text-fg">Top &amp; bottom</span>
-            <NumberField
-              value={layout.padY}
-              unit={layout.padYUnit}
-              max={SECTION_LIMITS.pad[layout.padYUnit]}
-              placeholder="Top and bottom padding"
-              onChange={(n) => setLayout({ padY: n })}
-              onUnit={(u) => setLayout({ padYUnit: u, padY: null })}
-            />
+
+          {/* Four sides, linked until they need not be. One number for the
+              sides and another for top-and-bottom cannot say "air above, none
+              below", which is exactly what a photograph standing on the band's
+              edge is. */}
+          <div className="grid grid-cols-[92px_minmax(0,1fr)] items-start gap-2.5">
+            <span className="pt-1.5 text-xs text-fg">Padding</span>
+            <div className="flex flex-col gap-1.5">
+              {layout.padLink ? (
+                <NumberField
+                  value={layout.pad.t}
+                  unit={layout.padUnit}
+                  max={SECTION_LIMITS.pad[layout.padUnit]}
+                  placeholder="Padding"
+                  onChange={(n) => setLayout({ pad: { t: n, r: n, b: n, l: n } })}
+                  onUnit={(u) => setLayout({ padUnit: u, pad: { t: null, r: null, b: null, l: null } })}
+                />
+              ) : (
+                <div className="flex items-center gap-1">
+                  {(["t", "r", "b", "l"] as const).map((side) => (
+                    <input
+                      key={side}
+                      type="number"
+                      min={0}
+                      max={SECTION_LIMITS.pad[layout.padUnit]}
+                      aria-label={`${{ t: "Top", r: "Right", b: "Bottom", l: "Left" }[side]} padding`}
+                      title={{ t: "Top", r: "Right", b: "Bottom", l: "Left" }[side]}
+                      value={layout.pad[side] ?? ""}
+                      placeholder="—"
+                      onChange={(e) => {
+                        const raw = e.target.value.trim();
+                        const n =
+                          raw === ""
+                            ? null
+                            : Math.max(0, Math.min(SECTION_LIMITS.pad[layout.padUnit], Number(raw)));
+                        setLayout({ pad: { ...layout.pad, [side]: n } });
+                      }}
+                      className="w-full min-w-0 rounded border border-border bg-surface px-1 py-1 text-center text-[0.68rem] tabular-nums outline-none focus:border-primary"
+                    />
+                  ))}
+                  <span className="shrink-0 text-[0.62rem] text-muted">{layout.padUnit}</span>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setLayout({ padLink: !layout.padLink })}
+                className="self-start rounded px-1 text-[0.62rem] text-muted hover:text-fg"
+              >
+                {layout.padLink ? "⛓ linked — set each side" : "⛓ set all four together"}
+              </button>
+            </div>
           </div>
           <p className="text-[0.62rem] leading-snug text-muted">
             Blank keeps the built-in air. 0 removes it — which is what a

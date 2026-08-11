@@ -238,8 +238,12 @@ function TemplatePreview({
   const band = template.band;
   const previewTheme = band?.style ? bandTheme(band.style) : theme;
   const layout = normalizeSectionLayout(band?.layout ?? null);
-  const padX = layout.padX ?? 24;
-  const padY = layout.padY ?? 48;
+  const pad = {
+    paddingTop: layout.pad.t ?? 48,
+    paddingRight: layout.pad.r ?? 24,
+    paddingBottom: layout.pad.b ?? 48,
+    paddingLeft: layout.pad.l ?? 24,
+  };
 
   // Fit the width; if the box has a fixed height, fit that too and take the
   // smaller. Fitting width alone is exactly the bug being fixed here — it is
@@ -268,8 +272,7 @@ function TemplatePreview({
           ref={content}
           className={`${PREVIEW_SCOPE} @container pointer-events-none`}
           style={{
-            paddingInline: padX,
-            paddingBlock: padY,
+            ...pad,
             color: previewTheme.fg,
           }}
         >

@@ -103,8 +103,26 @@ export const template: Template = {
                 color: "#ffffff",
                 weight: 600,
                 margin: { t: 0, r: 0, b: 0, l: 0, u: "px", link: false },
-                customCss:
-                  "selector a, selector span{background:linear-gradient(90deg,#0e9ca9,#75d45d) !important}",
+                // The gradient is the block's own background, not Custom CSS.
+                // It was CSS with an `!important` on it, which meant the
+                // Background control in the panel did nothing at all — the
+                // inspector said one colour and the pill stayed a gradient,
+                // with nothing on screen to explain the disagreement.
+                background: {
+                  type: "gradient",
+                  color: null,
+                  image: "",
+                  size: "cover",
+                  position: "center center",
+                  repeat: "no-repeat",
+                  from: "#0e9ca9",
+                  fromAt: 0,
+                  to: "#75d45d",
+                  toAt: 100,
+                  shape: "linear",
+                  angle: 90,
+                  overlay: 0,
+                },
               },
             ),
           ],

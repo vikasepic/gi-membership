@@ -716,7 +716,11 @@ export const BAND_PAD_Y_MD = 64;
  * has touched renders byte-identical CSS to the one it rendered yesterday.
  * That is the only safe way to add a layout knob to pages that are live.
  */
-export type SectionWidth = "boxed" | "full" | "custom";
+// Two answers, not three. "Custom" was a third mode whose only job was to
+// reveal the measure field — which meant Boxed was a measure you could see and
+// not change, and the difference between the two was a locked number. Boxed
+// now HAS the measure, and blank means the built-in 1040.
+export type SectionWidth = "boxed" | "full";
 
 /** Every measure here can be absolute or relative. % is of the viewport. */
 export type SectionUnit = "px" | "%";
@@ -727,27 +731,39 @@ export const SECTION_LIMITS = {
   pad: { px: 200, "%": 25 },
 } as const;
 
+/**
+ * Padding, per side.
+ *
+ * One number for "the sides" and another for "top and bottom" covers the
+ * common case and refuses the design that needs air above and none below —
+ * which is exactly what a photograph standing on the band's edge is. Four
+ * sides, each of which may be blank, and blank still means the built-in.
+ */
+export type SectionPad = {
+  t: number | null;
+  r: number | null;
+  b: number | null;
+  l: number | null;
+};
+
 export type SectionLayout = {
   width: SectionWidth;
-  /** The cap, for `custom`. Ignored by the other two. */
+  /** The measure a boxed band caps at. Null is the built-in 1040. */
   maxWidth: number | null;
   maxWidthUnit: SectionUnit;
-  /** Side padding. Null keeps the built-in 24px. Zero is a real answer. */
-  padX: number | null;
-  padXUnit: SectionUnit;
-  /** Top and bottom padding. Null keeps the built-in 48/64. Zero is real. */
-  padY: number | null;
-  padYUnit: SectionUnit;
+  pad: SectionPad;
+  padUnit: SectionUnit;
+  /** Typing one side sets all four. Off is how the four come apart. */
+  padLink: boolean;
 };
 
 export const defaultSectionLayout = (): SectionLayout => ({
   width: "boxed",
   maxWidth: null,
   maxWidthUnit: "px",
-  padX: null,
-  padXUnit: "px",
-  padY: null,
-  padYUnit: "px",
+  pad: { t: null, r: null, b: null, l: null },
+  padUnit: "px",
+  padLink: true,
 });
 
 /** A measure with its unit, ready for a style declaration. */
@@ -759,6 +775,7 @@ export function normalizeSectionLayout(value: unknown): SectionLayout {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return d;
   const v = value as Record<string, unknown>;
   const unit = (x: unknown): SectionUnit => (x === "%" ? "%" : "px");
+  const padRaw = (v.pad ?? {}) as Record<string, unknown>;
   // Nullable numbers stay null rather than falling back: null means "the
   // built-in", and 0 is a different, deliberate answer — a band with no air.
   //
@@ -768,23 +785,43 @@ export function normalizeSectionLayout(value: unknown): SectionLayout {
   const num = (x: unknown, cap: number): number | null =>
     typeof x === "number" && Number.isFinite(x) && x >= 0 ? Math.min(x, cap) : null;
   const maxWidthUnit = unit(v.maxWidthUnit);
-  const padXUnit = unit(v.padXUnit);
-  const padYUnit = unit(v.padYUnit);
+  // The unit was per-value for an afternoon; one unit for the four sides is
+  // what a padding actually is, and `padXUnit` is read here so nothing stored
+  // in between comes back blank.
+  const padUnit = unit(v.padUnit ?? v.padXUnit ?? v.padYUnit);
+  const cap = SECTION_LIMITS.pad[padUnit];
+  // `custom` was a third width mode. Anything stored under it was a boxed band
+  // with a measure, which is what boxed now is.
+  const width: SectionWidth = v.width === "full" ? "full" : "boxed";
+  const pad: SectionPad = {
+    t: num(padRaw.t ?? v.padY, cap),
+    r: num(padRaw.r ?? v.padX, cap),
+    b: num(padRaw.b ?? v.padY, cap),
+    l: num(padRaw.l ?? v.padX, cap),
+  };
   return {
-    width:
-      v.width === "full" || v.width === "custom" || v.width === "boxed" ? v.width : d.width,
+    width,
     maxWidth: num(v.maxWidth, SECTION_LIMITS.maxWidth[maxWidthUnit]),
     maxWidthUnit,
-    padX: num(v.padX, SECTION_LIMITS.pad[padXUnit]),
-    padXUnit,
-    padY: num(v.padY, SECTION_LIMITS.pad[padYUnit]),
-    padYUnit,
+    pad,
+    padUnit,
+    // Linked unless the four are actually different, so opening a band someone
+    // set per-side does not silently relink and flatten it on the next keypress.
+    padLink:
+      v.padLink === false
+        ? false
+        : pad.t === pad.r && pad.r === pad.b && pad.b === pad.l,
   };
 }
 
 /** True when a stored layout says nothing the built-in does not already say. */
 export const layoutIsDefault = (l: SectionLayout): boolean =>
-  l.width === "boxed" && l.maxWidth === null && l.padX === null && l.padY === null;
+  l.width === "boxed" &&
+  l.maxWidth === null &&
+  l.pad.t === null &&
+  l.pad.r === null &&
+  l.pad.b === null &&
+  l.pad.l === null;
 
 /**
  * The band's box, as CSS — one answer for the page and for the builder canvas.
@@ -797,17 +834,20 @@ export const layoutIsDefault = (l: SectionLayout): boolean =>
  */
 export function sectionBox(layout: unknown): { outer: React.CSSProperties; inner: React.CSSProperties } {
   const l = normalizeSectionLayout(layout);
+  // Per side, and only the sides that were set — an unset side keeps whatever
+  // the built-in put there, which is what "blank means the built-in" has to
+  // mean once the four can differ.
   const outer: React.CSSProperties = {};
-  if (l.padX !== null) outer.paddingInline = sectionSize(l.padX, l.padXUnit);
-  if (l.padY !== null) outer.paddingBlock = sectionSize(l.padY, l.padYUnit);
+  if (l.pad.t !== null) outer.paddingTop = sectionSize(l.pad.t, l.padUnit);
+  if (l.pad.r !== null) outer.paddingRight = sectionSize(l.pad.r, l.padUnit);
+  if (l.pad.b !== null) outer.paddingBottom = sectionSize(l.pad.b, l.padUnit);
+  if (l.pad.l !== null) outer.paddingLeft = sectionSize(l.pad.l, l.padUnit);
   const inner: React.CSSProperties =
     l.width === "full"
       ? {}
       : {
           maxWidth:
-            l.width === "custom" && l.maxWidth !== null
-              ? sectionSize(l.maxWidth, l.maxWidthUnit)
-              : `${BAND_WIDTH}px`,
+            l.maxWidth !== null ? sectionSize(l.maxWidth, l.maxWidthUnit) : `${BAND_WIDTH}px`,
           marginInline: "auto",
         };
   return { outer, inner };

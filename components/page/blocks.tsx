@@ -6,6 +6,7 @@ import {
   type StoreRender,
 } from "@/components/page/storefront-blocks";
 import {
+  backgroundCss,
   blockClass,
   blockColors,
   blockCssAt,
@@ -471,8 +472,15 @@ function Inner({
       // so it reads as the quieter of the two without needing its own palette.
       const outline = str(p.variant) === "outline";
       const full = bool(p.fullWidth);
+      // The pill carries whatever the block's background says — a colour, or a
+      // gradient. It used to take `c.fill` alone, which is one flat colour, so
+      // a two-colour button could only be had through Custom CSS with an
+      // `!important` on it. That made the Background control dead: the panel
+      // said #6b5757 and the button stayed a gradient, with nothing on screen
+      // to explain why.
+      const painted = s.background.type !== "none" ? backgroundCss(s.background, theme) : null;
       const style: React.CSSProperties = {
-        background: outline ? "transparent" : c.fill,
+        ...(outline ? { background: "transparent" } : (painted ?? { background: c.fill })),
         color: outline ? theme.fg : c.fg,
         border: outline ? `1px solid ${theme.rule}` : undefined,
         borderRadius: `${s.radius || 999}px`,

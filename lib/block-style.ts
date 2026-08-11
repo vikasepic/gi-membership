@@ -203,7 +203,11 @@ function wrapperCssFrom(block: Block, s: BlockStyle, theme: BandTheme): CSSPrope
     // used to set both, so asking for a centred column of text centred every
     // line inside it as well, which is the thing nobody wants.
     textAlign: s.textAlign,
-    ...backgroundCss(s.background, theme),
+    // A button's background belongs to the PILL, not to the box around it —
+    // the pill is the thing anybody means by "the button's colour". Painting
+    // the wrapper as well put a second rectangle of it behind a rounded
+    // button, and left the control ambiguous about which one it drove.
+    ...(block.type === "button" ? {} : backgroundCss(s.background, theme)),
   };
 
   const max = maxWidthCss(s);

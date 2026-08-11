@@ -23,7 +23,7 @@ export const template: Template = {
   band: {
     style: "paper",
     color: "#e9dde6",
-    layout: { width: "boxed", padY: 0 },
+    layout: { width: "boxed", pad: { t: 0, r: null, b: 0, l: null } },
   },
   blocks: [
     {
