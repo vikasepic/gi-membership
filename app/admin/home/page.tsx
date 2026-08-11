@@ -4,6 +4,7 @@ import { getPageSections, listPageSources } from "@/lib/pages";
 import { getStoreId } from "@/lib/store";
 import { PageEditor } from "@/components/admin/page-editor";
 import { storePreview } from "@/lib/store-preview";
+import { HomeSeed } from "@/components/admin/home-seed";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,8 @@ export default async function HomePageEditor() {
           </>
         )}
       </p>
+
+      <HomeSeed built={built} />
 
       {/* Full-bleed out of the admin's column: the preview needs real width or
           every band previews as its narrow layout. overflow-x-clip guards the

@@ -6,6 +6,7 @@ import { camelize } from "@/lib/case";
 import { normalizeHex } from "@/lib/color";
 import { normalizeBackground, normalizeBlocks, type Background, type Block } from "@/lib/blocks";
 import { priceProblems } from "@/lib/page-price-truth";
+import { homeStarterBlocks } from "@/lib/home-starter";
 import { realPriceLabel } from "@/lib/page-money";
 import {
   HOME_SECTIONS,
@@ -253,6 +254,48 @@ async function updateIfUnchanged(
  * Called once when someone turns a sales page on, so every section exists as a
  * real row and the editor's per-section saves have something to update.
  */
+/**
+ * Fill the storefront's bands with the built-in home page, as blocks.
+ *
+ * The fallback page is safe but it leaves the editor as four empty bands: a
+ * blank canvas where a working page used to be, with no route from one to the
+ * other except retyping it. This is that route.
+ *
+ * Refuses to run over work. Every band that already holds a block is left
+ * exactly as it is, and the count comes back so the caller can say what
+ * happened rather than claiming to have done something it did not.
+ */
+export async function seedHomeFromDefault(): Promise<{ written: string[]; skipped: string[] }> {
+  const storeId = await getStoreId();
+  const rows = await getPageSections("store", storeId);
+  const starter = homeStarterBlocks();
+
+  const written: string[] = [];
+  const skipped: string[] = [];
+
+  for (const row of rows) {
+    const blocks = starter[row.sectionKey];
+    if (!blocks || blocks.length === 0) continue;
+    const existing = (row.content as Record<string, unknown> | undefined)?.blocks;
+    if (Array.isArray(existing) && existing.length > 0) {
+      skipped.push(row.sectionKey);
+      continue;
+    }
+    await saveSection("store", storeId, row.sectionKey, {
+      enabled: true,
+      style: row.style ?? sectionDef(row.sectionKey)?.defaultStyle ?? "cream",
+      accent: row.accent ?? null,
+      variant: row.variant ?? null,
+      content: { ...(row.content ?? {}), blocks },
+      background: (row.background as Background | null) ?? null,
+      cssId: row.cssId ?? null,
+      cssClass: row.cssClass ?? null,
+    });
+    written.push(row.sectionKey);
+  }
+  return { written, skipped };
+}
+
 export async function seedPage(owner: OwnerType, ownerId: string): Promise<void> {
   const db = createServiceClient();
   const storeId = await getStoreId();

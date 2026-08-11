@@ -8,6 +8,7 @@ import { productDisplay, type ProductDisplay } from "@/lib/courses";
 import { publicCoverUrl } from "@/lib/media";
 import type { Product } from "@/lib/types";
 import { money } from "@/lib/money";
+import { HOME_COPY } from "@/lib/home-starter";
 import { getPageSections } from "@/lib/pages";
 import { getStoreId } from "@/lib/store";
 import { blocksForSection } from "@/lib/section-to-blocks";
@@ -180,17 +181,17 @@ function DefaultHome({
       <section className="grid grid-cols-1 items-end gap-10 pt-2 md:grid-cols-12 md:gap-8 md:pt-8">
         <div className="rise flex flex-col gap-6 md:col-span-7">
           <div className="flex items-center gap-3">
-            <span className="kicker text-primary">Greater Inside</span>
+            <span className="kicker text-primary">{HOME_COPY.eyebrow}</span>
             <span className="h-px flex-1 bg-border" />
             <span className="kicker text-muted">Est. Store</span>
           </div>
+          {/* The words, not a copy of them: the "start from the current home
+              page" button seeds blocks from this same object, so what it hands
+              you is what you were looking at. */}
           <h1 className="text-[2.05rem] leading-[1.08] tracking-tight text-balance sm:text-5xl sm:leading-[1.02] md:text-[4.2rem]">
-            A store for the work that goes deeper.
+            {HOME_COPY.headline}
           </h1>
-          <p className="max-w-md text-lg text-muted">
-            Field-tested guides, audio, and tools — with Content Engine when
-            you&rsquo;re ready to keep the momentum.
-          </p>
+          <p className="max-w-md text-lg text-muted">{HOME_COPY.subhead}</p>
           <div className="flex items-center gap-5 pt-1">
             {/* The catalog section is not rendered for a single product, so
                 #catalog would be a button that silently does nothing. Send it
@@ -199,7 +200,7 @@ function DefaultHome({
               href={products.length === 1 && featured ? `/p/${featured.slug}` : "#catalog"}
               className="rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover"
             >
-              {products.length === 1 ? "See what's inside" : "Browse the store"}
+              {products.length === 1 ? "See what's inside" : HOME_COPY.browseLabel}
             </a>
             {products.length > 0 && (
               <span className="text-sm text-muted">

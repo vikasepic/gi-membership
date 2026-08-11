@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
-import { savePageSettings, saveSection, seedPage, copyPage, StaleSectionError, type OwnerType } from "@/lib/pages";
+import { savePageSettings, saveSection, seedPage, seedHomeFromDefault, copyPage, StaleSectionError, type OwnerType } from "@/lib/pages";
 import { sectionDef } from "@/lib/page-sections";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
 import { priceProblems, priceProblemMessage } from "@/lib/page-price-truth";
@@ -185,5 +185,45 @@ export async function copyPageAction(
     return { message: `${n} sections copied. Reload to edit them.` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not copy that page." };
+  }
+}
+
+
+export type HomeSeedState = { ok?: boolean; message?: string; error?: string };
+
+/**
+ * Fill the storefront's bands with the page it is already showing.
+ *
+ * Never over the top of anything: a band with a block in it is left alone and
+ * named in the reply, so pressing this twice, or after building one band by
+ * hand, cannot cost anybody their work.
+ */
+export async function seedHomeAction(
+  _prev: HomeSeedState,
+  _formData: FormData,
+): Promise<HomeSeedState> {
+  await requireAdmin();
+  try {
+    const { written, skipped } = await seedHomeFromDefault();
+    revalidatePath("/admin/home");
+    revalidatePath("/", "layout");
+    if (written.length === 0) {
+      return {
+        ok: true,
+        message:
+          skipped.length > 0
+            ? "Every band already has something in it, so nothing was changed."
+            : "There was nothing to add.",
+      };
+    }
+    return {
+      ok: true,
+      message:
+        skipped.length > 0
+          ? `Filled ${written.length} ${written.length === 1 ? "band" : "bands"}. Left ${skipped.join(" and ")} alone — there was already something there.`
+          : `Filled ${written.length} ${written.length === 1 ? "band" : "bands"} with the page the store is showing. Edit anything you like; the store follows this now.`,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not start from the current page." };
   }
 }
