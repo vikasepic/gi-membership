@@ -68,6 +68,25 @@
 html {
   /* Stops iOS resizing text when the phone rotates. */
   -webkit-text-size-adjust: 100%;
+
+  /* Nothing on this site scrolls sideways.
+
+     The full-bleed bands — sales sections, the page editor's canvas, the course
+     preview — break out of their centred column with `width: 100vw` and a
+     matching negative margin. `100vw` is the WINDOW, and the window includes
+     the vertical scrollbar; the content area does not. So every one of those
+     bands is exactly one scrollbar wider than the space it has, overhangs by
+     half of that on each side, and the right-hand half puts a horizontal
+     scrollbar under the whole page.
+
+     Invisible to anyone on overlay scrollbars, which is the macOS default and
+     is why this survived so long. On Windows, on Linux, and on a Mac set to
+     always show scrollbars, it was on every page of the site and the admin.
+
+     `clip`, never `hidden`: `hidden` would turn the root into a scroll
+     container and silently kill every `position: sticky` on the site, the
+     header included. `clip` refuses the scroll without becoming a scroller. */
+  overflow-x: clip;
 }
 
 body {
