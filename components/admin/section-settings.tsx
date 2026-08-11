@@ -26,7 +26,6 @@ export type SectionEdit = {
   cssClass?: string | null;
   /** How wide the band holds its content, and how much air. */
   layout?: unknown;
-  variants?: { key: string; label: string }[];
   onChange: (patch: Record<string, unknown>) => void;
 };
 
@@ -144,29 +143,17 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
         </p>
       </div>
 
-      {section.variants && section.variants.length > 0 && (
-        <details open className="insp-section border-b border-border">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3 py-2 text-[0.7rem] font-semibold text-fg [&::-webkit-details-marker]:hidden">
-            <span className="text-[0.55rem] text-muted">▶</span> Layout
-          </summary>
-          <div className="flex flex-wrap gap-1.5 px-3 pb-3 pt-1">
-            {section.variants.map((v) => (
-              <button
-                key={v.key}
-                type="button"
-                onClick={() => section.onChange({ variant: v.key })}
-                className={`rounded-full border px-2.5 py-1 text-[0.68rem] transition-colors ${
-                  section.variant === v.key
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border text-muted hover:border-fg"
-                }`}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
-        </details>
-      )}
+      {/* The "Layout" pair — Numbered steps / Question grid and its siblings —
+          used to sit here, and it was a switch wired to nothing.
+          A section's `variant` is stored, saved and copied, and no renderer has
+          read it since the page became blocks: `blocksForSection` returns the
+          stored blocks when there are any and converts the typed content when
+          there are not, and neither path consults it. The one place it is even
+          mentioned is a comment in section-to-blocks.ts, beside code that
+          hardcodes the behaviour the comment describes.
+          So it did nothing except mark the section dirty and write a value on
+          save. The declarations stay in SECTIONS as a description of what each
+          band is for; the dead control is gone. */}
 
       {/* Width and air, on the band itself.
           Until this existed the only way to reach past the 1040px measure was

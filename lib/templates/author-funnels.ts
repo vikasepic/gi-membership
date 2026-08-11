@@ -67,7 +67,8 @@ export const template: Template = {
               margin: { t: 0, r: 0, b: 26, l: 0, u: "px", link: false },
             },
           ),
-          make(
+          {
+            ...make(
             "cards",
             {
               caption: "<em>Companies I have built for, or with:</em>",
@@ -113,7 +114,19 @@ export const template: Template = {
               padding: { t: 20, r: 22, b: 20, l: 22, u: "px", link: false },
               margin: { t: 0, r: 0, b: 0, l: 0, u: "px", link: false },
             },
-          ),
+            ),
+            // Three across on a phone. Six marks in 342px leaves 50px a cell
+            // and they climb over each other; the strip keeps its columns at
+            // every width now, so the number of columns is the thing to change.
+            //
+            // A per-device PROP that actually reaches a visitor, which is rare:
+            // Across is emitted as `--cards` inside a media query by
+            // `cardsRules`, rather than read from `block.props` at render.
+            responsive: {
+              tablet: { style: {}, props: { columns: 6 } },
+              mobile: { style: {}, props: { columns: 3 } },
+            },
+          },
         ],
         [
           make(

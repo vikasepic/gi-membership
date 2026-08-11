@@ -199,6 +199,18 @@ export type BlockStyle = {
   background: Background;
   radius: number;
   /**
+   * A line around the box. Zero is no line, which is what everything had.
+   *
+   * A block could be filled and rounded and never outlined, so an outlined box
+   * — a stat in a card, a quiet panel that is a rule rather than a fill — had
+   * no answer but Custom CSS. Custom CSS is the wrong material for it: it is
+   * invisible to every control, so the panel then disagrees with the page
+   * about what the block looks like.
+   */
+  borderWidth: number;
+  /** Null takes the band's own hairline, so an outline follows its section. */
+  borderColor: string | null;
+  /**
    * What sits on top of what, when two things overlap.
    *
    * Null means "wherever paint order puts it", which is what everything did
@@ -370,6 +382,8 @@ export const baseStyle = (over: Partial<BlockStyle> = {}): BlockStyle => ({
   color: null,
   background: emptyBackground(),
   radius: 0,
+  borderWidth: 0,
+  borderColor: null,
   zIndex: null,
   cssId: "",
   cssClass: "",
@@ -784,6 +798,10 @@ function normalizeStyle(v: unknown): BlockStyle {
     color: colorOrNull(v.color),
     background: normalizeBackground(v.background),
     radius: num(v.radius, d.radius),
+    // Clamped: this lands in a style attribute, and a 400px border is not a
+    // border, it is a block nobody can see past.
+    borderWidth: Math.max(0, Math.min(24, num(v.borderWidth, d.borderWidth))),
+    borderColor: colorOrNull(v.borderColor),
     // Null stays null: "nobody set this" and "sit at 0" are different answers,
     // and 0 is a real one — it is how you put something back UNDER a sibling
     // that has been given a positive one.

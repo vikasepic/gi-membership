@@ -484,7 +484,6 @@ function SectionPanel({
             cssId: row.cssId ?? null,
             cssClass: row.cssClass ?? null,
             layout: row.layout ?? null,
-            variants: def.variants,
             onChange,
           }}
           onChange={(next) => setField("blocks", next)}

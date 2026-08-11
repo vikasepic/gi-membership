@@ -675,6 +675,23 @@ function Inner({
       // device — see cardsTrack.
       const track = cardsTrack(block, at);
       const grid = { ...(track ? { "--cards": track } : {}), gap } as React.CSSProperties;
+
+      // A strip of pictures keeps its columns on a phone; cards with words do
+      // not.
+      //
+      // The grid is `grid-cols-1 @xl:grid-cols-[var(--cards)]`, so below the
+      // container's @xl every cards block falls to one column whatever Across
+      // says. That is right for cards — a paragraph in a third of a 390px
+      // screen is unreadable — and wrong for six logos, which became a ladder
+      // six deep. So the gate lifts only when every item is a picture and
+      // nothing has a word in it, which cannot be true of a card.
+      const marksOnly =
+        str(p.media) === "image" &&
+        items.length > 0 &&
+        items.every((it) => str(it.image) && !str(it.title).trim() && !str(it.body).trim());
+      const gridClass = marksOnly
+        ? "grid grid-cols-[var(--cards)]"
+        : "grid grid-cols-1 @xl:grid-cols-[var(--cards)]";
       // The gap between a card's title and its body. Unset keeps exactly what
       // each layout already drew — the two differ, and a single new default
       // here would move every card block on the site.
@@ -685,7 +702,7 @@ function Inner({
       // on the card instead of part of the sentence.
       if (inline) {
         return (
-          <div className="grid grid-cols-1 @xl:grid-cols-[var(--cards)]" style={grid}>
+          <div className={gridClass} style={grid}>
             {items.map((it, i) => (
               <Card key={i} style={cellAt(i)} beside={beside} tile={<IconTile item={it} p={p} colors={c} />}>
                 <div className="flex items-baseline gap-2">
@@ -740,7 +757,7 @@ function Inner({
               html={str(p.caption)}
             />
           )}
-        <div className="grid grid-cols-1 @xl:grid-cols-[var(--cards)]" style={grid}>
+        <div className={gridClass} style={grid}>
           {items.map((it, i) => (
             <Card key={i} style={cellAt(i)} beside={beside} tile={<IconTile item={it} p={p} colors={c} />}>
               {numbered &&
@@ -801,6 +818,34 @@ function Inner({
       const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
       if (items.length === 0) return null;
       const card = str(p.layout) === "card";
+      // Each figure in its own outlined box, side by side.
+      //
+      // Two boxed figures in a panel is a row of two columns, and a row inside
+      // a column is a container inside a container — which this tree does not
+      // do. So the shape belongs to the block: it is the same two figures the
+      // strip draws, in boxes, and it takes the block's own border settings so
+      // the outline is a control rather than a hardcoded hairline.
+      if (str(p.layout) === "boxed") {
+        const line = `${s.borderWidth || 1}px solid ${s.borderColor ?? c.rule}`;
+        return (
+          <div className="flex flex-wrap gap-3">
+            {items.map((it, i) => (
+              <div
+                key={i}
+                className="min-w-0 flex-1 px-4 py-3"
+                style={{ border: line, borderRadius: `${s.radius || 12}px` }}
+              >
+                <div className="font-display text-[1.6rem] font-bold leading-tight" style={{ color: c.fg, ...type }}>
+                  <Inline html={str(it.value)} />
+                </div>
+                <div className="mt-1 text-[0.68rem] uppercase tracking-[0.12em]" style={{ color: theme.muted }}>
+                  <Inline html={str(it.label)} />
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      }
       return card ? (
         <div className="rounded-2xl px-5" style={{ background: c.fill }}>
           {items.map((it, i) => (

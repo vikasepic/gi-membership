@@ -224,6 +224,13 @@ function wrapperCssFrom(block: Block, s: BlockStyle, theme: BandTheme): CSSPrope
     css.marginLeft = "auto";
   }
   if (s.background.type !== "none" && s.radius) css.borderRadius = `${s.radius}px`;
+  // An outline follows the band when it names no colour of its own, the same
+  // way ink and fills do — so a bordered box stays visible when the section
+  // preset underneath it changes.
+  if (s.borderWidth > 0) {
+    css.border = `${s.borderWidth}px solid ${s.borderColor ?? theme.rule}`;
+    if (s.radius) css.borderRadius = `${s.radius}px`;
+  }
   // Position too, or the number does nothing: z-index is ignored on a static
   // box. Only when one was actually set, so nothing that has never been
   // stacked starts creating a stacking context and changing what paints over
@@ -400,6 +407,9 @@ export function columnCss(
   const pad = dimCss(s.padding);
   if (pad !== "0px 0px 0px 0px") css.padding = pad;
   if (s.radius) css.borderRadius = `${s.radius}px`;
+  // A column can be outlined too — two boxed figures side by side is a row of
+  // two columns, not a block that has to grow an option.
+  if (s.borderWidth > 0) css.border = `${s.borderWidth}px solid ${s.borderColor ?? theme.rule}`;
   // Only where a background was actually set: a corner on a transparent column
   // rounds nothing, and clipping content that overflows would be a surprise.
   if (s.background.type !== "none" && s.radius) css.overflow = "hidden";

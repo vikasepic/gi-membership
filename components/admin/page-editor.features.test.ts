@@ -148,8 +148,11 @@ describe("each section", () => {
   });
 
   it("still carries the section's own settings into the block editor", () => {
-    // Band colour, accent, layout and whether it shows.
-    has("variants: def.variants");
+    // Band colour, accent, width and whether it shows. `variants` used to be
+    // in this list and is not any more: nothing has rendered from a section's
+    // variant since the page became blocks, so the control it fed was a switch
+    // wired to nothing.
+    has("layout: row.layout ?? null");
     has("enabled: row.enabled");
   });
 });

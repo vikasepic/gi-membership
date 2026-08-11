@@ -5,12 +5,13 @@ import { col, make, rowOf, type Template } from "./template";
 // Band: Paper painted #f7f7f7, boxed.
 //
 // The two figures are a stats block wearing the beige panel as its own
-// background. In the reference each figure sits in its own outlined box; a
-// block has a corner and a background but no BORDER, and per-item borders
-// would have to come from inside the stats renderer rather than from a
-// control. So this ships as the panel with the two figures side by side —
-// same structure, same colours, no outline — and the outline is called out for
-// review rather than faked with Custom CSS that no control could then reach.
+// background, each figure in its own outlined box.
+//
+// Two boxed figures side by side is a row of two columns, and a row inside a
+// column is a container inside a container — which this tree does not do. So
+// the shape belongs to the block: `stats` gained a Boxed layout, and blocks
+// gained a real border for it to draw with. Not Custom CSS, which is what the
+// first attempt at the gradient button used and which no control can reach.
 //
 // The orange is #c8663e, which is BAND_STYLES.navy's accent to the digit; the
 // heading navy is #11325b. These designs were drawn from this app's own
@@ -69,7 +70,10 @@ export const template: Template = {
                 { value: "3,400+", label: "CLIENT TESTIMONIALS", detail: "" },
                 { value: "100+", label: "COUNTRIES", detail: "" },
               ],
-              layout: "strip",
+              // Each figure in its own outlined box, as the reference draws
+              // them. It was a hairline-separated strip until the block grew a
+              // border and a layout to use it.
+              layout: "boxed",
             },
             {
               // The panel is the block's own background — one block, so it

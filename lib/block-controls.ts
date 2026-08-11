@@ -358,7 +358,7 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         ],
         addLabel: "Add a figure",
       },
-      { kind: "select", key: "layout", label: "Layout", options: [["strip", "Strip"], ["card", "Stacked card"]] },
+      { kind: "select", key: "layout", label: "Layout", options: [["strip", "Strip"], ["boxed", "Boxed"], ["card", "Stacked card"]], hint: "Boxed puts each figure in its own outlined box." },
     ],
     style: [...TYPOGRAPHY],
   },
@@ -812,6 +812,8 @@ export const COLUMN_CONTROLS: Control[] = [
   group("Spacing"),
   style({ kind: "dim", key: "padding", label: "Padding" }),
   style({ kind: "number", key: "radius", label: "Corner", min: 0, max: 60, step: 2, unit: "px" }),
+  style({ kind: "number", key: "borderWidth", label: "Border", min: 0, max: 24, step: 1, unit: "px", hint: "0 is no line." }),
+  style({ kind: "color", key: "borderColor", label: "Border colour", hint: "Unset follows the band.", when: (b) => b.style.borderWidth > 0 }),
   // Which column lies on top where two of them overlap. Blank leaves it to
   // paint order, which is what it was before — and paint order is exactly what
   // cannot be relied on, because the editor wraps every block in positioned
@@ -982,7 +984,19 @@ export const ADVANCED_CONTROLS: Control[] = [
     unit: "deg",
     when: (b) => b.style.background.type === "gradient" && b.style.background.shape === "linear",
   }),
-  style({ kind: "number", key: "radius", label: "Corner", min: 0, max: 80, step: 2, unit: "px", when: (b) => b.style.background.type !== "none" }),
+  // The corner applies to a fill OR to a border — an outlined box with no
+  // background still has corners to round, and gating this on a fill alone is
+  // what made an outlined panel unroundable.
+  style({ kind: "number", key: "radius", label: "Corner", min: 0, max: 80, step: 2, unit: "px", when: (b) => b.style.background.type !== "none" || b.style.borderWidth > 0 }),
+
+  // A line around the box, and not under Background: an outlined box usually
+  // has no fill at all, and hiding the border behind "Type: Classic" is what
+  // sent an outlined stat panel to Custom CSS in the first place. The corner
+  // above is gated on a fill for the same reason it always was; this one is
+  // not, and applies the corner itself when a border is set.
+  group("Border"),
+  style({ kind: "number", key: "borderWidth", label: "Border", min: 0, max: 24, step: 1, unit: "px", hint: "0 is no line." }),
+  style({ kind: "color", key: "borderColor", label: "Colour", hint: "Unset follows the band's own hairline.", when: (b) => b.style.borderWidth > 0 }),
 
   group("Visibility"),
   style({ kind: "toggle", key: "hideDesktop", label: "Show on desktop", invert: true }),
