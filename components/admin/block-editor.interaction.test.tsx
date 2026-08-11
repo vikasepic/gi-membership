@@ -714,3 +714,40 @@ describe("taking a cards block apart", () => {
     expect(editor.blocks[0].type).toBe("cards");
   });
 });
+
+
+/**
+ * A slider needs coarse detents to be draggable. A typed number needs none.
+ *
+ * They shared one `step`, so the container's Gap moved in fours from the
+ * keyboard as well as under the mouse, and 17px was a value the panel could
+ * not produce at all.
+ */
+describe("the number controls", () => {
+  const stepsOf = (label: string) => {
+    const range = document.querySelector<HTMLInputElement>(`input[type="range"][aria-label="${label}"]`);
+    const typed = document.querySelector<HTMLInputElement>(`input[type="number"][aria-label="${label} value"]`);
+    return { slider: range?.getAttribute("step"), typed: typed?.getAttribute("step") };
+  };
+
+  it("lets the keyboard reach a value the slider skips", () => {
+    mount([newBlock("row")]);
+    click(document.querySelector("[data-block]")!);
+    const gap = stepsOf("Gap");
+    expect(gap.slider, "the slider keeps its detents").toBe("4");
+    expect(gap.typed, "the typed field goes to the smallest unit").toBe("1");
+  });
+
+  it("does not coarsen a control that is already fine", () => {
+    // Line height steps by 0.05. Rounding that to 1 would turn it into a
+    // control that jumps from 1.5 to 2.5 — the opposite mistake.
+    mount([newBlock("heading")]);
+    click(document.querySelector("[data-block]")!);
+    const styleTab = [...document.querySelectorAll("button")].find(
+      (b) => (b.textContent ?? "").trim() === "style",
+    );
+    expect(styleTab, "the Style tab").toBeTruthy();
+    click(styleTab!);
+    expect(stepsOf("Line height").typed).toBe("0.05");
+  });
+});

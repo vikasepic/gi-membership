@@ -1904,9 +1904,18 @@ function ControlField({
       );
     }
 
-    case "number":
+    case "number": {
       // Slider AND a number you can type. A slider alone cannot reliably hit 15,
       // and a number alone cannot be explored.
+      //
+      // They do not share a step, and that was the bug: one `step` drove both,
+      // so a gap whose slider moves in fours also moved in fours from the
+      // keyboard, and 17px was a value the panel simply would not produce. The
+      // slider keeps its coarse detents — that is what makes it draggable — and
+      // the typed field goes to the smallest unit the setting has. A fractional
+      // step is already the finest it gets, so line height stays at 0.05 rather
+      // than becoming a control that steps from 1.5 to 2.5.
+      const typedStep = control.step >= 1 ? 1 : control.step;
       return row(
         <div className="flex items-center gap-1.5">
           <input
@@ -1924,7 +1933,7 @@ function ControlField({
             aria-label={`${control.label} value`}
             min={control.min}
             max={control.max}
-            step={control.step}
+            step={typedStep}
             value={typeof value === "number" ? value : ""}
             placeholder="—"
             onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
@@ -1944,6 +1953,7 @@ function ControlField({
         </div>,
         { value: control.unit && typeof value === "number" ? control.unit : undefined },
       );
+    }
 
     case "position":
       return row(
