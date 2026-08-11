@@ -59,13 +59,23 @@ describe("a logo path whose file has been deleted", () => {
     expect(host.textContent).toContain("Greater Inside");
   });
 
-  it("points the tab at the app's own mark, because it had the same dead path", () => {
+  /**
+   * The tab used to be repaired from here, because it was pointed at the logo
+   * whenever no favicon was uploaded. That fallback is gone: a logo is wide and
+   * a favicon is square, and pointing the tab at a 518×242 wordmark made it a
+   * smudge at 16px and nothing at all against a dark tab strip.
+   *
+   * So the tab is now either an uploaded favicon or the app's own mark, and a
+   * deleted logo has no bearing on either.
+   */
+  it("does not touch the tab, which was never pointed at the logo", () => {
     mount();
+    const before = document.querySelector("link[rel='icon']")!.getAttribute("href");
     fail();
-    expect(document.querySelector("link[rel='icon']")!.getAttribute("href")).toBe("/icon.svg");
+    expect(document.querySelector("link[rel='icon']")!.getAttribute("href")).toBe(before);
   });
 
-  it("leaves the tab alone when the favicon is a file of its own", () => {
+  it("leaves an uploaded favicon alone too", () => {
     // Only the logo is known to be gone. A separately uploaded favicon is a
     // different object and nothing here has heard anything about it.
     mount({ faviconPath: "favicon.png" });

@@ -15,12 +15,18 @@ export function storeMetadata(s: Settings): Metadata {
   const title = s.metaTitle || s.name;
   const description = s.metaDescription || s.tagline || undefined;
   const image = publicCoverUrl(s.shareImagePath || null);
+  // The favicon, and ONLY the favicon. This used to fall back to the logo,
+  // which is how the tab icon became a 518×242 black wordmark: unreadable at
+  // 16px and invisible against a dark tab strip. A logo is wide and a favicon
+  // is square, and no code here can tell whether an uploaded file is one or the
+  // other without a storage round trip on every render — so it stops guessing.
+  // Unset means no `icons` key at all, and Next's own app/icon.svg stands,
+  // which is the store's actual mark.
+  //
   // A path, not a file: nothing here can tell that the object behind it was
-  // deleted from the bucket, and finding out would be a storage round trip on
-  // every page render. Unset is handled — no `icons` key at all, so Next's own
-  // app/icon.svg stands — and a path that has gone dead is repaired in
-  // components/app-shell.tsx, which is where the browser reports the 404.
-  const icon = publicCoverUrl(s.faviconPath || s.logoPath || null);
+  // deleted from the bucket. That case is repaired in components/app-shell.tsx,
+  // which is where the browser reports the 404.
+  const icon = publicCoverUrl(s.faviconPath || null);
 
   return {
     title,

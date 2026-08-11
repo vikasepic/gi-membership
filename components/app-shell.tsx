@@ -55,19 +55,13 @@ export function AppShell({
   // than merely believed.
   const hook = (name: string) => (css ? ` ${name}` : "");
 
-  // The tab is pointed at this same path when the store has not uploaded a
-  // favicon of its own — `lib/site-metadata.ts` falls back from faviconPath to
-  // logoPath — so the file being gone kills the icon too, and a `<link>` in the
-  // head is not something a re-render reaches. Repaired here rather than there
-  // because here is where the 404 is observed; `/icon.svg` is the app's own
-  // mark, the same thing the head already carries when neither path is set.
-  const onLogoMissing = () => {
-    setLogoGone(true);
-    if (settings.faviconPath) return;
-    document
-      .querySelectorAll<HTMLLinkElement>('link[rel~="icon"]')
-      .forEach((l) => (l.href = "/icon.svg"));
-  };
+  // Only the bar's mark. The tab used to be pointed at this same path whenever
+  // no favicon was uploaded, so a deleted logo killed the icon too and had to
+  // be repaired from here — a `<link>` already in the head is not something a
+  // re-render reaches. `lib/site-metadata.ts` no longer falls back to the logo,
+  // so the tab is either an uploaded favicon or the app's own /icon.svg, and
+  // neither has anything to do with this file being gone.
+  const onLogoMissing = () => setLogoGone(true);
 
   // The uploaded logo when there is one, then whichever fallback the owner
   // chose. Sized by height so a wide wordmark and a square glyph both sit on

@@ -345,7 +345,7 @@ function BrandFields({ s, errors }: FieldsProps) {
       <ImageField
         name="faviconPath"
         label="Favicon"
-        hint="the browser tab — falls back to the logo"
+        hint="the browser tab — square, 64px or larger. Left empty, the store's own mark is used; a wide logo here is unreadable at tab size"
         value={s.faviconPath}
         error={errors.faviconPath}
       />
