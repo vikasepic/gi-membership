@@ -5,6 +5,7 @@ import { getStoreId } from "@/lib/store";
 import { PageEditor } from "@/components/admin/page-editor";
 import { storePreview } from "@/lib/store-preview";
 import { HomeSeed } from "@/components/admin/home-seed";
+import { storefrontPreview } from "@/lib/storefront-preview";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +25,16 @@ export default async function HomePageEditor() {
   await requireAdmin();
   const storeId = await getStoreId();
 
-  const [rows, pageSources, preview] = await Promise.all([
+  const [rows, pageSources, preview, store] = await Promise.all([
     getPageSections("store", storeId),
     listPageSources(),
     // The store's fonts and site typography. The admin renders no StoreBrand,
     // so without this the preview draws in the app's own fonts.
     storePreview(),
+    // The real catalogue and memberships, so Catalogue, Memberships and
+    // Featured draw something on the canvas. Without this they render nothing
+    // here — you drop one in, see an empty band, and conclude it is broken.
+    storefrontPreview(),
   ]);
 
   // Whether a visitor is seeing this page yet. Read off the stored blocks
@@ -87,6 +92,7 @@ export default async function HomePageEditor() {
             // button. One dropped here links out rather than pricing anything.
             money={{ priceLabel: null, termsLabel: null }}
             preview={preview}
+            store={store}
             liveHref="/"
           />
         </div>

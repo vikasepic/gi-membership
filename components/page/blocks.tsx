@@ -286,8 +286,20 @@ function hiddenAt(block: Block, at: Device): boolean {
  * chrome and drop zones, but what is inside is this — one implementation, so a
  * preview cannot drift from the page a buyer gets.
  */
-export function BlockBody({ block, theme, at }: { block: Block; theme: BandTheme; at?: Device }) {
-  return <Inner block={block} theme={theme} at={at} />;
+export function BlockBody({
+  block,
+  theme,
+  at,
+  store,
+}: {
+  block: Block;
+  theme: BandTheme;
+  at?: Device;
+  /** The builder passes a preview payload so the storefront blocks draw here
+   *  too. Without it they render nothing, which in an editor reads as broken. */
+  store?: StoreRender;
+}) {
+  return <Inner block={block} theme={theme} at={at} store={store} />;
 }
 
 function Inner({

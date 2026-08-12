@@ -7,6 +7,7 @@ import { ContextMenu, menuAt, type MenuState } from "@/components/admin/context-
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BlockBody, Blocks } from "@/components/page/blocks";
+import type { StoreRender } from "@/components/page/storefront-blocks";
 import { RichText } from "@/components/editor/rich-text";
 import {
   BLOCK_LABEL,
@@ -77,6 +78,16 @@ import { emptyHistory, record, redo, undo, undoIntent, type History } from "@/li
 const CanvasDevice = createContext<Device>("desktop");
 
 /**
+ * The catalogue and the memberships, for the canvas.
+ *
+ * A context rather than another prop threaded through the row, the column and
+ * the block: `CanvasDevice` next door solved the same problem the same way, and
+ * five signatures gaining a parameter each is how a tree becomes unreadable.
+ * Undefined everywhere but the home page, where those blocks are offered.
+ */
+const CanvasStore = createContext<StoreRender | undefined>(undefined);
+
+/**
  * The designs this page points at, by id — name included, because the panel
  * has to say what a block is linked TO.
  *
@@ -120,6 +131,7 @@ export function BlockEditor({
   onClose,
   preview,
   owner = "product",
+  store,
   globals,
   onSaveGlobal,
 }: {
@@ -134,6 +146,9 @@ export function BlockEditor({
    * would put blocks in the tray that render nothing wherever they are dropped.
    */
   owner?: "product" | "offer" | "store";
+  /** Live catalogue and memberships, so Catalogue/Memberships/Featured draw
+   *  something here instead of the nothing they drew before. Home page only. */
+  store?: StoreRender;
   /**
    * The band this content stands on.
    *
@@ -593,6 +608,7 @@ export function BlockEditor({
 
   const overlay = (
     <CanvasDevice.Provider value={device}>
+    <CanvasStore.Provider value={store}>
     <Globals.Provider value={index}>
     <Dragging.Provider value={dragging}>
     {/* The design itself, opened from a page that shows it.
@@ -1106,6 +1122,7 @@ export function BlockEditor({
     </div>
     </Dragging.Provider>
     </Globals.Provider>
+    </CanvasStore.Provider>
     </CanvasDevice.Provider>
   );
 
@@ -1586,9 +1603,10 @@ function Editable({
   onPatch: (id: string, next: Block) => void;
 }) {
   const device = useContext(CanvasDevice);
+  const store = useContext(CanvasStore);
   const key = block.type === "heading" || block.type === "button" ? "text" : null;
-  if (!key) return <BlockBody block={block} theme={theme} at={device} />;
-  if (!selected) return <BlockBody block={block} theme={theme} at={device} />;
+  if (!key) return <BlockBody block={block} theme={theme} at={device} store={store} />;
+  if (!selected) return <BlockBody block={block} theme={theme} at={device} store={store} />;
   return (
     <div
       contentEditable
@@ -1606,7 +1624,7 @@ function Editable({
       onClick={(e) => e.stopPropagation()}
       className="cursor-text outline-none"
     >
-      <BlockBody block={block} theme={theme} at={device} />
+      <BlockBody block={block} theme={theme} at={device} store={store} />
     </div>
   );
 }

@@ -96,4 +96,28 @@ describe("the storefront falls back", () => {
     expect(src).toContain("MembershipCard");
     expect(src).not.toContain("function MembershipCard");
   });
+
+  it("hands the canvas the same payload the page uses", () => {
+    // Catalogue, Memberships and Featured render nothing without a `store`
+    // payload, and only the storefront supplied one — so all three drew nothing
+    // in the builder. You drop one in, see an empty band, and conclude it is
+    // broken. The editor lying about the page is the one thing it may not do.
+    const editor = readFileSync("app/admin/home/page.tsx", "utf8");
+    expect(editor).toContain("storefrontPreview()");
+    expect(editor).toContain("store={store}");
+
+    // And it is the same StoreRender shape, not a second one invented for the
+    // editor — two shapes drift, and the one that drifts quotes a price.
+    const preview = readFileSync("lib/storefront-preview.ts", "utf8");
+    expect(preview).toContain("Promise<StoreRender>");
+  });
+
+  it("previews as a visitor who owns nothing", () => {
+    // The admin is designing what a NEW visitor sees. Showing them "Active —
+    // open your library" because they happen to own the thing would hide the
+    // selling state they are working on.
+    const preview = readFileSync("lib/storefront-preview.ts", "utf8");
+    expect(preview).toContain("owned: false");
+    expect(preview).not.toContain("viewerOwnership");
+  });
 });

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { saveSectionAction } from "@/app/admin/pages/actions";
 import { usePresence, PresenceNote } from "@/components/admin/presence";
+import type { StoreRender } from "@/components/page/storefront-blocks";
 import { copyToClipboard, readClipboard, onClipboardChange, type Clip } from "@/lib/clipboard";
 import { sectionClip, pastedSection } from "@/lib/section-clip";
 import { CopyPage } from "@/components/admin/copy-page";
@@ -45,6 +46,7 @@ type Draft = Record<string, unknown>;
 
 export function PageEditor({
   ownerType,
+  store,
   ownerId,
   initial,
   money,
@@ -53,6 +55,8 @@ export function PageEditor({
   preview,
 }: {
   ownerType: OwnerType;
+  /** Live catalogue and memberships for the canvas. Home page only. */
+  store?: StoreRender;
   ownerId: string;
   initial: SectionRow[];
   money: PageMoney;
@@ -300,6 +304,7 @@ export function PageEditor({
             row={openRow}
             money={money}
             owner={ownerType}
+            store={store}
             onChange={(next) => patch(openRow.sectionKey, next)}
             device={device}
             clip={clip}
@@ -426,6 +431,7 @@ function SectionPanel({
   onContext,
   preview,
   owner,
+  store,
 }: {
   row: SectionRow;
   money: PageMoney;
@@ -435,6 +441,7 @@ function SectionPanel({
   onContext: (e: React.MouseEvent, row: SectionRow) => void;
   preview?: SitePreview;
   owner: OwnerType;
+  store?: StoreRender;
 }) {
   const def = sectionDef(row.sectionKey)!;
   const content = useMemo<Draft>(
@@ -490,6 +497,7 @@ function SectionPanel({
           onChange={(next) => setField("blocks", next)}
           preview={preview}
           owner={owner}
+          store={store}
         />
 
       </div>
@@ -546,6 +554,7 @@ function BlockCanvasField({
   preview?: SitePreview;
   /** Passed through to the tray: the storefront blocks are one page's only. */
   owner: OwnerType;
+  store?: StoreRender;
 }) {
   const [open, setOpen] = useState(false);
   // The global designs this store has, so a pointer on the canvas draws what it
