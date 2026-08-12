@@ -8,6 +8,9 @@ import {
   unitLabel,
   zoneIsValid,
   zoneLabel,
+  evergreenDeadline,
+  evergreenKey,
+  evergreenMinutes,
 } from "@/lib/countdown";
 
 /**
@@ -167,5 +170,73 @@ describe("how a unit is written", () => {
     expect(pad(7, true)).toBe("07");
     expect(pad(7, false)).toBe("7");
     expect(pad(72, true)).toBe("72");
+  });
+});
+
+
+/**
+ * The evergreen timer.
+ *
+ * The version that lies hands every reload a fresh 48 hours. This one
+ * remembers when the visitor first arrived, so a reload continues the clock
+ * they already have.
+ */
+describe("an evergreen deadline", () => {
+  const store = (seed?: Record<string, string>) => {
+    const m = new Map(Object.entries(seed ?? {}));
+    return {
+      getItem: (k: string) => m.get(k) ?? null,
+      setItem: (k: string, v: string) => void m.set(k, v),
+      read: () => Object.fromEntries(m),
+    };
+  };
+  const NOW = Date.parse("2026-01-01T00:00:00Z");
+
+  it("starts when the visitor first arrives", () => {
+    const s = store();
+    expect(evergreenDeadline(s, "k", 60, NOW)).toBe(NOW + 3600_000);
+    expect(s.read().k).toBe(String(NOW));
+  });
+
+  it("does NOT restart on a reload — the whole point", () => {
+    const s = store({ k: String(NOW) });
+    // Half an hour later, the same visitor has thirty minutes left, not sixty.
+    expect(evergreenDeadline(s, "k", 60, NOW + 1800_000)).toBe(NOW + 3600_000);
+  });
+
+  it("stays run out once it has run out", () => {
+    const s = store({ k: String(NOW) });
+    const ends = evergreenDeadline(s, "k", 60, NOW + 5 * 3600_000);
+    expect(ends).toBe(NOW + 3600_000);
+    expect(ends).toBeLessThan(NOW + 5 * 3600_000);
+  });
+
+  it("can be set to come round again after a stated number of days", () => {
+    const s = store({ k: String(NOW) });
+    // Ends at +1h. Restart after 2 days: still expired at +1 day...
+    expect(evergreenDeadline(s, "k", 60, NOW + 86400_000)).toBe(NOW + 3600_000);
+    // ...and a fresh one once past the deadline plus two days.
+    const later = NOW + 3600_000 + 3 * 86400_000;
+    expect(evergreenDeadline(s, "k", 60, later, 2)).toBe(later + 3600_000);
+  });
+
+  it("ignores a stored start that cannot be true", () => {
+    // Tampered, corrupted, or a clock that moved backwards. Anything in the
+    // future is not a start time, and NaN is not a number.
+    for (const bad of ["", "abc", "-5", String(NOW + 999_999)]) {
+      const s = store({ k: bad });
+      expect(evergreenDeadline(s, "k", 60, NOW)).toBe(NOW + 3600_000);
+    }
+  });
+
+  it("starts everyone again when the length itself changes", () => {
+    // The key carries the length, so moving 48 hours to 24 does not leave old
+    // visitors on a deadline the page no longer offers.
+    expect(evergreenKey("b1", 2880)).not.toBe(evergreenKey("b1", 1440));
+  });
+
+  it("never produces a zero-length window", () => {
+    expect(evergreenMinutes(0, 0, 0)).toBe(1);
+    expect(evergreenMinutes(2, 3, 30)).toBe(2 * 1440 + 3 * 60 + 30);
   });
 });

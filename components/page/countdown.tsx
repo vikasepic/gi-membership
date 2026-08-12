@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { pad, remainingAt, unitLabel, type Remaining } from "@/lib/countdown";
+import { evergreenDeadline, pad, remainingAt, unitLabel, type Remaining } from "@/lib/countdown";
 
 /**
  * The clock itself.
@@ -21,8 +21,15 @@ import { pad, remainingAt, unitLabel, type Remaining } from "@/lib/countdown";
 export type CountdownUnits = { days: boolean; hours: boolean; minutes: boolean; seconds: boolean };
 
 export type CountdownView = {
-  /** The instant being counted to. */
-  deadline: number;
+  /**
+   * The instant being counted to, or null when it is a per-visitor length.
+   *
+   * An evergreen deadline cannot be decided on the server: it depends on when
+   * THIS browser first saw the block, which only that browser knows.
+   */
+  deadline: number | null;
+  /** Evergreen only: the window, and where this visitor's start is kept. */
+  evergreen?: { key: string; minutes: number; restartAfterDays: number };
   units: CountdownUnits;
   showLabel: boolean;
   /** Singular and plural per unit, already resolved from the block's props. */
@@ -43,6 +50,22 @@ const ORDER: (keyof CountdownUnits)[] = ["days", "hours", "minutes", "seconds"];
 
 export function Countdown(v: CountdownView) {
   const [now, setNow] = useState<number | null>(null);
+  // Resolved on mount, never during render: reading localStorage while
+  // rendering makes the server and client disagree, and writing to it during
+  // render would start somebody's timer just because React re-rendered.
+  const [evEnds, setEvEnds] = useState<number | null>(null);
+  const ev = v.evergreen;
+
+  useEffect(() => {
+    if (!ev) return;
+    try {
+      setEvEnds(evergreenDeadline(window.localStorage, ev.key, ev.minutes, Date.now(), ev.restartAfterDays));
+    } catch {
+      // Storage refused — private mode, or blocked. The visitor gets the full
+      // window each visit rather than no countdown at all, and nothing breaks.
+      setEvEnds(Date.now() + ev.minutes * 60000);
+    }
+  }, [ev?.key, ev?.minutes, ev?.restartAfterDays]);
 
   useEffect(() => {
     const tick = () => setNow(Date.now());
@@ -53,10 +76,11 @@ export function Countdown(v: CountdownView) {
     return () => clearInterval(id);
   }, []);
 
+  const ends = v.evergreen ? evEnds : v.deadline;
   const left: Remaining | null =
-    now === null
+    now === null || ends === null
       ? null
-      : remainingAt(v.deadline, now, {
+      : remainingAt(ends, now, {
           days: v.units.days,
           hours: v.units.hours,
           minutes: v.units.minutes,

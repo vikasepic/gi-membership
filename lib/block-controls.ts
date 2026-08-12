@@ -65,6 +65,8 @@ export type Control =
   | (Base & { kind: "position" })
   | (Base & { kind: "number"; min: number; max: number; step: number; unit?: string })
   | (Base & { kind: "color" })
+  /** A calendar and a clock, not a string somebody types in the right shape. */
+  | (Base & { kind: "datetime" })
   | (Base & { kind: "dim" })
   | (Base & { kind: "list"; item: { key: string; label: string; kind: "text" | "textarea" | "image" }[]; addLabel: string })
   // Rows only. Both need the block itself — how many columns there are, and how
@@ -268,8 +270,13 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
 
   countdown: {
     content: [
-      { kind: "select", key: "kind", label: "Counts to", options: [["date", "A date and time"]], hint: "A fixed moment every visitor shares. A per-visitor timer is a separate decision — see docs/countdown-block.md." },
-      { kind: "text", key: "due", label: "Deadline", hint: "YYYY-MM-DD HH:MM — 24 hour." },
+      {
+        kind: "select",
+        key: "kind",
+        label: "Counts to",
+        options: [["date", "A date and time"], ["evergreen", "A length, per visitor"]],
+      },
+      { kind: "datetime", key: "due", label: "Deadline", when: (b) => b.props.kind !== "evergreen" },
       {
         kind: "select",
         key: "zone",
@@ -284,6 +291,22 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
             (z) => [z, z.replace(/_/g, " ")] as [string, string],
           ),
         ],
+      },
+      // Evergreen. Days as well as hours and minutes — Elementor stops at
+      // hours, which makes a three-day window a 72 in a box marked Hours.
+      { kind: "number", key: "evDays", label: "Days", min: 0, max: 90, step: 1, when: (b) => b.props.kind === "evergreen" },
+      { kind: "number", key: "evHours", label: "Hours", min: 0, max: 23, step: 1, when: (b) => b.props.kind === "evergreen" },
+      { kind: "number", key: "evMinutes", label: "Minutes", min: 0, max: 59, step: 1, when: (b) => b.props.kind === "evergreen" },
+      {
+        kind: "number",
+        key: "evRestartDays",
+        label: "Comes round again after",
+        min: 0,
+        max: 365,
+        step: 1,
+        unit: "days",
+        hint: "0 never. Above zero, somebody who returns later than that gets a new window — a monthly opening rather than a reset on every visit.",
+        when: (b) => b.props.kind === "evergreen",
       },
       group("Which units"),
       { kind: "toggle", key: "showDays", label: "Days" },
@@ -317,14 +340,26 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "number", key: "boxPadding", label: "Padding", min: 0, max: 80, step: 1, unit: "px", responsive: true },
       { kind: "color", key: "boxBackground", label: "Background", hint: "Unset follows the band." },
       { kind: "number", key: "boxRadius", label: "Corner", min: 0, max: 60, step: 1, unit: "px" },
+      { kind: "number", key: "boxBorderWidth", label: "Border", min: 0, max: 12, step: 1, unit: "px" },
+      { kind: "color", key: "boxBorderColor", label: "Border colour", when: (b) => Number(b.props.boxBorderWidth ?? 0) > 0 },
+      { kind: "number", key: "boxMinWidth", label: "Least wide", min: 0, max: 240, step: 1, unit: "px", hint: "0 lets each box fit its digits. A number keeps them equal as the numbers change." },
+      { kind: "number", key: "boxShadowY", label: "Shadow drop", min: -40, max: 40, step: 1, unit: "px" },
+      { kind: "number", key: "boxShadowBlur", label: "Shadow blur", min: 0, max: 80, step: 1, unit: "px" },
+      { kind: "color", key: "boxShadowColor", label: "Shadow colour", when: (b) => Number(b.props.boxShadowBlur ?? 0) > 0 || Number(b.props.boxShadowY ?? 0) !== 0 },
       group("Digits"),
+      { kind: "select", key: "digitFont", label: "Font", options: [["", "Page default"]] },
       { kind: "number", key: "digitSize", label: "Size", min: 10, max: 120, step: 1, unit: "px", responsive: true },
       { kind: "select", key: "digitWeight", label: "Weight", options: [["", "Inherit"], ...["400", "500", "600", "700", "800"].map((w) => [w, w] as [string, string])] },
       { kind: "color", key: "digitColor", label: "Colour" },
+      { kind: "number", key: "digitLineHeight", label: "Line height", min: 0.8, max: 2, step: 0.05 },
+      { kind: "number", key: "digitLetterSpacing", label: "Letter spacing", min: -3, max: 8, step: 0.1, unit: "px" },
       group("Labels", (b) => b.props.showLabel !== false),
       { kind: "number", key: "labelSize", label: "Size", min: 8, max: 40, step: 1, unit: "px", responsive: true, when: (b) => b.props.showLabel !== false },
       { kind: "select", key: "labelWeight", label: "Weight", options: [["", "Inherit"], ...["400", "500", "600", "700"].map((w) => [w, w] as [string, string])], when: (b) => b.props.showLabel !== false },
       { kind: "color", key: "labelColor", label: "Colour", when: (b) => b.props.showLabel !== false },
+      { kind: "select", key: "labelFont", label: "Font", options: [["", "Page default"]], when: (b) => b.props.showLabel !== false },
+      { kind: "select", key: "labelCase", label: "Case", options: [["", "As typed"], ["uppercase", "UPPERCASE"], ["lowercase", "lowercase"], ["capitalize", "Capitalized"]], when: (b) => b.props.showLabel !== false },
+      { kind: "number", key: "labelLetterSpacing", label: "Letter spacing", min: -2, max: 10, step: 0.1, unit: "px", when: (b) => b.props.showLabel !== false },
     ],
   },
 
@@ -1151,8 +1186,14 @@ export function controlsFor(
 }
 
 /** The Font select, filled in with what the site actually has. */
+const FONT_KEYS = new Set(["fontFamily", "digitFont", "labelFont"]);
+
 function withFonts(c: Control, fonts: readonly string[]): Control {
-  if (isGroup(c) || c.kind !== "select" || c.key !== "fontFamily") return c;
+  // Every font picker, not just the block-level one. The countdown has two of
+  // its own — digits and labels are the first block here to want separate
+  // faces — and a picker that offered nothing but "Page default" would look
+  // like the store had no fonts installed.
+  if (isGroup(c) || c.kind !== "select" || !FONT_KEYS.has(c.key)) return c;
   return { ...c, options: [["", "Page default"], ...fonts.map((f) => [f, f] as [string, string])] };
 }
 

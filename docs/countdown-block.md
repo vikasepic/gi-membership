@@ -1,10 +1,20 @@
 # Countdown block — feature table
 
-**Phase 1 shipped 12 Aug 2026** — the due-date clock with a real timezone,
-unit toggles, singular/plural labels, leading zero, separator, the three expiry
-actions, and separate digit/label styling. Evergreen is NOT built: decision 3
-below is still open. Store-wide default timezone is not built either; a block
-with no zone reads UTC.
+**Built, 12 Aug 2026.** Due-date clock with a real timezone; a date-and-time
+picker rather than a typed string; **evergreen**, per visitor, remembered so a
+reload does not hand out a fresh window; unit toggles that carry; singular and
+plural labels; leading zero; separator; the four expiry actions; and separate
+font, size, weight, colour, case and letter-spacing for digits and labels, plus
+box border, corner, shadow and least-width.
+
+Still not built, and still open: **decision 2** — whether expiry does anything
+beyond presentation. The evergreen timer here is a page feature; nothing about
+the price changes when it reaches zero, and a visitor on another browser gets
+their own window. `docs` says this plainly because the store's rule is that it
+never fabricates urgency, and this is the one control that can.
+
+A store-wide default timezone is not built either; a block naming no zone reads
+UTC.
 
 Studied from the Elementor Countdown widget (its Content, Style and Advanced
 tabs, plus the official 3-minute walkthrough) and from the four screenshots

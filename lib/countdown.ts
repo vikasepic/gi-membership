@@ -185,3 +185,52 @@ export function unitLabel(n: number, singular: string, plural: string): string {
 
 /** Two digits when asked, so 07 and 7 are a choice rather than an accident. */
 export const pad = (n: number, on: boolean) => (on ? String(n).padStart(2, "0") : String(n));
+
+
+/**
+ * An evergreen deadline: a length, started when this visitor first arrived.
+ *
+ * The start is remembered in the browser, so a reload does not hand somebody a
+ * fresh 48 hours — which is the version of this widget that lies. It is still
+ * per visitor: a different browser is a different deadline, and clearing site
+ * data starts it again. That is the honest limit of a timer with nothing behind
+ * it, and it is why `docs/countdown-block.md` calls the enforced version a
+ * separate piece of work.
+ *
+ * Keyed by block id AND by the length, so changing 48 hours to 24 starts
+ * everyone again rather than leaving old visitors on a deadline the page no
+ * longer offers.
+ */
+export const evergreenKey = (blockId: string, minutes: number) => `gi.cd.${blockId}.${minutes}`;
+
+/** Minutes from the three fields, floored at one so a zero-length is not "already over". */
+export function evergreenMinutes(days: number, hours: number, minutes: number): number {
+  return Math.max(1, Math.round(days) * 1440 + Math.round(hours) * 60 + Math.round(minutes));
+}
+
+/**
+ * When this visitor's clock ends, reading and writing the stored start.
+ *
+ * `restartAfterDays` at 0 means never: once it has run out it stays run out.
+ * Above zero, somebody who comes back later than that gets a new one — which is
+ * a real campaign pattern (a monthly window) rather than a reset on every
+ * visit, and is stated in the panel rather than being a surprise.
+ */
+export function evergreenDeadline(
+  storage: Pick<Storage, "getItem" | "setItem">,
+  key: string,
+  minutes: number,
+  nowMs: number,
+  restartAfterDays = 0,
+): number {
+  const raw = storage.getItem(key);
+  const started = raw === null ? NaN : Number(raw);
+  const valid = Number.isFinite(started) && started > 0 && started <= nowMs;
+  if (valid) {
+    const ends = started + minutes * 60000;
+    const restartable = restartAfterDays > 0 && nowMs >= ends + restartAfterDays * 86400000;
+    if (!restartable) return ends;
+  }
+  storage.setItem(key, String(nowMs));
+  return nowMs + minutes * 60000;
+}

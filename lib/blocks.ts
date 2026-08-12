@@ -536,6 +536,12 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     kind: "date",
     due: "",
     zone: "",
+    // Evergreen: a length, started when this visitor first arrived. Stored per
+    // browser, so a reload continues the clock they already have.
+    evDays: 0,
+    evHours: 47,
+    evMinutes: 59,
+    evRestartDays: 0,
     showDays: true,
     showHours: true,
     showMinutes: true,
@@ -557,12 +563,24 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     boxPadding: 14,
     boxBackground: "",
     boxRadius: 10,
+    boxBorderWidth: 0,
+    boxBorderColor: "",
+    boxShadowY: 0,
+    boxShadowBlur: 0,
+    boxShadowColor: "",
+    boxMinWidth: 0,
+    digitFont: "",
     digitSize: null,
     digitWeight: null,
     digitColor: null,
+    digitLineHeight: null,
+    digitLetterSpacing: null,
+    labelFont: "",
     labelSize: null,
     labelWeight: null,
     labelColor: null,
+    labelCase: "",
+    labelLetterSpacing: null,
     onExpire: "keep",
     redirectTo: "",
     expiredMessage: "",
@@ -1613,7 +1631,10 @@ export function blockRendersNothing(block: Block): boolean {
     // cannot be read, means no clock — and the wrapper must go too, or the page
     // carries the block's margin around nothing.
     case "countdown":
-      return instantFrom(text(p.due), text(p.zone) || "UTC") === null;
+      // An evergreen timer needs no date — its length is the setting.
+      return text(p.kind) === "evergreen"
+        ? false
+        : instantFrom(text(p.due), text(p.zone) || "UTC") === null;
     // A pointer draws nothing. That looks wrong until you follow the order:
     // the resolve step replaces a placeholder with the blocks it names BEFORE
     // anything renders, so a live page never asks this about a working link.

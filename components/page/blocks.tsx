@@ -1,6 +1,7 @@
 import { blockRendersNothing, styleFor, type Block, type Device } from "@/lib/blocks";
 import { Countdown } from "@/components/page/countdown";
-import { instantFrom } from "@/lib/countdown";
+import { evergreenKey, evergreenMinutes, instantFrom } from "@/lib/countdown";
+import { familyToken } from "@/lib/fonts-catalogue";
 import {
   CatalogBlock,
   FeaturedBlock,
@@ -364,17 +365,22 @@ function Inner({
       );
 
     case "countdown": {
+      const evergreen = str(p.kind) === "evergreen";
       const due = str(p.due).trim();
-      if (!due) return null;
+      if (!evergreen && !due) return null;
       // UTC when the block names no zone. Not the viewer's zone and not the
       // editor's: either would make one deadline mean different moments to
       // different people, which is the defect this block exists to avoid. A
       // store-wide default belongs in Site settings and is not built yet.
       const zone = str(p.zone) || "UTC";
-      const deadline = instantFrom(due, zone);
+      // Evergreen has no server-side deadline: it depends on when this browser
+      // first saw the block, which only that browser knows. The clock resolves
+      // it on mount.
+      const minutes = evergreenMinutes(num(p.evDays, 0), num(p.evHours, 0), num(p.evMinutes, 0));
+      const deadline = evergreen ? null : instantFrom(due, zone);
       // An unreadable date draws nothing rather than a row of zeros that looks
       // like a deadline everybody missed.
-      if (deadline === null) return null;
+      if (!evergreen && deadline === null) return null;
 
       const custom = p.customLabels === true;
       const label = (many: string, one: string, dMany: string, dOne: string) =>
@@ -389,6 +395,15 @@ function Inner({
       return (
         <Countdown
           deadline={deadline}
+          evergreen={
+            evergreen
+              ? {
+                  key: evergreenKey(block.id, minutes),
+                  minutes,
+                  restartAfterDays: num(p.evRestartDays, 0),
+                }
+              : undefined
+          }
           units={{
             days: p.showDays !== false,
             hours: p.showHours !== false,
@@ -431,17 +446,33 @@ function Inner({
               // Unset follows the band's own panel, so a countdown dropped on a
               // navy band is not a white box nobody asked for.
               background: fill || c.fill,
-              minWidth: "3.5em",
+              minWidth: num(p.boxMinWidth, 0) > 0 ? num(p.boxMinWidth, 0) : "3.5em",
+              ...(num(p.boxBorderWidth, 0) > 0
+                ? { border: `${num(p.boxBorderWidth, 0)}px solid ${str(p.boxBorderColor) || c.rule}` }
+                : {}),
+              ...(num(p.boxShadowBlur, 0) > 0 || num(p.boxShadowY, 0) !== 0
+                ? {
+                    boxShadow: `0 ${num(p.boxShadowY, 0)}px ${num(p.boxShadowBlur, 0)}px ${
+                      str(p.boxShadowColor) || "rgba(0,0,0,0.14)"
+                    }`,
+                  }
+                : {}),
             },
             digit: {
+              fontFamily: str(p.digitFont) ? familyToken(str(p.digitFont)) : undefined,
               fontSize: p.digitSize != null ? num(p.digitSize, 34) : "2rem",
               fontWeight: str(p.digitWeight) ? Number(str(p.digitWeight)) : 700,
               color: str(p.digitColor) || c.fg,
+              ...(p.digitLineHeight != null ? { lineHeight: num(p.digitLineHeight, 1) } : {}),
+              ...(p.digitLetterSpacing != null ? { letterSpacing: `${num(p.digitLetterSpacing, 0)}px` } : {}),
             },
             label: {
+              fontFamily: str(p.labelFont) ? familyToken(str(p.labelFont)) : undefined,
               fontSize: p.labelSize != null ? num(p.labelSize, 12) : "0.72rem",
               fontWeight: str(p.labelWeight) ? Number(str(p.labelWeight)) : undefined,
               color: str(p.labelColor) || theme.muted,
+              ...(str(p.labelCase) ? { textTransform: str(p.labelCase) as "uppercase" } : {}),
+              ...(p.labelLetterSpacing != null ? { letterSpacing: `${num(p.labelLetterSpacing, 0)}px` } : {}),
             },
           }}
         />

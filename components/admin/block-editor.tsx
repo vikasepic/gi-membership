@@ -2397,6 +2397,19 @@ function ControlField({
         { stack: true },
       );
 
+    case "datetime":
+      // The browser's own picker. A text field asking for "YYYY-MM-DD HH:MM"
+      // is a format somebody has to get right by hand, and gets wrong.
+      return row(
+        <input
+          type="datetime-local"
+          aria-label={control.label}
+          value={typeof value === "string" ? value.replace(" ", "T").slice(0, 16) : ""}
+          onChange={(e) => onChange(e.target.value)}
+          className={`${input} [color-scheme:light]`}
+        />,
+      );
+
     case "color":
       return row(
         <div className="flex items-center gap-1.5">
