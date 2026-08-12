@@ -405,11 +405,25 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
           { key: "quote", label: "Quote", kind: "textarea" },
           { key: "name", label: "Name", kind: "text" },
           { key: "role", label: "Role", kind: "text" },
+          // Only the Portrait style reads it. Kept on the slide either way, so
+          // switching styles hides the picture rather than throwing it away.
+          { key: "image", label: "Photograph", kind: "image" },
         ],
         addLabel: "Add a slide",
       },
       { kind: "number", key: "perView", label: "Shown at once", min: 1, max: 3, step: 1 },
-      { kind: "select", key: "skin", label: "Style", options: [["card", "Card"], ["plain", "Plain"], ["bordered", "Bordered"]] },
+      {
+        kind: "select",
+        key: "skin",
+        label: "Style",
+        options: [
+          ["card", "Card"],
+          ["plain", "Plain"],
+          ["bordered", "Bordered"],
+          ["portrait", "Portrait — quote over the photograph"],
+        ],
+        hint: "Portrait lays the quote over each slide's photograph. Slides without one fall back to a plain panel.",
+      },
     ],
     style: [
       group("Card"),
@@ -576,6 +590,12 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         options: [["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"], ["6", "6"]],
         responsive: true,
         when: (b) => !isOneCard(b),
+      },
+      {
+        kind: "toggle",
+        key: "carousel",
+        label: "Scrolling shelf",
+        hint: "Side by side in a strip you can swipe, instead of a grid that wraps. Across becomes how many are visible at once.",
       },
       {
         kind: "toggle",

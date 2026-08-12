@@ -662,6 +662,92 @@ function Inner({
       const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
       if (items.length === 0) return null;
       const perView = Math.min(Math.max(num(p.perView, 1), 1), 3);
+      // The quote laid over the speaker's own photograph.
+      //
+      // Its own skin rather than a second block: the strip, the snapping, the
+      // per-view arithmetic and the quote/name/role are all the same, and only
+      // the inside of the card differs. A slide with no photograph falls back
+      // to the plain panel, so a half-filled set degrades to something that
+      // still reads rather than to a row of empty boxes.
+      if (str(p.skin) === "portrait") {
+        // The colour the quote stands on, and therefore the ink over it.
+        const wash = c.fill;
+        const overInk = readableOn(wash);
+        return (
+          <ul className="-mx-1 flex list-none snap-x snap-mandatory gap-4 overflow-x-auto p-0 px-1 pb-2">
+            {items.map((item, i) => {
+              const photo = imageSrc(str(item.image));
+              return (
+                <li
+                  key={i}
+                  className="relative flex min-w-0 shrink-0 snap-start flex-col justify-end overflow-hidden"
+                  style={{
+                    flexBasis: `calc(${100 / perView}% - ${((perView - 1) * 16) / perView}px)`,
+                    aspectRatio: "3 / 4",
+                    borderRadius: `${s.radius || 16}px`,
+                    background: c.fill,
+                  }}
+                >
+                  {photo && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={photo}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  )}
+                  {/* The wash the words stand on. Transparent at the top so the
+                      face is not muddied, opaque by the bottom so the quote is
+                      readable whatever the photograph is doing down there. */}
+                  <div
+                    aria-hidden
+                    className="absolute inset-0"
+                    style={{
+                      background: `linear-gradient(to top, ${wash} 0%, ${wash}f2 42%, ${wash}00 100%)`,
+                    }}
+                  />
+                  <div className="relative p-5">
+                    <span
+                      aria-hidden
+                      className="block font-display text-[2.6rem] leading-[0.6] opacity-60"
+                      style={{ color: overInk }}
+                    >
+                      &ldquo;
+                    </span>
+                    <p
+                      className="mt-3 mb-0 text-[0.95rem] leading-snug"
+                      style={{ color: overInk, ...type, whiteSpace: "pre-line" }}
+                    >
+                      {withLineBreaks(str(item.quote))}
+                    </p>
+                    {(str(item.name) || str(item.role)) && (
+                      <div
+                        className="mt-4 pt-3"
+                        style={{ borderTop: `1px solid ${overInk}59` }}
+                      >
+                        <span
+                          className="block text-[0.86rem] font-semibold uppercase tracking-[0.06em]"
+                          style={{ color: overInk }}
+                        >
+                          {str(item.name)}
+                        </span>
+                        {str(item.role) && (
+                          <span
+                            className="block text-[0.82rem] opacity-80"
+                            style={{ color: overInk }}
+                          >
+                            {str(item.role)}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        );
+      }
       // Scroll-snap rather than a JavaScript carousel: it swipes on touch,
       // scrolls with a trackpad, works with the keyboard, and needs no client
       // bundle on a page whose job is to load fast and take a payment.
@@ -797,10 +883,21 @@ function Inner({
       // opens above the border, so the card repeats it underneath — otherwise
       // the rule sits hard against the copy below it and reads as a heading
       // underline for the wrong card.
-      const cellAt = (i: number): React.CSSProperties =>
-        p.divider === true && i > 0
-          ? { ...cell, borderTop: `1px solid ${c.rule}`, paddingTop: gap }
-          : cell;
+      const cellAt = (i: number): React.CSSProperties => {
+        const base =
+          p.divider === true && i > 0
+            ? { ...cell, borderTop: `1px solid ${c.rule}`, paddingTop: gap }
+            : cell;
+        // In a strip the card cannot shrink and cannot wrap, so its width is
+        // stated rather than left to a grid track. `columns` reads as "how many
+        // visible at once", which is what it looks like on screen either way.
+        if (!carousel) return base;
+        const across = Math.min(Math.max(num(p.columns, 3), 1), 6);
+        return {
+          ...base,
+          flex: `0 0 calc(${100 / across}% - ${((across - 1) * 16) / across}px)`,
+        };
+      };
       // Null means the stylesheet carries it, because Across holds a value per
       // device — see cardsTrack.
       const track = cardsTrack(block, at);
@@ -819,9 +916,26 @@ function Inner({
         str(p.media) === "image" &&
         items.length > 0 &&
         items.every((it) => str(it.image) && !str(it.title).trim() && !str(it.body).trim());
-      const gridClass = marksOnly
-        ? "grid grid-cols-[var(--cards)]"
-        : "grid grid-cols-1 @xl:grid-cols-[var(--cards)]";
+      // A strip that scrolls sideways instead of a grid that wraps.
+      //
+      // Scroll-snap, the same mechanism the quote slider uses: it swipes on
+      // touch, scrolls with a trackpad, works from the keyboard, and adds no
+      // client bundle to a page whose job is to load fast and take a payment.
+      //
+      // A flag on this block rather than a block of its own, because a
+      // scrolling shelf of cards wants everything a card already has — the icon
+      // tile, the eyebrow number, the skins, the padding. A second block type
+      // would be all of that again, with its own bugs.
+      //
+      // `--cards` becomes the width of ONE card here rather than a track list,
+      // so "Across: 4" reads as "four visible at a time", which is what it
+      // looks like on screen either way.
+      const carousel = p.carousel === true;
+      const gridClass = carousel
+        ? "-mx-1 flex snap-x snap-mandatory overflow-x-auto px-1 pb-2"
+        : marksOnly
+          ? "grid grid-cols-[var(--cards)]"
+          : "grid grid-cols-1 @xl:grid-cols-[var(--cards)]";
       // The gap between a card's title and its body. Unset keeps exactly what
       // each layout already drew — the two differ, and a single new default
       // here would move every card block on the site.
@@ -834,7 +948,7 @@ function Inner({
         return (
           <div className={gridClass} style={grid}>
             {items.map((it, i) => (
-              <Card key={i} style={cellAt(i)} beside={beside} tile={<IconTile item={it} p={p} colors={c} />}>
+              <Card key={i} style={cellAt(i)} beside={beside} className={carousel ? "snap-start" : ""} tile={<IconTile item={it} p={p} colors={c} />}>
                 <div className="flex items-baseline gap-2">
                   {numbered && (
                     <span className="font-display font-bold tabular-nums" style={{ color: c.accent, fontSize: "1rem" }}>
@@ -889,7 +1003,7 @@ function Inner({
           )}
         <div className={gridClass} style={grid}>
           {items.map((it, i) => (
-            <Card key={i} style={cellAt(i)} beside={beside} tile={<IconTile item={it} p={p} colors={c} />}>
+            <Card key={i} style={cellAt(i)} beside={beside} className={carousel ? "snap-start" : ""} tile={<IconTile item={it} p={p} colors={c} />}>
               {numbered &&
                 (circle ? (
                   // In the flow, not absolutely positioned. The absolute
@@ -1300,15 +1414,18 @@ function Card({
   style,
   tile,
   beside,
+  className,
   children,
 }: {
   style: React.CSSProperties;
   tile: React.ReactNode;
   beside: boolean;
+  /** Empty unless the card is in a scrolling strip, so nothing else moves. */
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div style={style}>
+    <div style={style} className={className || undefined}>
       {beside ? (
         <div className="flex items-start gap-3">
           {tile}

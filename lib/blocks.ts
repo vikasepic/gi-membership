@@ -592,6 +592,9 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     items: [],
     columns: 3,
     numbered: false,
+    // A shelf that scrolls sideways rather than a grid that wraps. False is
+    // what every cards block has always been.
+    carousel: false,
     skin: "boxed",
     numberStyle: "eyebrow",
     title: "",

@@ -35,6 +35,8 @@ import { template as pricingPanel } from "./pricing-panel";
 import { template as signupBox } from "./signup-box";
 import { template as partsPanels } from "./parts-panels";
 import { template as discoverGrid } from "./discover-grid";
+import { template as testimonialPortraits } from "./testimonial-portraits";
+import { template as guideShelf } from "./guide-shelf";
 
 export { templateSource, type Template } from "./template";
 
@@ -66,6 +68,8 @@ const BUILT_INS: Template[] = [
   signupBox,
   partsPanels,
   discoverGrid,
+  testimonialPortraits,
+  guideShelf,
   hero,
   featureCards,
   benefitColumns,
