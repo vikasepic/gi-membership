@@ -39,10 +39,17 @@ export function TemplatePreview({
     const inner = content.current;
     if (!outer || !inner) return;
     const measure = () => setSize({ w: outer.clientWidth, h: inner.scrollHeight });
+    measure();
+    // Guarded rather than assumed. Unguarded this threw wherever ResizeObserver
+    // is missing — which is every test environment, and is why nothing had ever
+    // rendered this component.
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
     const ro = new ResizeObserver(measure);
     ro.observe(outer);
     ro.observe(inner);
-    measure();
     return () => ro.disconnect();
   }, [template.id]);
 
@@ -58,9 +65,29 @@ export function TemplatePreview({
     paddingLeft: layout.pad.l ?? 24,
   };
 
-  const byWidth = size.w > 0 ? size.w / PREVIEW_WIDTH : 0;
-  const byHeight = height && size.h > 0 ? height / size.h : Infinity;
-  const shown = Math.min(byWidth, byHeight);
+  // Scaled to the WIDTH, always. A tile with a height cap crops what will not
+  // fit, the way every template library does.
+  //
+  // It used to take the smaller of width and height, so that nothing was ever
+  // cropped — but a design twice as tall as its tile then rendered at half
+  // scale in a third of the width, and the rest of the tile was band colour.
+  // Every tall design read as a coloured bar. A thumbnail that shows the top of
+  // a design tells you what the design is; one that shows all of it at 12% does
+  // not.
+  //
+  // And never zero. `scale(0.0001)` was the fallback until the box had been
+  // measured, which draws the design at one ten-thousandth — a tile of flat
+  // band colour with the whole design in its top-left pixel. Any reason the
+  // measurement does not arrive (an observer that threw, a grid mounted while
+  // its container had no width, a browser without ResizeObserver) left every
+  // preview looking like an empty coloured bar, which is exactly what a
+  // library of forty-six designs looked like.
+  //
+  // A guess is better than nothing here: a tile is about 460px in this grid, so
+  // assume that until something measures otherwise. Wrong by a little for one
+  // frame beats right about nothing.
+  const ASSUMED = 460 / PREVIEW_WIDTH;
+  const shown = size.w > 0 ? size.w / PREVIEW_WIDTH : ASSUMED;
 
   return (
     <div
@@ -73,7 +100,7 @@ export function TemplatePreview({
     >
       <div
         className="absolute left-0 top-0 origin-top-left"
-        style={{ width: PREVIEW_WIDTH, transform: `scale(${shown || 0.0001})` }}
+        style={{ width: PREVIEW_WIDTH, transform: `scale(${shown})` }}
       >
         {/* @container, or every grid inside collapses to one column and the
             design previews as a stacked list — the same fix the editor canvas
