@@ -1,3 +1,4 @@
+import { instantFrom } from "@/lib/countdown";
 // The block tree.
 //
 // A section keeps its typed fields — a proof section still stores quotes with
@@ -35,6 +36,9 @@ export const BLOCK_TYPES = [
   // The price panel. It appears twice on the reference page and it is where
   // the money actually is.
   "pricecard",
+  // A deadline, ticking. The one block on a sales page that cannot be static,
+  // and the only one that renders a client leaf inside the server tree.
+  "countdown",
   // The storefront's three living parts.
   //
   // They are blocks rather than fixed sections so the home page can decide what
@@ -524,6 +528,45 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   // means "whatever the card already looked like". A number here instead of
   // null would repaint every card ever saved the moment this line shipped,
   // because normalize spreads these defaults over every stored block.
+  // Every default is the honest, quiet one: no deadline set, so the block draws
+  // nothing until somebody chooses a moment. `zone` empty means the store's own
+  // timezone, which Site settings holds — a date without a zone is a string,
+  // not an instant, and that is the defect this block exists to avoid.
+  countdown: {
+    kind: "date",
+    due: "",
+    zone: "",
+    showDays: true,
+    showHours: true,
+    showMinutes: true,
+    showSeconds: true,
+    showLabel: true,
+    customLabels: false,
+    labelDays: "days",
+    labelHours: "hours",
+    labelMinutes: "minutes",
+    labelSeconds: "seconds",
+    labelDay: "day",
+    labelHour: "hour",
+    labelMinute: "minute",
+    labelSecond: "second",
+    leadingZero: true,
+    separator: "",
+    layout: "start",
+    boxGap: 10,
+    boxPadding: 14,
+    boxBackground: "",
+    boxRadius: 10,
+    digitSize: null,
+    digitWeight: null,
+    digitColor: null,
+    labelSize: null,
+    labelWeight: null,
+    labelColor: null,
+    onExpire: "keep",
+    redirectTo: "",
+    expiredMessage: "",
+  },
   catalog: { title: "", limit: 0, columns: 3, showPrice: true },
   memberships: { title: "", showOwned: true },
   featured: { title: "", note: "" },
@@ -1566,6 +1609,11 @@ export function blockRendersNothing(block: Block): boolean {
     case "memberships":
     case "featured":
       return false;
+    // Unlike those three, this one CAN answer. No deadline chosen, or one that
+    // cannot be read, means no clock — and the wrapper must go too, or the page
+    // carries the block's margin around nothing.
+    case "countdown":
+      return instantFrom(text(p.due), text(p.zone) || "UTC") === null;
     // A pointer draws nothing. That looks wrong until you follow the order:
     // the resolve step replaces a placeholder with the blocks it names BEFORE
     // anything renders, so a live page never asks this about a working link.

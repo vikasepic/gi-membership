@@ -1,5 +1,11 @@
 # Countdown block — feature table
 
+**Phase 1 shipped 12 Aug 2026** — the due-date clock with a real timezone,
+unit toggles, singular/plural labels, leading zero, separator, the three expiry
+actions, and separate digit/label styling. Evergreen is NOT built: decision 3
+below is still open. Store-wide default timezone is not built either; a block
+with no zone reads UTC.
+
 Studied from the Elementor Countdown widget (its Content, Style and Advanced
 tabs, plus the official 3-minute walkthrough) and from the four screenshots
 supplied on 12 Aug 2026. Nothing here is built yet.

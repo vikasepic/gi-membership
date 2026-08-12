@@ -1,3 +1,4 @@
+import { ALL_ZONES } from "@/lib/countdown";
 import {
   BLOCK_TYPES,
   MAX_COLUMNS,
@@ -262,6 +263,68 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "number", key: "iconSize", label: "Icon size", min: 10, max: 40, step: 1, unit: "px" },
       { kind: "number", key: "gap", label: "Gap", min: 0, max: 40, step: 2, unit: "px" },
       ...TYPOGRAPHY,
+    ],
+  },
+
+  countdown: {
+    content: [
+      { kind: "select", key: "kind", label: "Counts to", options: [["date", "A date and time"]], hint: "A fixed moment every visitor shares. A per-visitor timer is a separate decision — see docs/countdown-block.md." },
+      { kind: "text", key: "due", label: "Deadline", hint: "YYYY-MM-DD HH:MM — 24 hour." },
+      {
+        kind: "select",
+        key: "zone",
+        label: "Timezone",
+        // The date above is a wall clock, not a moment, until this is applied.
+        // Elementor stores the editor's own zone and prints it as a caption,
+        // which is how one deadline comes to mean different instants.
+        hint: "The date is read in this zone, so every visitor counts to the same second.",
+        options: [
+          ["", "UTC"],
+          ...ALL_ZONES.filter((z) => z !== "UTC").map(
+            (z) => [z, z.replace(/_/g, " ")] as [string, string],
+          ),
+        ],
+      },
+      group("Which units"),
+      { kind: "toggle", key: "showDays", label: "Days" },
+      { kind: "toggle", key: "showHours", label: "Hours" },
+      { kind: "toggle", key: "showMinutes", label: "Minutes" },
+      { kind: "toggle", key: "showSeconds", label: "Seconds" },
+      group("Labels"),
+      { kind: "toggle", key: "showLabel", label: "Show labels" },
+      { kind: "toggle", key: "customLabels", label: "Write my own", when: (b) => b.props.showLabel !== false },
+      ...(["Days", "Hours", "Minutes", "Seconds"] as const).flatMap((u) => [
+        { kind: "text" as const, key: `label${u}`, label: `${u} — more than one`, when: (b: Block) => b.props.showLabel !== false && b.props.customLabels === true },
+        { kind: "text" as const, key: `label${u.slice(0, -1)}`, label: `${u} — exactly one`, when: (b: Block) => b.props.showLabel !== false && b.props.customLabels === true },
+      ]),
+      group("Reading"),
+      { kind: "toggle", key: "leadingZero", label: "Leading zero", hint: "07 rather than 7." },
+      { kind: "text", key: "separator", label: "Between the boxes", hint: "Left empty there is none. A colon reads as a clock." },
+      group("When it reaches zero"),
+      {
+        kind: "select",
+        key: "onExpire",
+        label: "Then",
+        options: [["keep", "Keep showing zero"], ["hide", "Hide the block"], ["message", "Show a message"], ["redirect", "Send them to a page"]],
+      },
+      { kind: "textarea", key: "expiredMessage", label: "Message", rows: 2, when: (b) => b.props.onExpire === "message" },
+      { kind: "text", key: "redirectTo", label: "Page", hint: "Start with / or https://", when: (b) => b.props.onExpire === "redirect" },
+    ],
+    style: [
+      group("Boxes"),
+      { kind: "select", key: "layout", label: "Layout", options: [["start", "Together"], ["stretch", "Spread out"]], responsive: true },
+      { kind: "number", key: "boxGap", label: "Space between", min: 0, max: 80, step: 1, unit: "px", responsive: true },
+      { kind: "number", key: "boxPadding", label: "Padding", min: 0, max: 80, step: 1, unit: "px", responsive: true },
+      { kind: "color", key: "boxBackground", label: "Background", hint: "Unset follows the band." },
+      { kind: "number", key: "boxRadius", label: "Corner", min: 0, max: 60, step: 1, unit: "px" },
+      group("Digits"),
+      { kind: "number", key: "digitSize", label: "Size", min: 10, max: 120, step: 1, unit: "px", responsive: true },
+      { kind: "select", key: "digitWeight", label: "Weight", options: [["", "Inherit"], ...["400", "500", "600", "700", "800"].map((w) => [w, w] as [string, string])] },
+      { kind: "color", key: "digitColor", label: "Colour" },
+      group("Labels", (b) => b.props.showLabel !== false),
+      { kind: "number", key: "labelSize", label: "Size", min: 8, max: 40, step: 1, unit: "px", responsive: true, when: (b) => b.props.showLabel !== false },
+      { kind: "select", key: "labelWeight", label: "Weight", options: [["", "Inherit"], ...["400", "500", "600", "700"].map((w) => [w, w] as [string, string])], when: (b) => b.props.showLabel !== false },
+      { kind: "color", key: "labelColor", label: "Colour", when: (b) => b.props.showLabel !== false },
     ],
   },
 
@@ -1363,6 +1426,7 @@ export const PALETTE: { type: BlockType; label: string; props?: Record<string, u
   { type: "pricing", label: "Price table" },
   { type: "pricecard", label: "Price card" },
   { type: "faq", label: "FAQ" },
+  { type: "countdown", label: "Countdown" },
   { type: "spacer", label: "Spacer" },
   { type: "divider", label: "Divider" },
   { type: "html", label: "HTML" },
@@ -1481,12 +1545,14 @@ export function sections(controls: Control[]): { title: string | null; controls:
 export const PALETTE_GROUPS: { title: string; types: string[] }[] = [
   { title: "Basic", types: ["Heading", "Text", "Image", "Video", "Buy button", "Button", "List", "Slides"] },
   { title: "Layout", types: ["Container", "Divider", "Spacer"] },
-  { title: "Sales", types: ["Cards", "Figures", "Price card", "Price table", "FAQ", "HTML"] },
+  { title: "Sales", types: ["Cards", "Figures", "Price card", "Price table", "FAQ", "Countdown", "HTML"] },
   { title: "Storefront", types: ["Catalogue", "Memberships", "Featured"] },
 ];
 
 /** One glyph per block type, so you learn the shapes and stop reading. */
 export const BLOCK_ICON: Record<BlockType, string> = {
+  // A clock face with a hand — the only block that keeps its own time.
+  countdown: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 10.6 4 2.3-1 1.7-5-2.9V6h2v6.6Z",
   // Two links of a chain — the same idea the Unlink button undoes.
   global: "M9.5 13.5a4 4 0 0 1 0-5.7l2.1-2.1a4 4 0 0 1 5.7 5.7l-1 1-1.4-1.4 1-1a2 2 0 0 0-2.9-2.9l-2.1 2.1a2 2 0 0 0 0 2.9l-1.4 1.4Zm5 -3a4 4 0 0 1 0 5.7l-2.1 2.1a4 4 0 0 1-5.7-5.7l1-1 1.4 1.4-1 1a2 2 0 0 0 2.9 2.9l2.1-2.1a2 2 0 0 0 0-2.9l1.4-1.4Z",
   catalog: "M3 4h8v7H3V4Zm10 0h8v7h-8V4ZM3 13h8v7H3v-7Zm10 0h8v7h-8v-7Z",

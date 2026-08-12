@@ -1,4 +1,6 @@
 import { blockRendersNothing, styleFor, type Block, type Device } from "@/lib/blocks";
+import { Countdown } from "@/components/page/countdown";
+import { instantFrom } from "@/lib/countdown";
 import {
   CatalogBlock,
   FeaturedBlock,
@@ -348,6 +350,91 @@ function Inner({
           dangerouslySetInnerHTML={{ __html: str(p.html) }}
         />
       );
+
+    case "countdown": {
+      const due = str(p.due).trim();
+      if (!due) return null;
+      // UTC when the block names no zone. Not the viewer's zone and not the
+      // editor's: either would make one deadline mean different moments to
+      // different people, which is the defect this block exists to avoid. A
+      // store-wide default belongs in Site settings and is not built yet.
+      const zone = str(p.zone) || "UTC";
+      const deadline = instantFrom(due, zone);
+      // An unreadable date draws nothing rather than a row of zeros that looks
+      // like a deadline everybody missed.
+      if (deadline === null) return null;
+
+      const custom = p.customLabels === true;
+      const label = (many: string, one: string, dMany: string, dOne: string) =>
+        custom
+          ? { one: str(p[one], dOne) || dOne, many: str(p[many], dMany) || dMany }
+          : { one: dOne, many: dMany };
+
+      const gap = num(p.boxGap, 10);
+      const boxPad = num(p.boxPadding, 14);
+      const fill = str(p.boxBackground);
+
+      return (
+        <Countdown
+          deadline={deadline}
+          units={{
+            days: p.showDays !== false,
+            hours: p.showHours !== false,
+            minutes: p.showMinutes !== false,
+            seconds: p.showSeconds !== false,
+          }}
+          showLabel={p.showLabel !== false}
+          labels={{
+            days: label("labelDays", "labelDay", "days", "day"),
+            hours: label("labelHours", "labelHour", "hours", "hour"),
+            minutes: label("labelMinutes", "labelMinute", "minutes", "minute"),
+            seconds: label("labelSeconds", "labelSecond", "seconds", "second"),
+          }}
+          leadingZero={p.leadingZero !== false}
+          separator={str(p.separator)}
+          onExpire={
+            (["keep", "hide", "message", "redirect"] as const).find((k) => k === str(p.onExpire)) ??
+            "keep"
+          }
+          redirectTo={str(p.redirectTo)}
+          message={
+            str(p.expiredMessage) ? (
+              <p className="text-[0.95rem]" style={{ color: c.fg }}>
+                <Inline html={str(p.expiredMessage)} />
+              </p>
+            ) : null
+          }
+          classes={{
+            list: `flex flex-wrap items-stretch ${str(p.layout) === "stretch" ? "justify-between" : ""}`,
+            box: "flex flex-col items-center justify-center text-center",
+            digit: "font-display tabular-nums leading-none",
+            label: "mt-1.5 leading-none",
+            sep: "self-center font-display leading-none",
+          }}
+          styles={{
+            list: { gap },
+            box: {
+              padding: boxPad,
+              borderRadius: num(p.boxRadius, 10),
+              // Unset follows the band's own panel, so a countdown dropped on a
+              // navy band is not a white box nobody asked for.
+              background: fill || c.fill,
+              minWidth: "3.5em",
+            },
+            digit: {
+              fontSize: p.digitSize != null ? num(p.digitSize, 34) : "2rem",
+              fontWeight: str(p.digitWeight) ? Number(str(p.digitWeight)) : 700,
+              color: str(p.digitColor) || c.fg,
+            },
+            label: {
+              fontSize: p.labelSize != null ? num(p.labelSize, 12) : "0.72rem",
+              fontWeight: str(p.labelWeight) ? Number(str(p.labelWeight)) : undefined,
+              color: str(p.labelColor) || theme.muted,
+            },
+          }}
+        />
+      );
+    }
 
     // Live store data. Without a `store` payload — every sales page — these
     // draw nothing at all rather than an empty heading or a box with a rule in
