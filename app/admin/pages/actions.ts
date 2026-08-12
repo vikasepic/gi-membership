@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
+import { codeSnippetsSchema } from "@/lib/code-snippets";
 import { savePageSettings, saveSection, seedPage, seedHomeFromDefault, copyPage, StaleSectionError, type OwnerType } from "@/lib/pages";
 import { sectionDef } from "@/lib/page-sections";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
@@ -162,6 +163,11 @@ export async function savePageSettingsAction(
     await savePageSettings(owner, ownerId, {
       customCss: String(formData.get("customCss") ?? ""),
       customJs: String(formData.get("customJs") ?? ""),
+      // Posted as JSON from a hidden input, the way every list on this admin
+      // is. Unreadable means none rather than a save that throws.
+      snippets: codeSnippetsSchema.safeParse(
+        JSON.parse(String(formData.get("snippets") ?? "[]") || "[]"),
+      ).data ?? [],
     });
     revalidatePath(`/admin/${owner === "product" ? "products" : "offers"}/${ownerId}/page-editor`);
     return { saved: true };

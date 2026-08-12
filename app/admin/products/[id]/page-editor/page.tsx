@@ -67,6 +67,7 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
             ownerId={id}
             customCss={settings.customCss}
             customJs={settings.customJs}
+            snippets={settings.snippets}
           />
         </div>
       </details>

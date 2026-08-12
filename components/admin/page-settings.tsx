@@ -2,6 +2,8 @@
 
 import { useActionState, useState } from "react";
 import { savePageSettingsAction } from "@/app/admin/pages/actions";
+import { SnippetFields } from "@/components/admin/snippet-fields";
+import type { CodeSnippet } from "@/lib/code-snippets";
 import type { OwnerType } from "@/lib/pages";
 
 // Page-level custom code.
@@ -18,15 +20,21 @@ export function PageSettings({
   ownerId,
   customCss,
   customJs,
+  snippets,
 }: {
   ownerType: OwnerType;
   ownerId: string;
   customCss: string;
   customJs: string;
+  /** This page's own snippets — same list, same shape, as the store-wide one. */
+  snippets: CodeSnippet[];
 }) {
   const [state, action, pending] = useActionState(savePageSettingsAction, {});
   const [open, setOpen] = useState(false);
-  const has = customCss.trim().length > 0 || customJs.trim().length > 0;
+  const has =
+    customCss.trim().length > 0 ||
+    customJs.trim().length > 0 ||
+    snippets.some((x) => x.code.trim() !== "");
 
   return (
     <div className="rounded-2xl border border-border bg-surface">
@@ -38,7 +46,7 @@ export function PageSettings({
       >
         <span className="font-medium">Custom code</span>
         <span className="text-sm text-muted">
-          {has ? "CSS and JS for this page" : "None — CSS and JS for this page"}
+          {has ? "CSS, JS and snippets for this page" : "None — CSS, JS and snippets for this page"}
         </span>
         <span aria-hidden className="ml-auto text-muted">
           {open ? "▴" : "▾"}
@@ -68,6 +76,11 @@ export function PageSettings({
             </span>
             <textarea name="customJs" rows={6} defaultValue={customJs} className={box} spellCheck={false} />
           </label>
+
+          {/* The same list the store-wide settings use, scoped to this page.
+              This is where a `<script>` tag goes: the box above is the inside
+              of a script element, so a tag typed there is not JavaScript. */}
+          <SnippetFields snippets={snippets} />
 
           <div className="flex items-center gap-3">
             <button

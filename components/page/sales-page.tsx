@@ -1,4 +1,5 @@
 import { Blocks, type CtaRender } from "@/components/page/blocks";
+import { CodeSnippets } from "@/components/code-snippets";
 import type { StoreRender } from "@/components/page/storefront-blocks";
 import { blocksForSection, type GlobalBlocks } from "@/lib/section-to-blocks";
 import {
@@ -171,12 +172,22 @@ export function SalesPage({
   const ordered = [...rows].sort((a, b) => a.position - b.position);
   const css = settings?.customCss.trim();
   const js = settings?.customJs.trim();
+  // This page's own snippets. A sales page is never the checkout, so nothing
+  // here is filtered by that — `onCheckout` on a page-level snippet only
+  // matters if this component is ever rendered on one.
+  const snippets = settings?.snippets ?? [];
   return (
     <div>
       {css && <style dangerouslySetInnerHTML={{ __html: inlineCss(css) }} />}
+      {/* `head` first: React lifts these out of here into the document head,
+          so a verification meta or a vendor loader lands where it belongs even
+          though it was written against one page. */}
+      <CodeSnippets snippets={snippets} place="head" onCheckout={false} />
+      <CodeSnippets snippets={snippets} place="bodyStart" onCheckout={false} />
       {ordered.map((row) => (
         <SectionBand key={row.sectionKey} row={row} money={money} cta={cta} globals={globals} />
       ))}
+      <CodeSnippets snippets={snippets} place="bodyEnd" onCheckout={false} />
       {/* Last, so it runs against a page that exists. `</` is treated by the
           same pair that treats the site-wide custom code — see `inlineCss`. */}
       {js && <script dangerouslySetInnerHTML={{ __html: inlineJs(js) }} />}

@@ -7,6 +7,7 @@ import { normalizeHex } from "@/lib/color";
 import { normalizeBackground, normalizeBlocks, type Background, type Block } from "@/lib/blocks";
 import { priceProblems } from "@/lib/page-price-truth";
 import { homeStarterBlocks } from "@/lib/home-starter";
+import { codeSnippetsSchema, type CodeSnippet } from "@/lib/code-snippets";
 import { realPriceLabel } from "@/lib/page-money";
 import {
   HOME_SECTIONS,
@@ -335,22 +336,29 @@ export async function seedPage(owner: OwnerType, ownerId: string): Promise<void>
 
 // --- page-level custom code -------------------------------------------------
 
-export type PageSettings = { customCss: string; customJs: string };
+export type PageSettings = { customCss: string; customJs: string; snippets: CodeSnippet[] };
 
-export const NO_PAGE_SETTINGS: PageSettings = { customCss: "", customJs: "" };
+export const NO_PAGE_SETTINGS: PageSettings = { customCss: "", customJs: "", snippets: [] };
 
 export async function getPageSettings(owner: OwnerType, ownerId: string): Promise<PageSettings> {
   const db = createServiceClient();
   const { data, error } = await db
     .from("page_settings")
-    .select("custom_css, custom_js")
+    .select("custom_css, custom_js, snippets")
     .eq("owner_type", owner)
     .eq("owner_id", ownerId)
     .maybeSingle();
   // A page renders without its custom code; it does not render without the
   // page. So a failure here is empty custom code, not a 500 on a sales page.
   if (error || !data) return NO_PAGE_SETTINGS;
-  return camelize<PageSettings>(data);
+  const row = camelize<{ customCss: string; customJs: string; snippets: unknown }>(data);
+  return {
+    customCss: row.customCss ?? "",
+    customJs: row.customJs ?? "",
+    // Parsed, never cast. These rows predate the column, and a page whose
+    // snippets are `null` must render rather than throw on `.filter`.
+    snippets: codeSnippetsSchema.safeParse(row.snippets).data ?? [],
+  };
 }
 
 export async function savePageSettings(
@@ -366,6 +374,7 @@ export async function savePageSettings(
       owner_id: ownerId,
       custom_css: input.customCss,
       custom_js: input.customJs,
+      snippets: codeSnippetsSchema.safeParse(input.snippets).data ?? [],
     },
     { onConflict: "owner_type,owner_id" },
   );

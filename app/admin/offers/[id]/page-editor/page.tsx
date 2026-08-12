@@ -71,6 +71,7 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
             ownerId={id}
             customCss={settings.customCss}
             customJs={settings.customJs}
+            snippets={settings.snippets}
           />
         </div>
       </details>
