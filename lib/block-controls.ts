@@ -414,7 +414,13 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         ],
         addLabel: "Add a slide",
       },
-      { kind: "number", key: "perView", label: "Shown at once", min: 1, max: 3, step: 1 },
+      { kind: "number", key: "perView", label: "Shown at once", min: 1, max: 6, step: 1, responsive: true, hint: "Set it lower on a phone — six portraits side by side is six slivers." },
+      // These two had been props since the block was written and had no
+      // controls and no renderer. The strip could always be scrolled and had
+      // no way of saying so, which is how three slides that happen to fit look
+      // like three cards and the fourth stays a secret.
+      { kind: "toggle", key: "arrows", label: "Arrows" },
+      { kind: "toggle", key: "dots", label: "Dots" },
       {
         kind: "select",
         key: "skin",

@@ -1,5 +1,6 @@
 import { blockRendersNothing, styleFor, type Block, type Device } from "@/lib/blocks";
 import { Countdown } from "@/components/page/countdown";
+import { SlideRail } from "@/components/page/slide-rail";
 import { evergreenKey, evergreenMinutes, instantFrom } from "@/lib/countdown";
 import { familyToken } from "@/lib/fonts-catalogue";
 import {
@@ -661,7 +662,21 @@ function Inner({
     case "slides": {
       const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
       if (items.length === 0) return null;
-      const perView = Math.min(Math.max(num(p.perView, 1), 1), 3);
+      // Up to six. Three was an arbitrary ceiling and a set of six logos or
+      // small portraits is a normal thing to want.
+      const perView = Math.min(Math.max(num(p.perView, 1), 1), 6);
+      const rail = (list: React.ReactNode) => (
+        <SlideRail
+          arrows={p.arrows !== false}
+          dots={p.dots !== false}
+          count={items.length}
+          perView={perView}
+          accent={c.accent}
+          ink={readableOn(c.accent)}
+        >
+          {list}
+        </SlideRail>
+      );
       // The quote laid over the speaker's own photograph.
       //
       // Its own skin rather than a second block: the strip, the snapping, the
@@ -673,7 +688,7 @@ function Inner({
         // The colour the quote stands on, and therefore the ink over it.
         const wash = c.fill;
         const overInk = readableOn(wash);
-        return (
+        return rail(
           <ul className="-mx-1 flex list-none snap-x snap-mandatory gap-4 overflow-x-auto p-0 px-1 pb-2">
             {items.map((item, i) => {
               const photo = imageSrc(str(item.image));
@@ -750,8 +765,10 @@ function Inner({
       }
       // Scroll-snap rather than a JavaScript carousel: it swipes on touch,
       // scrolls with a trackpad, works with the keyboard, and needs no client
-      // bundle on a page whose job is to load fast and take a payment.
-      return (
+      // bundle on a page whose job is to load fast and take a payment. The rail
+      // adds arrows and dots on top of that, once it has mounted — the strip
+      // could always be scrolled and had no way of saying so.
+      return rail(
         <ul className="-mx-1 flex list-none snap-x snap-mandatory gap-4 overflow-x-auto p-0 px-1 pb-2">
           {items.map((item, i) => (
             <li
