@@ -4,7 +4,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { Blocks } from "@/components/page/blocks";
 import { bandTheme } from "@/lib/page-sections";
-import { normalizeBlocks, type Block } from "@/lib/blocks";
+import { newBlock, normalizeBlocks, type Block } from "@/lib/blocks";
+import { controlsFor } from "@/lib/block-controls";
 
 const theme = bandTheme("paper");
 let root: { unmount: () => void } | null = null;
@@ -106,4 +107,60 @@ describe("the countdown block", () => {
     mount({ kind: "evergreen", evDays: 0, evHours: 1, evMinutes: 0 });
     expect(window.localStorage.getItem(key), "a reload must not restart it").toBe(old);
   });
+
+});
+
+/**
+ * The panel has to say what it resolved to.
+ *
+ * "I set 2 days and it shows 3" was not a clock fault — 2 days plus 47 hours
+ * plus 59 minutes IS 3d 23h 59m. The arithmetic was right and the panel simply
+ * never said what it added up to, which is the same failure as a deadline in a
+ * timezone nobody can picture: the editor knowing something the reader does not.
+ */
+describe("what the panel says back", () => {
+  const shown = (props: Record<string, unknown>) => {
+    const b = newBlock("countdown");
+    const blk = { ...b, props: { ...b.props, ...props } };
+    const t = controlsFor(blk);
+    return [...t.content, ...t.style];
+  };
+  const hintOf = (props: Record<string, unknown>, key: string) => {
+    const c = shown(props).find((x) => "key" in x && x.key === key);
+    return c && "hint" in c ? (c.hint ?? "") : null;
+  };
+
+  it("adds the three evergreen fields up out loud", () => {
+    expect(hintOf({ kind: "evergreen", evDays: 2, evHours: 47, evMinutes: 59 }, "evMinutes"))
+      .toContain("3 days 23 hours 59 minutes");
+  });
+
+  it("writes one day rather than 1 days there too", () => {
+    expect(hintOf({ kind: "evergreen", evDays: 1, evHours: 0, evMinutes: 0 }, "evMinutes"))
+      .toContain("1 day,");
+  });
+
+  it("states the deadline as a real moment, in two zones", () => {
+    const h = hintOf({ kind: "date", due: "2026-09-12T09:48", zone: "Asia/Kolkata" }, "due")!;
+    expect(h).toContain("09:48");
+    expect(h).toContain("05:18");
+    expect(h).toContain("London");
+  });
+
+  it("offers no timezone for a length", () => {
+    // Two days is two days wherever you are; a zone beside it says otherwise.
+    expect(hintOf({ kind: "evergreen" }, "zone")).toBeNull();
+    expect(hintOf({ kind: "date" }, "zone")).not.toBeNull();
+  });
+
+  it("starts from a length its own fields can express", () => {
+    // The default was 47 hours in a field that stops at 23 — a value the
+    // control cannot represent, which then summed with Days to a total nobody
+    // had chosen.
+    const p = newBlock("countdown").props;
+    // Asked as an evergreen block: the field is not offered on a date one.
+    const hours = shown({ kind: "evergreen" }).find((c) => "key" in c && c.key === "evHours");
+    expect(hours && "max" in hours ? hours.max : 0).toBeGreaterThanOrEqual(Number(p.evHours));
+  });
+
 });

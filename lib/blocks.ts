@@ -538,8 +538,8 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     zone: "",
     // Evergreen: a length, started when this visitor first arrived. Stored per
     // browser, so a reload continues the clock they already have.
-    evDays: 0,
-    evHours: 47,
+    evDays: 1,
+    evHours: 23,
     evMinutes: 59,
     evRestartDays: 0,
     showDays: true,

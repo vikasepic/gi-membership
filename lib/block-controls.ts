@@ -1,4 +1,4 @@
-import { ALL_ZONES } from "@/lib/countdown";
+import { ALL_ZONES, describeDeadline, evergreenMinutes } from "@/lib/countdown";
 import {
   BLOCK_TYPES,
   MAX_COLUMNS,
@@ -285,6 +285,9 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         // Elementor stores the editor's own zone and prints it as a caption,
         // which is how one deadline comes to mean different instants.
         hint: "The date is read in this zone, so every visitor counts to the same second.",
+        // A length has no timezone. Two days is two days wherever you are, and
+        // offering a zone beside it says otherwise.
+        when: (b) => b.props.kind !== "evergreen",
         options: [
           ["", "UTC"],
           ...ALL_ZONES.filter((z) => z !== "UTC").map(
@@ -1251,6 +1254,27 @@ function forBlock(c: Control, block: Block): Control {
   }
   if (c.kind === "select" && c.key === "width" && block.style.width === "fit") {
     return { ...c, options: [...c.options, ["fit", "Hug content"]] };
+  }
+  // What the countdown actually resolves to, said in words under the fields
+  // that set it. Three numbers that add up are three numbers somebody has to
+  // add up; a deadline in a zone is a moment nobody can picture. Both are the
+  // same failure — the panel knowing something the reader does not.
+  if (block.type === "countdown" && c.kind === "datetime" && c.key === "due") {
+    const said = describeDeadline(
+      typeof block.props.due === "string" ? block.props.due : "",
+      (typeof block.props.zone === "string" && block.props.zone) || "UTC",
+    );
+    return said ? { ...c, hint: `Ends ${said}` } : c;
+  }
+  if (block.type === "countdown" && c.kind === "number" && c.key === "evMinutes") {
+    const n = (k: string) => (typeof block.props[k] === "number" ? (block.props[k] as number) : 0);
+    const total = evergreenMinutes(n("evDays"), n("evHours"), n("evMinutes"));
+    const d = Math.floor(total / 1440);
+    const h = Math.floor((total % 1440) / 60);
+    const m = total % 60;
+    const part = (v: number, one: string) => (v === 0 ? "" : `${v} ${v === 1 ? one : one + "s"}`);
+    const words = [part(d, "day"), part(h, "hour"), part(m, "minute")].filter(Boolean).join(" ");
+    return { ...c, hint: `Every visitor gets ${words}, counted from their first visit.` };
   }
   return c;
 }
