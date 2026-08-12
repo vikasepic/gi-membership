@@ -516,7 +516,11 @@ function SectionPanel({
               className={`${PREVIEW_SCOPE} mx-auto transition-[max-width] duration-200`}
               style={{ maxWidth: DEVICE_CANVAS[device] ?? undefined }}
             >
-              <SectionBand row={{ ...row, content }} money={money} preview at={device} />
+              {/* `store` too. The band preview is a second render path from the
+                  block editor's canvas, and fixing only the canvas left the
+                  Catalogue block drawing nothing here — a section that reports
+                  "1 block" above an empty box. */}
+              <SectionBand row={{ ...row, content }} money={money} preview at={device} store={store} />
             </div>
           </div>
           <p className="text-xs text-muted">

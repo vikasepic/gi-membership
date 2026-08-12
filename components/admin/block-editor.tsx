@@ -1559,6 +1559,9 @@ function LinkedBlock({
   device: Device;
 }) {
   const globals = useContext(Globals);
+  // A saved design can hold a Catalogue block like any other. Without this it
+  // would preview as nothing here while drawing on the page.
+  const store = useContext(CanvasStore);
   const id = typeof block.props.globalId === "string" ? block.props.globalId : "";
   const linked = globals.get(id);
 
@@ -1585,7 +1588,7 @@ function LinkedBlock({
         ⛓ {linked.name}
       </span>
       <div className="pointer-events-none">
-        <Blocks blocks={linked.blocks} theme={theme} at={device} />
+        <Blocks blocks={linked.blocks} theme={theme} at={device} store={store} />
       </div>
     </div>
   );
