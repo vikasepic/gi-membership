@@ -471,7 +471,7 @@ document.head.appendChild(s);`}</pre>
         None of this runs in the admin, so a broken snippet can always be removed from here.
       </p>
 
-      <SnippetFields snippets={s.codeSnippets} />
+      <SnippetFields snippets={s.codeSnippets} name="codeSnippets" />
     </>
   );
 }

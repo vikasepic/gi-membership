@@ -80,7 +80,7 @@ export function PageSettings({
           {/* The same list the store-wide settings use, scoped to this page.
               This is where a `<script>` tag goes: the box above is the inside
               of a script element, so a tag typed there is not JavaScript. */}
-          <SnippetFields snippets={snippets} />
+          <SnippetFields snippets={snippets} name="snippets" />
 
           <div className="flex items-center gap-3">
             <button

@@ -22,7 +22,21 @@ import {
  * what a head snippet will actually emit, and that nothing runs on the checkout
  * unless it is told to.
  */
-export function SnippetFields({ snippets }: { snippets: CodeSnippet[] }) {
+export function SnippetFields({
+  snippets,
+  name,
+}: {
+  snippets: CodeSnippet[];
+  /**
+   * The form field to post as. Required, not defaulted.
+   *
+   * This component hardcoded one name and was dropped into two forms whose
+   * actions read different ones — so the page-level list posted a key nothing
+   * read, saved an empty array, and reported "Saved." Making the caller say it
+   * is what stops that being possible rather than merely fixed.
+   */
+  name: string;
+}) {
   const [list, setList] = useState<CodeSnippet[]>(snippets);
 
   const edit = (i: number, patch: Partial<CodeSnippet>) =>
@@ -37,7 +51,7 @@ export function SnippetFields({ snippets }: { snippets: CodeSnippet[] }) {
       changed={list.filter((s) => s.code.trim() !== "").length}
       hint="analytics, pixels, chat widgets, verification tags — whole markup, script tags and all"
     >
-      <input type="hidden" name="codeSnippets" value={JSON.stringify(list)} />
+      <input type="hidden" name={name} value={JSON.stringify(list)} />
 
       {list.length === 0 && (
         <p className="text-xs text-muted">
