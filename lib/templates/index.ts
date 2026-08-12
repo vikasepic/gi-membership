@@ -37,6 +37,7 @@ import { template as partsPanels } from "./parts-panels";
 import { template as discoverGrid } from "./discover-grid";
 import { template as testimonialPortraits } from "./testimonial-portraits";
 import { template as guideShelf } from "./guide-shelf";
+import { template as testimonialCases } from "./testimonial-cases";
 
 export { templateSource, type Template } from "./template";
 
@@ -70,6 +71,7 @@ const BUILT_INS: Template[] = [
   discoverGrid,
   testimonialPortraits,
   guideShelf,
+  testimonialCases,
   hero,
   featureCards,
   benefitColumns,
