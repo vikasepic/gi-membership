@@ -45,6 +45,10 @@ import { template as pricingWithIncludes } from "./pricing-with-includes";
 import { template as walkawayGrid } from "./walkaway-grid";
 import { template as testimonialOverlay } from "./testimonial-overlay";
 import { template as offerCard } from "./offer-card";
+import { template as signupBand } from "./signup-band";
+import { template as skillsList } from "./skills-list";
+import { template as everythingYouGet } from "./everything-you-get";
+import { template as tabbedPanels } from "./tabbed-panels";
 
 export { templateSource, type Template } from "./template";
 
@@ -86,6 +90,10 @@ const BUILT_INS: Template[] = [
   walkawayGrid,
   testimonialOverlay,
   offerCard,
+  signupBand,
+  skillsList,
+  everythingYouGet,
+  tabbedPanels,
   hero,
   featureCards,
   benefitColumns,
