@@ -864,30 +864,50 @@ export function BlockEditor({
               }}
               onPatch={patch}
               target={(index) => ({ zone: "root", index })}
+              // Inside the zone, so the box that says "drag a block here" is
+              // the box that takes the block. It used to sit BESIDE the zone:
+              // the invitation accepted nothing, and the strip that did accept
+              // was a thin line above it. You aimed at the box and the block
+              // landed somewhere else.
+              empty={
+                <div
+                  className={`flex flex-col items-center gap-3 rounded-xl border border-dashed p-8 text-center text-sm transition-colors ${
+                    dropAt?.startsWith("root:") ? "border-primary text-primary" : ""
+                  }`}
+                  style={
+                    dropAt?.startsWith("root:")
+                      ? undefined
+                      : { color: theme.muted, borderColor: theme.rule }
+                  }
+                >
+                  <span>
+                    {dropAt?.startsWith("root:")
+                      ? `Drop ${dragging.label ?? "it"} here`
+                      : "Drag a block here, or click one on the left."}
+                  </span>
+                  {/* Without this the only way to paste is beside an existing
+                      block, and the section you most want to paste into is the
+                      empty one. Pointer events are its own: the box around it
+                      must not swallow the drop. */}
+                  {clip?.kind === "block" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const copy = reid(normalizeBlocks([clip.data])[0]);
+                        if (!copy) return;
+                        commit(insertBlock(blocks, copy, { zone: "root", index: 0 }));
+                        setSelectedId(copy.id);
+                      }}
+                      className="rounded-full border px-3 py-1.5 text-xs"
+                      style={{ borderColor: theme.rule }}
+                    >
+                      Paste {clip.label}
+                    </button>
+                  )}
+                </div>
+              }
             />
-            {blocks.length === 0 && (
-              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed p-8 text-center text-sm" style={{ color: theme.muted, borderColor: theme.rule }}>
-                <span>Drag a block here, or click one on the left.</span>
-                {/* Without this the only way to paste is beside an existing
-                    block, and the section you most want to paste into is the
-                    empty one. */}
-                {clip?.kind === "block" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const copy = reid(normalizeBlocks([clip.data])[0]);
-                      if (!copy) return;
-                      commit(insertBlock(blocks, copy, { zone: "root", index: 0 }));
-                      setSelectedId(copy.id);
-                    }}
-                    className="rounded-full border px-3 py-1.5 text-xs"
-                    style={{ borderColor: theme.rule }}
-                  >
-                    Paste {clip.label}
-                  </button>
-                )}
-              </div>
-            )}
+
           </div>
           </div>
         </div>
@@ -1207,6 +1227,7 @@ function Zone({
   onPatch,
   target,
   emptyLabel,
+  empty,
   className,
 }: {
   blocks: Block[];
@@ -1222,7 +1243,16 @@ function Zone({
   onDragEnd: () => void;
   onPatch: (id: string, next: Block) => void;
   target: (index: number) => DropTarget;
-  /** Shown when the zone is empty. Never a drop target of its own — see below. */
+  /**
+   * Rendered inside the zone when it holds nothing.
+   *
+   * Inside, because the zone IS the drop target. The canvas used to draw its
+   * inviting dashed box as a SIBLING of the zone, so the box that said "drag a
+   * block here" accepted nothing and the strip that did accept it was a thin
+   * line above — you aimed at the box and the block landed somewhere else.
+   */
+  empty?: React.ReactNode;
+  /** Shown when the zone is empty and no `empty` node is given. */
   emptyLabel?: string;
   className?: string;
 }) {
@@ -1282,18 +1312,19 @@ function Zone({
           target={target}
         />
       ))}
-      {blocks.length === 0 && (
-        // An empty column is invisible until something is dragged near it,
-        // which is exactly when it needs to exist. pointer-events-none so the
-        // words cannot become the drop target and swallow the event before the
-        // zone sees it.
-        <p
-          className="pointer-events-none py-3 text-center text-[0.68rem]"
-          style={{ opacity: armed ? 1 : 0.7, color: armed ? "var(--primary)" : undefined }}
-        >
-          {armed ? `Drop ${dragLabel ?? "it"} here` : emptyLabel}
-        </p>
-      )}
+      {blocks.length === 0 &&
+        (empty ?? (
+          // An empty column is invisible until something is dragged near it,
+          // which is exactly when it needs to exist. pointer-events-none so the
+          // words cannot become the drop target and swallow the event before
+          // the zone sees it.
+          <p
+            className="pointer-events-none py-3 text-center text-[0.68rem]"
+            style={{ opacity: armed ? 1 : 0.7, color: armed ? "var(--primary)" : undefined }}
+          >
+            {armed ? `Drop ${dragLabel ?? "it"} here` : emptyLabel}
+          </p>
+        ))}
     </div>
   );
 }

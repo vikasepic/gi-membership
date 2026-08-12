@@ -803,3 +803,54 @@ describe("a link inside the canvas", () => {
     expect(document.body.textContent).not.toContain("band everything sits on");
   });
 });
+
+
+/**
+ * The invitation and the drop target were two different boxes.
+ *
+ * The canvas drew "Drag a block here" as a SIBLING of the zone, so the box that
+ * asked for a block accepted nothing, and the strip that accepted it was a thin
+ * line above. You aimed at the box and the block landed somewhere else.
+ */
+describe("dropping onto an empty canvas", () => {
+  const zone = () => document.querySelector('[data-zone="root"]')!;
+  // By its shape, not its words: the copy changes to "Drop … here" the moment
+  // something is dragged over it, which is the state under test.
+  const inviteBox = () =>
+    [...zone().querySelectorAll("div")].find((d) => d.className.includes("border-dashed"));
+
+  it("puts the invitation inside the drop target", () => {
+    mount([]);
+    expect(zone(), "the root zone exists").toBeTruthy();
+    expect(inviteBox(), "the invitation is inside the zone, not beside it").toBeTruthy();
+    expect(inviteBox()!.textContent).toContain("Drag a block here");
+  });
+
+  it("arms the invitation itself when something is dragged over it", () => {
+    mount([]);
+    act(() => {
+      zone().dispatchEvent(
+        Object.assign(new Event("dragover", { bubbles: true, cancelable: true }), {
+          dataTransfer: { effectAllowed: "", setData() {}, getData: () => "" },
+        }),
+      );
+    });
+    // The box the reader is aiming at is the one that changes.
+    const box = inviteBox();
+    expect(box?.className, "the invitation should light up").toContain("border-primary");
+    expect(box?.textContent).toContain("Drop");
+  });
+
+  it("accepts a drop on the invitation and keeps the block", () => {
+    const editor = mount([]);
+    const dt = { effectAllowed: "", setData() {}, getData: () => "" };
+    act(() => {
+      const box = inviteBox()!;
+      box.dispatchEvent(Object.assign(new Event("dragover", { bubbles: true, cancelable: true }), { dataTransfer: dt }));
+      box.dispatchEvent(Object.assign(new Event("drop", { bubbles: true, cancelable: true }), { dataTransfer: dt }));
+    });
+    // Nothing was being dragged from the palette here, so the canvas should
+    // still be empty rather than holding a block nobody chose.
+    expect(editor.blocks).toHaveLength(0);
+  });
+});
