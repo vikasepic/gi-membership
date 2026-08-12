@@ -1,61 +1,23 @@
 import { at, col, fill, make, rowOf, type Template } from "./template";
-import { baseStyle, dim, type Block } from "@/lib/blocks";
+import { baseStyle, dim } from "@/lib/blocks";
 
 // The enrolment hero: a terracotta bar across the top naming the next live
 // call, then a dark photographic band with the promise and the button.
 //
-// ONE THING THIS TEMPLATE DOES NOT DO, on purpose: the four boxes in the bar
-// are STATIC. A counting-down clock needs a script, and a section that can
-// introduce arbitrary script is a section that can read the payment form on
-// the same page — which is why the sanitizer strips them. The bar states the
-// date and time, which is the part that is actually true; a clock that reads
-// 00 : 00 : 00 : 00 because its script was stripped is worse than no clock.
+// The bar holds a real Countdown block. It was four static "00" boxes, on the
+// reasoning that a live clock needs script and script is stripped on save —
+// true of an HTML block, and not true of a block the builder ships, which
+// carries its own client leaf and needs nothing pasted in.
 //
-// If a live countdown is wanted it belongs in the page's own custom code,
-// where it is one decision by one person rather than a capability every
-// section carries.
+// THE DATE IS A PLACEHOLDER and must be changed. It is set to 21:00 in
+// Asia/Dubai, which is what the line beside it says, and the zone is stored
+// with it rather than inferred: a deadline without one is a wall-clock string
+// that means a different moment to every reader, and shifts under whoever last
+// edited the page. Change the date in the panel and it states the instant it
+// resolved to, in that zone and in London, so a wrong day is visible before
+// the page goes out.
 
 const BAR = "#c8663e";
-
-const unit = (value: string, label: string): Block[] => [
-  make(
-    "text",
-    { html: `<p>${value}</p>` },
-    {
-      color: "#ffffff",
-      size: 19,
-      weight: 700,
-      lineHeight: 1.1,
-      textAlign: "center",
-      blockAlign: "center",
-      width: "auto",
-      maxWidthValue: null,
-      margin: { t: 0, r: 0, b: 2, l: 0, u: "px", link: false },
-    },
-  ),
-  make(
-    "text",
-    { html: `<p>${label}</p>` },
-    {
-      color: "#ffe3d6",
-      size: 11,
-      lineHeight: 1.2,
-      textAlign: "center",
-      blockAlign: "center",
-      width: "auto",
-      maxWidthValue: null,
-      margin: { t: 0, r: 0, b: 0, l: 0, u: "px", link: false },
-    },
-  ),
-];
-
-const box = () =>
-  col({
-    borderWidth: 1,
-    borderColor: "#e9a385",
-    radius: 8,
-    padding: { t: 8, r: 6, b: 8, l: 6, u: "px", link: false },
-  });
 
 export const template: Template = {
   id: "banner-enrol-countdown",
@@ -89,15 +51,34 @@ export const template: Template = {
             ),
           ],
           [
-            {
-              ...rowOf([unit("00", "Days"), unit("00", "Hours"), unit("00", "Minutes"), unit("00", "Seconds")], {
-                widths: [25, 25, 25, 25],
-                gap: 8,
-                verticalAlign: "stretch",
-              }),
-              style: baseStyle({ margin: dim(0, 0, 0, 0) }),
-              columnStyles: [box(), box(), box(), box()],
-            },
+            // One block where four columns of static text used to be. The boxes
+            // it draws are the same bordered squares, so the bar looks as it
+            // did — they simply count now.
+            make(
+              "countdown",
+              {
+                kind: "date",
+                due: "2027-06-30T21:00",
+                zone: "Asia/Dubai",
+                boxBackground: "transparent",
+                boxBorderWidth: 1,
+                boxBorderColor: "#e9a385",
+                boxRadius: 8,
+                boxPadding: 8,
+                boxGap: 8,
+                boxMinWidth: 62,
+                digitSize: 19,
+                digitWeight: "700",
+                digitColor: "#ffffff",
+                labelSize: 11,
+                labelColor: "#ffe3d6",
+              },
+              {
+                margin: dim(0, 0, 0, 0),
+                width: "auto",
+                maxWidthValue: null,
+              },
+            ),
           ],
         ],
         { widths: [62, 38], gap: 24, verticalAlign: "center", stack: "mobile" },
