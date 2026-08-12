@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { contrastRatio } from "@/lib/color";
 import { bandTheme, BAND_STYLE_KEYS } from "@/lib/page-sections";
-import { DEVICE_MAX, newBlock, type Block } from "@/lib/blocks";
+import { DEVICE_MAX, newBlock, normalizeBlocks, type Block } from "@/lib/blocks";
 import {
   backgroundCss,
   blockColors,
@@ -152,9 +152,20 @@ describe("typographyCss", () => {
 
 describe("blockWrapperCss", () => {
   it("writes the box model", () => {
+    // A newly dropped block starts at zero on every side. It used to arrive
+    // with a 16 in the bottom box that nobody had typed, which reads as a
+    // value somebody chose rather than as a default.
     const css = blockWrapperCss(newBlock("text"), paper);
-    expect(css.margin).toBe("0px 0px 16px 0px");
+    expect(css.margin).toBe("0px 0px 0px 0px");
     expect(css.padding).toBe("0px 0px 0px 0px");
+  });
+
+  it("still gives a stored block with no margin the one it always had", () => {
+    // The other half, and the one that matters: a row saved before today, or
+    // written by hand, carried no margin and was rendered with 16. Changing
+    // what a NEW block starts at must not move it.
+    const stored = normalizeBlocks([{ id: "b1", type: "text", props: { html: "<p>x</p>" } }])[0];
+    expect(blockWrapperCss(stored, paper).margin).toBe("0px 0px 16px 0px");
   });
 
   it("caps the measure at the width that was asked for", () => {

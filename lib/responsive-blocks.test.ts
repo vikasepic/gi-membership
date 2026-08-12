@@ -173,8 +173,13 @@ describe("the CSS a block emits", () => {
     // padding cap, the row's column rules and the block's own custom CSS. Undo
     // the doubling textually and what is left is what the single class emitted,
     // captured before the change.
+    // The 16px bottom margin, stated rather than inherited. These goldens were
+    // captured when a new block carried it by default; one no longer does, and
+    // the capture is about the SELECTOR, not the spacing. Saying it here keeps
+    // the string below meaning exactly what it meant.
     let b = newBlock("row", { props: { widths: [60, 40], gap: 24 } });
     b.id = "cap2";
+    b = { ...b, style: { ...b.style, margin: { t: 0, r: 0, b: 16, l: 0, u: "px", link: false } } };
     b = setStyleAt(b, "desktop", { padding: { t: 0, r: 160, b: 0, l: 160, u: "px", link: false } });
     b = setStyleAt(b, "tablet", { textAlign: "center" });
     b = setStyleAt(b, "mobile", { transform: "uppercase" });
@@ -207,8 +212,13 @@ describe("the CSS a block emits", () => {
     // change that moved the six keys into a width query and gave them an arm
     // that names the text. This one is that shape, byte for byte: a heading
     // with typography on the laptop and a smaller size on the phone.
+    // The 16px bottom margin, stated rather than inherited. These goldens were
+    // captured when a new block carried it by default; one no longer does, and
+    // the capture is about the SELECTOR, not the spacing. Saying it here keeps
+    // the string below meaning exactly what it meant.
     let b = newBlock("heading", { props: { text: "Hi", tag: "h2" } });
     b.id = "gold1";
+    b = { ...b, style: { ...b.style, margin: { t: 0, r: 0, b: 16, l: 0, u: "px", link: false } } };
     b = setStyleAt(b, "desktop", { size: 48, weight: 700, color: "#123456" });
     b = setStyleAt(b, "mobile", { size: 28 });
 

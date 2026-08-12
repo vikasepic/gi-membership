@@ -62,6 +62,13 @@ const block = (type: BlockType, props: Props = {}, style: Partial<Block["style"]
     // the block would fail to survive a round trip through the database.
     style: {
       ...b.style,
+      // The 16px bottom margin, pinned rather than inherited. These blocks are
+      // built at READ time from sections still holding typed content — fifteen
+      // of them on the live store — and they set no margins of their own. When
+      // a newly dropped block stopped defaulting to 16, this conversion would
+      // otherwise have flattened every one of those sections to a column of
+      // touching blocks, on pages taking money.
+      margin: { t: 0, r: 0, b: 16, l: 0, u: "px", link: false },
       ...(type === "text" && style.width === undefined ? LEGACY_TEXT_MEASURE : {}),
       ...style,
     },

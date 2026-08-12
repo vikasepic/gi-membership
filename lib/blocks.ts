@@ -411,7 +411,15 @@ export const emptyBackground = (): Background => ({
 });
 
 export const baseStyle = (over: Partial<BlockStyle> = {}): BlockStyle => ({
-  margin: dim(0, 0, 16, 0),
+  // Zero. A block used to arrive with a 16 in the bottom box that nobody had
+  // typed, which reads as a value somebody chose rather than as a default —
+  // and it was the only spacing on the page, so it could not be explained away
+  // either. Spacing is now something you set, on the blocks that need it.
+  //
+  // Nothing already saved moves: a stored block carries its own margin, and the
+  // templates pin theirs in `lib/templates/template.ts` for exactly this
+  // change. Only a newly dropped block is different.
+  margin: dim(0, 0, 0, 0),
   padding: dim(0, 0, 0, 0),
   width: "auto",
   maxWidthValue: null,
@@ -891,7 +899,12 @@ function normalizeColumnLayout(v: Record<string, unknown>): ColumnLayout {
 }
 
 function normalizeStyle(v: unknown): BlockStyle {
-  const d = baseStyle();
+  // READ, not create. A block arrives with a 16px bottom margin because that is
+  // what every block created before today was given, and a row that stored no
+  // margin at all — an old row, a hand-written one — was rendered with it. A
+  // newly dropped block now starts at zero; a stored one must not move because
+  // of that, so the fallback here stays where it was.
+  const d = baseStyle({ margin: dim(0, 0, 16, 0) });
   if (!isRecord(v)) return d;
   const nullableNum = (x: unknown): number | null => (typeof x === "number" && Number.isFinite(x) ? x : null);
   return {

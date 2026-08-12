@@ -64,7 +64,18 @@ export function make(
   style: Partial<BlockStyle> = {},
 ): Block {
   const b = newBlock(type);
-  return { ...b, props: { ...b.props, ...props }, style: { ...b.style, ...style } };
+  return {
+    ...b,
+    props: { ...b.props, ...props },
+    // The 16px bottom margin is PINNED here rather than inherited.
+    //
+    // Forty-two blocks across these templates sat at `baseStyle`'s default and
+    // were spaced by it. A new block dropped in the builder now starts at zero
+    // — the panel showing a 16 nobody typed was the complaint — and without
+    // this line that change would have quietly collapsed the spacing in every
+    // one of those forty-two designs. A template states what it wants.
+    style: { ...b.style, margin: { t: 0, r: 0, b: 16, l: 0, u: "px", link: false }, ...style },
+  };
 }
 
 /**
