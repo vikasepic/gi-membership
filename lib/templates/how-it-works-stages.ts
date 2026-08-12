@@ -8,8 +8,11 @@ import { baseStyle, dim } from "@/lib/blocks";
 // to the LEFT of every stage but the first, which stacked becomes a rule above
 // each. Four stages on a phone is four columns of two words otherwise.
 //
-// The screenshot is a placeholder at the reference's own proportion. Swap it
-// for the real product shot; nothing about the layout depends on its content.
+// The screenshot is drawn art at the reference's own proportion, and it STAYS
+// drawn art. A template is inserted onto pages nobody has thought of yet, so a
+// real photograph shipped inside one arrives wherever it is dropped — someone
+// else's product, or someone else's face, on a page they never agreed to. The
+// page author puts the real picture in; the template supplies the shape.
 /** A stage's column, and the rule that separates it from the one before. */
 const stage = (ruled: boolean) =>
   col({
