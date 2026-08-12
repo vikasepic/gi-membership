@@ -20,10 +20,43 @@ import { useEffect, useMemo, useState } from "react";
  */
 
 export type PickedIcon = { v: string; d: string };
-type Row = { i: string; l: string; s: string; t: string[]; v: string; d: string };
+export type Row = { i: string; l: string; s: string; t: string[]; v: string; d: string };
 
 /** Cached for the session: 1.7MB should be fetched once, not per open. */
 let cache: Row[] | null = null;
+
+/** Solid is what people mean by "an icon"; brands are a different question. */
+const STYLES = [
+  { id: "all", label: "All" },
+  { id: "solid", label: "Solid" },
+  { id: "regular", label: "Outline" },
+  { id: "brands", label: "Brands" },
+] as const;
+
+const STYLE_RANK: Record<string, number> = { solid: 0, regular: 1, brands: 2 };
+
+/**
+ * How well a row answers the search, lower being better.
+ *
+ * Without this the grid was `filter` in file order, which is alphabetical — so
+ * the first thing anyone saw was 0, 1, 2, 3, and searching "star" put "Star and
+ * Crescent" above "Star". A set of 2,163 icons looked like a set of twelve.
+ */
+export function score(r: Row, q: string): number {
+  const l = r.l.toLowerCase();
+  const style = STYLE_RANK[r.s] ?? 3;
+  if (!q) {
+    // No search: the useful shapes first. Digits and single letters are
+    // alphabetically first and almost never what someone is looking for.
+    const junk = /^[0-9]$|^[a-z]$/.test(l) ? 40 : 0;
+    return 100 + junk + style;
+  }
+  if (l === q) return 0;
+  if (l.startsWith(q)) return 10 + style;
+  if (new RegExp(`\\b${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(l)) return 20 + style;
+  if (l.includes(q)) return 30 + style;
+  return 40 + style;
+}
 
 export function IconPicker({
   value,
@@ -38,6 +71,11 @@ export function IconPicker({
   const [rows, setRows] = useState<Row[] | null>(cache);
   const [error, setError] = useState(false);
   const [q, setQ] = useState("");
+  const [style, setStyle] = useState<string>("all");
+  // Grows as you scroll. The whole set in one grid is 2,163 SVGs and a second
+  // of layout per keystroke; a hard cap of 120 was the other extreme and made
+  // the library look tiny.
+  const [cap, setCap] = useState(200);
 
   useEffect(() => {
     if (!open || rows) return;
@@ -54,16 +92,20 @@ export function IconPicker({
     };
   }, [open, rows]);
 
-  const shown = useMemo(() => {
+  const matched = useMemo(() => {
     if (!rows) return [];
     const term = q.trim().toLowerCase();
+    const byStyle = style === "all" ? rows : rows.filter((r) => r.s === style);
     const match = term
-      ? rows.filter((r) => r.l.toLowerCase().includes(term) || r.t.some((t) => t.includes(term)))
-      : rows;
-    // Capped. Two thousand SVGs in one grid is a second of layout every
-    // keystroke, and nobody scrolls past the first hundred anyway.
-    return match.slice(0, 120);
-  }, [rows, q]);
+      ? byStyle.filter((r) => r.l.toLowerCase().includes(term) || r.t.some((t) => t.includes(term)))
+      : byStyle;
+    return [...match].sort((a, b) => score(a, term) - score(b, term) || a.l.localeCompare(b.l));
+  }, [rows, q, style]);
+
+  const shown = useMemo(() => matched.slice(0, cap), [matched, cap]);
+
+  // A new search starts at the top of a fresh page rather than 800 rows deep.
+  useEffect(() => setCap(200), [q, style]);
 
   return (
     <div className="flex flex-col gap-2">
@@ -93,10 +135,28 @@ export function IconPicker({
             autoFocus
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search 2,000 icons — star, lock, chart…"
+            placeholder="Search 2,163 icons — star, lock, chart…"
             aria-label="Search icons"
             className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs outline-none focus:border-primary"
           />
+
+          <div className="flex flex-wrap gap-1">
+            {STYLES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setStyle(t.id)}
+                aria-pressed={style === t.id}
+                className={`rounded-full px-2 py-0.5 text-[0.65rem] transition-colors ${
+                  style === t.id
+                    ? "bg-primary text-primary-fg"
+                    : "border border-border text-muted hover:border-primary"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
 
           {error && (
             <p className="px-1 py-2 text-[0.68rem] text-primary">
@@ -108,7 +168,15 @@ export function IconPicker({
 
           {rows && (
             <>
-              <div className="grid max-h-56 grid-cols-8 gap-1 overflow-y-auto">
+              <div
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) {
+                    setCap((c) => (c < matched.length ? c + 200 : c));
+                  }
+                }}
+                className="grid max-h-72 grid-cols-8 gap-1 overflow-y-auto"
+              >
                 {shown.map((r) => (
                   <button
                     key={r.i}
@@ -130,9 +198,11 @@ export function IconPicker({
                 ))}
               </div>
               <p className="px-1 text-[0.62rem] text-muted">
-                {shown.length === 0
+                {matched.length === 0
                   ? "Nothing matches that."
-                  : `Showing ${shown.length}${shown.length === 120 ? " — keep typing to narrow it" : ""}.`}
+                  : shown.length < matched.length
+                    ? `${shown.length} of ${matched.length} — scroll for more.`
+                    : `${matched.length} icon${matched.length === 1 ? "" : "s"}.`}
               </p>
             </>
           )}

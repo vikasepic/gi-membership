@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
+import { score, type Row } from "@/components/admin/icon-picker";
 
 /**
  * The Font Awesome set is a static file, not a bundle import.
@@ -44,3 +45,36 @@ describe("where the icon set lives", () => {
     expect(pkg.dependencies?.["@fortawesome/fontawesome-free"]).toBeUndefined();
   });
 })
+
+/**
+ * The grid held 2,163 icons and looked like it held twelve.
+ *
+ * It was `filter` in file order, and file order is alphabetical: opening the
+ * picker showed 0, 1, 2, 3, and searching "star" put "Star and Crescent" above
+ * "Star". These pin the ordering against the real set rather than a fixture,
+ * because the thing that went wrong was the shape of the actual data.
+ */
+describe("what the picker shows first", () => {
+  const rows = JSON.parse(readFileSync("public/fa-icons.json", "utf8")) as Row[];
+  const search = (q: string) => {
+    const term = q.trim().toLowerCase();
+    return [...rows]
+      .filter((r) => !term || r.l.toLowerCase().includes(term) || r.t.some((t) => t.includes(term)))
+      .sort((a, b) => score(a, term) - score(b, term) || a.l.localeCompare(b.l));
+  };
+
+  it("puts the exact match first", () => {
+    for (const q of ["star", "lock", "heart", "check"]) {
+      expect(search(q)[0].l.toLowerCase(), q).toBe(q);
+    }
+  });
+
+  it("does not open on digits and single letters", () => {
+    const first = search("").slice(0, 24).map((r) => r.l);
+    expect(first.filter((l) => /^[0-9a-z]$/i.test(l))).toEqual([]);
+  });
+
+  it("opens on solid icons rather than brands", () => {
+    expect(search("").slice(0, 40).every((r) => r.s === "solid")).toBe(true);
+  });
+});

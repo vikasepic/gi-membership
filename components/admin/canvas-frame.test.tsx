@@ -1,7 +1,9 @@
 /** @vitest-environment jsdom */
 import { describe, expect, it } from "vitest";
-import { DEVICE_MAX } from "@/lib/blocks";
-import { deviceForWidth, widthRange } from "@/components/admin/canvas-frame";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { DEVICE_MAX, type Device } from "@/lib/blocks";
+import { CanvasFrame, deviceForWidth, widthRange } from "@/components/admin/canvas-frame";
 
 /**
  * The numbers, not the drag.
@@ -49,35 +51,32 @@ describe("the range a tab governs", () => {
 
 describe("the handles", () => {
   it("resize with the arrow keys and move the tab with the width", async () => {
-    const { act } = await import("react");
-    const { createRoot } = await import("react-dom/client");
-    const { CanvasFrame } = await import("@/components/admin/canvas-frame");
-    const React = await import("react");
-
     let width: number | null = 800;
-    let device: "desktop" | "tablet" | "mobile" = "tablet";
+    let device: Device = "tablet";
     const host = document.createElement("div");
     document.body.append(host);
     const root = createRoot(host);
     const render = () =>
       act(() => {
         root.render(
-          React.createElement(
-            CanvasFrame,
-            {
-              device,
-              width,
-              onWidth: (w: number | null) => (width = w),
-              onDevice: (d: typeof device) => (device = d),
-            },
-            React.createElement("p", null, "page"),
-          ),
+          <CanvasFrame
+            device={device}
+            width={width}
+            onWidth={(w) => {
+              width = w;
+            }}
+            onDevice={(d) => {
+              device = d;
+            }}
+          >
+            <p>page</p>
+          </CanvasFrame>,
         );
       });
     await render();
 
     const handle = host.querySelector("button")!;
-    // Shift is the coarse step: 800 → 750 → 700, which is below 768 and so is
+    // Shift is the coarse step: 800 -> 750 -> 700, which is below 768 and so is
     // no longer a tablet.
     for (let i = 0; i < 2; i++) {
       await act(async () => {
