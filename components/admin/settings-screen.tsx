@@ -11,6 +11,7 @@ import { GROUP_FIELDS, SETTINGS_GROUPS, type Settings, type SettingsGroupKey } f
 import { usePresence, PresenceNote } from "@/components/admin/presence";
 import { TypographyFields, FontLibrary, type InstalledFont } from "@/components/admin/typography-fields";
 import { ShellFields } from "@/components/admin/shell-fields";
+import { SnippetFields } from "@/components/admin/snippet-fields";
 
 /**
  * Site settings, in groups.
@@ -467,8 +468,10 @@ document.head.appendChild(s);`}</pre>
         </p>
       </div>
       <p className="text-xs text-muted">
-        Neither of these runs in the admin, so a broken snippet can always be removed from here.
+        None of this runs in the admin, so a broken snippet can always be removed from here.
       </p>
+
+      <SnippetFields snippets={s.codeSnippets} />
     </>
   );
 }

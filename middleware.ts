@@ -9,7 +9,12 @@ import { createServerClient } from "@supabase/ssr";
 //   early traffic is permanently unattributable).
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const res = NextResponse.next({ request: req });
+  // The path, forwarded to the server components. A layout cannot read the URL
+  // any other way, and the store layout needs it to keep pasted snippets off
+  // the checkout unless one of them says otherwise.
+  const withPath = new Headers(req.headers);
+  withPath.set("x-pathname", pathname);
+  const res = NextResponse.next({ request: { headers: withPath } });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

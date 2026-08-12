@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
+import { codeSnippetsSchema } from "@/lib/code-snippets";
 import { SITE_TYPOGRAPHY_SCHEMA } from "@/lib/site-typography";
 import { SITE_SHELL_SCHEMA } from "@/lib/site-shell";
 
@@ -109,6 +110,9 @@ export const SETTINGS_SCHEMA = z.object({
   // ---- Advanced ----------------------------------------------------------
   customCss: z.string().max(20000).default(""),
   customJs: z.string().max(20000).default(""),
+  // Named snippets with a position of their own. `customJs` stays: it is one
+  // box of JavaScript, and this is a list of vendors' markup.
+  codeSnippets: codeSnippetsSchema,
 });
 
 export type Settings = z.infer<typeof SETTINGS_SCHEMA> & { name: string };
@@ -161,6 +165,6 @@ export const GROUP_FIELDS: Record<SettingsGroupKey, readonly (keyof Settings)[]>
     "socialX",
     "socialLinkedin",
   ],
-  advanced: ["customCss", "customJs"],
+  advanced: ["customCss", "customJs", "codeSnippets"],
 };
 

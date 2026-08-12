@@ -8,6 +8,8 @@ import { StoreBrand } from "@/components/store-brand";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import { listFonts } from "@/lib/fonts";
 import { storeMetadata } from "@/lib/site-metadata";
+import { CodeSnippets } from "@/components/code-snippets";
+import { headers } from "next/headers";
 
 // Live store — never statically prerender (server data uses runtime-only env).
 export const dynamic = "force-dynamic";
@@ -24,12 +26,23 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function StoreLayout({ children }: { children: React.ReactNode }) {
   const settings = await getSettingsOrDefaults();
+  // Which page this is, so a snippet that did not opt in stays off the
+  // checkout. Read from the header Next sets rather than from a client hook —
+  // this is a server component and the answer has to be known before render.
+  const path = (await headers()).get("x-pathname");
+  // A missing header fails SAFE: unknown counts as the checkout, so the only
+  // snippets that run are the ones explicitly allowed there. The failure is
+  // then a snippet that does not fire — visible, and reported by somebody —
+  // rather than a third-party script quietly appearing on a payment page.
+  const onCheckout = path === null || path.startsWith("/checkout");
   // A font table that cannot be read must not take the shop down with it; the
   // page then renders in the fonts it was built with, which is what it did
   // before any of this existed.
   const fonts = await listFonts().catch(() => []);
   return (
     <>
+      <CodeSnippets snippets={settings.codeSnippets} place="head" onCheckout={onCheckout} />
+      <CodeSnippets snippets={settings.codeSnippets} place="bodyStart" onCheckout={onCheckout} />
       <StoreBrand
         settings={settings}
         fonts={fonts}
@@ -39,6 +52,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
       <Analytics ids={publicAnalyticsIds()} />
       <AppShell settings={settings}>{children}</AppShell>
       <ConsentBanner />
+      <CodeSnippets snippets={settings.codeSnippets} place="bodyEnd" onCheckout={onCheckout} />
     </>
   );
 }
