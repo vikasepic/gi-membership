@@ -481,7 +481,18 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   // the offer's sales page, a one-click accept after checkout. The label stays
   // editable; the money path never is.
   button: { text: "Get instant access", link: "", fullWidth: false, variant: "solid", action: "link" },
-  iconlist: { items: [], layout: "stacked", iconSize: 16, gap: 8, iconColor: null },
+  // `gap` was doing two jobs — the space between lines AND the space between a
+  // mark and its words — so neither could be set. `iconGap` is the second one.
+  iconlist: {
+    items: [],
+    layout: "stacked",
+    marker: "check",
+    markerImage: "",
+    iconSize: 16,
+    gap: 8,
+    iconGap: 10,
+    iconColor: null,
+  },
   slides: { items: [], skin: "card", perView: 1, arrows: true, dots: true },
   spacer: { height: 40 },
   divider: { thickness: 1, width: 100 },

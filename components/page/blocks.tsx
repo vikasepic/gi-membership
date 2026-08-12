@@ -2,6 +2,7 @@ import { blockRendersNothing, styleFor, type Block, type Device } from "@/lib/bl
 import { Countdown } from "@/components/page/countdown";
 import { SlideRail } from "@/components/page/slide-rail";
 import { evergreenKey, evergreenMinutes, instantFrom } from "@/lib/countdown";
+import { listIconPath } from "@/lib/list-icons";
 import { familyToken } from "@/lib/fonts-catalogue";
 import {
   CatalogBlock,
@@ -644,14 +645,57 @@ function Inner({
       const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
       if (items.length === 0) return null;
       const size = num(p.iconSize, 16);
+      const marker = str(p.marker, "check");
+      const path = listIconPath(marker);
+      // The space between a mark and its words, which used to be the same
+      // number as the space between lines — so neither could be set without
+      // moving the other.
+      const iconGap = num(p.iconGap, 10);
+      const listImage = imageSrc(str(p.markerImage));
+      const markFor = (item: Record<string, unknown>) => {
+        // A line's own picture wins, then the list's, then the drawn mark.
+        const own = imageSrc(str(item.image));
+        const src = own ?? (marker === "image" ? listImage : null);
+        if (src) {
+          return (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={src}
+              alt=""
+              aria-hidden
+              className="shrink-0"
+              style={{ width: size, height: size, objectFit: "contain", marginTop: "0.15em" }}
+            />
+          );
+        }
+        if (!path) return null;
+        return (
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden
+            focusable="false"
+            className="shrink-0"
+            style={{
+              width: size,
+              height: size,
+              // Optically on the first line rather than above it: a 24px mark
+              // beside 16px text sits high without this.
+              marginTop: "0.15em",
+              fill: str(p.iconColor) || c.accent,
+            }}
+          >
+            <path d={path} />
+          </svg>
+        );
+      };
       return (
         <ul
           className={`flex list-none p-0 ${str(p.layout) === "inline" ? "flex-row flex-wrap" : "flex-col"}`}
           style={{ gap: `${num(p.gap, 8)}px`, color: c.fg, ...type }}
         >
           {items.map((item, i) => (
-            <li key={i} className="flex items-start" style={{ gap: `${Math.max(6, num(p.gap, 8))}px` }}>
-              <Tick color={c.accent} size={size} />
+            <li key={i} className="flex items-start" style={{ gap: `${iconGap}px` }}>
+              {markFor(item)}
               <Inline html={str(item.text)} />
             </li>
           ))}

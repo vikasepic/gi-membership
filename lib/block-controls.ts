@@ -1,4 +1,5 @@
 import { ALL_ZONES, describeDeadline, evergreenMinutes } from "@/lib/countdown";
+import { LIST_ICONS } from "@/lib/list-icons";
 import {
   BLOCK_TYPES,
   MAX_COLUMNS,
@@ -256,14 +257,46 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
 
   iconlist: {
     content: [
-      { kind: "list", key: "items", label: "Lines", item: [{ key: "text", label: "Line", kind: "text" }], addLabel: "Add a line" },
+      {
+        kind: "list",
+        key: "items",
+        label: "Lines",
+        // A per-line picture, so one line can carry its own mark. Empty on a
+        // line means the list's own marker, which is what almost every line
+        // wants.
+        item: [
+          { key: "text", label: "Line", kind: "text" },
+          { key: "image", label: "Its own mark", kind: "image" },
+        ],
+        addLabel: "Add a line",
+      },
       { kind: "select", key: "layout", label: "Layout", options: [["stacked", "Stacked"], ["inline", "Inline"]] },
     ],
     style: [
-      group("Icon"),
-      { kind: "color", key: "iconColor", label: "Icon colour", hint: "Unset follows the band accent." },
-      { kind: "number", key: "iconSize", label: "Icon size", min: 10, max: 40, step: 1, unit: "px" },
-      { kind: "number", key: "gap", label: "Gap", min: 0, max: 40, step: 2, unit: "px" },
+      group("Mark"),
+      {
+        kind: "select",
+        key: "marker",
+        label: "Mark",
+        hint: "Drawn in the page, so it costs no request and cannot fail to load.",
+        options: [
+          ...LIST_ICONS.map((i) => [i.id, i.label] as [string, string]),
+          ["image", "A picture of my own"],
+          ["none", "None"],
+        ],
+      },
+      {
+        kind: "image",
+        key: "markerImage",
+        label: "The picture",
+        hint: "SVG or PNG. Used on every line that has none of its own.",
+        when: (b) => b.props.marker === "image",
+      },
+      { kind: "color", key: "iconColor", label: "Mark colour", hint: "Unset follows the band accent. A picture keeps its own colours.", when: (b) => b.props.marker !== "none" },
+      { kind: "number", key: "iconSize", label: "Mark size", min: 8, max: 64, step: 1, unit: "px", responsive: true, when: (b) => b.props.marker !== "none" },
+      { kind: "number", key: "iconGap", label: "Mark to text", min: 0, max: 48, step: 1, unit: "px", responsive: true, when: (b) => b.props.marker !== "none" },
+      group("Lines"),
+      { kind: "number", key: "gap", label: "Between lines", min: 0, max: 48, step: 1, unit: "px", responsive: true },
       ...TYPOGRAPHY,
     ],
   },
