@@ -646,12 +646,20 @@ function Inner({
       if (items.length === 0) return null;
       const size = num(p.iconSize, 16);
       const marker = str(p.marker, "check");
-      const path = listIconPath(marker);
+      const path = listIconPath(marker === "fa" ? "check" : marker);
       // The space between a mark and its words, which used to be the same
       // number as the space between lines — so neither could be set without
       // moving the other.
       const iconGap = num(p.iconGap, 10);
       const listImage = imageSrc(str(p.markerImage));
+      // A chosen Font Awesome icon travels as its own path, so the page needs
+      // no library to draw it and no request to find it.
+      const fa =
+        marker === "fa" && p.markerIcon && typeof p.markerIcon === "object"
+          ? (p.markerIcon as { v?: unknown; d?: unknown })
+          : null;
+      const faPath = fa && typeof fa.d === "string" ? fa.d : null;
+      const faBox = fa && typeof fa.v === "string" ? fa.v : "0 0 512 512";
       const markFor = (item: Record<string, unknown>) => {
         // A line's own picture wins, then the list's, then the drawn mark.
         const own = imageSrc(str(item.image));
@@ -666,6 +674,24 @@ function Inner({
               className="shrink-0"
               style={{ width: size, height: size, objectFit: "contain", marginTop: "0.15em" }}
             />
+          );
+        }
+        if (faPath) {
+          return (
+            <svg
+              viewBox={faBox}
+              aria-hidden
+              focusable="false"
+              className="shrink-0"
+              style={{
+                width: size,
+                height: size,
+                marginTop: "0.15em",
+                fill: str(p.iconColor) || c.accent,
+              }}
+            >
+              <path d={faPath} />
+            </svg>
           );
         }
         if (!path) return null;

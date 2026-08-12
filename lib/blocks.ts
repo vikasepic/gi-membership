@@ -488,6 +488,7 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     layout: "stacked",
     marker: "check",
     markerImage: "",
+    markerIcon: null,
     iconSize: 16,
     gap: 8,
     iconGap: 10,

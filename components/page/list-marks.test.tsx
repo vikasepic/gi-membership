@@ -81,4 +81,29 @@ describe("what a list puts in front of a line", () => {
     expect(out).not.toContain("fontawesome");
     expect(out).not.toMatch(/<link|@import/);
   });
+
+  it("draws a Font Awesome icon from the path stored in the block", () => {
+    // The whole design in one test: the page has no library and makes no
+    // request — the icon travels as its own path inside the block.
+    const out = render({
+      items: LINES,
+      marker: "fa",
+      markerIcon: { v: "0 0 448 512", d: "M438.6 105.4L167 377z" },
+    });
+    expect(out).toContain('viewBox="0 0 448 512"');
+    expect(out).toContain("M438.6 105.4L167 377z");
+  });
+
+  it("falls back to a drawn mark when the icon was never chosen", () => {
+    // Marker set to "fa" with nothing picked yet must not lose its bullets.
+    expect(render({ items: LINES, marker: "fa" })).toContain(listIconPath("check")!);
+  });
+
+  it("takes the mark colour for a Font Awesome icon too", () => {
+    const out = render({
+      items: LINES, marker: "fa", iconColor: "#00ff00",
+      markerIcon: { v: "0 0 448 512", d: "M1 2" },
+    });
+    expect(out).toContain("fill:#00ff00");
+  });
 });

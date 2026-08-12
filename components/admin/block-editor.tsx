@@ -7,6 +7,7 @@ import { ContextMenu, menuAt, type MenuState } from "@/components/admin/context-
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BlockBody, Blocks } from "@/components/page/blocks";
+import { IconPicker } from "@/components/admin/icon-picker";
 import type { StoreRender } from "@/components/page/storefront-blocks";
 import { RichText } from "@/components/editor/rich-text";
 import {
@@ -2434,6 +2435,17 @@ function ControlField({
         />,
         { stack: true },
       );
+
+    case "icon": {
+      const picked =
+        value && typeof value === "object" && "d" in (value as Record<string, unknown>)
+          ? (value as { v: string; d: string })
+          : null;
+      return row(
+        <IconPicker value={picked} onPick={(icon) => onChange(icon)} onClear={() => onChange(null)} />,
+        { stack: true },
+      );
+    }
 
     case "datetime":
       // The browser's own picker. A text field asking for "YYYY-MM-DD HH:MM"

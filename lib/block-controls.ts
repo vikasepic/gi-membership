@@ -68,6 +68,9 @@ export type Control =
   | (Base & { kind: "color" })
   /** A calendar and a clock, not a string somebody types in the right shape. */
   | (Base & { kind: "datetime" })
+  /** Every Font Awesome free icon. Stores the chosen PATH, not a name — see
+   *  components/admin/icon-picker.tsx for why that matters. */
+  | (Base & { kind: "icon" })
   | (Base & { kind: "dim" })
   | (Base & { kind: "list"; item: { key: string; label: string; kind: "text" | "textarea" | "image" }[]; addLabel: string })
   // Rows only. Both need the block itself — how many columns there are, and how
@@ -281,9 +284,17 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         hint: "Drawn in the page, so it costs no request and cannot fail to load.",
         options: [
           ...LIST_ICONS.map((i) => [i.id, i.label] as [string, string]),
+          ["fa", "A Font Awesome icon"],
           ["image", "A picture of my own"],
           ["none", "None"],
         ],
+      },
+      {
+        kind: "icon",
+        key: "markerIcon",
+        label: "The icon",
+        hint: "Searched and drawn from the free set. Only this admin ever loads it — the page draws the icon you picked.",
+        when: (b) => b.props.marker === "fa",
       },
       {
         kind: "image",
