@@ -4,7 +4,7 @@ import { useSlowSave } from "@/components/admin/save-status";
 import { useActionState, useState } from "react";
 import { saveCourseAction, deleteCourseAction, type SaveState } from "@/app/admin/courses/actions";
 import { inputClass, Field, Section } from "@/components/admin/form-controls";
-import { slugify } from "@/lib/slug";
+import { slugify, slugDraft } from "@/lib/slug";
 import type { Course } from "@/lib/courses";
 
 const SLUG_RE = /^[a-z0-9-]+$/;
@@ -49,7 +49,7 @@ export function CourseForm({ course }: { course?: Course }) {
 
   function onSlug(v: string) {
     // Normalise as they type so the field can only ever hold a valid slug.
-    setSlug(slugify(v));
+    setSlug(slugDraft(v));
     setSlugEdited(true);
     setClientErr((c) => ({ ...c, slug: "" }));
   }
@@ -85,6 +85,9 @@ export function CourseForm({ course }: { course?: Course }) {
               name="slug"
               value={slug}
               onChange={(e) => onSlug(e.target.value)}
+              // The trailing hyphen is allowed while typing and tidied the
+              // moment the field is left, so nothing half-written is saved.
+              onBlur={(e) => setSlug(slugify(e.target.value))}
               className={invalid(inputClass, Boolean(err("slug")))}
             />
           </Field>

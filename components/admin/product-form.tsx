@@ -11,7 +11,7 @@ import { PRODUCT_FIELD_TABS, summarise, tabToShow, tabsWithErrors } from "@/lib/
 import { publicCoverUrl } from "@/lib/media-url";
 import { MediaButton, type PickedMedia } from "@/components/admin/media-modal";
 import { StorefrontPreview, BumpPreview, Readiness } from "@/components/admin/editor-preview";
-import { slugify } from "@/lib/slug";
+import { slugify, slugDraft } from "@/lib/slug";
 import type { Product } from "@/lib/types";
 import type { OfferOption } from "@/lib/admin";
 import type { Course } from "@/lib/courses";
@@ -116,8 +116,10 @@ export function ProductForm({
   }
 
   function onSlug(v: string) {
-    // Normalise as they type so the field can only hold a valid slug.
-    setSlug(slugify(v));
+    // Normalised as they type, but with the trailing hyphen left alone —
+    // trimming it here is what made a hyphen impossible to type at all. The
+    // full rule runs on blur, and again on the server.
+    setSlug(slugDraft(v));
     setSlugEdited(true);
     setClientErr((c) => ({ ...c, slug: "" }));
   }
@@ -270,6 +272,9 @@ export function ProductForm({
               name="slug"
               value={slug}
               onChange={(e) => onSlug(e.target.value)}
+              // The trailing hyphen is allowed while typing and tidied the
+              // moment the field is left, so nothing half-written is saved.
+              onBlur={(e) => setSlug(slugify(e.target.value))}
               className={invalid(inputClass, Boolean(err("slug")))}
             />
           </Field>
