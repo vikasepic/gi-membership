@@ -1,4 +1,4 @@
-import { at, col, make, rowOf, type Template } from "./template";
+import { at, col, fill, make, rowOf, type Template } from "./template";
 import { baseStyle, dim } from "@/lib/blocks";
 
 // The full price section: what you get on the left, the price panel on the
@@ -93,12 +93,40 @@ export const template: Template = {
                 altPrice: "",
                 altPeriod: "",
                 badge: "40% off",
-                ctaLabel: "Start {trial} free trial",
+                // Not "{trial}" — the token is substituted in the small print
+                // and nowhere else, so a button written with it prints the six
+                // characters at a buyer.
+                ctaLabel: "Start free trial",
                 action: "buy",
-                note: "{trial} free, then 3 funnels every month. Cancel anytime.",
+                note: "Then 3 funnels every month. Cancel anytime.",
                 secureNote: "For your security, all orders are processed on a secure server.",
               },
-              { margin: { t: 0, r: 0, b: 0, l: 0, u: "px", link: false } },
+              {
+                // Plum. Unset it takes the band's panel, which on this
+                // warm-paper ground is a cream barely distinguishable from it.
+                background: fill("#832a63"),
+        // The wrapper paints too once it has a colour, so it needs the card's own corner or a square shows behind the rounded box.
+        radius: 20,
+                margin: { t: 0, r: 0, b: 0, l: 0, u: "px", link: false },
+              },
+            ),
+            // Not part of the price card — it draws the price, the button, the
+            // small print and the security line, and nothing else.
+            make(
+              "image",
+              {
+                url: "/templates/sections/payment-marks.svg",
+                alt: "Accepted payment methods",
+                ratio: "auto",
+                maxWidth: 100,
+              },
+              {
+                width: "custom",
+                maxWidthValue: 260,
+                maxWidthUnit: "px",
+                blockAlign: "center",
+                margin: { t: 16, r: 0, b: 0, l: 0, u: "px", link: false },
+              },
             ),
           ],
         ],

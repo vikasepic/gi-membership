@@ -86,7 +86,33 @@ export const template: Template = {
                 note: "You have a 7-day guarantee, so you can look inside, test it and make sure it is right for you.",
                 secureNote: "For your security, all orders are processed on a secure server",
               },
-              { margin: { t: 0, r: 0, b: 0, l: 0, u: "px", link: false } },
+              {
+                // White, so the price card's own tray disappears into the card
+                // it is standing in. Unset it fills with the band's panel and
+                // draws a second cream box inside a white one, which is what it
+                // did until this was looked at.
+                background: fill("#ffffff"),
+                radius: 20,
+                margin: { t: 0, r: 0, b: 0, l: 0, u: "px", link: false },
+              },
+            ),
+            // A picture, not part of the price card. Generic marks on purpose:
+            // a template cannot know which schemes a store accepts.
+            make(
+              "image",
+              {
+                url: "/templates/sections/payment-marks.svg",
+                alt: "Accepted payment methods",
+                ratio: "auto",
+                maxWidth: 100,
+              },
+              {
+                width: "custom",
+                maxWidthValue: 300,
+                maxWidthUnit: "px",
+                blockAlign: "center",
+                margin: { t: 10, r: 0, b: 0, l: 0, u: "px", link: false },
+              },
             ),
           ],
         ],
