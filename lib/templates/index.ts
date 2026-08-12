@@ -31,6 +31,10 @@ import { template as bannerNavyFacts } from "./banner-navy-facts";
 import { template as bannerLightPackage } from "./banner-light-package";
 import { template as bannerImageOptin } from "./banner-image-optin";
 import { template as bannerEnrolCountdown } from "./banner-enrol-countdown";
+import { template as pricingPanel } from "./pricing-panel";
+import { template as signupBox } from "./signup-box";
+import { template as partsPanels } from "./parts-panels";
+import { template as discoverGrid } from "./discover-grid";
 
 export { templateSource, type Template } from "./template";
 
@@ -58,6 +62,10 @@ const BUILT_INS: Template[] = [
   bannerLightPackage,
   bannerImageOptin,
   bannerEnrolCountdown,
+  pricingPanel,
+  signupBox,
+  partsPanels,
+  discoverGrid,
   hero,
   featureCards,
   benefitColumns,
