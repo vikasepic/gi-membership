@@ -42,6 +42,9 @@ import { template as testimonialSingle } from "./testimonial-single";
 import { template as testimonialVideo } from "./testimonial-video";
 import { template as outcomeList } from "./outcome-list";
 import { template as pricingWithIncludes } from "./pricing-with-includes";
+import { template as walkawayGrid } from "./walkaway-grid";
+import { template as testimonialOverlay } from "./testimonial-overlay";
+import { template as offerCard } from "./offer-card";
 
 export { templateSource, type Template } from "./template";
 
@@ -80,6 +83,9 @@ const BUILT_INS: Template[] = [
   testimonialVideo,
   outcomeList,
   pricingWithIncludes,
+  walkawayGrid,
+  testimonialOverlay,
+  offerCard,
   hero,
   featureCards,
   benefitColumns,
