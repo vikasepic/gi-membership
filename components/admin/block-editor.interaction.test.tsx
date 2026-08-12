@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { BlockEditor } from "@/components/admin/block-editor";
 import { bandTheme } from "@/lib/page-sections";
-import { newBlock, setStyleAt, type Block } from "@/lib/blocks";
+import { newBlock, setColumnCount, setStyleAt, type Block } from "@/lib/blocks";
 import { normalizeSiteTypography } from "@/lib/site-typography";
 import { BLOCK_CONTROLS, writeControl, type Control } from "@/lib/block-controls";
 import { blockRules } from "@/lib/block-style";
@@ -749,5 +749,57 @@ describe("the number controls", () => {
     expect(styleTab, "the Style tab").toBeTruthy();
     click(styleTab!);
     expect(stepsOf("Line height").typed).toBe("0.05");
+  });
+});
+
+
+/**
+ * Selecting a block that contains a link.
+ *
+ * The canvas draws the real thing, so a button with a href is a real `<a>`.
+ * Left to its default a click on it navigates: an in-page href jumps the
+ * editor, an external one leaves it, and either way the selection is lost and
+ * the panel falls back to the section — which reads as "clicking the button
+ * selects the section".
+ */
+describe("a link inside the canvas", () => {
+  const linked = () => {
+    const b = newBlock("button");
+    return { ...b, id: "lk1", props: { ...b.props, text: "See how it works", link: "#how" } };
+  };
+
+  it("selects the block rather than following the link", () => {
+    mount([linked()]);
+    const a = [...document.querySelectorAll("a")].find((x) => x.textContent === "See how it works")!;
+    expect(a, "the canvas draws a real anchor").toBeTruthy();
+
+    const ev = new MouseEvent("click", { bubbles: true, cancelable: true });
+    act(() => { a.dispatchEvent(ev); });
+
+    expect(ev.defaultPrevented, "the link must not navigate the admin").toBe(true);
+    // And it still selected: the panel is the block's, not the section's.
+    expect(document.body.textContent).not.toContain("band everything sits on");
+  });
+
+  it("still selects a block that holds no link at all", () => {
+    mount([{ ...newBlock("heading"), props: { text: "Just a heading", tag: "h2" } }]);
+    const h = [...document.querySelectorAll("h2")].find((x) => x.textContent === "Just a heading")!;
+    const ev = new MouseEvent("click", { bubbles: true, cancelable: true });
+    act(() => { h.dispatchEvent(ev); });
+    // Nothing to prevent here — preventing every click would break the parts
+    // of the canvas that rely on one.
+    expect(ev.defaultPrevented).toBe(false);
+  });
+
+  it("selects a button nested inside a container column", () => {
+    // Where the report came from: the button sat in a two-column hero.
+    const b = newBlock("button");
+    const btn = { ...b, id: "btn1", props: { ...b.props, text: "Start 7-day free trial" } };
+    const row = setColumnCount(newBlock("row"), 2);
+    row.columns = [[btn], []];
+    mount([row]);
+    const el = [...document.querySelectorAll("span,a")].find((x) => x.textContent === "Start 7-day free trial")!;
+    act(() => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
+    expect(document.body.textContent).not.toContain("band everything sits on");
   });
 });

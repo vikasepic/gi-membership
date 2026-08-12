@@ -1366,6 +1366,13 @@ function CanvasBlock({
       }}
       onClick={(e) => {
         e.stopPropagation();
+        // A block can contain a real link — a button block with a href is an
+        // `<a>`, and a rich-text block can hold any number of them. Left to its
+        // default, clicking one in the CANVAS navigates the admin: an in-page
+        // href jumps the editor, an external one leaves it, and either way the
+        // selection you were trying to make is gone and the panel falls back to
+        // the section. The click still selects; it just stops going anywhere.
+        if ((e.target as HTMLElement).closest?.("a")) e.preventDefault();
         onSelect(block.id);
       }}
       onContextMenu={(e) => {
