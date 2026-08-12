@@ -38,6 +38,10 @@ import { template as discoverGrid } from "./discover-grid";
 import { template as testimonialPortraits } from "./testimonial-portraits";
 import { template as guideShelf } from "./guide-shelf";
 import { template as testimonialCases } from "./testimonial-cases";
+import { template as testimonialSingle } from "./testimonial-single";
+import { template as testimonialVideo } from "./testimonial-video";
+import { template as outcomeList } from "./outcome-list";
+import { template as pricingWithIncludes } from "./pricing-with-includes";
 
 export { templateSource, type Template } from "./template";
 
@@ -72,6 +76,10 @@ const BUILT_INS: Template[] = [
   testimonialPortraits,
   guideShelf,
   testimonialCases,
+  testimonialSingle,
+  testimonialVideo,
+  outcomeList,
+  pricingWithIncludes,
   hero,
   featureCards,
   benefitColumns,
