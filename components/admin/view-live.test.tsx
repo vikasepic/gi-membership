@@ -33,12 +33,26 @@ describe("the link to the live page", () => {
 });
 
 describe("where it appears", () => {
-  it("sits in the product editor's header", () => {
-    // The header row absorbed the heading block, the two link buttons and the
-    // cover card. ViewLive itself still guards the offer editor.
+  it("sits in the product editor's header, whatever the status", () => {
+    // It used to be offered only for a published product. But a draft's public
+    // address is exactly where somebody goes to SEE that it 404s — hiding the
+    // way there is how they conclude the page is broken rather than
+    // unpublished. The button now says what a draft will do instead of
+    // disappearing.
     const src = readFileSync("app/admin/products/[id]/page.tsx", "utf8");
     expect(src).toContain("liveHref=");
-    expect(src).toContain('product.status === "published"');
+    expect(src, "the status guard is back").not.toContain('liveHref={product.status === "published"');
+
+    const form = readFileSync("components/admin/product-form.tsx", "utf8");
+    expect(form).toContain("404");
+  });
+
+  it("says on the product screen what a draft actually does", () => {
+    // The status was a grey word in a corner. The consequence — the address
+    // returns 404 to everyone — is the part somebody needs and was not told.
+    const form = readFileSync("components/admin/product-form.tsx", "utf8");
+    expect(form).toContain("returns 404 to everyone");
+    expect(form).toContain('status !== "published"');
   });
 
   it("knows both ways an offer page can be unreachable", () => {

@@ -31,7 +31,10 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         inheritedCoverUrl={publicCoverUrl(assigned.find((c) => c.coverPath)?.coverPath ?? null)}
         hasSalesPage={hasSalesPage}
         salesPageHref={`/admin/products/${id}/page-editor`}
-        liveHref={product.status === "published" ? `/p/${product.slug}` : undefined}
+        // Offered whatever the status. A draft's public address is where you
+        // go to SEE that it 404s; hiding the way there is how somebody decides
+        // the page is broken rather than unpublished.
+        liveHref={`/p/${product.slug}`}
       />
 
       {/* Legacy single-file delivery, only for a product with no course yet.

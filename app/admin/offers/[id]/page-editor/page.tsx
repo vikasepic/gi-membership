@@ -53,11 +53,24 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
       <div className="mx-[calc(50%-50vw+var(--admin-nav)/2)] w-[calc(100vw-var(--admin-nav))] overflow-x-clip px-5 md:px-8">
         <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-4">
       <details className="rounded-xl border border-border bg-surface">
-        <summary className="cursor-pointer list-none px-3 py-2 text-xs text-muted [&::-webkit-details-marker]:hidden">
-          Public link &amp; custom code
-          <span className="ml-2 text-[0.68rem]">
-            /o/{offer.key}
-            {settings.customCss || settings.customJs ? " · code set" : ""}
+        {/* Same bar as the product page editor: a caret that turns, the address
+            as the loudest thing on the row, and a count of what is folded away.
+            It read as a caption with no sign that clicking it did anything. */}
+        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 hover:bg-surface-2 [&::-webkit-details-marker]:hidden [[open]>&]:border-b [[open]>&]:border-border">
+          <svg viewBox="0 0 16 16" aria-hidden className="size-2.5 shrink-0 fill-current text-muted transition-transform [[open]_&]:rotate-90">
+            <path d="M5 2.5 10.5 8 5 13.5V2.5Z" />
+          </svg>
+          <code className="font-mono text-xs text-fg">/o/{offer.key}</code>
+          <span className="ml-auto text-[0.68rem] text-muted">
+            {[
+              "Public link",
+              settings.customCss || settings.customJs ? "custom code" : null,
+              settings.snippets.length > 0
+                ? `${settings.snippets.length} snippet${settings.snippets.length === 1 ? "" : "s"}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
         </summary>
         <div className="flex flex-col gap-3 border-t border-border p-3">

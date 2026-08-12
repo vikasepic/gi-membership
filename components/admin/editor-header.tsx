@@ -31,7 +31,15 @@ export function EditorHeader({
   title: string;
   /** Slug, price — the identifying detail, small. */
   meta?: string;
-  status?: { live: boolean; label: string };
+  /**
+   * Live or not, and what that MEANS.
+   *
+   * It was a 1.5px dot and a grey word, which is a label for somebody who
+   * already knows the answer. The one that matters is "draft", and its
+   * consequence — the public address returns 404 to everyone — is the thing an
+   * editor needs and the thing they were not being told.
+   */
+  status?: { live: boolean; label: string; note?: string };
   coverUrl: string | null;
   /** Absent for things with no artwork of their own. */
   onPickCover?: (item: PickedMedia) => void;
@@ -72,10 +80,20 @@ export function EditorHeader({
       </span>
 
       {status && (
-        <span className="flex items-center gap-1.5 text-xs text-muted">
+        <span
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+            status.live
+              ? "bg-[#3f9b6d]/12 text-[#2f7553]"
+              : // Not grey. A draft is the state that surprises people, and a
+                // surprise in the same colour as the furniture is not a state,
+                // it is a decoration.
+                "bg-primary/12 text-primary"
+          }`}
+          title={status.note}
+        >
           <span
             aria-hidden
-            className={`size-1.5 rounded-full ${status.live ? "bg-[#3f9b6d]" : "bg-border"}`}
+            className={`size-1.5 rounded-full ${status.live ? "bg-[#3f9b6d]" : "bg-primary"}`}
           />
           {status.label}
         </span>

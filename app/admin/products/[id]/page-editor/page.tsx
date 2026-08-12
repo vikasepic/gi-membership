@@ -49,11 +49,34 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
       {/* Both folded away. The URL is one line you copy occasionally; custom
           code is empty on every page until the day it is not. */}
       <details className="rounded-xl border border-border bg-surface">
-        <summary className="cursor-pointer list-none px-3 py-2 text-xs text-muted [&::-webkit-details-marker]:hidden">
-          Public link &amp; custom code
-          <span className="ml-2 text-[0.68rem]">
-            /p/{product.slug}
-            {settings.customCss || settings.customJs ? " · code set" : ""}
+        {/* It read as a caption: two grey phrases on a bar, no caret, nothing
+            that says a click does anything. The address was there and could not
+            be opened, copied, or told apart from the label beside it.
+
+            Now: a caret that turns, the address as the loudest thing on the row
+            because it is what somebody came to find, the status beside it
+            because a draft's address 404s, and a count of what is folded away
+            so opening it is a decision rather than a search. */}
+        <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 hover:bg-surface-2 [&::-webkit-details-marker]:hidden [[open]>&]:border-b [[open]>&]:border-border">
+          <svg viewBox="0 0 16 16" aria-hidden className="size-2.5 shrink-0 fill-current text-muted transition-transform [[open]_&]:rotate-90">
+            <path d="M5 2.5 10.5 8 5 13.5V2.5Z" />
+          </svg>
+          <code className="font-mono text-xs text-fg">/p/{product.slug}</code>
+          {product.status !== "published" && (
+            <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[0.62rem] font-medium text-primary">
+              {product.status} — 404s until published
+            </span>
+          )}
+          <span className="ml-auto text-[0.68rem] text-muted">
+            {[
+              "Public link",
+              settings.customCss || settings.customJs ? "custom code" : null,
+              settings.snippets.length > 0
+                ? `${settings.snippets.length} snippet${settings.snippets.length === 1 ? "" : "s"}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
         </summary>
         <div className="flex flex-col gap-3 border-t border-border p-3">
@@ -71,6 +94,16 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
                 : `This product is a ${product.status}, so the address 404s for everyone until you publish it — whatever is saved here.`
             }
           />
+          {/* The slug is a product field with a uniqueness rule behind it, so it
+              is edited in the one form that owns it rather than in a second one
+              that would have to repeat the rule and could disagree with it. */}
+          <p className="text-xs text-muted">
+            The address comes from the product&rsquo;s slug.{" "}
+            <Link href={`/admin/products/${id}`} className="text-primary underline underline-offset-2">
+              Change it in Basics
+            </Link>
+            .
+          </p>
           <PageSettings
             ownerType="product"
             ownerId={id}

@@ -228,8 +228,14 @@ describe("the page above the sections", () => {
     // A heading, a paragraph explaining what a sales page is, a card for a URL
     // and a card for code that is empty — five hundred pixels before section
     // one.
-    expect(src).toContain("Public link &amp; custom code");
+    //
+    // The wording is not the feature. What has to survive is that it FOLDS, and
+    // that the address is on the closed bar so nobody opens it just to read the
+    // URL — which is what the summary now leads with.
     expect(src).toContain("<details");
+    expect(src).toContain("<summary");
+    expect(src).toMatch(/<code[^>]*>\/(p|o)\//);
+    expect(src).toContain("Public link");
   });
 
   it.each([

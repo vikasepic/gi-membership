@@ -194,7 +194,14 @@ export function ProductForm({
         backLabel="Products"
         title={title || "New product"}
         meta={[slug && `/p/${slug}`, price && `$${price}`].filter(Boolean).join(" · ")}
-        status={{ live: status === "published", label: status === "published" ? "Published" : "Draft" }}
+        status={{
+          live: status === "published",
+          label: status === "published" ? "Published" : "Draft",
+          note:
+            status === "published"
+              ? undefined
+              : `/p/${slug} returns 404 to everyone until this is published.`,
+        }}
         coverUrl={shownCover}
         onPickCover={(item) => {
           setCover(item);
@@ -208,9 +215,18 @@ export function ProductForm({
                 {notReady} to sort out
               </span>
             )}
+            {/* Buttons, not muted text. These were two grey links the size of a
+                caption sitting among captions — the two things somebody comes
+                to this screen to do, styled as the least important words on it.
+                "View" is offered whatever the status: a draft's address is
+                where you go to SEE that it 404s, and hiding the way there is
+                how somebody concludes the page is broken. */}
             {salesPageHref && (
-              <a href={salesPageHref} className="rounded px-2 py-1 text-xs text-muted hover:text-fg">
-                Edit sales page →
+              <a
+                href={salesPageHref}
+                className="rounded-lg border border-border px-2.5 py-1 text-xs transition-colors hover:border-primary hover:text-fg"
+              >
+                Edit sales page
               </a>
             )}
             {liveHref && (
@@ -218,9 +234,14 @@ export function ProductForm({
                 href={liveHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="rounded px-2 py-1 text-xs text-muted hover:text-fg"
+                title={
+                  status === "published"
+                    ? "Opens the live page in a new tab"
+                    : "Opens in a new tab — a draft returns 404 until you publish it"
+                }
+                className="rounded-lg border border-border px-2.5 py-1 text-xs transition-colors hover:border-primary hover:text-fg"
               >
-                View live ↗
+                View page ↗
               </a>
             )}
           </>
@@ -238,6 +259,20 @@ export function ProductForm({
           />
         }
       />
+
+      {/* The one fact somebody needs on this screen, said where they are
+          looking. The status was a word in the corner; this is what the word
+          means. Gone the moment it is published — a banner that never goes
+          away is a banner nobody reads. */}
+      {status !== "published" && (
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-primary">
+          <strong className="font-medium">This is a {status}.</strong>
+          <span>
+            <code className="font-mono text-[0.82em]">/p/{slug}</code> returns 404 to everyone,
+            however finished the sales page is. Set Status to Published below to put it live.
+          </span>
+        </p>
+      )}
 
       <EditorTabs
         showTab={showTab}
