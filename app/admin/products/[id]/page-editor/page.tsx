@@ -57,10 +57,19 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
           </span>
         </summary>
         <div className="flex flex-col gap-3 border-t border-border p-3">
+          {/* The note used to promise the link went live as soon as a section
+              was saved. That is only true of a PUBLISHED product: /p/[slug]
+              404s a draft, whatever is on the page. Somebody built a whole
+              sales page, opened the link and got a 404 while the admin told
+              them it was live. */}
           <CopyLink
             url={`${siteUrl()}/p/${product.slug}`}
             label="Public link"
-            note="Live as soon as you save any section. Before that this address shows the short product page."
+            note={
+              product.status === "published"
+                ? "Live as soon as you save any section. Before that this address shows the short product page."
+                : `This product is a ${product.status}, so the address 404s for everyone until you publish it — whatever is saved here.`
+            }
           />
           <PageSettings
             ownerType="product"
