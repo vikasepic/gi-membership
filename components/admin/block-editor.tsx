@@ -8,6 +8,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import { createPortal } from "react-dom";
 import { BlockBody, Blocks } from "@/components/page/blocks";
 import { IconPicker } from "@/components/admin/icon-picker";
+import { CanvasFrame } from "@/components/admin/canvas-frame";
 import type { StoreRender } from "@/components/page/storefront-blocks";
 import { RichText } from "@/components/editor/rich-text";
 import {
@@ -190,6 +191,16 @@ export function BlockEditor({
   // narrows and the inspector writes to the same device, because a panel that
   // edits mobile while the canvas shows desktop is a panel you cannot trust.
   const [device, setDevice] = useState<Device>("desktop");
+  // The canvas width, dragged. Null means "take the pane", which is what
+  // desktop means and what the real page does with a window.
+  const [canvasWidth, setCanvasWidth] = useState<number | null>(null);
+  // Pressing a tab jumps to that tab's width — desktop's null still means
+  // "take the pane". Dragging then moves the tab back, because the width is
+  // what the page's media queries actually read.
+  const pickDevice = (d: Device) => {
+    setDevice(d);
+    setCanvasWidth(DEVICE_CANVAS[d]);
+  };
   const drag = useRef<DragPayload | null>(null);
   const [search, setSearch] = useState("");
   const [left, setLeft] = useState<"add" | "structure">("add");
@@ -648,7 +659,7 @@ export function BlockEditor({
       <header className="flex items-center gap-3 border-b border-border bg-surface px-4 py-2.5">
         <strong className="font-display text-sm">Builder</strong>
         <span className="text-sm text-muted">{title}</span>
-        <DeviceSwitch device={device} onChange={setDevice} className="mx-auto" />
+        <DeviceSwitch device={device} onChange={pickDevice} className="mx-auto" />
         <div className="flex items-center gap-0.5">
           {/* Visible as well as bound to the keyboard: a shortcut nobody knows
               about is not an undo, and the button is what tells you there is
@@ -833,6 +844,7 @@ export function BlockEditor({
               entirely — so Width, Measure and the paddings wrote values that
               the page honoured and the builder did not, which reads as "these
               settings don't work" because from in here they didn't. */}
+          <CanvasFrame device={device} width={canvasWidth} onWidth={setCanvasWidth} onDevice={setDevice}>
           <div
             className={`${PREVIEW_SCOPE} @container mx-auto w-full transition-[max-width] duration-200`}
             style={{
@@ -841,7 +853,9 @@ export function BlockEditor({
               // always narrower than the thing it was previewing: a row set to
               // Boxed looked identical to Full, because both were being cut
               // off by the canvas before either could reach its own limit.
-              maxWidth: DEVICE_CANVAS[device] ?? undefined,
+              //
+              // The frame around this now owns the width, so there is no
+              // second cap here fighting it.
               ...sectionBox(section?.layout).outer,
             }}
           >
@@ -911,6 +925,7 @@ export function BlockEditor({
 
           </div>
           </div>
+          </CanvasFrame>
         </div>
 
         {/* Inspector */}
