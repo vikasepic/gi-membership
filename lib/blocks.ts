@@ -1343,6 +1343,92 @@ export function setColumnWidth(widths: number[], index: number, value: number): 
  * count on reload, so keeping it also made the panel and a refresh disagree
  * about the same row.
  */
+/**
+ * Copy a column beside itself, content and settings and all.
+ *
+ * The count dropdown could already add a column, and that is a different thing:
+ * it adds an EMPTY one and resets every width to even, so a 70/30 hero becomes
+ * 33/33/33 and the work is gone. Duplicating keeps the blocks, keeps the
+ * column's own background and padding, and splits the source column's width
+ * between the two — so everything either side of it stays exactly where it was,
+ * which is what makes it feel like the copy "took its place".
+ *
+ * Fresh ids on every block inside, or the copy and the original would be the
+ * same block twice and editing one would edit both.
+ */
+export function duplicateColumn(block: Block, index: number): Block {
+  if (block.type !== "row") return block;
+  const cols = block.columns ?? [];
+  if (index < 0 || index >= cols.length || cols.length >= MAX_COLUMNS) return block;
+
+  const columns = [...cols];
+  columns.splice(index + 1, 0, cols[index].map((b) => reid(b)));
+
+  const styles = block.columnStyles ? [...block.columnStyles] : null;
+  if (styles) styles.splice(index + 1, 0, styles[index]);
+
+  // The STORED widths, per device — not the effective ones. A device that has
+  // never been given its own list inherits, and writing one here would pin a
+  // value nobody typed onto the phone.
+  const split = (raw: unknown): number[] | null => {
+    if (!Array.isArray(raw) || raw.length !== cols.length) return null;
+    const widths = raw.map((n) => num(n, 0));
+    const half = Math.round((widths[index] / 2) * 10) / 10;
+    const next = [...widths];
+    next[index] = half;
+    next.splice(index + 1, 0, Math.round((widths[index] - half) * 10) / 10);
+    return next;
+  };
+
+  let out: Block = { ...block, columns, ...(styles ? { columnStyles: styles } : {}) };
+  const desktop = split(block.props.widths);
+  if (desktop) out = { ...out, props: { ...out.props, widths: desktop } };
+  for (const device of ["tablet", "mobile"] as const) {
+    const stored = block.responsive?.[device]?.props?.widths;
+    const next = split(stored);
+    if (next) out = setPropsAt(out, device, { widths: next });
+  }
+  return out;
+}
+
+/**
+ * Take a column out, and hand its width to the one beside it.
+ *
+ * The inverse of `duplicateColumn`, and it has to exist for the same reason a
+ * delete key does: without it the only way back from a duplicate is the count
+ * dropdown, which resets every width to even and undoes the layout as well as
+ * the mistake. Its blocks go with it — this is "remove this column", not
+ * "merge it into the last one", which is what the count already does.
+ */
+export function removeColumn(block: Block, index: number): Block {
+  if (block.type !== "row") return block;
+  const cols = block.columns ?? [];
+  if (cols.length <= 1 || index < 0 || index >= cols.length) return block;
+
+  const columns = cols.filter((_, i) => i !== index);
+  const styles = block.columnStyles ? block.columnStyles.filter((_, i) => i !== index) : null;
+
+  // The width goes to the neighbour rather than being spread over everything,
+  // so the columns that were not involved do not move at all.
+  const shrink = (raw: unknown): number[] | null => {
+    if (!Array.isArray(raw) || raw.length !== cols.length) return null;
+    const widths = raw.map((n) => num(n, 0));
+    const next = widths.filter((_, i) => i !== index);
+    const to = index === 0 ? 0 : index - 1;
+    next[to] = Math.round((next[to] + widths[index]) * 10) / 10;
+    return next;
+  };
+
+  let out: Block = { ...block, columns, ...(styles ? { columnStyles: styles } : {}) };
+  const desktop = shrink(block.props.widths);
+  if (desktop) out = { ...out, props: { ...out.props, widths: desktop } };
+  for (const device of ["tablet", "mobile"] as const) {
+    const next = shrink(block.responsive?.[device]?.props?.widths);
+    if (next) out = setPropsAt(out, device, { widths: next });
+  }
+  return out;
+}
+
 export function setColumnCount(block: Block, count: number): Block {
   if (block.type !== "row") return block;
   const want = Math.max(1, Math.min(MAX_COLUMNS, Math.round(count)));
@@ -1494,15 +1580,39 @@ export function findBlock(blocks: Block[], id: string): Found | null {
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i];
     if (b.id === id) return { block: b, siblings: blocks, index: i, parentId: null, column: null };
-    if (b.columns) {
-      for (let c = 0; c < b.columns.length; c++) {
-        const col = b.columns[c];
-        for (let j = 0; j < col.length; j++) {
-          if (col[j].id === id) {
-            return { block: col[j], siblings: col, index: j, parentId: b.id, column: c };
-          }
+    if (!b.columns) continue;
+    for (let c = 0; c < b.columns.length; c++) {
+      const col = b.columns[c];
+      for (let j = 0; j < col.length; j++) {
+        if (col[j].id === id) {
+          return { block: col[j], siblings: col, index: j, parentId: b.id, column: c };
         }
       }
+      // A container inside a column has columns of its own. Row ids are unique
+      // across the whole tree, so `parentId` still names one column exactly —
+      // no path is needed, however deep it sits.
+      const deeper = findBlock(col, id);
+      if (deeper) return deeper;
+    }
+  }
+  return null;
+}
+
+/**
+ * How deep a row sits, or null when it is not a row in this tree.
+ *
+ * The insert guard needs it: the model allows one container inside a column
+ * and no more, because `normalizeBlocks` stops at MAX_DEPTH and would silently
+ * delete a third level on the next read — which is the worst way to lose a
+ * page, since it happens after the editor said the change was saved.
+ */
+export function rowDepth(blocks: Block[], rowId: string, depth = 0): number | null {
+  for (const b of blocks) {
+    if (b.id === rowId) return depth;
+    if (!b.columns) continue;
+    for (const col of b.columns) {
+      const found = rowDepth(col, rowId, depth + 1);
+      if (found !== null) return found;
     }
   }
   return null;
@@ -1526,35 +1636,38 @@ export function insertBlock(blocks: Block[], block: Block, target: DropTarget): 
     next.splice(clampIndex(target.index, next.length), 0, block);
     return next;
   }
-  return blocks.map((b) => {
-    if (b.id !== target.rowId || !b.columns) return b;
-    // A row inside a column inside a row is where this stops being a layout
-    // and starts being a puzzle — and MAX_DEPTH has to hold on insert too, or
-    // normalizeBlocks silently deletes what the editor just accepted.
-    if (block.type === "row") return b;
-    const columns = b.columns.map((col, c) => {
-      if (c !== target.column) return col;
-      const next = [...col];
-      next.splice(clampIndex(target.index, next.length), 0, block);
-      return next;
+  // A container may go inside a column, but only one deep. Two deep is where
+  // this stops being a layout and starts being a puzzle — and MAX_DEPTH has to
+  // hold on insert as well, or `normalizeBlocks` deletes on the next read what
+  // the editor just said it had saved.
+  if (block.type === "row" && rowDepth(blocks, target.rowId) !== 0) return blocks;
+
+  const into = (list: Block[]): Block[] =>
+    list.map((b) => {
+      if (!b.columns) return b;
+      if (b.id !== target.rowId) return { ...b, columns: b.columns.map(into) };
+      const columns = b.columns.map((col, c) => {
+        if (c !== target.column) return col;
+        const next = [...col];
+        next.splice(clampIndex(target.index, next.length), 0, block);
+        return next;
+      });
+      return { ...b, columns };
     });
-    return { ...b, columns };
-  });
+  return into(blocks);
 }
 
 export function removeBlock(blocks: Block[], id: string): Block[] {
   return blocks
     .filter((b) => b.id !== id)
-    .map((b) =>
-      b.columns ? { ...b, columns: b.columns.map((col) => col.filter((x) => x.id !== id)) } : b,
-    );
+    .map((b) => (b.columns ? { ...b, columns: b.columns.map((col) => removeBlock(col, id)) } : b));
 }
 
 export function updateBlock(blocks: Block[], id: string, patch: (b: Block) => Block): Block[] {
   return blocks.map((b) => {
     if (b.id === id) return patch(b);
     if (!b.columns) return b;
-    return { ...b, columns: b.columns.map((col) => col.map((x) => (x.id === id ? patch(x) : x))) };
+    return { ...b, columns: b.columns.map((col) => updateBlock(col, id, patch)) };
   });
 }
 
@@ -1569,9 +1682,16 @@ export function updateBlock(blocks: Block[], id: string, patch: (b: Block) => Bl
 export function moveBlock(blocks: Block[], id: string, target: DropTarget): Block[] {
   const found = findBlock(blocks, id);
   if (!found) return blocks;
-  // Dropping a row into a column is refused rather than silently ignored at
-  // insert time, so the caller can leave the block where it was.
-  if (found.block.type === "row" && target.zone === "column") return blocks;
+  // A container may be dragged into a column, but not into one that is already
+  // inside a container. Refused here rather than silently ignored at insert
+  // time, so the caller can leave the block where it was.
+  if (
+    found.block.type === "row" &&
+    target.zone === "column" &&
+    rowDepth(removeBlock(blocks, id), target.rowId) !== 0
+  ) {
+    return blocks;
+  }
 
   const sameList =
     (target.zone === "root" && found.parentId === null) ||
@@ -1591,8 +1711,8 @@ export function duplicateBlock(blocks: Block[], id: string): Block[] {
     found.parentId === null
       ? { zone: "root", index: found.index + 1 }
       : { zone: "column", rowId: found.parentId, column: found.column ?? 0, index: found.index + 1 };
-  // insertBlock refuses a row into a column; a duplicate of a nested block is
-  // never a row, so this is safe.
+  // insertBlock enforces the one-deep rule itself, so a duplicate that would
+  // break it lands nowhere rather than landing somewhere wrong.
   return insertBlock(blocks, copy, target);
 }
 
@@ -1736,17 +1856,22 @@ export function edgeIndex(clientY: number, top: number, height: number, index: n
  */
 export function addTarget(blocks: Block[], selectedId: string | null, type: BlockType): DropTarget {
   const found = selectedId ? findBlock(blocks, selectedId) : null;
+  // A container may go inside a column, but not inside one that is already in
+  // a container — the same one-deep rule insertBlock enforces. Asked here as
+  // well so the tray does not offer a home the tree will refuse.
+  const fits = (rowId: string) => type !== "row" || rowDepth(blocks, rowId) === 0;
+
   if (!found) {
     const col = selectedId ? splitColumnId(selectedId) : null;
     const row = col ? findBlock(blocks, col.rowId)?.block : null;
     const into = row?.columns?.[col?.index ?? -1];
-    if (col && into && type !== "row") {
+    if (col && into && fits(col.rowId)) {
       return { zone: "column", rowId: col.rowId, column: col.index, index: into.length };
     }
     return { zone: "root", index: blocks.length };
   }
   if (found.parentId !== null) {
-    if (type === "row") return { zone: "root", index: blocks.length };
+    if (!fits(found.parentId)) return { zone: "root", index: blocks.length };
     return { zone: "column", rowId: found.parentId, column: found.column ?? 0, index: found.index + 1 };
   }
   return { zone: "root", index: found.index + 1 };

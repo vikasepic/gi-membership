@@ -15,6 +15,10 @@ import {
   updateBlock,
   walkBlocks,
   type Block,
+  duplicateColumn,
+  removeColumn,
+  MAX_COLUMNS,
+  setColumnCount,
 } from "@/lib/blocks";
 
 const ids = (blocks: Block[]) => blocks.map((b) => b.id);
@@ -194,12 +198,32 @@ describe("insertBlock", () => {
     expect(out[0].columns![1][0].id).toBe(btn.id);
   });
 
-  it("refuses a row inside a column — depth has to hold here too", () => {
-    // normalizeBlocks enforces MAX_DEPTH on read. If the editor let a row nest
-    // freely, the next page load would silently delete what was just built.
+  it("puts a container inside a column, one deep", () => {
     const row = newBlock("row");
-    const out = insertBlock([row], newBlock("row"), { zone: "column", rowId: row.id, column: 0, index: 0 });
-    expect(out[0].columns![0]).toEqual([]);
+    const inner = newBlock("row");
+    const out = insertBlock([row], inner, { zone: "column", rowId: row.id, column: 0, index: 0 });
+    expect(out[0].columns![0][0].id).toBe(inner.id);
+  });
+
+  it("refuses a second one — depth has to hold here too", () => {
+    // normalizeBlocks enforces MAX_DEPTH on read. A third level would be
+    // deleted on the next page load, which is the worst way to lose work:
+    // after the editor has already said it saved.
+    const row = newBlock("row");
+    const inner = newBlock("row");
+    const one = insertBlock([row], inner, { zone: "column", rowId: row.id, column: 0, index: 0 });
+    const two = insertBlock(one, newBlock("row"), { zone: "column", rowId: inner.id, column: 0, index: 0 });
+    expect(two).toEqual(one);
+  });
+
+  it("still puts ordinary blocks inside a nested container", () => {
+    // Otherwise the container you just added is a box nothing can go in.
+    const row = newBlock("row");
+    const inner = newBlock("row");
+    const one = insertBlock([row], inner, { zone: "column", rowId: row.id, column: 0, index: 0 });
+    const kid = newBlock("heading");
+    const two = insertBlock(one, kid, { zone: "column", rowId: inner.id, column: 1, index: 0 });
+    expect(two[0].columns![0][0].columns![1][0].id).toBe(kid.id);
   });
 
   it("does not mutate the tree it was given", () => {
@@ -270,11 +294,21 @@ describe("moveBlock", () => {
     expect(out[0].columns![1][0].id).toBe("kid");
   });
 
-  it("will not drop a row into a column, and leaves it where it was", () => {
+  it("drags a container into a column", () => {
     const row = newBlock("row");
     const other = newBlock("row");
     const out = moveBlock([row, other], other.id, { zone: "column", rowId: row.id, column: 0, index: 0 });
-    expect(ids(out)).toEqual([row.id, other.id]);
+    expect(ids(out)).toEqual([row.id]);
+    expect(out[0].columns![0][0].id).toBe(other.id);
+  });
+
+  it("will not drag one into a column that is already inside a container", () => {
+    const row = newBlock("row");
+    const inner = newBlock("row");
+    const loose = newBlock("row");
+    const tree = insertBlock([row, loose], inner, { zone: "column", rowId: row.id, column: 0, index: 0 });
+    const out = moveBlock(tree, loose.id, { zone: "column", rowId: inner.id, column: 0, index: 0 });
+    expect(out).toEqual(tree);
   });
 
   it("ignores an id that is not in the tree", () => {
@@ -390,5 +424,106 @@ describe("blockRendersNothing", () => {
     expect(blockRendersNothing(row)).toBe(true);
     row.columns![1] = [filled("heading", { text: "Real" })];
     expect(blockRendersNothing(row)).toBe(false);
+  });
+});
+
+/**
+ * Duplicating a column, which the count dropdown could never do.
+ *
+ * "More columns" adds an EMPTY one and resets every width to even — so using it
+ * to copy a 70/30 hero column loses the content and the layout in one move.
+ */
+describe("duplicateColumn", () => {
+  const hero = () => {
+    let row = setColumnCount(newBlock("row"), 2);
+    row = { ...row, props: { ...row.props, widths: [70, 30] } };
+    row.columns![0] = [newBlock("heading")];
+    row.columns![1] = [newBlock("image")];
+    return row;
+  };
+
+  it("copies the blocks, with ids of their own", () => {
+    const row = hero();
+    const out = duplicateColumn(row, 0);
+    expect(out.columns).toHaveLength(3);
+    expect(out.columns![1][0].type).toBe("heading");
+    // The same block twice would mean editing one edits both.
+    expect(out.columns![1][0].id).not.toBe(row.columns![0][0].id);
+  });
+
+  it("puts the copy directly beside the original", () => {
+    const out = duplicateColumn(hero(), 0);
+    expect(out.columns![2][0].type).toBe("image");
+  });
+
+  it("splits that column's width, so nothing else moves", () => {
+    // 70/30 becomes 35/35/30. The column that was not involved is untouched,
+    // which is what makes the copy feel like it took its place.
+    expect(duplicateColumn(hero(), 0).props.widths).toEqual([35, 35, 30]);
+  });
+
+  it("keeps the column's own styling with it", () => {
+    const row = { ...hero(), columnStyles: [{ tag: "left" }, { tag: "right" }] } as unknown as Block;
+    const out = duplicateColumn(row, 0);
+    expect((out.columnStyles as unknown[])![1]).toEqual({ tag: "left" });
+    expect((out.columnStyles as unknown[])![2]).toEqual({ tag: "right" });
+  });
+
+  it("refuses past the column limit rather than silently doing nothing else", () => {
+    const full = setColumnCount(newBlock("row"), MAX_COLUMNS);
+    expect(duplicateColumn(full, 0)).toBe(full);
+  });
+});
+
+describe("removeColumn", () => {
+  const three = () => {
+    const row = setColumnCount(newBlock("row"), 3);
+    return { ...row, props: { ...row.props, widths: [50, 25, 25] } };
+  };
+
+  it("gives the width to the neighbour, not to everyone", () => {
+    expect(removeColumn(three(), 1).props.widths).toEqual([75, 25]);
+  });
+
+  it("hands the first column's width to the one that follows it", () => {
+    expect(removeColumn(three(), 0).props.widths).toEqual([75, 25]);
+  });
+
+  it("will not empty the row", () => {
+    const one = setColumnCount(newBlock("row"), 1);
+    expect(removeColumn(one, 0)).toBe(one);
+  });
+});
+
+/**
+ * A container inside a column, which is what a hero with a two-column strip
+ * beside its picture actually is. One level, never two.
+ */
+describe("a nested container survives a save", () => {
+  it("comes back with its blocks after normalize", () => {
+    // The failure that mattered: the editor accepts it, the page saves, and the
+    // next read silently drops it because MAX_DEPTH was exceeded.
+    const outer = newBlock("row");
+    const inner = newBlock("row");
+    const kid = newBlock("heading");
+    let tree = insertBlock([outer], inner, { zone: "column", rowId: outer.id, column: 0, index: 0 });
+    tree = insertBlock(tree, kid, { zone: "column", rowId: inner.id, column: 1, index: 0 });
+
+    const round = normalizeBlocks(JSON.parse(JSON.stringify(tree)));
+    expect(round[0].columns![0][0].type).toBe("row");
+    expect(round[0].columns![0][0].columns![1][0].id).toBe(kid.id);
+  });
+
+  it("can be found, updated and removed from where it sits", () => {
+    const outer = newBlock("row");
+    const inner = newBlock("row");
+    const kid = newBlock("heading");
+    let tree = insertBlock([outer], inner, { zone: "column", rowId: outer.id, column: 0, index: 0 });
+    tree = insertBlock(tree, kid, { zone: "column", rowId: inner.id, column: 0, index: 0 });
+
+    expect(findBlock(tree, kid.id)?.parentId).toBe(inner.id);
+    const edited = updateBlock(tree, kid.id, (b) => ({ ...b, props: { ...b.props, text: "hi" } }));
+    expect(findBlock(edited, kid.id)?.block.props.text).toBe("hi");
+    expect(findBlock(removeBlock(edited, kid.id), kid.id)).toBe(null);
   });
 });

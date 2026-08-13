@@ -120,12 +120,27 @@ describe("addTarget — where clicking the palette puts a block", () => {
     });
   });
 
-  it("sends a row to the canvas rather than nowhere, when a nested block is selected", () => {
-    // A row cannot nest inside a column, so targeting one would drop it
-    // silently — the click would look broken.
+  it("puts a container beside the block selected inside a column", () => {
+    // One deep is allowed now: a hero column holding its own two-column strip
+    // is an ordinary sales-page layout.
     const row = newBlock("row");
     row.columns![0] = [b];
-    expect(addTarget([row], b.id, "row")).toEqual({ zone: "root", index: 1 });
+    expect(addTarget([row], b.id, "row")).toEqual({
+      zone: "column",
+      rowId: row.id,
+      column: 0,
+      index: 1,
+    });
+  });
+
+  it("sends it to the canvas instead when that column is already inside one", () => {
+    // Two deep is refused by the tree, so offering it here would be a click
+    // that looks broken.
+    const outer = newBlock("row");
+    const inner = newBlock("row");
+    inner.columns![0] = [b];
+    outer.columns![0] = [inner];
+    expect(addTarget([outer], b.id, "row")).toEqual({ zone: "root", index: 1 });
   });
 
   it("appends when the selected block has since been deleted", () => {
@@ -147,9 +162,21 @@ describe("addTarget — where clicking the palette puts a block", () => {
     expect(addTarget([row], `${row.id}#0`, "button")).toMatchObject({ column: 0, index: 0 });
   });
 
-  it("still sends a row to the canvas when a column is selected", () => {
+  it("adds a container into the column that is selected", () => {
     const row = newBlock("row");
-    expect(addTarget([row], `${row.id}#0`, "row")).toEqual({ zone: "root", index: 1 });
+    expect(addTarget([row], `${row.id}#0`, "row")).toEqual({
+      zone: "column",
+      rowId: row.id,
+      column: 0,
+      index: 0,
+    });
+  });
+
+  it("but not into a column of a container that is already nested", () => {
+    const outer = newBlock("row");
+    const inner = newBlock("row");
+    outer.columns![0] = [inner];
+    expect(addTarget([outer], `${inner.id}#0`, "row")).toEqual({ zone: "root", index: 1 });
   });
 
   it("appends when the selected column belongs to a row that is gone", () => {

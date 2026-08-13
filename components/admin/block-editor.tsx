@@ -38,6 +38,8 @@ import {
   addTarget,
   blockRendersNothing,
   duplicateBlock,
+  duplicateColumn,
+  removeColumn,
   reid,
   edgeIndex,
   findBlock,
@@ -971,16 +973,47 @@ export function BlockEditor({
                 </strong>
                 <div className="ml-auto flex gap-1">
                   {column ? (
-                    // A column cannot be duplicated or deleted on its own — its
-                    // count belongs to the row. Offering the buttons and having
-                    // them do nothing would be worse than not offering them.
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(column.row.id)}
-                      className="rounded px-2 text-[0.68rem] text-muted hover:text-fg"
-                    >
-                      Edit the row
-                    </button>
+                    <>
+                      {/* A column is its own thing after all. The count
+                          dropdown adds an EMPTY one and resets every width to
+                          even, so using it to copy a 70/30 hero column loses
+                          both the content and the layout. These two keep the
+                          blocks, keep the column's own background and padding,
+                          and only touch the width of the column involved. */}
+                      <IconBtn
+                        label="Duplicate this column"
+                        onClick={() => {
+                          const next = duplicateColumn(column.row, column.index);
+                          if (next === column.row) return;
+                          commit(updateBlock(blocks, column.row.id, () => next));
+                          setSelectedId(`${column.row.id}#${column.index + 1}`);
+                        }}
+                      >
+                        ⧉
+                      </IconBtn>
+                      {(column.row.columns?.length ?? 0) > 1 && (
+                        <IconBtn
+                          label="Remove this column and its blocks"
+                          onClick={() => {
+                            commit(
+                              updateBlock(blocks, column.row.id, (b) =>
+                                removeColumn(b, column.index),
+                              ),
+                            );
+                            setSelectedId(column.row.id);
+                          }}
+                        >
+                          🗑
+                        </IconBtn>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(column.row.id)}
+                        className="rounded px-2 text-[0.68rem] text-muted hover:text-fg"
+                      >
+                        Edit the row
+                      </button>
+                    </>
                   ) : (
                   <>
                   <IconBtn label="Duplicate" onClick={() => commit(duplicateBlock(blocks, selected.id))}>
