@@ -133,14 +133,26 @@ export function CanvasFrame({
             else return;
             e.preventDefault();
           }}
-          className={`absolute top-0 z-20 hidden h-full w-3 cursor-ew-resize touch-none items-center justify-center md:flex ${
+          className={`group absolute top-0 z-20 hidden h-full w-3 cursor-ew-resize touch-none justify-center md:flex ${
             side === 1 ? "-right-3" : "-left-3"
           }`}
         >
+          {/* The wall: a hairline down the whole edge, so where the canvas
+              stops is visible at every scroll position and not only where the
+              grip happens to be. */}
           <span
             aria-hidden
-            className={`h-10 w-1 rounded-full transition-colors ${
-              dragging ? "bg-primary" : "bg-border hover:bg-primary"
+            className={`absolute inset-y-0 w-px transition-colors ${
+              side === 1 ? "left-0" : "right-0"
+            } ${dragging ? "bg-primary" : "bg-border group-hover:bg-primary"}`}
+          />
+          {/* The grip, stuck to the middle of the pane rather than the middle
+              of the page. Centring it in a page ten screens tall put it five
+              screens below anything you could see. */}
+          <span
+            aria-hidden
+            className={`sticky top-1/2 z-10 h-10 w-1 rounded-full transition-colors ${
+              dragging ? "bg-primary" : "bg-border group-hover:bg-primary"
             }`}
           />
         </button>
