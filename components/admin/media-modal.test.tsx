@@ -109,3 +109,30 @@ describe("the details pane", () => {
     expect(out).not.toContain("object-cover");
   });
 });
+
+/**
+ * One file at a time was the whole complaint, and it had two halves: the input
+ * took one, and the library — where everybody already is — had no way in at all.
+ */
+describe("getting files in", () => {
+  it("accepts more than one at a time", () => {
+    const out = open();
+    // `multiple` on every picker, not just the one on the upload tab.
+    const pickers = out.split('type="file"').length - 1;
+    const many = out.split("multiple").length - 1;
+    expect(pickers).toBeGreaterThan(0);
+    expect(many).toBe(pickers);
+  });
+
+  it("offers an upload button on the library, not only on the other tab", () => {
+    // The library opens first, so this is the one people see. Before this it
+    // had a search box and nothing else.
+    const out = open();
+    expect(out).toContain("Search your files");
+    expect(out).toContain(">Upload<");
+  });
+
+  it("keeps the upload tab as well, for when there is nothing to drop onto", () => {
+    expect(open()).toContain("Upload files");
+  });
+});

@@ -88,6 +88,15 @@ export function MediaModal({
 
   if (!open) return null;
 
+  // Straight into the grid and selected, so an upload ends where a person
+  // expects: looking at the thing they just added. On a batch that means the
+  // last one to land, which is the one still under the cursor.
+  const took = (item: PickedMedia) => {
+    setItems((old) => [item, ...(old ?? [])]);
+    setSelected(item);
+    setTab("library");
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
@@ -126,33 +135,18 @@ export function MediaModal({
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col">
             {tab === "upload" ? (
-              <Upload
-                kind={kind}
-                onDone={(item) => {
-                  // Straight into the grid and selected, so an upload ends where
-                  // a person expects: looking at the thing they just added.
-                  setItems((old) => [item, ...(old ?? [])]);
-                  setSelected(item);
-                  setTab("library");
-                }}
-              />
+              <Upload kind={kind} onItem={took} />
             ) : (
-              <>
-                <div className="border-b border-border px-5 py-3">
-                  <input
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    placeholder="Search your files"
-                    className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"
-                  />
-                </div>
-                <Grid
-                  items={items}
-                  error={error}
-                  selectedId={selected?.id ?? null}
-                  onSelect={setSelected}
-                />
-              </>
+              <Library
+                kind={kind}
+                q={q}
+                setQ={setQ}
+                items={items}
+                error={error}
+                selected={selected}
+                onSelect={setSelected}
+                onItem={took}
+              />
             )}
           </div>
 
@@ -419,18 +413,113 @@ function Step({
   );
 }
 
-function Upload({ kind, onDone }: { kind: MediaKind; onDone: (item: PickedMedia) => void }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+/**
+ * The library, which can also take files.
+ *
+ * Uploading used to live on its own tab and nowhere else, so the answer to "add
+ * a picture" was: open the window, notice a second tab, switch to it, upload,
+ * come back. The grid is where people already are, so it takes a drop anywhere
+ * on it and has a button of its own. The tab stays — it is the obvious place
+ * when the library is empty and there is nothing to drop onto.
+ */
+function Library({
+  kind,
+  q,
+  setQ,
+  items,
+  error,
+  selected,
+  onSelect,
+  onItem,
+}: {
+  kind: MediaKind;
+  q: string;
+  setQ: (v: string) => void;
+  items: PickedMedia[] | null;
+  error: string | null;
+  selected: PickedMedia | null;
+  onSelect: (item: PickedMedia) => void;
+  onItem: (item: PickedMedia) => void;
+}) {
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const up = useUploader(kind, onItem);
+
+  return (
+    <div
+      className="relative flex min-h-0 flex-1 flex-col"
+      // On the whole pane, not on the grid alone: an empty library has no tiles
+      // to aim at, and neither does the gap under a short row.
+      onDragOver={(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        // Only when the cursor actually leaves the pane. Moving over a child
+        // fires dragleave on the parent, which made the overlay flicker.
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        void up.send(e.dataTransfer.files);
+      }}
+    >
+      <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search your files"
+          className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"
+        />
+        <button
+          type="button"
+          onClick={() => input.current?.click()}
+          disabled={up.busy}
+          className="shrink-0 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-60"
+        >
+          {up.label ?? "Upload"}
+        </button>
+        <FilePicker inputRef={input} accept={up.accept} onFiles={(f) => void up.send(f)} />
+      </div>
+
+      {up.error && (
+        <p className="border-b border-border px-5 py-2 text-xs text-primary">{up.error}</p>
+      )}
+
+      <Grid items={items} error={error} selectedId={selected?.id ?? null} onSelect={onSelect} />
+
+      {over && (
+        <div className="pointer-events-none absolute inset-0 z-10 m-3 grid place-content-center rounded-2xl border-2 border-dashed border-primary bg-surface/85 text-sm font-medium text-primary">
+          Drop to upload
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Uploading, however it was started.
+ *
+ * One implementation behind three ways in — the drop zone on the Upload tab, a
+ * button on the library, and dropping files onto the library grid — because
+ * the interesting part is not the button. It is that a batch is many requests:
+ * the endpoint takes one file, and one request per file is what lets a single
+ * bad file report its own error while the other eleven still land.
+ *
+ * Sequential, not parallel. Every image is resized on the server, and firing
+ * twenty of those at once is how a shared box falls over — the one thing an
+ * upload button must never do to the four other apps on it.
+ */
+function useUploader(kind: MediaKind, onItem: (item: PickedMedia) => void) {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const accept = kind === "image" ? "image/*" : kind === "audio" ? "audio/*" : ".pdf,.txt,.docx";
 
-  async function send(file: File | undefined) {
-    if (!file) return;
-    setBusy(true);
-    setError(null);
+  async function one(file: File): Promise<string | null> {
     // A fetch with no timeout can wait forever, and "Uploading…" that never
     // ends is the same as no feedback at all. Two minutes is generous for a
     // 100MB attachment on a slow line and far short of forever.
@@ -440,29 +529,80 @@ function Upload({ kind, onDone }: { kind: MediaKind; onDone: (item: PickedMedia)
       const fd = new FormData();
       fd.append("file", file);
       fd.append("kind", kind);
-      const res = await fetch("/api/media/library", {
-        method: "POST",
-        body: fd,
-        signal: stop.signal,
-      });
+      const res = await fetch("/api/media/library", { method: "POST", body: fd, signal: stop.signal });
       // Not every failure answers in JSON — a proxy rejecting the size sends
       // HTML, and parsing that would throw where a message was wanted.
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.item) {
-        setError(data.error ?? `Upload failed (${res.status}). The file may be too large.`);
-      } else {
-        onDone(data.item);
+        return data.error ?? `${file.name}: upload failed (${res.status}). It may be too large.`;
       }
+      onItem(data.item as PickedMedia);
+      return null;
     } catch (e) {
-      setError(
-        e instanceof DOMException && e.name === "AbortError"
-          ? "That took too long and was stopped. Try a smaller file, or check the connection."
-          : "Upload failed. Check the connection and try again.",
-      );
+      return e instanceof DOMException && e.name === "AbortError"
+        ? `${file.name}: took too long and was stopped.`
+        : `${file.name}: upload failed. Check the connection.`;
+    } finally {
+      clearTimeout(timer);
     }
-    clearTimeout(timer);
-    setBusy(false);
   }
+
+  async function send(files: FileList | File[] | null | undefined) {
+    const list = Array.from(files ?? []);
+    if (list.length === 0) return;
+    setBusy(true);
+    setError(null);
+    setTotal(list.length);
+    setDone(0);
+    const failed: string[] = [];
+    for (const f of list) {
+      const err = await one(f);
+      if (err) failed.push(err);
+      setDone((n) => n + 1);
+    }
+    setBusy(false);
+    setTotal(0);
+    // Named, not counted. "3 failed" sends you hunting; the names say which.
+    if (failed.length > 0) setError(failed.slice(0, 4).join(" · ") + (failed.length > 4 ? ` · and ${failed.length - 4} more` : ""));
+  }
+
+  const label = busy ? (total > 1 ? `Uploading ${done + 1} of ${total}…` : "Uploading…") : null;
+  return { busy, error, setError, send, accept, label };
+}
+
+/** A hidden file input, `multiple`, that resets so the same file can be re-picked. */
+function FilePicker({
+  inputRef,
+  accept,
+  onFiles,
+}: {
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  accept: string;
+  onFiles: (files: FileList | null) => void;
+}) {
+  return (
+    <input
+      ref={inputRef}
+      type="file"
+      accept={accept}
+      multiple
+      className="sr-only"
+      onChange={(e) => {
+        const files = e.target.files;
+        // Cleared BEFORE the handler runs, or choosing the same file twice in
+        // a row fires no change event at all the second time.
+        const copy = files ? Array.from(files) : [];
+        e.target.value = "";
+        onFiles(copy.length > 0 ? (copy as unknown as FileList) : null);
+      }}
+    />
+  );
+}
+
+function Upload({ kind, onItem }: { kind: MediaKind; onItem: (item: PickedMedia) => void }) {
+  const [over, setOver] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+  const up = useUploader(kind, onItem);
 
   return (
     <div className="flex flex-1 items-center justify-center p-5">
@@ -475,39 +615,29 @@ function Upload({ kind, onDone }: { kind: MediaKind; onDone: (item: PickedMedia)
         onDrop={(e) => {
           e.preventDefault();
           setOver(false);
-          void send(e.dataTransfer.files?.[0]);
+          void up.send(e.dataTransfer.files);
         }}
         className={`flex w-full max-w-md flex-col items-center gap-3 rounded-2xl border-2 border-dashed p-10 text-center transition-colors ${
           over ? "border-primary bg-surface-2" : "border-border"
         }`}
       >
-        <p className="text-sm text-muted">Drop a file here</p>
+        <p className="text-sm text-muted">Drop files here — as many as you like</p>
         <button
           type="button"
           onClick={() => input.current?.click()}
-          disabled={busy}
+          disabled={up.busy}
           className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-60"
         >
-          {busy ? "Uploading…" : "Choose a file"}
+          {up.label ?? "Choose files"}
         </button>
-        <input
-          ref={input}
-          type="file"
-          accept={accept}
-          className="sr-only"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            e.target.value = "";
-            void send(f);
-          }}
-        />
+        <FilePicker inputRef={input} accept={up.accept} onFiles={(f) => void up.send(f)} />
         {kind === "image" && (
           <p className="text-xs text-muted">
-            Any size. It is resized for the web on the way in, so a photo straight off a phone is
+            Any size. They are resized for the web on the way in, so photos straight off a phone are
             fine.
           </p>
         )}
-        {error && <p className="text-sm text-primary">{error}</p>}
+        {up.error && <p className="text-sm text-primary">{up.error}</p>}
       </div>
     </div>
   );
