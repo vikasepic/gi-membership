@@ -11,6 +11,7 @@ import {
 } from "@/lib/palette";
 import { normalizeHex, readableInk } from "@/lib/color";
 import { normalizeBlocks, setStyleAt } from "@/lib/blocks";
+import { bandTheme } from "@/lib/page-sections";
 
 const BRAND: PaletteColor = { id: "a1b2c3d4", name: "Brand", value: "#b4472b" };
 const INK: PaletteColor = { id: "ffff0000", name: "Ink", value: "#16181f" };
@@ -107,6 +108,39 @@ describe("what may be saved", () => {
   it("gives every new colour an id the schema accepts", () => {
     for (let i = 0; i < 20; i++) {
       expect(paletteSchema.parse([{ id: newColorId(), name: "x", value: "#000000" }])).toHaveLength(1);
+    }
+  });
+});
+
+/**
+ * A band's accent is the one colour outside the block tree, and it has to make
+ * the same round trip: stored as a link, drawn as a link, and still able to
+ * answer "what ink is readable on this".
+ */
+describe("a band accent that follows a global colour", () => {
+  it("draws the reference, so changing the colour repaints the band", () => {
+    const theme = bandTheme("navy", colorToken(BRAND));
+    expect(theme.accent).toBe(colorToken(BRAND));
+  });
+
+  it("still picks its ink from the colour behind the reference", () => {
+    // Not from a fallback, and not from the band's own accent — a pale global
+    // colour needs dark ink on it whichever way it was written.
+    expect(bandTheme("navy", colorToken(BRAND)).onAccent).toBe(
+      bandTheme("navy", BRAND.value).onAccent,
+    );
+  });
+
+  it("leaves a plain hex exactly as it was", () => {
+    expect(bandTheme("navy", "#123456").accent).toBe("#123456");
+    expect(bandTheme("navy", null).accent).toBe(bandTheme("navy").accent);
+  });
+
+  it("refuses anything that is not a colour or one of ours", () => {
+    // The value reaches a style attribute; "the band's own" is the safe answer.
+    const own = bandTheme("navy").accent;
+    for (const bad of ["var(--anything, #fff)", "url(x)", "red;background:url(y)"]) {
+      expect(bandTheme("navy", bad).accent, bad).toBe(own);
     }
   });
 });

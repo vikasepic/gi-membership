@@ -57,6 +57,20 @@ export const colorVar = (id: string): string => `--gc-${id}`;
 /** What a block stores when it points at a global colour. */
 export const colorToken = (c: PaletteColor): string => `var(${colorVar(c.id)}, ${c.value})`;
 
+/**
+ * Exactly what a stored reference may look like.
+ *
+ * Our own prefix, our own id shape, and a hex fallback — and not one character
+ * more, because these values are written straight into a style attribute. One
+ * definition, imported by everything that has to decide whether a colour is a
+ * link: a second copy of "what counts as safe" is how the two drift.
+ */
+export const GLOBAL_COLOR_RE = /^var\(--gc-[a-z0-9]{4,12},\s*#[0-9a-f]{3,8}\)$/i;
+
+export function isGlobalColor(v: unknown): v is string {
+  return typeof v === "string" && GLOBAL_COLOR_RE.test(v.trim());
+}
+
 /** The id inside a stored token, or null when the value is a plain colour. */
 export function tokenId(value: unknown): string | null {
   if (typeof value !== "string") return null;

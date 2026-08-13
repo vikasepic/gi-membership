@@ -10,7 +10,7 @@ import { BlockBody, Blocks } from "@/components/page/blocks";
 import { IconPicker } from "@/components/admin/icon-picker";
 import { CanvasFrame } from "@/components/admin/canvas-frame";
 import { SpacingGuide } from "@/components/admin/spacing-guide";
-import { colorName, colorToken, swatchColor, tokenId, type PaletteColor } from "@/lib/palette";
+import { ColorControl, PaletteContext } from "@/components/admin/color-control";
 import type { StoreRender } from "@/components/page/storefront-blocks";
 import { RichText } from "@/components/editor/rich-text";
 import {
@@ -126,90 +126,6 @@ const input =
 
 /** Uploads a file and returns the stored path, or an error. */
 
-
-/**
- * A colour, and the store's own colours beside it.
- *
- * Two ways to answer the same question, and the difference matters. The picker
- * writes a hex — a copy, which is right for a one-off. A swatch writes a
- * REFERENCE, `var(--gc-…, #hex)`, so the day the brand colour changes in Site
- * settings every block that took it changes with it. Nothing else in the
- * builder can say "the same colour as that other thing".
- *
- * A linked value cannot be shown in an `<input type="color">` — it holds a
- * variable, not a hex — so the swatch is drawn as a button and the picker sits
- * beside it holding the resolved colour.
- */
-function ColorControl({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: unknown;
-  onChange: (v: unknown) => void;
-}) {
-  const palette = useContext(PaletteContext);
-  const linked = tokenId(value);
-  const shown = swatchColor(value, palette) ?? "#000000";
-  const named = colorName(value, palette);
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-1.5">
-        <input
-          type="color"
-          aria-label={label}
-          className="size-7 shrink-0 rounded border border-border bg-surface"
-          value={shown}
-          onChange={(e) => onChange(e.target.value)}
-        />
-        <span className="min-w-0 flex-1 truncate font-mono text-[0.66rem] text-muted">
-          {/* The NAME when it is linked. A row of identical hexes tells you
-              nothing about which of them will move when the brand changes. */}
-          {named ?? (linked ? "unlinked colour" : typeof value === "string" ? value : "theme")}
-        </span>
-        <button
-          type="button"
-          title="Follow the section's band"
-          aria-label={`Reset ${label}`}
-          onClick={() => onChange(null)}
-          className="shrink-0 rounded px-0.5 text-[0.62rem] text-muted hover:text-fg"
-        >
-          ✕
-        </button>
-      </div>
-
-      {palette.length > 0 && (
-        <div className="flex flex-wrap items-center gap-1">
-          {palette.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              title={`${c.name} — follows Site settings`}
-              aria-label={`${label}: ${c.name}`}
-              aria-pressed={linked === c.id}
-              onClick={() => onChange(colorToken(c))}
-              className={`size-5 rounded-full border transition-transform hover:scale-110 ${
-                linked === c.id ? "border-fg ring-1 ring-fg" : "border-border"
-              }`}
-              style={{ background: c.value }}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * The store's named colours, for every colour control on this screen.
- *
- * A context rather than a prop threaded through nine components: the control
- * that needs it is rendered from a switch statement four levels down, and the
- * palette is one value that never changes while the editor is open.
- */
-const PaletteContext = createContext<PaletteColor[]>([]);
 
 export function BlockEditor({
   blocks,

@@ -1,4 +1,5 @@
 import { instantFrom } from "@/lib/countdown";
+import { isGlobalColor } from "@/lib/palette";
 // The block tree.
 //
 // A section keeps its typed fields — a proof section still stores quotes with
@@ -812,11 +813,10 @@ export const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallb
  * the link stripped on the next read — the picker would appear to work, the
  * page would draw the colour once, and it would be gone after a reload.
  */
-const GLOBAL_COLOR = /^var\(--gc-[a-z0-9]{4,12},\s*#[0-9a-f]{3,8}\)$/i;
 const colorOrNull = (v: unknown): string | null => {
   if (typeof v !== "string") return null;
   const t = v.trim();
-  return /^#[0-9a-f]{3,8}$/i.test(t) || GLOBAL_COLOR.test(t) ? t : null;
+  return /^#[0-9a-f]{3,8}$/i.test(t) || isGlobalColor(t) ? t : null;
 };
 
 function normalizeDim(v: unknown, fallback: Dim): Dim {

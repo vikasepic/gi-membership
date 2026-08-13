@@ -4,6 +4,8 @@
 // One implementation, because the interesting part is not the maths — it is
 // that the AA guarantee is total, and two copies of "total" drift.
 
+import { GLOBAL_COLOR_RE } from "@/lib/palette";
+
 const HEX = /^#[0-9a-f]{6}$/i;
 
 /**
@@ -23,8 +25,14 @@ export function normalizeHex(value: unknown, fallback: string): string {
     // ink over a button, the tint behind a panel. Without this every derived
     // colour on a block using a global one would be computed from the fallback
     // argument instead, and a dark brand colour would get black text on it.
-    const inVar = /^var\(\s*--[a-z0-9-]+\s*,\s*(#[0-9a-f]{3,6})\s*\)$/.exec(v);
-    if (inVar) return normalizeHex(inVar[1], fallback);
+    //
+    // The SAME pattern the storage layer accepts, imported rather than written
+    // out again: a value this treats as a colour and the normalizer rejects —
+    // or the reverse — is two modules disagreeing about what is safe.
+    if (GLOBAL_COLOR_RE.test(v)) {
+      const hex = /(#[0-9a-f]{3,8})\s*\)$/.exec(v);
+      if (hex) return normalizeHex(hex[1], fallback);
+    }
   }
   return fallback;
 }

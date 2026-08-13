@@ -10,6 +10,7 @@ import {
   type SectionLayout,
   type SectionUnit,
 } from "@/lib/page-sections";
+import { ColorControl } from "@/components/admin/color-control";
 import { emptyBackground, type Background } from "@/lib/blocks";
 import { MediaButton } from "@/components/admin/media-modal";
 import { PositionPicker } from "@/components/admin/position-picker";
@@ -288,30 +289,19 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
-            <span className="text-xs text-fg">Accent</span>
-            <div className="flex items-center gap-1.5">
-              <input
-                type="color"
-                value={section.accent ?? BAND_STYLES[band].accent}
-                onChange={(e) => section.onChange({ accent: e.target.value })}
-                aria-label="Accent colour"
-                className="size-7 shrink-0 cursor-pointer rounded border border-border bg-surface"
-              />
-              <span className="min-w-0 flex-1 truncate font-mono text-[0.66rem] text-muted">
-                {section.accent ?? "the band's own"}
-              </span>
-              {section.accent && (
-                <button
-                  type="button"
-                  onClick={() => section.onChange({ accent: null })}
-                  aria-label="Use the band's own accent"
-                  className="shrink-0 rounded px-0.5 text-[0.62rem] text-muted hover:text-fg"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
+          <div className="grid grid-cols-[92px_minmax(0,1fr)] items-start gap-2.5">
+            <span className="pt-1.5 text-xs text-fg">Accent</span>
+            {/* The same control the blocks use, so the store's global colours
+                are offered on the band too — a band accent picked by hand while
+                every button beside it follows the brand is exactly the drift
+                the palette exists to stop. */}
+            <ColorControl
+              label="Accent colour"
+              value={section.accent}
+              empty="the band's own"
+              fallback={BAND_STYLES[band].accent}
+              onChange={(v) => section.onChange({ accent: v })}
+            />
           </div>
           <p className="text-[0.66rem] leading-snug text-muted">
             The accent marks small things — buttons, numbers, ticks. The band decides the ground and
