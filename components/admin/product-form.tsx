@@ -17,6 +17,7 @@ import type { OfferOption } from "@/lib/admin";
 import type { Course } from "@/lib/courses";
 
 import { money } from "@/lib/money";
+import { PricePicker } from "@/components/admin/price-picker";
 const SLUG_RE = /^[a-z0-9-]+$/;
 
 // Client-side checks for the fields with real rules, run before the form is ever
@@ -79,9 +80,11 @@ export function ProductForm({
   // Held here so each placement can say, as you pick, exactly what the buyer
   // will be shown.
   const [bumpOfferId, setBumpOfferId] = useState(product?.bumpOfferId ?? "");
-  const [bumpAltOfferId, setBumpAltOfferId] = useState(product?.bumpAltOfferId ?? "");
+  const [bumpAltOfferId] = useState(product?.bumpAltOfferId ?? "");
+  const [bumpPriceIds, setBumpPriceIds] = useState<string[]>(product?.bumpPriceIds ?? []);
   const [upsellOfferId, setUpsellOfferId] = useState(product?.upsellOfferId ?? "");
-  const [upsellAltOfferId, setUpsellAltOfferId] = useState(product?.upsellAltOfferId ?? "");
+  const [upsellAltOfferId] = useState(product?.upsellAltOfferId ?? "");
+  const [upsellPriceIds, setUpsellPriceIds] = useState<string[]>(product?.upsellPriceIds ?? []);
   const [clientErr, setClientErr] = useState<Record<string, string>>({});
   // For the preview. Uncontrolled elsewhere, but the point of the preview is
   // that it moves as you type.
@@ -531,7 +534,9 @@ export function ProductForm({
             offerId={bumpOfferId}
             onOffer={setBumpOfferId}
             altId={bumpAltOfferId}
-            onAlt={setBumpAltOfferId}
+            priceName="bumpPriceIds"
+            priceIds={bumpPriceIds}
+            onPrices={setBumpPriceIds}
             error={err("bumpOfferId")}
             single="A tick-box for this one price."
             both="A choice: the buyer picks one of the two, or No thanks."
@@ -545,7 +550,9 @@ export function ProductForm({
             offerId={upsellOfferId}
             onOffer={setUpsellOfferId}
             altId={upsellAltOfferId}
-            onAlt={setUpsellAltOfferId}
+            priceName="upsellPriceIds"
+            priceIds={upsellPriceIds}
+            onPrices={setUpsellPriceIds}
             error={err("upsellOfferId")}
             single="One button, one click."
             both="Two buttons side by side, one click each."
@@ -635,7 +642,9 @@ function Placement({
   offerId,
   onOffer,
   altId,
-  onAlt,
+  priceName,
+  priceIds,
+  onPrices,
   error,
   single,
   both,
@@ -648,7 +657,9 @@ function Placement({
   offerId: string;
   onOffer: (v: string) => void;
   altId: string;
-  onAlt: (v: string) => void;
+  priceName: string;
+  priceIds: string[];
+  onPrices: (next: string[]) => void;
   error?: string;
   single: string;
   both: string;
@@ -669,7 +680,10 @@ function Placement({
               onOffer(e.target.value);
               // An alternative left pointing at the offer that just became the
               // main one would render the same price twice.
-              if (!e.target.value || e.target.value === altId) onAlt("");
+              // The price ticks belong to the offer that was chosen, so
+            // choosing a different one clears them rather than leaving a list
+            // pointing at prices this placement can no longer resolve.
+            if (e.target.value !== offerId) onPrices([]);
             }}
             className={inputClass}
           >
@@ -679,28 +693,35 @@ function Placement({
             ))}
           </select>
         </Field>
-        <Field
-          label="Second price"
-          hint={offerId ? "optional — leave empty for one price" : "pick an offer first"}
-        >
-          <select
-            name={altName}
-            value={altId}
-            onChange={(e) => onAlt(e.target.value)}
-            disabled={!offerId}
-            className={`${inputClass} disabled:opacity-50`}
-          >
-            <option value="">— none, one price —</option>
-            {offers
-              // Same currency only. Two prices side by side in different
-              // currencies is a choice nobody can make.
-              .filter((o) => o.id !== offerId && (!chosen || o.currency === chosen.currency))
-              .map((o) => (
-                <option key={o.id} value={o.id}>{offerLabel(o)}</option>
-              ))}
-          </select>
-        </Field>
       </div>
+
+      {/* Which of the chosen offer's prices this checkout shows.
+          The "Second price" dropdown that stood here could only ever hold one,
+          because it pointed at a whole second OFFER — the reason building a
+          monthly and a yearly meant building two of everything. */}
+      {chosen && chosen.prices.length > 0 && (
+        <PricePicker
+          label="Prices to show"
+          hint="from the offer above"
+          prices={chosen.prices}
+          currency={chosen.currency}
+          name={priceName}
+          chosen={priceIds}
+          onChange={onPrices}
+        />
+      )}
+
+      {/* The old pairing, while it still exists. Shown rather than dropped:
+          it is what the checkout is actually doing today, and silently
+          ignoring it would change a live bump without saying so. */}
+      {alt && (
+        <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-muted">
+          Still paired with <b className="font-medium text-fg">{alt.name}</b> as a
+          second price — a separate offer, from before prices lived inside one.
+          It keeps working until you tick prices above, which take over.
+          <input type="hidden" name={altName} value={altId} />
+        </p>
+      )}
 
       {chosen && (
         <p className="text-sm text-muted">

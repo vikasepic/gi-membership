@@ -35,6 +35,21 @@ export type OfferPrice = {
 
 export const INTERVALS = ["day", "week", "month", "year"] as const;
 
+/**
+ * The prices of one offer, in the order the editor put them in.
+ *
+ * `sortOrder` is not on OfferPrice because nothing outside this needs it — the
+ * order IS the array order everywhere else. It arrives on the row from the
+ * database, so the sort happens once, here, at the point of hydration. Two
+ * readers sorting differently is how the checkout ends up charging the option
+ * beside the one that was ticked.
+ */
+export function sortPrices(rows: (OfferPrice & { sortOrder?: number })[]): OfferPrice[] {
+  return [...rows]
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    .map(({ sortOrder: _drop, ...price }) => price);
+}
+
 /** A blank price to start from — one-time, so nothing is claimed by default. */
 export function newOfferPrice(id: string): OfferPrice {
   return {

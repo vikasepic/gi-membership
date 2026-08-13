@@ -36,8 +36,16 @@ export type Product = {
    * prices in one product's bump and only the monthly in another's, and a
    * product form that does not say which is a form nobody can read.
    */
+  /**
+   * The second OFFER a placement pairs with. Superseded by the price lists
+   * below and kept only while placements are being moved across — an empty
+   * price list falls through to this, so nothing that works today stops.
+   */
   bumpAltOfferId: string | null;
   upsellAltOfferId: string | null;
+  /** Which of the bump offer's prices this checkout shows. Empty = the headline one. */
+  bumpPriceIds: string[];
+  upsellPriceIds: string[];
   isPlaceholder: boolean;
   sortOrder: number;
   /** A line under the tagline on the checkout. Null falls back to nothing. */
@@ -93,6 +101,8 @@ export type Offer = {
    * how a reader asks about a different one.
    */
   prices: OfferPrice[];
+  /** Which of its own prices the offer's page shows. Empty = the headline one. */
+  pagePriceIds: string[];
   /** Applied when a trial starts. Kept if they cancel before ever paying. */
   activecampaignTrialTagId: string | null;
   /** Applied when access ends. Never removed. */

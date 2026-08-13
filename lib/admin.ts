@@ -1,9 +1,9 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
-import { getStoreId, OFFER_COLUMNS } from "@/lib/store";
+import { getStoreId, hydrateOffer, OFFER_COLUMNS } from "@/lib/store";
 import { money } from "@/lib/money";
-import type { OfferPrice } from "@/lib/offer-prices";
+import { sortPrices, type OfferPrice } from "@/lib/offer-prices";
 import type {
   Product,
   ProductStatus,
@@ -16,7 +16,7 @@ import type {
 // Admin-side reads/writes. Service-role; callers are admin server actions/pages.
 
 const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, is_placeholder, sort_order, checkout_note, checkout_bullets";
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, bump_price_ids, upsell_price_ids, is_placeholder, sort_order, checkout_note, checkout_bullets";
 
 
 export type OfferOption = {
@@ -31,6 +31,8 @@ export type OfferOption = {
   /** So a bump can be described the way the buyer will read it: "$0 today". */
   trialDays: number | null;
   billingType: "one_time" | "recurring";
+  /** Its ways to pay, so a placement can tick which of them to show. */
+  prices: OfferPrice[];
   active: boolean;
 };
 
@@ -50,6 +52,8 @@ export type ProductInput = {
   upsellOfferId: string | null;
   bumpAltOfferId?: string | null;
   upsellAltOfferId?: string | null;
+  bumpPriceIds?: string[];
+  upsellPriceIds?: string[];
   activecampaignTagId: string | null;
   activecampaignAbandonedTagId: string | null;
   checkoutNote?: string | null;
@@ -88,14 +92,23 @@ export async function listOfferOptions(includeDrafts = false): Promise<OfferOpti
   const q = db
     .from("offers")
     .select(
-      "id, name, grant_type, grant_app_id, grant_entitlement_key, price_cents, currency, interval, trial_days, billing_type, active",
+      // The prices come with it: the placement picker asks "which of this
+      // offer's prices", and a second query per offer in a dropdown of twelve
+      // is a round trip nobody would write on purpose.
+      "id, name, grant_type, grant_app_id, grant_entitlement_key, price_cents, currency, interval, trial_days, billing_type, active, " +
+        "offer_prices(id, label, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, sort_order, archived)",
     )
     .eq("store_id", await getStoreId());
   const { data, error } = await (includeDrafts ? q : q.eq("active", true)).order("created_at", {
     ascending: true,
   });
   if (error) throw new Error(`listOfferOptions: ${error.message}`);
-  return camelize<OfferOption[]>(data ?? []);
+  // camelize turns offer_prices into offerPrices; the option calls it `prices`
+  // because from a placement's point of view that is what they are.
+  return (camelize<(OfferOption & { offerPrices?: OfferPrice[] })[]>(data ?? []) ?? []).map((o) => ({
+    ...o,
+    prices: sortPrices(o.offerPrices ?? []),
+  }));
 }
 
 // Map camelCase input -> snake_case row. Empty offer slots stored as null.
@@ -113,6 +126,8 @@ function toRow(input: ProductInput, storeId: string) {
     upsell_offer_id: input.upsellOfferId,
     bump_alt_offer_id: input.bumpAltOfferId ?? null,
     upsell_alt_offer_id: input.upsellAltOfferId ?? null,
+    bump_price_ids: input.bumpPriceIds ?? [],
+    upsell_price_ids: input.upsellPriceIds ?? [],
     // Empty string means "no tag" — stored as null so the purchase path can
     // test for absence rather than for an empty string it would then have to
     // remember to trim.
@@ -209,14 +224,14 @@ export async function listOffers(): Promise<Offer[]> {
     .eq("store_id", await getStoreId())
     .order("created_at", { ascending: true });
   if (error) throw new Error(`listOffers: ${error.message}`);
-  return camelize<Offer[]>(data ?? []);
+  return (data ?? []).map(hydrateOffer);
 }
 
 export async function getOfferById(id: string): Promise<Offer | null> {
   const db = createServiceClient();
   const { data, error } = await db.from("offers").select(OFFER_COLUMNS).eq("id", id).maybeSingle();
   if (error) throw new Error(`getOfferById: ${error.message}`);
-  return data ? camelize<Offer>(data) : null;
+  return data ? hydrateOffer(data) : null;
 }
 
 export async function listProductOptions(): Promise<ProductOption[]> {

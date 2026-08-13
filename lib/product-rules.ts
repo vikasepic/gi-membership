@@ -19,6 +19,27 @@ const uuidish = z
 
 const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
 
+/**
+ * A list of ids posted as one JSON string.
+ *
+ * Never throws and never returns null. An unreadable value narrows to "no
+ * prices ticked", which is the same as an untouched placement — the wrong way
+ * to fail here would be refusing the whole product save because of a field
+ * nobody typed into.
+ */
+const idList = z
+  .preprocess((raw) => {
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw !== "string" || raw.trim() === "") return [];
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }, z.array(z.string().trim().min(1)))
+  .catch([]);
+
 // What the admin product form submits, and nothing else.
 //
 // media_mode / media_path / cover_image_url / media_embed_url are deliberately
@@ -48,6 +69,10 @@ export const productSchema = z.object({
   // would be the same offer twice.
   bumpAltOfferId: z.preprocess(emptyToNull, uuidish.nullable().default(null)),
   upsellAltOfferId: z.preprocess(emptyToNull, uuidish.nullable().default(null)),
+  // A list of ids, posted as JSON the way every list in this admin is. Never
+  // null: the column is jsonb with a `jsonb_typeof = 'array'` CHECK behind it.
+  bumpPriceIds: idList,
+  upsellPriceIds: idList,
   // ActiveCampaign tag ids are numeric, but kept as a string: it is an opaque
   // identifier handed straight back to AC, never arithmetic. Digits only, so a
   // pasted tag NAME is rejected here rather than silently failing at purchase
@@ -88,6 +113,8 @@ export type ParsedProduct = {
   upsellOfferId: string | null;
   bumpAltOfferId: string | null;
   upsellAltOfferId: string | null;
+  bumpPriceIds: string[];
+  upsellPriceIds: string[];
   activecampaignTagId: string | null;
   activecampaignAbandonedTagId: string | null;
   checkoutNote: string | null;
@@ -129,6 +156,11 @@ export function parseProductForm(raw: Record<string, unknown>): ParseResult {
       // it, so it is dropped here rather than failing the save.
       bumpAltOfferId: altFor(v.bumpOfferId, v.bumpAltOfferId),
       upsellAltOfferId: altFor(v.upsellOfferId, v.upsellAltOfferId),
+      // Dropped with the offer, like the alt above: a list of prices belonging
+      // to an offer this placement no longer names is a list nothing can
+      // resolve, and it would sit there looking configured.
+      bumpPriceIds: v.bumpOfferId ? v.bumpPriceIds : [],
+      upsellPriceIds: v.upsellOfferId ? v.upsellPriceIds : [],
       activecampaignTagId: v.activecampaignTagId,
       activecampaignAbandonedTagId: v.activecampaignAbandonedTagId,
       checkoutNote: v.checkoutNote,

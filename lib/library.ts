@@ -1,7 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
-import { getStoreId, OFFER_COLUMNS } from "@/lib/store";
+import { getStoreId, hydrateOffer, OFFER_COLUMNS } from "@/lib/store";
 import { savedPaymentMethodFor, ownershipFor } from "@/lib/checkout";
 import { createClient } from "@/lib/supabase/server";
 import { coursesForProduct } from "@/lib/courses";
@@ -81,7 +81,7 @@ export async function getStandingOffer(userId: string): Promise<Offer | null> {
     .eq("store_id", await getStoreId())
     .eq("active", true)
     .eq("grant_type", "subscription");
-  for (const offer of camelize<Offer[]>(data ?? [])) {
+  for (const offer of (data ?? []).map(hydrateOffer)) {
     if (offer.grantAppId && !(await subscribedToApp(userId, offer.grantAppId))) return offer;
   }
   return null;
