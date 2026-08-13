@@ -1,15 +1,13 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
-import { getStoreId } from "@/lib/store";
+import { getStoreId, OFFER_COLUMNS } from "@/lib/store";
 import { savedPaymentMethodFor, ownershipFor } from "@/lib/checkout";
 import { createClient } from "@/lib/supabase/server";
 import { coursesForProduct } from "@/lib/courses";
 import type { Ownership } from "@/lib/offers";
 import type { Product, Offer } from "@/lib/types";
 
-const OFFER_COLUMNS =
-  "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, bump_headline, bump_description, bump_banner, bump_bullets, bump_note, bump_accent, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live";
 
 // Ownership-gated library reads + signed-URL delivery. Paid assets live in the
 // PRIVATE bucket and are only ever reached through an ownership check here.
