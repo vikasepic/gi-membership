@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { BlockEditor } from "@/components/admin/block-editor";
 import { bandTheme } from "@/lib/page-sections";
-import { newBlock, setColumnCount, setStyleAt, type Block } from "@/lib/blocks";
+import { insertBlock, newBlock, setColumnCount, setStyleAt, type Block } from "@/lib/blocks";
 import { normalizeSiteTypography } from "@/lib/site-typography";
 import { BLOCK_CONTROLS, writeControl, type Control } from "@/lib/block-controls";
 import { blockRules } from "@/lib/block-style";
@@ -852,5 +852,58 @@ describe("dropping onto an empty canvas", () => {
     // Nothing was being dragged from the palette here, so the canvas should
     // still be empty rather than holding a block nobody chose.
     expect(editor.blocks).toHaveLength(0);
+  });
+});
+
+/**
+ * A column is not a block, and a right-click on one used to say otherwise.
+ *
+ * The event bubbled to the row, so the menu that opened was the CONTAINER's —
+ * and "Duplicate" there copies the whole thing, which is a very different
+ * answer to the question that was asked.
+ */
+describe("the column context menu", () => {
+  it("offers the column's actions, not the container's", () => {
+    mount([setColumnCount(newBlock("row"), 2)]);
+    const column = document.querySelector("[data-column]");
+    expect(column, "a column is a thing the DOM can name").toBeTruthy();
+    rightClick(column!);
+
+    const items = menuItems();
+    expect(items).toContain("Duplicate this column");
+    expect(items).toContain("Delete this column");
+    expect(items).toContain("Edit the container");
+    // The container's own menu must not be what opened.
+    expect(items).not.toContain("Duplicate");
+  });
+
+  it("says why deleting is unavailable on a one-column container", () => {
+    mount([setColumnCount(newBlock("row"), 1)]);
+    rightClick(document.querySelector("[data-column]")!);
+    // Greyed with a reason, not hidden — the same way Paste says why.
+    const del = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (b) => b.textContent?.trim() === "Delete this column",
+    )!;
+    expect(del.disabled).toBe(true);
+    expect(del.title).toContain("needs one column");
+  });
+});
+
+/**
+ * The drop that lit up and then threw the block away.
+ *
+ * The editor carried its own copy of "a container cannot go inside a column",
+ * which outlived the rule: the zone accepted the drop and the block vanished
+ * between the two. One authority now — insertBlock — and the editor asks it.
+ */
+describe("dropping a container into a column", () => {
+  it("keeps it", () => {
+    const row = setColumnCount(newBlock("row"), 2);
+    const inner = newBlock("row");
+    const out = insertBlock([row], inner, { zone: "column", rowId: row.id, column: 0, index: 0 });
+    expect(out[0].columns![0][0].id).toBe(inner.id);
+    // And the editor's own guard is gone, so what insertBlock accepts is what
+    // the canvas keeps.
+    expect(out).not.toEqual([row]);
   });
 });

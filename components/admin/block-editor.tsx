@@ -37,6 +37,7 @@ import { canExplode, explodeWarnings, takeApart } from "@/lib/cards-to-blocks";
 import {
   addTarget,
   blockRendersNothing,
+  MAX_COLUMNS,
   duplicateBlock,
   duplicateColumn,
   removeColumn,
@@ -316,6 +317,44 @@ export function BlockEditor({
     );
   };
 
+  /**
+   * The menu for a column, which is not a block.
+   *
+   * A right-click on one used to bubble to the row and open the ROW's menu —
+   * so "Duplicate" on a column duplicated the whole container, which is a very
+   * different thing to be handed when you asked for one column.
+   */
+  const columnMenu = (e: React.MouseEvent, row: Block, index: number) => {
+    const count = row.columns?.length ?? 0;
+    setMenu(
+      menuAt(e, [
+        {
+          label: "Duplicate this column",
+          onSelect: () => {
+            const next = duplicateColumn(row, index);
+            if (next === row) return;
+            commit(updateBlock(blocks, row.id, () => next));
+            setSelectedId(`${row.id}#${index + 1}`);
+          },
+          disabled: count >= MAX_COLUMNS ? `A container holds at most ${MAX_COLUMNS}` : undefined,
+        },
+        {
+          label: "Edit the container",
+          onSelect: () => setSelectedId(row.id),
+        },
+        {
+          label: "Delete this column",
+          danger: true,
+          onSelect: () => {
+            commit(updateBlock(blocks, row.id, (b) => removeColumn(b, index)));
+            setSelectedId(row.id);
+          },
+          disabled: count <= 1 ? "A container needs one column" : undefined,
+        },
+      ]),
+    );
+  };
+
   const [families, setFamilies] = useState<string[]>([]);
   useEffect(() => {
     let alive = true;
@@ -403,10 +442,14 @@ export function BlockEditor({
     if (payload.kind === "new") {
       const base = newBlock(payload.type);
       const block = payload.props ? { ...base, props: { ...base.props, ...payload.props } } : base;
-      // insertBlock refuses a row inside a column; say so rather than letting
-      // the click appear to do nothing.
-      if (block.type === "row" && target.zone === "column") return;
-      commit(insertBlock(blocks, block, target));
+      // One authority for what may go where — `insertBlock`. This used to carry
+      // its own copy of "a container cannot go in a column", which outlived the
+      // rule: the drop zone lit up, the drop was accepted, and the block was
+      // thrown away between the two. A tree that comes back unchanged means the
+      // target was refused, so nothing is committed and nothing is selected.
+      const next = insertBlock(blocks, block, target);
+      if (next === blocks) return;
+      commit(next);
       setSelectedId(block.id);
       setTab("content");
     } else {
@@ -632,6 +675,7 @@ export function BlockEditor({
     <CanvasStore.Provider value={store}>
     <Globals.Provider value={index}>
     <Dragging.Provider value={dragging}>
+    <ColumnMenu.Provider value={columnMenu}>
     {/* The design itself, opened from a page that shows it.
         A second editor over the first rather than a trip to another screen,
         because the model chosen was "edit anywhere, changes everywhere" — and
@@ -1196,6 +1240,7 @@ export function BlockEditor({
         </aside>
       </div>
     </div>
+    </ColumnMenu.Provider>
     </Dragging.Provider>
     </Globals.Provider>
     </CanvasStore.Provider>
@@ -1233,6 +1278,17 @@ const Dragging = createContext<{ label: string | null; type: BlockType | null }>
   label: null,
   type: null,
 });
+
+/**
+ * The right-click menu for a column.
+ *
+ * A context rather than a prop threaded through Zone and the block wrapper to
+ * reach RowColumns: it is one function that never changes, and the two layers
+ * in between have no use for it.
+ */
+const ColumnMenu = createContext<((e: React.MouseEvent, row: Block, index: number) => void) | null>(
+  null,
+);
 
 /** A bin. Drawn rather than typed, so it reads as a delete at 12px. */
 function TrashIcon() {
@@ -1773,6 +1829,7 @@ function RowColumns({
   // for the person building the page, and a dashed box on the live page would
   // be a border nobody asked for.
   const grid = rowIsGrid(block, device);
+  const onColumnContext = useContext(ColumnMenu);
   return (
     <div style={layout.container}>
       {columns.map((col, c) => {
@@ -1780,12 +1837,24 @@ function RowColumns({
         return (
         <div
           key={c}
+          // Named the way a block is. A column is selectable, right-clickable
+          // and draggable-into, and until now it was none of those things to
+          // anything looking at the DOM.
+          data-column={colId}
           onClick={(e) => {
             // Only when the click was not on a block inside it. A column is the
             // thing behind its contents, so it is what a click on the space
             // around them means.
             e.stopPropagation();
             onSelect(colId);
+          }}
+          onContextMenu={(e) => {
+            // Stopped, or it reaches the row's own handler and the menu that
+            // opens is the container's — so "Duplicate" copies the whole thing
+            // when a column was what was asked for.
+            e.stopPropagation();
+            onSelect(colId);
+            onColumnContext?.(e, block, c);
           }}
           className={
             selectedId === colId
