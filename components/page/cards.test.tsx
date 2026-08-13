@@ -4,6 +4,7 @@ import { Blocks } from "@/components/page/blocks";
 import { blockRules } from "@/lib/block-style";
 import { bandTheme } from "@/lib/page-sections";
 import { normalizeBlocks, setPropsAt, setStyleAt, type Block } from "@/lib/blocks";
+import { sanitizeBlocks } from "@/lib/sanitize-html";
 
 // The cards block, and the settings added to it after pages were already using
 // it. Every one of those settings is null or a "as it was" default, and this
@@ -360,4 +361,53 @@ describe("the last block in a flow", () => {
     expect(style.lastIndexOf("margin-bottom:0")).toBeGreaterThan(style.indexOf("@media"));
   });
 });
+});
+
+/**
+ * The three things a card could not say.
+ *
+ * Each one is "null still means what it meant" plus "and now there is a way to
+ * say otherwise" — the same shape as everything else in this file, because a
+ * card block saved two years ago must render byte for byte either way.
+ */
+describe("what a card can now be told", () => {
+  const cards = (props: Record<string, unknown>) =>
+    render(stored({ items: ITEMS, ...props }));
+
+  it("draws the closing note's markup, like every other field on the card", () => {
+    const out = cards({ skin: "list", note: "<strong>Voice match:</strong> paste 200 words." });
+    expect(out).toContain("<strong>Voice match:</strong>");
+    expect(out).not.toContain("&lt;strong&gt;");
+  });
+
+  it("filters that note on save, because it is now markup", () => {
+    const [b] = sanitizeBlocks(
+      normalizeBlocks([
+        { id: "b1", type: "cards", props: { items: [], note: '<strong>ok</strong><script>alert(1)</script>' } },
+      ]),
+    );
+    expect(String(b.props.note)).toContain("<strong>ok</strong>");
+    expect(String(b.props.note)).not.toContain("<script");
+  });
+
+  it("takes card padding as one number, as it always has", () => {
+    expect(cards({ cardPadding: 22 })).toContain("padding:22px");
+  });
+
+  it("takes it as four sides", () => {
+    const out = cards({ cardPadding: { t: 10, r: 20, b: 30, l: 40, u: "px", link: false } });
+    expect(out).toContain("padding:10px 20px 30px 40px");
+  });
+
+  it("still lets the skin pad the card when nothing is set", () => {
+    // 1.35rem 1.4rem is the boxed skin's own padding, and unset must not
+    // replace it with a figure of this control's choosing.
+    expect(cards({ skin: "boxed" })).toContain("padding:1.35rem 1.4rem");
+  });
+
+  it("paints the card's own title and text when told to", () => {
+    const out = cards({ cardTitleColor: "#ff0000", cardBodyColor: "#00ff00" });
+    expect(out).toContain("#ff0000");
+    expect(out).toContain("#00ff00");
+  });
 });

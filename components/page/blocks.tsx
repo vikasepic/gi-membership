@@ -130,6 +130,27 @@ export function withLineBreaks(value: string): string {
  * need to keep their class and style — the block's own rule is what carries
  * size, weight and colour.
  */
+/**
+ * A card's padding, whether it was saved as one number or as four sides.
+ *
+ * It shipped as a single figure, and a card is a box like any other — the
+ * top and the sides almost never want to be equal. Four sides is a `Dim`, the
+ * same shape Margin and Padding use everywhere else; a stored number still
+ * means all four, so nothing already saved moves.
+ *
+ * Null is not zero. Each skin pads differently and Plain pads not at all, so
+ * unset has to keep meaning "whatever the skin does".
+ */
+function cardPadCss(v: unknown): React.CSSProperties {
+  if (v == null) return {};
+  if (typeof v === "number") return { padding: `${v}px` };
+  if (typeof v !== "object") return {};
+  const d = v as Record<string, unknown>;
+  const u = typeof d.u === "string" ? d.u : "px";
+  const side = (k: string) => `${num(d[k], 0)}${u}`;
+  return { padding: `${side("t")} ${side("r")} ${side("b")} ${side("l")}` };
+}
+
 function Inline({
   as: Tag = "span",
   html,
@@ -894,6 +915,12 @@ function Inner({
       const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
       if (items.length === 0) return null;
       const skin = str(p.skin, "boxed");
+      // The card's own ink. Unset is the band's, which is what every card ever
+      // saved has drawn — a card on a dark section is not always the same
+      // colour as the paragraph beside it, and until now there was no way to
+      // say so.
+      const cardTitleInk = str(p.cardTitleColor) || c.fg;
+      const cardBodyInk = str(p.cardBodyColor) || theme.muted;
 
       // One card holding compact rows, rather than a stack of separate boxes.
       // Six boxes down the side of a hero is twice the height of the copy it
@@ -926,9 +953,9 @@ function Inner({
                     </span>
                   )}
                   <span className="min-w-0">
-                    <span style={{ color: c.fg, fontSize: "0.88rem", ...type }}><Inline html={str(it.title)} /></span>
+                    <span style={{ color: cardTitleInk, fontSize: "0.88rem", ...type }}><Inline html={str(it.title)} /></span>
                     {str(it.body) && (
-                      <span className="mt-0.5 block text-[0.78rem] leading-snug" style={{ color: theme.muted }}>
+                      <span className="mt-0.5 block text-[0.78rem] leading-snug" style={{ color: cardBodyInk }}>
                         <Inline html={str(it.body)} />
                       </span>
                     )}
@@ -937,9 +964,17 @@ function Inner({
               ))}
             </div>
             {str(p.note) && (
-              <p className="mt-3 text-[0.82rem] leading-relaxed" style={{ ...rowStyle, color: c.fg }}>
-                {str(p.note)}
-              </p>
+              // Markup, not text. Every other field on this card — the row
+              // titles, the bodies, the caption — is inline HTML, so somebody
+              // who bolds two words in the closing note is doing exactly what
+              // the field above it does. They were reading back "<strong>" on
+              // a live sales page.
+              <Inline
+                as="p"
+                className="mt-3 text-[0.82rem] leading-relaxed"
+                style={{ ...rowStyle, color: cardTitleInk }}
+                html={str(p.note)}
+              />
             )}
           </div>
         );
@@ -962,7 +997,7 @@ function Inner({
       // every card already saved.
       const cell: React.CSSProperties = {
         ...skinCell,
-        ...(p.cardPadding == null ? {} : { padding: `${num(p.cardPadding, 0)}px` }),
+        ...cardPadCss(p.cardPadding),
         ...(p.cardRadius == null ? {} : { borderRadius: num(p.cardRadius, 0) }),
       };
       const gap = p.cardGap == null ? (inline ? "1.6rem" : "1rem") : `${num(p.cardGap, 0)}px`;
@@ -1042,7 +1077,7 @@ function Inner({
                       {String(i + 1).padStart(2, "0")}
                     </span>
                   )}
-                  <h3 className="font-display font-semibold" style={{ color: c.fg, fontSize: "1.02rem", ...type }}>
+                  <h3 className="font-display font-semibold" style={{ color: cardTitleInk, fontSize: "1.02rem", ...type }}>
                     <Inline html={str(it.title)} />
                   </h3>
                 </div>
@@ -1053,7 +1088,7 @@ function Inner({
                   // this first shipped as an inline `marginTop: 8`.
                   className={`${textGap == null ? "mt-2 " : ""}text-[0.9rem] leading-relaxed`}
                   style={{
-                    color: theme.muted,
+                    color: cardBodyInk,
                     paddingLeft: numbered ? "1.9rem" : 0,
                     ...(textGap == null ? {} : { marginTop: textGap }),
                   }}
@@ -1121,7 +1156,7 @@ function Inner({
               <h3
                 className="font-display font-semibold"
                 style={{
-                  color: c.fg,
+                  color: cardTitleInk,
                   fontSize: "1.02rem",
                   marginTop: numbered && !circle ? ".45rem" : 0,
                   marginBottom: textGap ?? ".4rem",
@@ -1130,7 +1165,7 @@ function Inner({
               >
                 <Inline html={str(it.title)} />
               </h3>
-              <p className="text-[0.88rem] leading-relaxed" style={{ color: theme.muted }}>
+              <p className="text-[0.88rem] leading-relaxed" style={{ color: cardBodyInk }}>
                 <Inline html={str(it.body)} />
               </p>
               {str(it.amount) && (

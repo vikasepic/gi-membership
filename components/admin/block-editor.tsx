@@ -4,11 +4,12 @@ import { MediaButton } from "@/components/admin/media-modal";
 import { copyToClipboard, readClipboard, onClipboardChange, type Clip } from "@/lib/clipboard";
 import { ContextMenu, menuAt, type MenuState } from "@/components/admin/context-menu";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BlockBody, Blocks } from "@/components/page/blocks";
 import { IconPicker } from "@/components/admin/icon-picker";
 import { CanvasFrame } from "@/components/admin/canvas-frame";
+import { SpacingGuide } from "@/components/admin/spacing-guide";
 import type { StoreRender } from "@/components/page/storefront-blocks";
 import { RichText } from "@/components/editor/rich-text";
 import {
@@ -1390,6 +1391,11 @@ function CanvasBlock({
   // canvas exists to be what the page is; a rule it silently drops is the one
   // thing it may not do.
   const textRules = blockTextRules(block, device) + blockCustomRules(block);
+  // The element the guide measures — held in state, not a ref, because a ref
+  // filled in after the first paint never tells anybody it happened. The
+  // callback is stable so React attaches it once rather than on every render.
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  const boxRef = useCallback((n: HTMLDivElement | null) => setBox(n), []);
 
   /** Above or below, decided by which half of the block the cursor is in. */
   function edge(e: React.DragEvent<HTMLDivElement>): number {
@@ -1474,7 +1480,11 @@ function CanvasBlock({
             canvas's own `.site-type h2` would otherwise beat the block. A block
             that sets no typography ships no element at all. */}
         {textRules && <style dangerouslySetInnerHTML={{ __html: textRules }} />}
-        <div className={blockClass(block)} style={blockCssAt(block, theme, device)}>
+        {/* Amber outside the box is margin, green inside it is padding — the
+            browser's own colours, over the block they belong to. Four numbers
+            in a panel do not say which edge moved. */}
+        <SpacingGuide on={selected} el={box} />
+        <div ref={boxRef} className={blockClass(block)} style={blockCssAt(block, theme, device)}>
           {block.type === "row" ? (
             <RowColumns
               block={block}
@@ -2501,16 +2511,24 @@ function ControlField({
       );
 
     case "dim": {
-      const d = (value ?? { t: 0, r: 0, b: 0, l: 0, u: "px", link: false }) as Record<string, number | string | boolean>;
+      // A value that has never been set starts LINKED. It is arriving from a
+      // control that used to be one number, and typing into one box and
+      // getting three zeroes you did not ask for is not what "add per-side"
+      // was meant to mean. Unlink for four.
+      const d = (value ?? { t: 0, r: 0, b: 0, l: 0, u: "px", link: true }) as Record<string, number | string | boolean>;
+      const SIDE_LABEL = { t: "Top", r: "Right", b: "Bottom", l: "Left" } as const;
       return (
         <div className="flex flex-col gap-1">
           {label}
           <div className="flex items-center gap-1">
             {(["t", "r", "b", "l"] as const).map((side) => (
+              // Labelled. Four identical boxes in a row is a guess about which
+              // one is the top, and the guess is wrong a quarter of the time.
+              <span key={side} className="flex w-full flex-col items-center gap-0.5">
               <input
-                key={side}
                 type="number"
-                aria-label={`${control.label} ${side}`}
+                aria-label={`${control.label} ${SIDE_LABEL[side].toLowerCase()}`}
+                title={SIDE_LABEL[side]}
                 className="w-full rounded border border-border bg-surface px-1 py-1 text-center text-xs"
                 value={Number(d[side] ?? 0)}
                 onChange={(e) => {
@@ -2518,13 +2536,15 @@ function ControlField({
                   onChange(d.link ? { ...d, t: n, r: n, b: n, l: n } : { ...d, [side]: n });
                 }}
               />
+              <span className="text-[0.6rem] text-muted">{SIDE_LABEL[side]}</span>
+              </span>
             ))}
             <button
               type="button"
               aria-label="Link sides"
               title="Link all four sides"
               onClick={() => onChange({ ...d, link: !d.link })}
-              className={`rounded px-1 text-xs ${d.link ? "text-fg" : "text-muted"}`}
+              className={`mb-4 rounded px-1 text-xs ${d.link ? "text-fg" : "text-muted"}`}
             >
               ⛓
             </button>

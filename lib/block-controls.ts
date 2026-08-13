@@ -675,7 +675,10 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       // Both empty by default, and empty is not zero. Each skin pads its cards
       // differently on purpose and Plain pads not at all, so there is no one
       // figure that could stand here without repainting every card ever saved.
-      { kind: "number", key: "cardPadding", label: "Card padding", min: 0, max: 96, step: 2, unit: "px", hint: "Unset follows the skin." },
+      // Four sides, not one figure. A card is a box like any other and its top
+      // rarely wants what its sides want; the chain ties them back together for
+      // anyone who only wanted one number. A stored number still means all four.
+      { kind: "dim", key: "cardPadding", label: "Card padding", hint: "Unset follows the skin. The chain ties all four together." },
       { kind: "number", key: "cardGap", label: "Gap between cards", min: 0, max: 96, step: 2, unit: "px", hint: "Unset follows the skin." },
       { kind: "number", key: "cardRadius", label: "Card corner", min: 0, max: 64, step: 1, unit: "px", hint: "Unset follows the skin." },
       // The one gap inside a card, as opposed to the gap between cards above.
@@ -683,6 +686,10 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       // in, because "Text gap" in a panel that already has three gaps says
       // nothing about which one it moves.
       { kind: "number", key: "cardTextGap", label: "Title to text", min: 0, max: 48, step: 1, unit: "px", hint: "Unset follows the skin." },
+
+      group("Card colour"),
+      { kind: "color", key: "cardTitleColor", label: "Title", hint: "Unset follows the band." },
+      { kind: "color", key: "cardBodyColor", label: "Text", hint: "Unset follows the band." },
 
       group("Icon tile", (b) => b.props.media !== "none"),
       { kind: "select", key: "iconShape", label: "Shape", options: [["square", "Square"], ["rounded", "Rounded"], ["circle", "Circle"]], when: (b) => b.props.media !== "none" },

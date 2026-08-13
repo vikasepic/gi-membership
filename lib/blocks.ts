@@ -629,10 +629,15 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     iconSize: null,
     iconBg: null,
     iconColor: null,
+    // One number means all four sides; a Dim means four. Null is neither —
+    // it is "whatever the skin does", which is not a figure any skin shares.
     cardPadding: null,
     cardGap: null,
     cardTextGap: null,
     cardRadius: null,
+    // Blank is the band's ink, which is what every card ever saved has drawn.
+    cardTitleColor: null,
+    cardBodyColor: null,
     // False, not null: a rule between cards is either there or it is not, and
     // there is no skin whose corner it could be following instead.
     divider: false,
