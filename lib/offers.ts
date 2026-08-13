@@ -1,3 +1,4 @@
+import type { OfferPrice } from "@/lib/offer-prices";
 // Offer eligibility — correctness, not polish (plan): an offer is NEVER shown
 // to a buyer who already owns or subscribes to what it grants.
 
@@ -53,6 +54,54 @@ export function immediateChargeCents(offer: {
   if (offer.trialDays && offer.trialDays > 0) return 0;
   return offer.priceCents;
 }
+
+/**
+ * The price this offer quotes when nobody has chosen one.
+ *
+ * The first that is showing, by the order the editor put them in. There is no
+ * `is_default` column on purpose: it would be a second key describing what the
+ * order already says, and hiding the top price SHOULD promote the next one
+ * rather than leave the storefront quoting a price nobody can buy.
+ */
+export function defaultPriceOf(prices: OfferPrice[]): OfferPrice | null {
+  return prices.filter((p) => !p.archived)[0] ?? null;
+}
+
+/**
+ * The offer, as sold at one of its prices.
+ *
+ * The whole reason the sixty existing readers did not have to change. They
+ * were never reading "the offer's price" — they were reading "the price of the
+ * thing being sold", and this hands them exactly that with one fact swapped.
+ * Same trick as `offerAsSoldTo`, which strips a trial the buyer has used and
+ * lets every reader move together.
+ *
+ * Anything on the money path must be handed the PROJECTED offer. A raw one
+ * type-checks perfectly and charges the headline price to somebody who picked
+ * the yearly — `immediateChargeCents` takes a structural
+ * `{billingType, priceCents, trialDays}`, so nothing catches it.
+ */
+export function offerAtPrice<T extends PriceFields>(offer: T, price: OfferPrice | null): T {
+  if (!price) return offer;
+  return {
+    ...offer,
+    billingType: price.billingType,
+    interval: price.interval,
+    intervalCount: price.intervalCount,
+    trialDays: price.trialDays,
+    priceCents: price.priceCents,
+    compareAtCents: price.compareAtCents,
+  };
+}
+
+type PriceFields = {
+  billingType: "one_time" | "recurring";
+  interval: string | null;
+  intervalCount: number | null;
+  trialDays: number | null;
+  priceCents: number;
+  compareAtCents: number | null;
+};
 
 /**
  * Which offer a click on the upsell actually buys.

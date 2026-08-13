@@ -23,12 +23,50 @@ const schema = z
     grantProductId: z.preprocess(emptyToNull, uuidish.nullable()),
     grantAppId: z.preprocess(emptyToNull, uuidish.nullable()),
     grantEntitlementKey: z.preprocess(emptyToNull, z.string().nullable()),
-    billingType: z.enum(["one_time", "recurring"]),
-    interval: z.preprocess(emptyToNull, z.enum(["day", "week", "month", "year"]).nullable()),
-    intervalCount: z.preprocess(emptyToNull, z.coerce.number().int().min(1).nullable()),
-    trialDays: z.preprocess(emptyToNull, z.coerce.number().int().min(0).nullable()),
-    price: z.coerce.number().min(0, "Price must be ≥ 0"),
-    compareAt: z.preprocess(emptyToNull, z.coerce.number().min(0).nullable()),
+    // The ways to pay, posted as one JSON string the way every other list in
+    // this admin is. Every rule here is a rule the database also states as a
+    // CHECK — a save that gets past this and fails there arrives as a bare
+    // Postgres message about a constraint nobody can find.
+    prices: z
+      .string()
+      .transform((raw, ctx) => {
+        try {
+          return JSON.parse(raw) as unknown;
+        } catch {
+          ctx.addIssue({ code: "custom", message: "The prices could not be read. Reload and try again." });
+          return z.NEVER;
+        }
+      })
+      .pipe(
+        z
+          .array(
+            z
+              .object({
+                id: z.string().default(""),
+                label: z.string().default(""),
+                billingType: z.enum(["one_time", "recurring"]),
+                interval: z.enum(["day", "week", "month", "year"]).nullable().default(null),
+                intervalCount: z.coerce.number().int().min(1).default(1),
+                trialDays: z.coerce.number().int().min(0).nullable().default(null),
+                priceCents: z.coerce.number().int().min(0),
+                compareAtCents: z.coerce.number().int().min(0).nullable().default(null),
+                archived: z.boolean().default(false),
+              })
+              .refine((p) => p.billingType !== "recurring" || p.interval !== null, {
+                message: "A recurring price needs an interval",
+              })
+              .refine((p) => p.billingType !== "one_time" || p.trialDays === null, {
+                message: "A one-off purchase has nothing to trial",
+              })
+              .refine((p) => p.compareAtCents === null || p.compareAtCents >= p.priceCents, {
+                message: "A was-price below the price reads as a markup",
+              }),
+          )
+          .min(1, "An offer needs a way to pay")
+          .refine((list) => list.some((p) => !p.archived), {
+            message: "At least one way to pay has to be showing",
+          }),
+      ),
     currency: z.string().trim().min(1).default("usd"),
     headline: z.string().trim().min(1, "Headline required"),
     description: z.preprocess(emptyToNull, z.string().nullable()),
@@ -84,11 +122,9 @@ const schema = z
   .refine((v) => v.grantType !== "subscription" || v.grantAppId, {
     message: "Pick the app this subscription grants",
     path: ["grantAppId"],
-  })
-  .refine((v) => v.billingType !== "recurring" || v.interval, {
-    message: "Recurring offers need a billing interval",
-    path: ["interval"],
   });
+// The recurring-needs-an-interval rule moved onto each price, where the
+// billing type now lives — see the `prices` schema above.
 
 export type SaveState = { error?: string; saved?: boolean };
 
@@ -112,12 +148,7 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     grantProductId: v.grantProductId,
     grantAppId: v.grantAppId,
     grantEntitlementKey: v.grantEntitlementKey,
-    billingType: v.billingType,
-    interval: v.interval,
-    intervalCount: v.intervalCount ?? (v.billingType === "recurring" ? 1 : null),
-    trialDays: v.trialDays,
-    priceCents: Math.round(v.price * 100),
-    compareAtCents: v.compareAt == null ? null : Math.round(v.compareAt * 100),
+    prices: v.prices,
     currency: v.currency,
     headline: v.headline,
     description: v.description,

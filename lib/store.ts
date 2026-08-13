@@ -24,7 +24,12 @@ const PRODUCT_COLUMNS =
  * the one nobody reads.
  */
 export const OFFER_COLUMNS =
-  "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, page_alt_offer_id, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, activecampaign_trial_tag_id, activecampaign_cancelled_tag_id, bump_headline, bump_description, bump_banner, bump_bullets, bump_note, bump_accent, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live";
+  "id, key, name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, page_alt_offer_id, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, activecampaign_trial_tag_id, activecampaign_cancelled_tag_id, bump_headline, bump_description, bump_banner, bump_bullets, bump_note, bump_accent, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live, " +
+  // The ways to pay, embedded rather than fetched one offer at a time: every
+  // reader of an offer is a reader of its prices, and a second round trip per
+  // offer on a storefront that lists them all is a query nobody would write on
+  // purpose. camelize already recurses into nested arrays.
+  "offer_prices(id, label, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, sort_order, archived)";
 
 // Memoised per request: nearly every read in the app resolves the store first,
 // so a single page render was asking for the same row a dozen times.

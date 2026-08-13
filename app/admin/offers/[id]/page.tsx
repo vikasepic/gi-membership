@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OfferForm } from "@/components/admin/offer-form";
-import { getOfferById, listProductOptions, listAppOptions, listOfferOptions } from "@/lib/admin";
+import { getOfferById, listProductOptions, listAppOptions, listOfferOptions, priceUsage } from "@/lib/admin";
 import { hasCustomOtoPage } from "@/components/oto/registry";
 import { hasPageSections } from "@/lib/pages";
 import { ViewLive } from "@/components/admin/view-live";
@@ -12,12 +12,16 @@ export default async function EditOfferPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [offer, products, apps, offers] = await Promise.all([
+  const [offer, products, apps, offers, usage] = await Promise.all([
     getOfferById(id),
     listProductOptions(),
     listAppOptions(),
     // Drafts too: the second price is usually built beside the first.
     listOfferOptions(true),
+    // Who is on each way to pay. A price with anybody on it can be hidden but
+    // never repriced or removed — their subscription holds its own price, so
+    // changing it here would only mislead whoever changed it.
+    priceUsage(id),
   ]);
   if (!offer) notFound();
 
@@ -112,7 +116,7 @@ export default async function EditOfferPage({
           </a>
         </div>
       </div>
-      <OfferForm offer={offer} products={products} apps={apps} offers={offers} />
+      <OfferForm offer={offer} products={products} apps={apps} offers={offers} usage={usage} />
     </div>
   );
 }

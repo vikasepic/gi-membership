@@ -3,11 +3,13 @@
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { saveOffer, removeOffer, type SaveState } from "@/app/admin/offers/actions";
 import { inputClass as input, Field, Section } from "@/components/admin/form-controls";
+import { OfferPriceFields, type PriceUsage } from "@/components/admin/offer-price-fields";
 import { EditorTabs, TabPanel } from "@/components/admin/editor-tabs";
 import { ConfirmSubmit } from "@/components/admin/confirm-submit";
 import { SaveStatus, useJustSaved, useSlowSave } from "@/components/admin/save-status";
 import { OFFER_FIELD_TABS, summarise, tabToShow, tabsWithErrors } from "@/lib/save-feedback";
 import type { Offer } from "@/lib/types";
+import type { OfferPrice } from "@/lib/offer-prices";
 import type { ProductOption, AppOption, OfferOption } from "@/lib/admin";
 import { money } from "@/lib/money";
 import { sectionsToForm } from "@/lib/oto-sections";
@@ -21,6 +23,7 @@ export function OfferForm({
   apps,
   offers = [],
   defaultCurrency = "usd",
+  usage = {},
 }: {
   offer?: Offer;
   products: ProductOption[];
@@ -29,14 +32,20 @@ export function OfferForm({
   offers?: OfferOption[];
   /** The store's currency, so a new offer starts in the one it actually sells in. */
   defaultCurrency?: string;
+  /** How many people are on each price — a row with any cannot be repriced. */
+  usage?: PriceUsage;
 }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveOffer, {});
   const sections = sectionsToForm(offer?.otoSections as never);
   // Held in state so the trial tag field appears the moment trial days are
   // typed, rather than after a save — the field is the explanation of what a
   // trial means to the list, and it is needed while deciding to have one.
-  const [trialDays, setTrialDays] = useState(String(offer?.trialDays ?? ""));
-  const hasTrial = Number(trialDays) > 0;
+  // ANY price with a trial, not one field. The trial tag is about what
+  // happens to a buyer, and a buyer on the yearly with a trial gets tagged the
+  // same as one on the monthly — so the field appears while any way to pay
+  // offers one.
+  const [prices, setPrices] = useState<OfferPrice[]>(offer?.prices ?? []);
+  const hasTrial = prices.some((p) => (p.trialDays ?? 0) > 0);
   const [dirty, setDirty] = useState(false);
   const [active, setActive] = useState(offer ? offer.active : true);
   const [clientErr, setClientErr] = useState<Record<string, string>>({});
@@ -198,51 +207,20 @@ export function OfferForm({
       </TabPanel>
 
       <TabPanel tab="pricing">
-      <Section title="How it bills" hint="One-time is charged once. Recurring bills on a schedule — add trial days for a free period first.">
-        <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
-          <Field label="Billing type" required>
-            <select name="billingType" defaultValue={offer?.billingType ?? "one_time"} className={input}>
-              <option value="one_time">One-time</option>
-              <option value="recurring">Recurring</option>
-            </select>
-          </Field>
-          <Field label="Interval" hint="recurring">
-            <select name="interval" defaultValue={offer?.interval ?? ""} className={input}>
-              <option value="">—</option>
-              <option value="day">Day</option>
-              <option value="week">Week</option>
-              <option value="month">Month</option>
-              <option value="year">Year</option>
-            </select>
-          </Field>
-          <Field label="Every" hint="interval count">
-            <input name="intervalCount" type="number" min="1" defaultValue={offer?.intervalCount ?? ""} className={input} />
-          </Field>
-          <Field label="Trial days" hint="recurring">
-            <input
-              name="trialDays"
-              type="number"
-              min="0"
-              value={trialDays}
-              onChange={(e) => setTrialDays(e.target.value)}
-              className={input}
-            />
-          </Field>
-        </div>
-      </Section>
-
-      <Section title="Price" hint="Charged on the card already saved at checkout — no re-entry.">
-      <div className="grid grid-cols-2 gap-5 sm:grid-cols-3">
-        <Field label="Price ($)" required>
-          <input name="price" type="number" min="0" step="1" defaultValue={offer ? offer.priceCents / 100 : ""} required className={input} />
-        </Field>
-        <Field label="Compare-at ($)" hint="optional anchor">
-          <input name="compareAt" type="number" min="0" step="1" defaultValue={offer?.compareAtCents ? offer.compareAtCents / 100 : ""} className={input} />
-        </Field>
-        <Field label="Currency">
+      <Section
+        title="Ways to pay"
+        hint="One offer, however many prices. Monthly beside yearly used to mean building a second offer — its own copy, its own bump, its own tags — and two was the ceiling."
+      >
+        <OfferPriceFields
+          prices={offer?.prices ?? []}
+          currency={offer?.currency ?? defaultCurrency}
+          name="prices"
+          usage={usage}
+          onChange={setPrices}
+        />
+        <Field label="Currency" hint="every way to pay shares it">
           <input name="currency" defaultValue={offer?.currency ?? defaultCurrency} className={input} />
         </Field>
-      </div>
       </Section>
 
       {/* Each block below is named for the SURFACE it appears on. The old

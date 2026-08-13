@@ -1,3 +1,4 @@
+import type { OfferPrice } from "@/lib/offer-prices";
 // camelCase domain types (API boundary). DB is snake_case; see lib/case.ts.
 export type ProductType = "pdf" | "audio" | "video" | "app" | "course";
 export type MediaMode = "upload" | "embed";
@@ -83,6 +84,15 @@ export type Offer = {
    * has no product behind it, so it carries its own.
    */
   pageAltOfferId: string | null;
+  /**
+   * The ways to pay for this. Never empty once 0048 has run.
+   *
+   * The scalar price fields above are a MIRROR of the first non-archived one,
+   * kept by a database trigger. They stay because sixty readers want "the
+   * headline price" and that is exactly what they are — see offerAtPrice for
+   * how a reader asks about a different one.
+   */
+  prices: OfferPrice[];
   /** Applied when a trial starts. Kept if they cancel before ever paying. */
   activecampaignTrialTagId: string | null;
   /** Applied when access ends. Never removed. */

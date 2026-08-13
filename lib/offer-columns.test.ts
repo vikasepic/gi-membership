@@ -45,7 +45,21 @@ describe("the columns an Offer is built from", () => {
   });
 
   it("names no column twice", () => {
-    const names = OFFER_COLUMNS.split(",").map((c) => c.trim());
+    // The embedded offer_prices(...) selection has its own comma-separated
+    // list inside it; cut it out before counting, or its columns are read as
+    // duplicates of the offer's own.
+    const flat = OFFER_COLUMNS.replace(/\w+\([^)]*\)/g, "");
+    const names = flat.split(",").map((c) => c.trim()).filter(Boolean);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("brings the prices with it", () => {
+    // Every reader of an offer is a reader of its prices. Fetching them
+    // separately would be a round trip per offer on a storefront that lists
+    // them all.
+    expect(OFFER_COLUMNS).toContain("offer_prices(");
+    for (const col of ["billing_type", "interval_count", "trial_days", "sort_order", "archived"]) {
+      expect(OFFER_COLUMNS.slice(OFFER_COLUMNS.indexOf("offer_prices(")), col).toContain(col);
+    }
   });
 });

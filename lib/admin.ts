@@ -2,6 +2,8 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
 import { getStoreId, OFFER_COLUMNS } from "@/lib/store";
+import { money } from "@/lib/money";
+import type { OfferPrice } from "@/lib/offer-prices";
 import type {
   Product,
   ProductStatus,
@@ -176,12 +178,8 @@ export type OfferInput = {
   grantProductId: string | null;
   grantAppId: string | null;
   grantEntitlementKey: string | null;
-  billingType: BillingType;
-  interval: Interval | null;
-  intervalCount: number | null;
-  trialDays: number | null;
-  priceCents: number;
-  compareAtCents: number | null;
+  /** The ways to pay. Never empty — an offer with no price cannot be bought. */
+  prices: OfferPrice[];
   currency: string;
   headline: string;
   description: string | null;
@@ -252,12 +250,14 @@ function toOfferRow(input: OfferInput, storeId: string) {
     grant_product_id: input.grantType === "product" ? input.grantProductId : null,
     grant_app_id: input.grantType === "subscription" ? input.grantAppId : null,
     grant_entitlement_key: input.grantEntitlementKey,
-    billing_type: input.billingType,
-    interval: input.billingType === "recurring" ? input.interval : null,
-    interval_count: input.billingType === "recurring" ? input.intervalCount : null,
-    trial_days: input.billingType === "recurring" ? input.trialDays : null,
-    price_cents: input.priceCents,
-    compare_at_cents: input.compareAtCents,
+    // The price columns are NOT written here any more. They are a mirror of
+    // the headline price, kept by offer_prices_sync, and a second writer of a
+    // cache is how a cache starts disagreeing with itself. `savePrices` below
+    // writes the prices; the trigger writes these.
+    //
+    // Except on INSERT, where they are NOT NULL and no price exists yet — see
+    // createOffer, which seeds them from the first price and then lets the
+    // trigger take over for ever.
     currency: input.currency,
     headline: input.headline,
     description: input.description,
@@ -279,12 +279,24 @@ function toOfferRow(input: OfferInput, storeId: string) {
 
 export async function createOffer(input: OfferInput): Promise<string> {
   const db = createServiceClient();
+  const first = input.prices[0];
   const { data, error } = await db
     .from("offers")
-    .insert(toOfferRow(input, await getStoreId()))
+    .insert({
+      ...toOfferRow(input, await getStoreId()),
+      // Seed values only. They are NOT NULL and the trigger has nothing to
+      // copy from until the first price row exists a moment from now.
+      billing_type: first.billingType,
+      interval: first.billingType === "recurring" ? first.interval : null,
+      interval_count: first.intervalCount,
+      trial_days: first.billingType === "recurring" ? first.trialDays : null,
+      price_cents: first.priceCents,
+      compare_at_cents: first.compareAtCents,
+    })
     .select("id")
     .single();
   if (error) throw new Error(`createOffer: ${error.message}`);
+  await savePrices(data.id as string, input.prices);
   return data.id as string;
 }
 
@@ -292,6 +304,102 @@ export async function updateOffer(id: string, input: OfferInput): Promise<void> 
   const db = createServiceClient();
   const { error } = await db.from("offers").update(toOfferRow(input, await getStoreId())).eq("id", id);
   if (error) throw new Error(`updateOffer: ${error.message}`);
+  await savePrices(id, input.prices);
+}
+
+/** How many people are on each price of this offer, and still paying. */
+export async function priceUsage(offerId: string): Promise<Record<string, number>> {
+  const db = createServiceClient();
+  // 'canceled' is deliberately excluded: those rows are kept and revived on a
+  // re-purchase, and counting them would block archiving a price for ever.
+  const { data, error } = await db
+    .from("ownership")
+    .select("offer_price_id")
+    .eq("offer_id", offerId)
+    .in("status", ["active", "trialing", "past_due"])
+    .not("offer_price_id", "is", null);
+  if (error) throw new Error(`priceUsage: ${error.message}`);
+  const out: Record<string, number> = {};
+  for (const row of data ?? []) {
+    const id = (row as { offer_price_id: string }).offer_price_id;
+    out[id] = (out[id] ?? 0) + 1;
+  }
+  return out;
+}
+
+/**
+ * Write the ways to pay, and refuse the two things that would hurt somebody.
+ *
+ * A price with live subscribers may be hidden but never repriced or removed.
+ * Stripe holds each subscriber's price inline on their own subscription, so
+ * neither actually changes what they pay — which is exactly why this has to be
+ * refused rather than allowed: the admin would believe they had moved people
+ * who had not moved, and the record of what somebody is on would be gone.
+ *
+ * `on delete restrict` on ownership is the half that holds when something
+ * other than this function does the writing. This half is the one that can say
+ * why.
+ */
+export async function savePrices(offerId: string, prices: OfferPrice[]): Promise<void> {
+  const db = createServiceClient();
+  const live = prices.filter((p) => !p.archived);
+  if (live.length === 0) throw new Error("An offer needs at least one way to pay that is showing.");
+
+  const { data: existingRows, error: readErr } = await db
+    .from("offer_prices")
+    .select("id, billing_type, interval, interval_count, trial_days, price_cents")
+    .eq("offer_id", offerId);
+  if (readErr) throw new Error(`savePrices: ${readErr.message}`);
+  const existing = new Map((existingRows ?? []).map((r) => [r.id as string, r]));
+  const usage = await priceUsage(offerId);
+
+  const keep = new Set(prices.map((p) => p.id));
+  for (const [id] of existing) {
+    if (keep.has(id)) continue;
+    if ((usage[id] ?? 0) > 0) {
+      throw new Error(
+        `${usage[id]} ${usage[id] === 1 ? "person is" : "people are"} on one of the prices you removed. Hide it instead — it stops being offered and nobody's billing changes.`,
+      );
+    }
+    const { error } = await db.from("offer_prices").delete().eq("id", id);
+    if (error) throw new Error(`savePrices: ${error.message}`);
+  }
+
+  for (const [i, p] of prices.entries()) {
+    const row = {
+      offer_id: offerId,
+      label: p.label.trim() || null,
+      billing_type: p.billingType,
+      interval: p.billingType === "recurring" ? p.interval : null,
+      interval_count: Math.max(1, Math.round(p.intervalCount || 1)),
+      trial_days: p.billingType === "recurring" ? p.trialDays : null,
+      price_cents: p.priceCents,
+      compare_at_cents: p.compareAtCents,
+      sort_order: i,
+      archived: p.archived,
+    };
+    const was = existing.get(p.id);
+    if (was) {
+      const moved =
+        was.price_cents !== row.price_cents ||
+        was.billing_type !== row.billing_type ||
+        was.interval !== row.interval ||
+        was.interval_count !== row.interval_count ||
+        was.trial_days !== row.trial_days;
+      if (moved && (usage[p.id] ?? 0) > 0) {
+        throw new Error(
+          `${usage[p.id]} ${usage[p.id] === 1 ? "person is" : "people are"} on ${money(was.price_cents as number)} — its terms cannot change. Add a new way to pay and hide this one.`,
+        );
+      }
+      const { error } = await db.from("offer_prices").update(row).eq("id", p.id);
+      if (error) throw new Error(`savePrices: ${error.message}`);
+    } else {
+      // The id came from the browser, so it is a suggestion rather than a
+      // fact — the database mints its own.
+      const { error } = await db.from("offer_prices").insert(row);
+      if (error) throw new Error(`savePrices: ${error.message}`);
+    }
+  }
 }
 
 /**

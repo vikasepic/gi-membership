@@ -13,6 +13,11 @@ const { OfferForm } = await import("@/components/admin/offer-form");
 // has to follow the trial-days box as it is typed — the field is the
 // explanation of what a trial costs you in the CRM, and it is needed while
 // deciding to have one.
+//
+// A trial is a property of a WAY TO PAY now, not of the offer, so "has a
+// trial" means "any of them offers one". A buyer on the yearly with a trial is
+// tagged exactly like one on the monthly, so one price offering a trial is
+// enough for the field to matter.
 
 let mounted: { unmount: () => void } | null = null;
 afterEach(() => {
@@ -22,6 +27,17 @@ afterEach(() => {
 });
 
 function mount(trialDays: number | null) {
+  const price = {
+    id: "p1",
+    label: "",
+    billingType: "recurring" as const,
+    interval: "month" as const,
+    intervalCount: 1,
+    trialDays,
+    priceCents: 2900,
+    compareAtCents: null,
+    archived: false,
+  };
   document.body.innerHTML = "";
   const host = document.createElement("div");
   document.body.appendChild(host);
@@ -37,6 +53,7 @@ function mount(trialDays: number | null) {
             trialDays,
             billingType: "recurring",
             interval: "month",
+            prices: [price],
             bullets: [],
             otoSections: {},
           } as never
@@ -49,8 +66,13 @@ function mount(trialDays: number | null) {
 }
 
 const field = (name: string) => document.querySelector(`input[name="${name}"]`);
+/** The per-price trial box, which is where a trial is set now. */
+const trialBox = () => document.querySelector<HTMLInputElement>('input[aria-label="Free trial days"]')!;
 const type = (name: string, to: string) => {
-  const el = document.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+  const el =
+    name === "trialDays"
+      ? trialBox()
+      : document.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
   const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
   act(() => {
     set.call(el, to);
