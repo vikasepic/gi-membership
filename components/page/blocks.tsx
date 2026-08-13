@@ -1,4 +1,7 @@
 import { blockRendersNothing, styleFor, type Block, type Device } from "@/lib/blocks";
+import { PriceChoice } from "@/components/page/price-choice";
+import { StickyBarBlock } from "@/components/page/sticky-bar-block";
+import { priceLabel, type OfferPrice } from "@/lib/offer-prices";
 import { Countdown } from "@/components/page/countdown";
 import { SlideRail } from "@/components/page/slide-rail";
 import { evergreenKey, evergreenMinutes, instantFrom } from "@/lib/countdown";
@@ -79,6 +82,17 @@ export type BlockMoney = {
   altTermsLabel?: string | null;
   /** "7 days" — derived from the offer, so changing the trial changes the page. */
   trialLabel?: string | null;
+  /**
+   * Every way to pay this page is selling, in the placement's own order.
+   *
+   * The Ways to pay block draws these. The formatted labels above stay because
+   * sixty other things read them, and they are the headline one — see
+   * offerAtPrice for how a reader asks about a different price.
+   */
+  prices?: OfferPrice[];
+  currency?: string;
+  /** Where the Ways to pay button goes; the chosen price is appended to it. */
+  buyHref?: string | null;
 };
 
 /**
@@ -406,6 +420,78 @@ function Inner({
           dangerouslySetInnerHTML={{ __html: str(p.html) }}
         />
       );
+
+    case "prices": {
+      const list = money?.prices ?? [];
+      if (list.length === 0) {
+        // Nothing to choose between yet. Said out loud rather than drawn as an
+        // empty box: on a page being built this is a step that has not been
+        // done, not a block that is broken.
+        return (
+          <p
+            className="rounded-xl border border-dashed px-3 py-4 text-center text-sm"
+            style={{ color: theme.muted, borderColor: theme.rule }}
+          >
+            The ways to pay appear here once this page is attached to an offer.
+          </p>
+        );
+      }
+      return (
+        // Named in the DOM so the sticky bar can find it without anybody
+        // having to type an id.
+        <div data-ways-to-pay>
+          <PriceChoice
+            prices={list}
+            currency={money?.currency ?? "usd"}
+            heading={str(p.heading)}
+            note={str(p.note)}
+            acceptLabel={str(p.acceptLabel, "Get instant access")}
+            declineLabel={str(p.declineLabel)}
+            href={money?.buyHref ?? null}
+            band={{ fg: c.fg, muted: theme.muted, rule: theme.rule, accent: c.accent, panel: theme.panel }}
+            s={{
+              optionBg: str(p.optionBg) || null,
+              optionBorder: str(p.optionBorder) || null,
+              optionRadius: num(p.optionRadius, 12),
+              selectedColor: str(p.selectedColor) || null,
+              labelColor: str(p.labelColor) || null,
+              termsColor: str(p.termsColor) || null,
+              badgeBg: str(p.badgeBg) || null,
+              badgeColor: str(p.badgeColor) || null,
+              buttonBg: str(p.buttonBg) || null,
+              buttonColor: str(p.buttonColor) || null,
+              buttonRadius: num(p.buttonRadius, 999),
+              showTerms: p.showTerms !== false,
+              showCompareAt: p.showCompareAt !== false,
+              showSaving: p.showSaving !== false,
+            }}
+          />
+        </div>
+      );
+    }
+
+    case "stickybar": {
+      const first = money?.prices?.[0] ?? null;
+      return (
+        <StickyBarBlock
+          text={str(p.text)}
+          buttonLabel={str(p.buttonLabel, "Get instant access")}
+          scrollTo={str(p.scrollTo)}
+          position={str(p.position, "bottom") === "top" ? "top" : "bottom"}
+          priceLine={
+            p.showPrice !== false && first
+              ? `${priceLabel(first, money?.currency ?? "usd")}`
+              : null
+          }
+          background={str(p.background) || null}
+          textColor={str(p.textColor) || null}
+          buttonBg={str(p.buttonBg) || null}
+          buttonColor={str(p.buttonColor) || null}
+          buttonRadius={num(p.buttonRadius, 999)}
+          band={{ fg: c.fg, panel: theme.panel, rule: theme.rule, accent: c.accent }}
+        />
+      );
+    }
 
     case "countdown": {
       const evergreen = str(p.kind) === "evergreen";

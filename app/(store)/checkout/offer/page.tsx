@@ -4,6 +4,7 @@ import { getOffer } from "@/lib/store";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { ownershipFor } from "@/lib/checkout";
 import { isOfferEligible, immediateChargeCents } from "@/lib/offers";
+import { shownPrices } from "@/lib/offer-prices";
 import { stripePublishableKey } from "@/lib/env";
 import { OfferCheckoutForm } from "@/components/checkout/offer-checkout-form";
 
@@ -25,9 +26,9 @@ export const metadata = NOINDEX;
 export default async function OfferCheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ offer?: string }>;
+  searchParams: Promise<{ offer?: string; price?: string }>;
 }) {
-  const { offer: offerId } = await searchParams;
+  const { offer: offerId, price: wantPrice } = await searchParams;
   if (!offerId) notFound();
 
   const supabase = await createClient();
@@ -92,6 +93,14 @@ export default async function OfferCheckoutPage({
           acceptLabel: offer.acceptLabel ?? "Confirm",
           currency: offer.currency,
         }}
+          // Every way to pay, and the one they picked on the way here. The
+          // choice travels; it does not decide. What is charged is resolved on
+          // the server from this same list, so an id it does not recognise
+          // preselects nothing rather than buying something unexpected.
+          prices={shownPrices(offer.prices, offer.pagePriceIds ?? [])}
+          chosen={shownPrices(offer.prices, offer.pagePriceIds ?? []).findIndex(
+            (p) => p.id === wantPrice,
+          )}
           email={user.email}
           publishableKey={stripePublishableKey()}
         />

@@ -8,6 +8,7 @@ import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
 import { resolveGlobals } from "@/lib/templates-store";
 import { SalesPage } from "@/components/page/sales-page";
 import { money } from "@/lib/money";
+import { shownPrices } from "@/lib/offer-prices";
 import { TrackView } from "@/components/track-view";
 import { BuyLink } from "@/components/buy-link";
 import { buildBumpView } from "@/lib/bump";
@@ -83,6 +84,12 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
           trialLabel: offer.trialDays ? `${offer.trialDays} days` : null,
           altPriceLabel: showAlt ? money(showAlt.priceCents, showAlt.currency) : null,
           altTermsLabel: showAlt?.interval ? `/${showAlt.interval}` : null,
+          // The real ways to pay, for the Ways to pay block. Same list the
+          // checkout will rebuild, through the same function, so the two
+          // cannot present them in a different order.
+          prices: shownPrices(offer.prices, offer.pagePriceIds ?? []),
+          currency: offer.currency,
+          buyHref: `/checkout/offer?offer=${offer.id}`,
         }}
         cta={(label, theme) =>
           alreadyHas ? (

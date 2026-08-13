@@ -16,15 +16,22 @@ export type OfferSummary = {
 };
 
 import { money } from "@/lib/money";
+import { priceLabel, priceTerms, chargeNowCents, type OfferPrice } from "@/lib/offer-prices";
 
 export function OfferCheckoutForm({
   offer,
   email,
   publishableKey,
+  prices = [],
+  chosen = -1,
 }: {
   offer: OfferSummary;
   email: string;
   publishableKey: string;
+  /** Every way to pay. One or none means there is nothing to choose. */
+  prices?: OfferPrice[];
+  /** Preselected from the sales page. -1 when they arrived without choosing. */
+  chosen?: number;
 }) {
   const stripePromise = useMemo(() => loadStripe(publishableKey), [publishableKey]);
   return (
@@ -40,12 +47,27 @@ export function OfferCheckoutForm({
         appearance: { theme: "stripe", variables: { colorPrimary: "#c8653d" } },
       }}
     >
-      <Inner offer={offer} email={email} />
+      <Inner offer={offer} email={email} prices={prices} chosen={chosen} />
     </Elements>
   );
 }
 
-function Inner({ offer, email }: { offer: OfferSummary; email: string }) {
+function Inner({
+  offer,
+  email,
+  prices,
+  chosen,
+}: {
+  offer: OfferSummary;
+  email: string;
+  prices: OfferPrice[];
+  chosen: number;
+}) {
+  // Preselected from the sales page, and still changeable — somebody who
+  // picked the yearly two pages ago should not have to pick it again, and
+  // should not be stuck with it either.
+  const [pick, setPick] = useState<number>(chosen >= 0 ? chosen : prices.length === 1 ? 0 : -1);
+  const picked = pick >= 0 ? (prices[pick] ?? null) : null;
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +86,7 @@ function Inner({ offer, email }: { offer: OfferSummary; email: string }) {
       return;
     }
 
-    const res = await startOffer(offer.id);
+    const res = await startOffer(offer.id, pick >= 0 ? pick : undefined);
     if (!res.ok) {
       setError(res.error);
       setBusy(false);
@@ -103,11 +125,52 @@ function Inner({ offer, email }: { offer: OfferSummary; email: string }) {
         </p>
       )}
 
+      {/* The choice again, here, because a page that takes a card is the last
+          honest place to change your mind. Preselected from the sales page. */}
+      {prices.length > 1 && (
+        <fieldset className="flex flex-col gap-2 border-0 p-0">
+          <legend className="kicker mb-1 text-muted">How you want to pay</legend>
+          {prices.map((p, i) => (
+            <label
+              key={p.id}
+              className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 transition-colors ${
+                pick === i ? "border-primary bg-primary/5" : "border-border hover:border-primary"
+              }`}
+            >
+              <input
+                type="radio"
+                name="offer-price"
+                checked={pick === i}
+                onChange={() => setPick(i)}
+                className="size-[18px] shrink-0 cursor-pointer accent-[var(--primary)]"
+              />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="font-display font-semibold tabular-nums">
+                  {priceLabel(p, offer.currency)}
+                  {p.label.trim() && (
+                    <span className="ml-2 text-[0.72rem] font-medium text-muted">{p.label.trim()}</span>
+                  )}
+                </span>
+                {priceTerms(p, offer.currency) && (
+                  <span className="text-[0.76rem] text-muted">{priceTerms(p, offer.currency)}</span>
+                )}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+
       <div className="flex items-center justify-between border-t border-border pt-4">
         <span className="text-muted">Due today</span>
-        <span className="font-display text-2xl">{money(offer.chargeNowCents, offer.currency)}</span>
+        <span className="font-display text-2xl">
+          {money(picked ? chargeNowCents(picked) : offer.chargeNowCents, offer.currency)}
+        </span>
       </div>
-      {offer.recurringNote && <p className="-mt-3 text-sm text-muted">{offer.recurringNote}</p>}
+      {picked
+        ? priceTerms(picked, offer.currency) && (
+            <p className="-mt-3 text-sm text-muted">{priceTerms(picked, offer.currency)}</p>
+          )
+        : offer.recurringNote && <p className="-mt-3 text-sm text-muted">{offer.recurringNote}</p>}
 
       <button
         type="submit"

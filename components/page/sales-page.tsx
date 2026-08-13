@@ -1,3 +1,4 @@
+import type { OfferPrice } from "@/lib/offer-prices";
 import { Blocks, type CtaRender } from "@/components/page/blocks";
 import { CodeSnippets } from "@/components/code-snippets";
 import type { StoreRender } from "@/components/page/storefront-blocks";
@@ -39,6 +40,15 @@ export type PageMoney = {
    * Never typed by an admin.
    */
   priceLabel: string | null;
+  /**
+   * Every way to pay this page is selling, in the order the placement stored
+   * them. The Ways to pay block draws these; the labels above stay because
+   * sixty other things read them.
+   */
+  prices?: OfferPrice[];
+  /** Where the Ways to pay button goes, with the chosen price appended. */
+  buyHref?: string | null;
+  currency?: string;
   /** e.g. "/month". */
   termsLabel: string | null;
   /** What is actually taken today, where that differs — "$0" during a trial. */

@@ -40,6 +40,13 @@ export const BLOCK_TYPES = [
   // A deadline, ticking. The one block on a sales page that cannot be static,
   // and the only one that renders a client leaf inside the server tree.
   "countdown",
+  // A choice of ways to pay, and the button that takes it. Placeable anywhere
+  // rather than baked into the checkout, because the page it belongs on is
+  // whichever page is doing the selling.
+  "prices",
+  // The bar that follows the page down. Its own block so its words and its
+  // colours are edited where everything else is.
+  "stickybar",
   // The storefront's three living parts.
   //
   // They are blocks rather than fixed sections so the home page can decide what
@@ -605,6 +612,43 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     onExpire: "keep",
     redirectTo: "",
     expiredMessage: "",
+  },
+  prices: {
+    heading: "",
+    note: "",
+    acceptLabel: "Get instant access",
+    declineLabel: "",
+    // Null everywhere means "follow the band", the same as every other colour
+    // in this file — a figure here would repaint a block nobody had touched.
+    optionBg: null,
+    optionBorder: null,
+    optionRadius: 12,
+    selectedColor: null,
+    labelColor: null,
+    termsColor: null,
+    badgeBg: null,
+    badgeColor: null,
+    buttonBg: null,
+    buttonColor: null,
+    buttonRadius: 999,
+    showTerms: true,
+    showSaving: true,
+    showCompareAt: true,
+  },
+  stickybar: {
+    text: "",
+    buttonLabel: "Get instant access",
+    // The id of the thing to scroll to. Empty scrolls to the first prices
+    // block on the page, which is what "the order section" means nine times
+    // out of ten and saves anybody having to name it.
+    scrollTo: "",
+    position: "bottom",
+    background: null,
+    textColor: null,
+    buttonBg: null,
+    buttonColor: null,
+    buttonRadius: 999,
+    showPrice: true,
   },
   catalog: { title: "", limit: 0, columns: 3, showPrice: true },
   memberships: { title: "", showOwned: true },
@@ -1759,6 +1803,11 @@ export function blockRendersNothing(block: Block): boolean {
   const text = (v: unknown) => (typeof v === "string" ? v.trim() : "");
   const list = (v: unknown) => (Array.isArray(v) ? v.length : 0);
   switch (block.type) {
+    case "prices":
+    case "stickybar":
+      // Never empty: both draw real prices that come from the offer rather
+      // than from anything typed into them, so there is nothing to be missing.
+      return false;
     case "heading":
       return !text(p.text);
     case "text":

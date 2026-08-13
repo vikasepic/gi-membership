@@ -410,6 +410,67 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
     ],
   },
 
+  prices: {
+    content: [
+      { kind: "text", key: "heading", label: "Heading", hint: "Optional — a line above the choices." },
+      { kind: "textarea", key: "note", label: "Note", rows: 2, hint: "Under the button. Blank draws nothing." },
+      { kind: "text", key: "acceptLabel", label: "Button" },
+      { kind: "text", key: "declineLabel", label: "Decline link", hint: "Blank hides it — a sales page usually has nowhere to decline TO." },
+      { kind: "toggle", key: "showTerms", label: "Show the terms under each price" },
+      { kind: "toggle", key: "showCompareAt", label: "Show the was-price" },
+      { kind: "toggle", key: "showSaving", label: "Show what the longer term saves" },
+    ],
+    style: [
+      group("Layout"),
+      BLOCK_POSITION,
+      group("Each option"),
+      { kind: "color", key: "optionBg", label: "Background", hint: "Unset follows the band." },
+      { kind: "color", key: "optionBorder", label: "Border", hint: "Unset follows the band." },
+      { kind: "number", key: "optionRadius", label: "Corner", min: 0, max: 40, step: 1, unit: "px" },
+      { kind: "color", key: "selectedColor", label: "When chosen", hint: "The border and tint of the picked one." },
+      { kind: "color", key: "labelColor", label: "Price", hint: "Unset follows the band." },
+      { kind: "color", key: "termsColor", label: "Terms", hint: "Unset follows the band." },
+      group("Saving badge"),
+      { kind: "color", key: "badgeBg", label: "Background" },
+      { kind: "color", key: "badgeColor", label: "Text" },
+      group("Button"),
+      { kind: "color", key: "buttonBg", label: "Background", hint: "Unset uses the band's accent." },
+      { kind: "color", key: "buttonColor", label: "Label", hint: "Unset picks whatever reads on it." },
+      { kind: "number", key: "buttonRadius", label: "Corner", min: 0, max: 999, step: 4, unit: "px" },
+      ...TYPOGRAPHY,
+    ],
+  },
+
+  stickybar: {
+    content: [
+      { kind: "text", key: "text", label: "Line", hint: "Left of the button. Blank shows the price instead." },
+      { kind: "text", key: "buttonLabel", label: "Button" },
+      {
+        kind: "text",
+        key: "scrollTo",
+        label: "Scrolls to",
+        hint: "The CSS id of the block to jump to — set one on that block's Advanced tab. Blank finds the Ways to pay block.",
+      },
+      { kind: "toggle", key: "showPrice", label: "Show the price beside the button" },
+      {
+        kind: "select",
+        key: "position",
+        label: "Sits at the",
+        options: [["bottom", "Bottom"], ["top", "Top"]],
+      },
+    ],
+    style: [
+      group("Bar"),
+      { kind: "color", key: "background", label: "Background", hint: "Unset follows the band." },
+      { kind: "color", key: "textColor", label: "Text", hint: "Unset follows the band." },
+      group("Button"),
+      { kind: "color", key: "buttonBg", label: "Background", hint: "Unset uses the band's accent." },
+      { kind: "color", key: "buttonColor", label: "Label" },
+      { kind: "number", key: "buttonRadius", label: "Corner", min: 0, max: 999, step: 4, unit: "px" },
+      ...TYPOGRAPHY,
+    ],
+  },
+
   catalog: {
     content: [
       { kind: "text", key: "title", label: "Heading", hint: "Left empty there is no heading — the products start straight away." },
@@ -1592,6 +1653,10 @@ export const PALETTE: { type: BlockType; label: string; props?: Record<string, u
   { type: "button", label: "Buy button", props: { action: "buy", text: "Get instant access" } },
   { type: "button", label: "Button", props: { action: "link" } },
   { type: "iconlist", label: "List" },
+  // The choice itself, and the bar that points at it. Together in the tray
+  // because one is nearly always why the other is there.
+  { type: "prices", label: "Ways to pay" },
+  { type: "stickybar", label: "Sticky bar" },
   { type: "slides", label: "Slides" },
   // "Container", not "Columns": the block is a flex container with a direction,
   // a justify and a min height of its own, and columns are only what is in it.
@@ -1721,7 +1786,7 @@ export function sections(controls: Control[]): { title: string | null; controls:
 export const PALETTE_GROUPS: { title: string; types: string[] }[] = [
   { title: "Basic", types: ["Heading", "Text", "Image", "Video", "Buy button", "Button", "List", "Slides"] },
   { title: "Layout", types: ["Container", "Divider", "Spacer"] },
-  { title: "Sales", types: ["Cards", "Figures", "Price card", "Price table", "FAQ", "Countdown", "HTML"] },
+  { title: "Sales", types: ["Ways to pay", "Cards", "Figures", "Price card", "Price table", "FAQ", "Countdown", "Sticky bar", "HTML"] },
   { title: "Storefront", types: ["Catalogue", "Memberships", "Featured"] },
 ];
 
@@ -1731,6 +1796,10 @@ export const BLOCK_ICON: Record<BlockType, string> = {
   countdown: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 10.6 4 2.3-1 1.7-5-2.9V6h2v6.6Z",
   // Two links of a chain — the same idea the Unlink button undoes.
   global: "M9.5 13.5a4 4 0 0 1 0-5.7l2.1-2.1a4 4 0 0 1 5.7 5.7l-1 1-1.4-1.4 1-1a2 2 0 0 0-2.9-2.9l-2.1 2.1a2 2 0 0 0 0 2.9l-1.4 1.4Zm5 -3a4 4 0 0 1 0 5.7l-2.1 2.1a4 4 0 0 1-5.7-5.7l1-1 1.4 1.4-1 1a2 2 0 0 0 2.9 2.9l2.1-2.1a2 2 0 0 0 0-2.9l1.4-1.4Z",
+  // Two stacked options with a dot beside each — a choice, not a list.
+  prices: "M4 5h16v6H4V5Zm2 2v2h12V7H6Zm-2 6h16v6H4v-6Zm2 2v2h12v-2H6Z",
+  // A bar pinned to the foot of a frame.
+  stickybar: "M3 4h18v12H3V4Zm2 2v8h14V6H5Zm-2 12h18v3H3v-3Z",
   catalog: "M3 4h8v7H3V4Zm10 0h8v7h-8V4ZM3 13h8v7H3v-7Zm10 0h8v7h-8v-7Z",
   memberships: "M3 6h18v12H3V6Zm2 2v8h14V8H5Zm2 2h6v2H7v-2Zm0 3h4v2H7v-2Z",
   featured: "M12 2.6l2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9l6.1-.8L12 2.6Z",

@@ -1,7 +1,8 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getOffer } from "@/lib/store";
-import { isOfferEligible, immediateChargeCents } from "@/lib/offers";
+import { isOfferEligible, immediateChargeCents, offerAtPrice } from "@/lib/offers";
+import { priceForChoice, shownPrices } from "@/lib/offer-prices";
 import { ownershipFor, fulfilOffer, grantOfferOwnership, customerForUser } from "@/lib/checkout";
 import { stripe } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
@@ -25,9 +26,21 @@ export async function startOfferCheckout(args: {
   userId: string;
   email: string;
   offerId: string;
+  /** Which way to pay — an INDEX into the list this offer's page shows. */
+  priceChoice?: number;
 }): Promise<StartResult> {
   const offer = await getOffer(args.offerId);
   if (!offer || !offer.active) return { ok: false, error: "That offer isn’t available any more." };
+
+  // The list is rebuilt here from the offer's own page selection, never from
+  // the request — the browser sends an index into it and nothing else, so the
+  // only thing it can buy is something it was shown. An index outside the list
+  // refuses rather than falling back to the headline price.
+  const shown = shownPrices(offer.prices, offer.pagePriceIds ?? []);
+  if (args.priceChoice !== undefined) {
+    const price = priceForChoice(shown, args.priceChoice);
+    if (!price) return { ok: false, error: "That option is no longer available." };
+  }
 
   // Never sell someone what they already have.
   const owned = await ownershipFor(args.userId);
@@ -42,7 +55,18 @@ export async function startOfferCheckout(args: {
     customer: customerId,
     usage: "off_session",
     automatic_payment_methods: { enabled: true },
-    metadata: { storeId, userId: args.userId, offerId: offer.id },
+    // The price id is written by US, from a list we rebuilt — not copied out
+    // of the request — so completeOfferCheckout can charge the right one on the
+    // way back without trusting anything the browser said.
+    metadata: {
+      storeId,
+      userId: args.userId,
+      offerId: offer.id,
+      offerPriceId:
+        args.priceChoice !== undefined
+          ? (priceForChoice(shown, args.priceChoice)?.id ?? "")
+          : "",
+    },
   });
   if (!si.client_secret) return { ok: false, error: "Could not start checkout." };
   return { ok: true, clientSecret: si.client_secret, customerId };
@@ -63,8 +87,14 @@ export async function completeOfferCheckout(
   const storeId = si.metadata?.storeId;
   if (!userId || !offerId || !storeId) return { ok: false, error: "unknown_setup_intent" };
 
-  const offer = await getOffer(offerId);
-  if (!offer || !offer.active) return { ok: false, error: "unavailable" };
+  const raw = await getOffer(offerId);
+  if (!raw || !raw.active) return { ok: false, error: "unavailable" };
+  // Which way to pay they chose, read back from metadata WE wrote at start —
+  // never from the request. A price archived since then falls back to the
+  // headline one rather than refusing a card that has already been saved.
+  const chosenId = si.metadata?.offerPriceId ?? "";
+  const chosen = chosenId ? raw.prices.find((p) => p.id === chosenId && !p.archived) : null;
+  const offer = chosen ? offerAtPrice(raw, chosen) : raw;
 
   // A refresh of the return page lands here again — by then they own it.
   const owned = await ownershipFor(userId);

@@ -8,6 +8,8 @@ import { startOfferCheckout } from "@/lib/offer-checkout";
 // the form — the card being saved must belong to whoever is actually signed in.
 export async function startOffer(
   offerId: string,
+  /** Which way to pay — an index into the list the offer's page shows. */
+  priceChoice?: number,
 ): Promise<{ ok: true; clientSecret: string } | { ok: false; error: string }> {
   const supabase = await createClient();
   const {
@@ -15,7 +17,7 @@ export async function startOffer(
   } = await supabase.auth.getUser();
   if (!user?.email) return { ok: false, error: "Please log in first." };
 
-  const res = await startOfferCheckout({ userId: user.id, email: user.email, offerId });
+  const res = await startOfferCheckout({ userId: user.id, email: user.email, offerId, priceChoice });
   if (!res.ok) return res;
   return { ok: true, clientSecret: res.clientSecret };
 }
