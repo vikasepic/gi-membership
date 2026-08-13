@@ -491,6 +491,24 @@ describe("the heading over a cards block", () => {
     expect(cards({ caption: "Trusted by" })).toBe(cards({ caption: "Trusted by", subheading: "" }));
   });
 
+  it("takes a face and a weight for both lines", () => {
+    const out = cards({
+      caption: "Trusted by",
+      subheading: "The whole set.",
+      headingFont: "Lora",
+      headingWeight: "800",
+      subheadingFont: "Inter",
+      subheadingWeight: "300",
+    });
+    expect(out).toContain("font-weight:800");
+    expect(out).toContain("font-weight:300");
+    // The face arrives through familyToken — a var() with the family as its
+    // fallback — so it resolves to whatever the site has loaded under that
+    // name rather than to a bare string the page may not have.
+    expect(out).toContain("font-family:&quot;Lora&quot;");
+    expect(out).toContain("font-family:var(--font-inter");
+  });
+
   it("filters the line under the heading, because it is markup", () => {
     const [b] = sanitizeBlocks(
       normalizeBlocks([{ id: "b1", type: "cards", props: { items: [], subheading: '<em>ok</em><script>x()</script>' } }]),

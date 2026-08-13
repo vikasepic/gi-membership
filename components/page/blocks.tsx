@@ -947,12 +947,20 @@ function Inner({
       const headingInk = str(p.headingColor) || theme.muted;
       // Size only when one was typed, so a block that never had this control
       // ships the identical markup it always has.
-      const headingSize = p.headingSize == null ? {} : { fontSize: num(p.headingSize, 0) };
+      const headingSize = {
+        ...(p.headingSize == null ? {} : { fontSize: num(p.headingSize, 0) }),
+        ...(str(p.headingFont) ? { fontFamily: familyToken(str(p.headingFont)) } : {}),
+        ...(str(p.headingWeight) ? { fontWeight: Number(str(p.headingWeight)) } : {}),
+      };
       // The line under the heading. Its own field, its own size and its own
       // ink, because a heading with a sentence under it is two lines of type
       // and one of them is not a heading.
       const subInk = str(p.subheadingColor) || theme.muted;
-      const subSize = p.subheadingSize == null ? {} : { fontSize: num(p.subheadingSize, 0) };
+      const subSize = {
+        ...(p.subheadingSize == null ? {} : { fontSize: num(p.subheadingSize, 0) }),
+        ...(str(p.subheadingFont) ? { fontFamily: familyToken(str(p.subheadingFont)) } : {}),
+        ...(str(p.subheadingWeight) ? { fontWeight: Number(str(p.subheadingWeight)) } : {}),
+      };
       const subheading = str(p.subheading) ? (
         <Inline
           as="p"

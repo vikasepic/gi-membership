@@ -707,9 +707,14 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "number", key: "cardTextGap", label: "Title to text", min: 0, max: 48, step: 1, unit: "px", hint: "Unset follows the skin." },
 
       group("Heading above the cards"),
+      // The face is filled in from the site's own fonts — see FONT_KEYS.
+      { kind: "select", key: "headingFont", label: "Heading font", options: [["", "Page default"]] },
       { kind: "number", key: "headingSize", label: "Heading size", min: 8, max: 72, step: 1, unit: "px", hint: "Unset keeps the size it has." },
+      { kind: "select", key: "headingWeight", label: "Heading weight", options: [["", "Inherit"], ...["300", "400", "500", "600", "700", "800", "900"].map((w) => [w, w] as [string, string])] },
       { kind: "color", key: "headingColor", label: "Heading colour", hint: "Unset follows the band." },
+      { kind: "select", key: "subheadingFont", label: "Text font", options: [["", "Page default"]] },
       { kind: "number", key: "subheadingSize", label: "Text size", min: 8, max: 48, step: 1, unit: "px", hint: "Unset keeps the size it has." },
+      { kind: "select", key: "subheadingWeight", label: "Text weight", options: [["", "Inherit"], ...["300", "400", "500", "600", "700", "800", "900"].map((w) => [w, w] as [string, string])] },
       { kind: "color", key: "subheadingColor", label: "Text colour", hint: "Unset follows the band." },
 
       group("Colour"),
@@ -1295,7 +1300,7 @@ export function controlsFor(
 }
 
 /** The Font select, filled in with what the site actually has. */
-const FONT_KEYS = new Set(["fontFamily", "digitFont", "labelFont"]);
+const FONT_KEYS = new Set(["fontFamily", "digitFont", "labelFont", "headingFont", "subheadingFont"]);
 
 function withFonts(c: Control, fonts: readonly string[]): Control {
   // Every font picker, not just the block-level one. The countdown has two of

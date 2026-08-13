@@ -640,10 +640,16 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     // the heading above the cards, a card's own title, and its body copy.
     headingColor: null,
     headingSize: null,
+    // Empty string, not null: these are select values and "" is the option
+    // that means "whatever the page already uses".
+    headingFont: "",
+    headingWeight: "",
     // The line under the heading, and what it looks like. Blank draws nothing.
     subheading: "",
     subheadingColor: null,
     subheadingSize: null,
+    subheadingFont: "",
+    subheadingWeight: "",
     cardTitleColor: null,
     cardBodyColor: null,
     // False, not null: a rule between cards is either there or it is not, and
