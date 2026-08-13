@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { readableInk } from "@/lib/color";
 import { colorName, colorToken, swatchColor, tokenId, type PaletteColor } from "@/lib/palette";
 
@@ -53,7 +54,12 @@ export function ColorControl({
 }) {
   const palette = useContext(PaletteContext);
   const [open, setOpen] = useState(false);
+  // Where to put the list, in viewport coordinates. Null until it has been
+  // measured, so the first paint cannot flash it in the wrong corner.
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
+  const globe = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const linked = tokenId(value);
   const shown = swatchColor(value, palette) ?? fallback;
@@ -61,10 +67,38 @@ export function ColorControl({
   const text = typeof value === "string" ? value.trim() : "";
 
   useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => {
-      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
+    if (!open) {
+      setAt(null);
+      return;
+    }
+    // The list is portalled to the body, so it has to be placed by hand — and
+    // that is the point. Every panel this control sits in is a scrolling box
+    // with `overflow: hidden` somewhere above it, and an overflow ancestor
+    // clips a child whatever its z-index says. The list was being cut off at
+    // the edge of the inspector with half its colours unreachable.
+    const place = () => {
+      const b = globe.current?.getBoundingClientRect();
+      if (!b) return;
+      const W = 240;
+      const H = Math.min(64 + palette.length * 34, 320);
+      // Below the button, unless there is no room — then above it. Clamped to
+      // the viewport so it can never sit half off the screen.
+      const below = b.bottom + 6;
+      const top = below + H > window.innerHeight - 8 ? Math.max(8, b.top - H - 6) : below;
+      const left = Math.min(Math.max(8, b.left), window.innerWidth - W - 8);
+      setAt({ top, left });
     };
+    place();
+    const away = (e: MouseEvent) => {
+      const t = e.target as Node;
+      // `wrap` no longer contains the list, so both have to be asked.
+      if (wrap.current?.contains(t) || listRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    // Follow the button: the panel it sits in scrolls, and a list that stays
+    // put while its control moves away is worse than one that is clipped.
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
     const key = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       // Stopped here, or the builder underneath reads it as "close the editor"
@@ -75,10 +109,12 @@ export function ColorControl({
     document.addEventListener("mousedown", away);
     document.addEventListener("keydown", key, true);
     return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
       document.removeEventListener("mousedown", away);
       document.removeEventListener("keydown", key, true);
     };
-  }, [open]);
+  }, [open, palette.length]);
 
   // Typed text that is not a colour is dropped on save by every normalizer in
   // the app, and used to be dropped without a word on the screens that had no
@@ -89,6 +125,7 @@ export function ColorControl({
     <div ref={wrap} className="relative flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
       {globals && (
         <button
+          ref={globe}
           type="button"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
@@ -161,9 +198,11 @@ export function ColorControl({
         </span>
       )}
 
-      {open && (
+      {open && at && typeof document !== "undefined" && createPortal(
         <div
-          className="absolute right-0 top-9 z-[200] w-60 overflow-hidden rounded-xl border border-border bg-surface shadow-xl"
+          ref={listRef}
+          style={{ position: "fixed", top: at.top, left: at.left, width: 240 }}
+          className="z-[300] overflow-hidden rounded-xl border border-border bg-surface shadow-2xl"
           role="listbox"
           aria-label="Global colours"
         >
@@ -225,7 +264,8 @@ export function ColorControl({
               ))}
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

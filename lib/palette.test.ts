@@ -12,6 +12,7 @@ import {
 import { normalizeHex, readableInk, tint } from "@/lib/color";
 import { normalizeBlocks, setStyleAt } from "@/lib/blocks";
 import { bandTheme } from "@/lib/page-sections";
+import { blockCssAt } from "@/lib/block-style";
 import { SITE_TYPOGRAPHY_SCHEMA } from "@/lib/site-typography";
 import { SITE_SHELL_SCHEMA } from "@/lib/site-shell";
 import { SETTINGS_SCHEMA } from "@/lib/settings-schema";
@@ -237,5 +238,40 @@ describe("no colour field is left accepting only a hex", () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * Picking one has to reach the page, not just the panel.
+ *
+ * Every step in between already has its own test above — the schema keeps it,
+ * the normalizer keeps it, the band draws it. This is the end of the chain:
+ * what a browser is actually handed.
+ */
+describe("what the page receives", () => {
+  const token = colorToken(BRAND);
+
+  it("puts the variable in a block's own CSS", () => {
+    const b = normalizeBlocks([{ id: "b1", type: "heading", props: { text: "x" } }])[0];
+    const linked = setStyleAt(b, "desktop", { color: token });
+    const css = JSON.stringify(blockCssAt(linked, bandTheme("paper"), "desktop"));
+    expect(css).toContain("var(--gc-a1b2c3d4, #b4472b)");
+  });
+
+  it("puts it in the band's accent", () => {
+    expect(bandTheme("navy", token).accent).toBe(token);
+  });
+
+  it("declares that variable on the store, so the page can resolve it", () => {
+    // Without this the reference would silently fall back to the hex inside it
+    // for ever — which LOOKS right, and never changes when the colour does.
+    const css = paletteCss([BRAND]);
+    expect(css).toContain("--gc-a1b2c3d4:#b4472b");
+  });
+
+  it("and declares it in the builder too, scoped to the canvas", () => {
+    // The admin renders no StoreBrand on purpose, so the builder needs its own
+    // copy or every linked colour previews as its fallback.
+    expect(paletteCss([BRAND], ".site-type")).toContain("--gc-a1b2c3d4:#b4472b");
   });
 });
