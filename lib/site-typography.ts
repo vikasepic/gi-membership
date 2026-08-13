@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { PaletteColor } from "@/lib/palette";
 import { DEVICE_MAX, type Device } from "@/lib/blocks";
 import { normalizeHex } from "@/lib/color";
 import { familyToken } from "@/lib/fonts-catalogue";
@@ -259,7 +260,12 @@ export const PREVIEW_SCOPE = "site-type";
  * with, and the type to draw. Built server-side by `lib/store-preview`; the
  * shape lives here because the editors that receive it run in the browser.
  */
-export type SitePreview = { fontCss: string; typography: SiteTypography };
+export type SitePreview = {
+  fontCss: string;
+  typography: SiteTypography;
+  /** The store's named colours, so the builder can offer and draw them. */
+  palette?: PaletteColor[];
+};
 
 /**
  * Where the rule applies. `scope` empty means the store itself.

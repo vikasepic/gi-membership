@@ -1,6 +1,7 @@
 import { SETTINGS_DEFAULTS, type Settings } from "@/lib/settings-schema";
 import { fontFaceCss, familyStack, type FontRow } from "@/lib/fonts";
 import { inlineCss, inlineJs, siteTypographyCss } from "@/lib/site-typography";
+import { paletteCss } from "@/lib/palette";
 
 /**
  * The saved brand, as real CSS.
@@ -58,6 +59,10 @@ export function StoreBrand({
     // CSS, which must be able to beat both. Empty until somebody sets something.
     siteTypographyCss(settings.siteTypography),
     rules.length > 0 ? `:root{${rules.join(";")}}` : "",
+    // The store's named colours, as the variables blocks point at. Empty until
+    // somebody defines one, so a store that has never opened this ships
+    // nothing extra.
+    paletteCss(settings.palette),
     // Only the owner's half is treated: everything above it is written by this
     // codebase out of schema-cleaned values, so passing it through as well
     // would be a no-op that reads like a doubt.

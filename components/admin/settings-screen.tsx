@@ -12,6 +12,7 @@ import { usePresence, PresenceNote } from "@/components/admin/presence";
 import { TypographyFields, FontLibrary, type InstalledFont } from "@/components/admin/typography-fields";
 import { ShellFields } from "@/components/admin/shell-fields";
 import { SnippetFields } from "@/components/admin/snippet-fields";
+import { PaletteFields } from "@/components/admin/palette-fields";
 
 /**
  * Site settings, in groups.
@@ -336,6 +337,7 @@ function BrandFields({ s, errors }: FieldsProps) {
           error={errors.deepColor}
         />
       </div>
+      <PaletteFields palette={s.palette} name="palette" />
       <ImageField
         name="logoPath"
         label="Logo"

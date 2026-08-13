@@ -800,9 +800,24 @@ const str = (v: unknown, fallback = ""): string => (typeof v === "string" ? v : 
 export const oneOf = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T =>
   typeof v === "string" && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
 
-/** null stays null — it is the value that means "inherit". */
-const colorOrNull = (v: unknown): string | null =>
-  typeof v === "string" && /^#[0-9a-f]{3,8}$/i.test(v.trim()) ? v.trim() : null;
+/**
+ * null stays null — it is the value that means "inherit".
+ *
+ * A hex, or a reference to one of the store's global colours. The reference
+ * form is deliberately narrow: our own `--gc-` prefix, our own id shape, and a
+ * hex fallback. It is not "any CSS", because this value is written straight
+ * into a style attribute.
+ *
+ * Without the second form every block pointing at a global colour would have
+ * the link stripped on the next read — the picker would appear to work, the
+ * page would draw the colour once, and it would be gone after a reload.
+ */
+const GLOBAL_COLOR = /^var\(--gc-[a-z0-9]{4,12},\s*#[0-9a-f]{3,8}\)$/i;
+const colorOrNull = (v: unknown): string | null => {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  return /^#[0-9a-f]{3,8}$/i.test(t) || GLOBAL_COLOR.test(t) ? t : null;
+};
 
 function normalizeDim(v: unknown, fallback: Dim): Dim {
   if (!isRecord(v)) return fallback;

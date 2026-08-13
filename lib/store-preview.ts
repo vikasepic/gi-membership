@@ -2,6 +2,7 @@ import "server-only";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import { listFonts, fontFaceCss, familyStack } from "@/lib/fonts";
 import { PREVIEW_SCOPE, type SitePreview } from "@/lib/site-typography";
+import { paletteCss } from "@/lib/palette";
 
 /**
  * The store's own type, for a preview inside the admin.
@@ -35,9 +36,13 @@ export async function storePreview(): Promise<SitePreview> {
     fontCss: [
       fonts.length > 0 ? fontFaceCss(fonts, process.env.NEXT_PUBLIC_SUPABASE_URL ?? "") : "",
       vars.length > 0 ? `.${PREVIEW_SCOPE}{${vars.join(";")}}` : "",
+      // Scoped for the same reason the fonts are: the canvas gets the store's
+      // colours and the admin around it keeps its own.
+      paletteCss(settings.palette, `.${PREVIEW_SCOPE}`),
     ]
       .filter(Boolean)
       .join("\n"),
     typography: settings.siteTypography,
+    palette: settings.palette,
   };
 }

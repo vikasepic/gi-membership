@@ -18,6 +18,13 @@ export function normalizeHex(value: unknown, fallback: string): string {
     const v = value.trim().toLowerCase();
     if (HEX.test(v)) return v;
     if (/^#[0-9a-f]{3}$/i.test(v)) return `#${v[1]}${v[1]}${v[2]}${v[2]}${v[3]}${v[3]}`;
+    // A global colour is `var(--gc-…, #b4472b)`. The variable is what the page
+    // draws; the hex inside it is what we can do ARITHMETIC on — the readable
+    // ink over a button, the tint behind a panel. Without this every derived
+    // colour on a block using a global one would be computed from the fallback
+    // argument instead, and a dark brand colour would get black text on it.
+    const inVar = /^var\(\s*--[a-z0-9-]+\s*,\s*(#[0-9a-f]{3,6})\s*\)$/.exec(v);
+    if (inVar) return normalizeHex(inVar[1], fallback);
   }
   return fallback;
 }

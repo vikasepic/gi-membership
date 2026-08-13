@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { paletteSchema } from "@/lib/palette";
 import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
 import { codeSnippetsSchema } from "@/lib/code-snippets";
 import { SITE_TYPOGRAPHY_SCHEMA } from "@/lib/site-typography";
@@ -60,6 +61,10 @@ export const SETTINGS_SCHEMA = z.object({
   // with nothing behind it renders as the fallback and looks like a bug.
   headingFont: z.string().trim().max(60).default(""),
   bodyFont: z.string().trim().max(60).default(""),
+  // The store's named colours. A block that points at one stores a reference,
+  // so repainting the store is one field here rather than a hunt through every
+  // page — see lib/palette.ts.
+  palette: paletteSchema.default([]),
   // One object rather than a field per element per width — eleven elements
   // times four measurements is a settings table nobody could read, and the
   // group's form posts it as one JSON string for the same reason the page
@@ -152,7 +157,7 @@ export const GROUP_FIELDS: Record<SettingsGroupKey, readonly (keyof Settings)[]>
     "policiesUpdated",
   ],
   identity: ["name", "tagline"],
-  brand: ["primaryColor", "deepColor", "logoPath", "faviconPath"],
+  brand: ["primaryColor", "deepColor", "palette", "logoPath", "faviconPath"],
   typography: ["headingFont", "bodyFont", "siteTypography"],
   shell: ["siteShell"],
   commerce: ["currency", "contactEmail", "replyTime"],

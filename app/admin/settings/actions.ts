@@ -35,7 +35,7 @@ function parseBaseline(raw: FormDataEntryValue | null): Record<string, unknown> 
 }
 
 /** Settings that are an object, posted as one JSON string from a hidden input. */
-const JSON_FIELDS = new Set(["siteTypography", "siteShell", "codeSnippets"]);
+const JSON_FIELDS = new Set(["siteTypography", "siteShell", "codeSnippets", "palette"]);
 
 const FIELD_LABELS: Record<string, string> = {
   legalEntity: "the registered entity",
@@ -46,6 +46,7 @@ const FIELD_LABELS: Record<string, string> = {
   refundWindowDays: "the refund window",
   primaryColor: "the primary colour",
   deepColor: "the deep colour",
+  palette: "the global colours",
   name: "the store name",
 };
 
@@ -101,7 +102,7 @@ export async function saveSettingsGroup(
       // stored alone rather than replacing it with nothing.
       if (typeof raw !== "string") continue;
       try {
-        const shape = SETTINGS_SCHEMA.shape[field as "siteTypography" | "siteShell" | "codeSnippets"];
+        const shape = SETTINGS_SCHEMA.shape[field as "siteTypography" | "siteShell" | "codeSnippets" | "palette"];
         patch[field as string] = shape.parse(JSON.parse(raw));
       } catch {
         errors[field as string] = "That could not be read. Reload and try again.";
