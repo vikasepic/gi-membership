@@ -636,6 +636,9 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     cardTextGap: null,
     cardRadius: null,
     // Blank is the band's ink, which is what every card ever saved has drawn.
+    // Three separate things, because they are three separate lines on screen:
+    // the heading above the cards, a card's own title, and its body copy.
+    headingColor: null,
     cardTitleColor: null,
     cardBodyColor: null,
     // False, not null: a rule between cards is either there or it is not, and

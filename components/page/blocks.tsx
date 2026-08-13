@@ -921,6 +921,10 @@ function Inner({
       // say so.
       const cardTitleInk = str(p.cardTitleColor) || c.fg;
       const cardBodyInk = str(p.cardBodyColor) || theme.muted;
+      // The line ABOVE the cards — the list skin's title, the grid's caption.
+      // A different thing from a card's own title, and it had no control at
+      // all: the only way to recolour "YOUR FUNNEL PACKAGE" was to not have it.
+      const headingInk = str(p.headingColor) || theme.muted;
 
       // One card holding compact rows, rather than a stack of separate boxes.
       // Six boxes down the side of a hero is twice the height of the copy it
@@ -939,7 +943,7 @@ function Inner({
             {str(p.title) && (
               <div
                 className="mb-3 text-[0.68rem] uppercase tracking-[0.13em]"
-                style={{ color: theme.muted }}
+                style={{ color: headingInk }}
               >
                 {str(p.title)}
               </div>
@@ -972,7 +976,7 @@ function Inner({
               <Inline
                 as="p"
                 className="mt-3 text-[0.82rem] leading-relaxed"
-                style={{ ...rowStyle, color: cardTitleInk }}
+                style={{ ...rowStyle, color: str(p.cardBodyColor) || c.fg }}
                 html={str(p.note)}
               />
             )}
@@ -1119,7 +1123,7 @@ function Inner({
             <Inline
               as="p"
               className="mb-3 text-[0.82rem]"
-              style={{ color: theme.muted }}
+              style={{ color: headingInk }}
               html={str(p.caption)}
             />
           )}

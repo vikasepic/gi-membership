@@ -3,7 +3,7 @@ import { make, type Template } from "./template";
 // The FAQ block's own starter questions under a heading. The starter copy
 // already reads as an instruction, which is the rule for placeholders.
 export const template: Template = {
-  id: "faq-accordion",
+  id: "faq-basic",
   name: "FAQ",
   group: "FAQ",
   blocks: [

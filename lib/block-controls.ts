@@ -687,9 +687,14 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       // nothing about which one it moves.
       { kind: "number", key: "cardTextGap", label: "Title to text", min: 0, max: 48, step: 1, unit: "px", hint: "Unset follows the skin." },
 
-      group("Card colour"),
-      { kind: "color", key: "cardTitleColor", label: "Title", hint: "Unset follows the band." },
-      { kind: "color", key: "cardBodyColor", label: "Text", hint: "Unset follows the band." },
+      group("Colour"),
+      // Three lines, three controls, each named after what is on screen.
+      // "Title" alone meant a card's title to this file and the line above the
+      // cards to everybody reading the panel, which is the sort of label that
+      // makes a working control look broken.
+      { kind: "color", key: "headingColor", label: "Heading above the cards", hint: "The caption over the group. Unset follows the band." },
+      { kind: "color", key: "cardTitleColor", label: "Card title", hint: "The bold line on each card. Unset follows the band." },
+      { kind: "color", key: "cardBodyColor", label: "Card text", hint: "The copy under it, and the closing note. Unset follows the band." },
 
       group("Icon tile", (b) => b.props.media !== "none"),
       { kind: "select", key: "iconShape", label: "Shape", options: [["square", "Square"], ["rounded", "Rounded"], ["circle", "Circle"]], when: (b) => b.props.media !== "none" },

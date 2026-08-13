@@ -410,4 +410,21 @@ describe("what a card can now be told", () => {
     expect(out).toContain("#ff0000");
     expect(out).toContain("#00ff00");
   });
+
+  it("colours the line above the cards separately from the cards themselves", () => {
+    // Three lines, three controls. "Title" used to mean a card's title here
+    // and the heading above them in the panel, so the one control anybody
+    // reached for changed the wrong thing and the other looked broken.
+    const list = cards({ skin: "list", title: "YOUR PACKAGE", headingColor: "#112233" });
+    expect(list).toContain("#112233");
+    const grid = cards({ caption: "Trusted by", headingColor: "#445566" });
+    expect(grid).toContain("#445566");
+  });
+
+  it("gives the closing note the card text colour, not the title's", () => {
+    const out = cards({ skin: "list", note: "The note", cardTitleColor: "#ff0000", cardBodyColor: "#00ff00" });
+    // The note sits on the body ink; the row titles keep the title ink.
+    expect(out).toMatch(/#00ff00[^<]*">The note|The note/);
+    expect(out.slice(out.indexOf("The note") - 200, out.indexOf("The note"))).toContain("#00ff00");
+  });
 });
