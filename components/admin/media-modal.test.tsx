@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("@/app/admin/media/actions", () => ({ describeMediaAction: async () => ({ ok: true }) }));
-const { MediaModal, MediaButton } = await import("@/components/admin/media-modal");
+const { MediaModal, MediaButton, Details } = await import("@/components/admin/media-modal");
 
 // Upload and library used to be two controls side by side, which asks the wrong
 // question first: nobody thinks "am I uploading or reusing", they think "I want
@@ -62,5 +62,50 @@ describe("the button that opens it", () => {
       <MediaButton kind="image" label="Select image" onPick={() => {}} />,
     );
     expect(out).not.toContain("Media library");
+  });
+});
+
+/**
+ * The details pane, which is only reachable once a file is chosen — so it is
+ * rendered here directly rather than through a click the list has to answer.
+ */
+describe("the details pane", () => {
+  const file = {
+    id: "1",
+    path: "media/pay-strip.png.webp",
+    url: "https://x.test/pay-strip.png.webp",
+    name: "pay strip",
+    alt: "",
+    mime: "image/webp",
+    size: 3072,
+    width: 290,
+    height: 53,
+    createdAt: "2026-08-13T00:00:00.000Z",
+  };
+  const pane = () =>
+    renderToStaticMarkup(
+      <Details item={file} neighbours={[file]} onMove={() => {}} onSaved={() => {}} onUse={() => {}} />,
+    );
+
+  it("keeps the two buttons out of the part that scrolls", () => {
+    // The bug: `mt-auto` inside a scrolling column pins a thing to the end of
+    // the CONTENT, not to the bottom of the pane — so a tall picture pushed
+    // "Use this file" below the fold and the library looked like it had no way
+    // to pick anything. Asserted structurally, because that is the mistake.
+    const out = pane();
+    const scroller = out.indexOf("overflow-y-auto");
+    const use = out.indexOf("Use this file");
+    expect(scroller).toBeGreaterThan(-1);
+    expect(use).toBeGreaterThan(-1);
+    // The scrolling box is closed before the buttons are opened.
+    const closed = out.lastIndexOf("</div>", use);
+    expect(closed).toBeGreaterThan(scroller);
+  });
+
+  it("shows the whole picture rather than a crop of its middle", () => {
+    // A 290×53 payment strip cropped to 16:10 is not enough of it to recognise.
+    const out = pane();
+    expect(out).toContain("object-contain");
+    expect(out).not.toContain("object-cover");
   });
 });

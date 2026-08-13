@@ -554,6 +554,15 @@ function Inner({
       // well, the image would keep being cropped to a box it no longer has.
       const ratio = str(p.ratio, "16/9");
       const whole = ratio === "auto";
+      // Block position moves the PICTURE, not only the box around it.
+      //
+      // An image has a width control of its own, and the two fought: Max width
+      // shrinks the picture inside a box that is still the full column, so
+      // "Centre" moved a box that had nowhere to go and the picture stayed
+      // hard left. Auto margins on the image itself settle it whatever the
+      // wrapper is doing — and when the wrapper HAS shrunk to the picture,
+      // they are worth nothing and cost nothing.
+      const shift = str(s.blockAlign, "left");
       const img = (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -564,6 +573,8 @@ function Inner({
             width: "100%",
             height: whole ? "auto" : undefined,
             maxWidth: `${num(p.maxWidth, 100)}%`,
+            marginLeft: shift === "left" ? undefined : "auto",
+            marginRight: shift === "center" ? "auto" : undefined,
             aspectRatio: whole ? undefined : ratio,
             objectFit: whole ? undefined : "cover",
             borderRadius: s.radius ? `${s.radius}px` : undefined,

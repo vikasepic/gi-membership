@@ -229,7 +229,8 @@ function Grid({
  * someone is actually looking at the picture. Asked anywhere else, the honest
  * answer to "what is in this image" is "let me go and look".
  */
-function Details({
+/** Exported for its own test: the pane is only reachable with a file chosen. */
+export function Details({
   item,
   neighbours,
   onMove,
@@ -280,8 +281,13 @@ function Details({
   }
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-l border-border p-5">
-      <div className="flex items-center justify-between">
+    // Three bands, not one scrolling column: a heading, the details, and the
+    // two buttons. `mt-auto` inside a scrolling box pins a thing to the end of
+    // the CONTENT, not to the bottom of the panel — so on a tall picture with
+    // a long URL, "Use this file" sat below the fold and the library looked
+    // like it had no way to pick anything.
+    <aside className="flex w-80 shrink-0 flex-col border-l border-border">
+      <div className="flex items-center justify-between px-5 pb-2 pt-5">
         <span className="text-sm font-medium">File details</span>
         {/* Stepping through them beats going back to the grid: the question is
             almost always "is that the one I meant, or the next one". */}
@@ -298,7 +304,9 @@ function Details({
           </Step>
         </span>
       </div>
-      <Thumb item={item} />
+
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 pb-4">
+      <Thumb item={item} whole />
       <dl className="flex flex-col gap-0.5 text-xs text-muted">
         <Fact label="File" value={item.path.split("/").pop() ?? item.path} />
         <Fact label="Type" value={item.mime} />
@@ -355,7 +363,9 @@ function Details({
         </label>
       )}
 
-      <div className="mt-auto flex flex-col gap-2 pt-2">
+      </div>
+
+      <div className="flex shrink-0 flex-col gap-2 border-t border-border bg-surface px-5 py-3">
         <button
           type="button"
           onClick={save}
@@ -503,14 +513,28 @@ function Upload({ kind, onDone }: { kind: MediaKind; onDone: (item: PickedMedia)
   );
 }
 
-function Thumb({ item }: { item: PickedMedia }) {
+/**
+ * The picture, whole.
+ *
+ * `object-cover` crops to a 16:10 box, and a media library is the one place
+ * that is wrong: a 290×53 payment strip and a 615×64 logo both arrived as a
+ * close-up of their middle, which is not enough of either to recognise. The
+ * ground stays visible around it so a transparent PNG reads as transparent
+ * rather than as a picture with white in it.
+ */
+function Thumb({ item, whole = false }: { item: PickedMedia; whole?: boolean }) {
   if (item.mime.startsWith("image/") && item.url) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={item.url}
         alt={item.alt ?? ""}
-        className="aspect-[16/10] w-full rounded-lg bg-surface-2 object-cover"
+        // In the details panel the box grows with the picture up to a cap, so a
+        // tall one is not letterboxed into a strip — and cannot push the rest
+        // of the panel down for ever either.
+        className={`w-full rounded-lg bg-surface-2 object-contain p-1 ${
+          whole ? "max-h-52 shrink-0" : "aspect-[16/10]"
+        }`}
       />
     );
   }

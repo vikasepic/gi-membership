@@ -460,3 +460,35 @@ describe("the price card shows what it costs, not what is due today", () => {
     expect(out).toContain("$99");
   });
 });
+
+/**
+ * An image has a width control of its own, and the two fought.
+ *
+ * Max width shrinks the PICTURE inside a box that is still the whole column, so
+ * "Block position: Centre" moved a box with nowhere to go while the picture
+ * stayed hard left. Auto margins on the image settle it whatever the wrapper is
+ * doing, and cost nothing when the wrapper has already shrunk to the picture.
+ */
+describe("where an image sits in its block", () => {
+  const image = (style: Record<string, unknown>) =>
+    render([make("image", { url: "https://x.test/a.png", maxWidth: 70 }, style)]);
+
+  it("stays put when it is left aligned, as it always has", () => {
+    const out = image({ blockAlign: "left" });
+    expect(out).not.toMatch(/margin-left:auto[^"]*max-width:70%|max-width:70%[^"]*margin-left:auto/);
+  });
+
+  it("centres the picture, not only the box around it", () => {
+    const out = image({ blockAlign: "center" });
+    expect(out).toContain("margin-left:auto");
+    expect(out).toContain("margin-right:auto");
+  });
+
+  it("pushes it right with one margin, not two", () => {
+    const out = image({ blockAlign: "right" });
+    expect(out).toContain("margin-left:auto");
+    // The image itself takes no right margin, or it would centre instead.
+    const img = out.slice(out.indexOf("<img"), out.indexOf(">", out.indexOf("<img")));
+    expect(img).not.toContain("margin-right:auto");
+  });
+});
