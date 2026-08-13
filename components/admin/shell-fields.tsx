@@ -1,5 +1,7 @@
 "use client";
 
+import { ColorControl } from "@/components/admin/color-control";
+
 import { useState } from "react";
 import { Group, Seg, Sub } from "@/components/admin/form-controls";
 import {
@@ -12,7 +14,6 @@ import {
   type ShellLink,
   type SiteShell,
 } from "@/lib/site-shell";
-import { colorIsValid } from "@/lib/site-typography";
 
 /**
  * The header, the navigation and the footer.
@@ -624,35 +625,10 @@ function Switch({
  * is the colour", not as "no colour".
  */
 function Colour({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const set = value.trim() !== "";
-  const bad = set && !colorIsValid(value);
+  // The one control, so the bar and its links can follow a global colour.
   return (
-    <span className="flex min-w-0 flex-1 flex-col gap-1">
-      <span className="flex items-center gap-2">
-        {/* The picker and the text write the same value, because a hex you can
-            paste matters as much as one you can point at. */}
-        <input
-          type="color"
-          aria-label="Colour picker"
-          value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000"}
-          onChange={(e) => onChange(e.target.value)}
-          className={`size-7 shrink-0 cursor-pointer rounded-lg border border-border bg-surface p-1 ${
-            set ? "" : "opacity-40"
-          }`}
-        />
-        <input
-          aria-label="Colour"
-          value={value}
-          placeholder="Inherit"
-          onChange={(e) => onChange(e.target.value)}
-          className={`${cell} max-w-[9rem]`}
-        />
-      </span>
-      {bad && (
-        <span className="text-[0.66rem] text-primary">
-          Not a colour — dropped on save. Try #c8653d.
-        </span>
-      )}
+    <span className="flex min-w-0 flex-1">
+      <ColorControl label="Colour" value={value} onChange={(v) => onChange(v ?? "")} empty="Inherit" />
     </span>
   );
 }

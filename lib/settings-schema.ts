@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { paletteSchema } from "@/lib/palette";
+import { GLOBAL_COLOR_RE, paletteSchema } from "@/lib/palette";
 import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
 import { codeSnippetsSchema } from "@/lib/code-snippets";
 import { SITE_TYPOGRAPHY_SCHEMA } from "@/lib/site-typography";
@@ -29,10 +29,17 @@ import { SITE_SHELL_SCHEMA } from "@/lib/site-shell";
  */
 
 /** A colour we are willing to write into a stylesheet. */
+// A hex, or a reference to one of the global colours below. The two brand
+// colours offer the same globe as every other colour control, and a field that
+// offers a choice it then rejects on save is worse than one that never offered
+// it.
 const hexColor = z
   .string()
   .trim()
-  .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Use a hex colour like #b4472b");
+  .refine(
+    (v) => /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v) || GLOBAL_COLOR_RE.test(v),
+    "Use a hex colour like #b4472b, or pick one of the global colours",
+  );
 
 const optionalUrl = z
   .string()

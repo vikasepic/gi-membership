@@ -5,6 +5,8 @@ import { saveBumpAction, type BumpSaveState } from "@/app/admin/offers/[id]/bump
 import { OrderBump } from "@/components/checkout/order-bump";
 import { buildBumpView, normalizeAccent, BUMP_ACCENT_DEFAULT, defaultBanner, type BumpChoice } from "@/lib/bump";
 import { inputClass } from "@/components/admin/form-controls";
+import { ColorControl } from "@/components/admin/color-control";
+import { normalizeHex, readableInk } from "@/lib/color";
 import type { Offer } from "@/lib/types";
 
 // Bump editor: fields left, the real bump right, updating as you type.
@@ -154,16 +156,24 @@ export function BumpEditor({ offer, alt }: { offer: Offer; alt?: Offer | null })
                   style={{ background: s.hex, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.12)" }}
                 />
               ))}
-              <input
-                type="color"
-                value={accent}
-                onChange={(e) => setAccent(normalizeAccent(e.target.value))}
-                aria-label="Custom accent colour"
-                className="size-9 cursor-pointer rounded-lg border border-border bg-surface p-1"
-              />
-              <span className="font-mono text-sm text-muted">{accent}</span>
+              {/* The same control every other colour on the site uses, so this
+                  one can follow a global colour too. Its AA guarantee survives
+                  that: the ink is published beside the colour, so lightening
+                  the brand in settings darkens this label with it. */}
+              <span className="flex min-w-[12rem] flex-1">
+                <ColorControl
+                  label="Custom accent colour"
+                  value={accent}
+                  onChange={(v) => setAccent(normalizeAccent(v ?? ""))}
+                  empty="the default"
+                  fallback={BUMP_ACCENT_DEFAULT}
+                />
+              </span>
             </div>
-            {view.ink !== "#ffffff" && (
+            {/* Asked of the COLOUR, not of the rendered ink: once the accent is
+                a global colour the ink is a variable, and a variable is never
+                equal to "#ffffff". */}
+            {readableInk(normalizeHex(accent, BUMP_ACCENT_DEFAULT)) !== "#ffffff" && (
               <p className="text-sm text-muted">
                 Dark text is used on this colour — white would not be readable against it.
               </p>

@@ -1,5 +1,5 @@
 import { immediateChargeCents } from "@/lib/offers";
-import { normalizeHex, readableInk, luminance, contrastRatio, tint } from "@/lib/color";
+import { normalizeColor, readableInk, luminance, contrastRatio, tint } from "@/lib/color";
 import { money } from "@/lib/money";
 
 // The order bump's view model, derived in one place.
@@ -25,7 +25,10 @@ export const BUMP_ACCENT_DEFAULT = "#b0532f";
 // Colour handling lives in lib/color.ts — the sales page needs the same
 // guarantees, and two copies of "provably AA" drift.
 export function normalizeAccent(value: unknown): string {
-  return normalizeHex(value, BUMP_ACCENT_DEFAULT);
+  // A reference is kept whole. The AA guarantee below survives it: `bumpInk`
+  // is `readableInk`, which hands back the ink the palette publishes for that
+  // colour rather than one computed once and frozen.
+  return normalizeColor(value, BUMP_ACCENT_DEFAULT);
 }
 
 /** Text colour for the banner and the added bar. Always clears AA. */

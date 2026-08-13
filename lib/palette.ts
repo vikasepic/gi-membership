@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { colorVar, inkVar, readableInk, tokenId } from "@/lib/color";
+
+// The value-level helpers live in lib/color.ts — everything there has to know
+// what a reference looks like — and are re-exported so callers have one import.
+export { colorVar, isGlobalColor, tokenId, GLOBAL_COLOR_RE } from "@/lib/color";
 
 /**
  * The store's own colours, named once and used everywhere.
@@ -51,32 +56,8 @@ export function newColorId(): string {
   return raw.replace(/[^a-z0-9]/g, "").slice(0, 8) || "c0000000";
 }
 
-/** The custom property a colour is published under. */
-export const colorVar = (id: string): string => `--gc-${id}`;
-
 /** What a block stores when it points at a global colour. */
 export const colorToken = (c: PaletteColor): string => `var(${colorVar(c.id)}, ${c.value})`;
-
-/**
- * Exactly what a stored reference may look like.
- *
- * Our own prefix, our own id shape, and a hex fallback — and not one character
- * more, because these values are written straight into a style attribute. One
- * definition, imported by everything that has to decide whether a colour is a
- * link: a second copy of "what counts as safe" is how the two drift.
- */
-export const GLOBAL_COLOR_RE = /^var\(--gc-[a-z0-9]{4,12},\s*#[0-9a-f]{3,8}\)$/i;
-
-export function isGlobalColor(v: unknown): v is string {
-  return typeof v === "string" && GLOBAL_COLOR_RE.test(v.trim());
-}
-
-/** The id inside a stored token, or null when the value is a plain colour. */
-export function tokenId(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const m = /^var\(--gc-([a-z0-9]{4,12})/.exec(value.trim());
-  return m ? m[1] : null;
-}
 
 /**
  * What to paint in a swatch for a stored value.
@@ -110,5 +91,7 @@ export function colorName(value: unknown, palette: readonly PaletteColor[]): str
  */
 export function paletteCss(palette: readonly PaletteColor[], scope = ":root"): string {
   if (palette.length === 0) return "";
-  return `${scope}{${palette.map((c) => `${colorVar(c.id)}:${c.value}`).join(";")}}`;
+  return `${scope}{${palette
+    .map((c) => `${colorVar(c.id)}:${c.value};${inkVar(c.id)}:${readableInk(c.value)}`)
+    .join(";")}}`;
 }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { normalizeHex } from "@/lib/color";
+import { normalizeColor } from "@/lib/color";
 import { cleaned, isRecord, matching, oneOf } from "@/lib/site-typography";
 
 /**
@@ -157,7 +157,7 @@ const shellSchema = z.object({
   logoHeightDesktop: matching(LENGTH),
   logoHeightMobile: matching(LENGTH),
   brandFallback: oneOf(["mark", "name"]),
-  barColor: cleaned((raw) => (raw ? normalizeHex(raw, "") : "")),
+  barColor: cleaned((raw) => (raw ? normalizeColor(raw, "") : "")),
   barTranslucent: oneOf(SWITCH),
   barSticky: oneOf(SWITCH),
   barBorder: oneOf(SWITCH),
@@ -170,9 +170,9 @@ const shellSchema = z.object({
   linkWeight: oneOf(SHELL_WEIGHTS),
   linkCase: oneOf(SHELL_CASES),
   linkLetterSpacing: matching(SPACE),
-  linkColor: cleaned((raw) => (raw ? normalizeHex(raw, "") : "")),
-  linkHoverColor: cleaned((raw) => (raw ? normalizeHex(raw, "") : "")),
-  linkCurrentColor: cleaned((raw) => (raw ? normalizeHex(raw, "") : "")),
+  linkColor: cleaned((raw) => (raw ? normalizeColor(raw, "") : "")),
+  linkHoverColor: cleaned((raw) => (raw ? normalizeColor(raw, "") : "")),
+  linkCurrentColor: cleaned((raw) => (raw ? normalizeColor(raw, "") : "")),
   currentMark: oneOf(["pill", "underline", "none"]),
   ctaLabel: cleaned((raw) => raw.slice(0, 40)),
   ctaHref: cleaned((raw) => (HREF.test(raw.slice(0, 300)) ? raw.slice(0, 300) : "")),

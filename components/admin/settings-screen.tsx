@@ -13,6 +13,7 @@ import { TypographyFields, FontLibrary, type InstalledFont } from "@/components/
 import { ShellFields } from "@/components/admin/shell-fields";
 import { SnippetFields } from "@/components/admin/snippet-fields";
 import { PaletteFields } from "@/components/admin/palette-fields";
+import { ColorField as SharedColorField, PaletteContext } from "@/components/admin/color-control";
 
 /**
  * Site settings, in groups.
@@ -47,6 +48,11 @@ export function SettingsScreen({
   };
 
   return (
+    // The saved palette, so the colour fields on THIS page offer the same
+    // colours the builder does. Saved rather than live: the list below is a
+    // form until it is submitted, and a swatch that vanishes when you rename it
+    // would be worse than one that appears a save later.
+    <PaletteContext.Provider value={settings.palette}>
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <div className="flex flex-col">
@@ -104,6 +110,7 @@ export function SettingsScreen({
         everyone out.
       </p>
     </div>
+    </PaletteContext.Provider>
   );
 }
 
@@ -482,6 +489,13 @@ document.head.appendChild(s);`}</pre>
 // Field kinds that need state
 // ---------------------------------------------------------------------------
 
+/**
+ * The brand's two colours, in the one control every colour uses.
+ *
+ * `globals` stays on: these are chosen, not defined — the palette is defined in
+ * the Global colours field below, and pointing the primary colour at one of
+ * those is a reasonable thing to want.
+ */
 function ColorField({
   name,
   label,
@@ -495,25 +509,10 @@ function ColorField({
   value: string;
   error?: string;
 }) {
-  const [colour, setColour] = useState(value);
   return (
     <Field label={label} hint={hint} error={error}>
-      <span className="flex items-center gap-2">
-        {/* The native picker and the text both write the same field, because a
-            hex you can paste matters as much as one you can point at. */}
-        <input
-          type="color"
-          aria-label={`${label} picker`}
-          value={/^#[0-9a-fA-F]{6}$/.test(colour) ? colour : "#000000"}
-          onChange={(e) => setColour(e.target.value)}
-          className="size-9 shrink-0 cursor-pointer rounded-lg border border-border bg-surface p-1"
-        />
-        <input
-          name={name}
-          value={colour}
-          onChange={(e) => setColour(e.target.value)}
-          className={input}
-        />
+      <span className="flex items-center">
+        <SharedColorField name={name} label={label} value={value} empty="the built-in" />
       </span>
     </Field>
   );

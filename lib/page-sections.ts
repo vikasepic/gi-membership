@@ -1,5 +1,4 @@
-import { normalizeHex, readableInk, tint } from "@/lib/color";
-import { isGlobalColor } from "@/lib/palette";
+import { normalizeColor, readableInk, tint } from "@/lib/color";
 
 // The ten-section sales page.
 //
@@ -64,12 +63,9 @@ export function bandTheme(
   accentOverride?: string | null,
 ): BandTheme {
   const s = BAND_STYLES[(styleKey ?? "paper") as BandStyleKey] ?? BAND_STYLES.paper;
-  // Two values, one colour. The band DRAWS the reference, so changing that
-  // global colour in settings repaints the band; the arithmetic — which ink is
-  // readable on it — needs a real hex, and normalizeHex reads the one carried
-  // inside the reference.
-  const hex = normalizeHex(accentOverride, s.accent);
-  const accent = isGlobalColor(accentOverride) ? accentOverride.trim() : hex;
+  // A hex, or a reference to one of the store's global colours — `readableInk`
+  // and `tint` both understand the second, so nothing below has to.
+  const accent = normalizeColor(accentOverride, s.accent);
   // The rule and the muted tone are the ink at two alphas, so they follow it
   // rather than being a second thing to keep in step.
   const fg = s.fg;
@@ -77,7 +73,7 @@ export function bandTheme(
     bg: s.bg,
     fg,
     accent,
-    onAccent: readableInk(hex),
+    onAccent: readableInk(accent),
     panel: s.panel,
     panel2: s.panel2,
     rule: tint(fg, 0.14),

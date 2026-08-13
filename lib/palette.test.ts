@@ -9,9 +9,13 @@ import {
   tokenId,
   type PaletteColor,
 } from "@/lib/palette";
-import { normalizeHex, readableInk } from "@/lib/color";
+import { normalizeHex, readableInk, tint } from "@/lib/color";
 import { normalizeBlocks, setStyleAt } from "@/lib/blocks";
 import { bandTheme } from "@/lib/page-sections";
+import { SITE_TYPOGRAPHY_SCHEMA } from "@/lib/site-typography";
+import { SITE_SHELL_SCHEMA } from "@/lib/site-shell";
+import { SETTINGS_SCHEMA } from "@/lib/settings-schema";
+import { normalizeAccent, bumpInk } from "@/lib/bump";
 
 const BRAND: PaletteColor = { id: "a1b2c3d4", name: "Brand", value: "#b4472b" };
 const INK: PaletteColor = { id: "ffff0000", name: "Ink", value: "#16181f" };
@@ -50,13 +54,31 @@ describe("what a block stores when it takes a global colour", () => {
 });
 
 describe("colours derived from a global one", () => {
-  it("are worked out from the hex inside the reference, not from a fallback", () => {
-    // A button filled with a dark brand colour must get light text. Reading the
-    // token as "not a colour" would compute the ink from the fallback argument
-    // instead and put black on navy.
+  it("reads the hex inside the reference for arithmetic", () => {
     expect(normalizeHex(colorToken(INK), "#ffffff")).toBe("#16181f");
-    expect(readableInk(colorToken(INK))).toBe(readableInk(INK.value));
-    expect(readableInk(colorToken(BRAND))).toBe(readableInk(BRAND.value));
+  });
+
+  it("hands back the ink the palette publishes, not one frozen at render", () => {
+    // The trap this closes: compute white-on-navy once, then somebody lightens
+    // that global colour in settings and every button keeps a white label on a
+    // pale ground. The AA promise has to survive the colour changing, so the
+    // ink is a variable too — with today's answer as its fallback.
+    expect(readableInk(colorToken(INK))).toBe(`var(--gc-ffff0000-ink, ${readableInk(INK.value)})`);
+    expect(readableInk(colorToken(BRAND))).toBe(`var(--gc-a1b2c3d4-ink, ${readableInk(BRAND.value)})`);
+  });
+
+  it("leaves a plain colour computing exactly as it always did", () => {
+    expect(readableInk("#16181f")).toBe("#ffffff");
+    expect(readableInk("#ffffff")).toBe("#000000");
+  });
+
+  it("tints a reference with color-mix, because the channels are not knowable yet", () => {
+    // rgba() from the fallback hex would stop following the colour, which is
+    // the one thing a global colour is for.
+    expect(tint(colorToken(BRAND), 0.14)).toBe(
+      `color-mix(in srgb, ${colorToken(BRAND)} 14%, transparent)`,
+    );
+    expect(tint("#16181f", 0.5)).toBe("rgba(22, 24, 31, 0.5)");
   });
 });
 
@@ -85,12 +107,22 @@ describe("the palette as CSS", () => {
     expect(paletteCss([])).toBe("");
   });
 
-  it("declares each colour under the name blocks point at", () => {
-    expect(paletteCss([BRAND, INK])).toBe(":root{--gc-a1b2c3d4:#b4472b;--gc-ffff0000:#16181f}");
+  it("declares each colour, and the ink that reads on it", () => {
+    expect(paletteCss([BRAND])).toBe(
+      `:root{--gc-a1b2c3d4:#b4472b;--gc-a1b2c3d4-ink:${readableInk(BRAND.value)}}`,
+    );
+  });
+
+  it("does that for every colour in the list", () => {
+    const css = paletteCss([BRAND, INK]);
+    for (const c of [BRAND, INK]) {
+      expect(css).toContain(`--gc-${c.id}:${c.value}`);
+      expect(css).toContain(`--gc-${c.id}-ink:${readableInk(c.value)}`);
+    }
   });
 
   it("can be scoped, so the builder is not the admin around it", () => {
-    expect(paletteCss([BRAND], ".site-type")).toBe(".site-type{--gc-a1b2c3d4:#b4472b}");
+    expect(paletteCss([BRAND], ".site-type").startsWith(".site-type{")).toBe(true);
   });
 });
 
@@ -123,11 +155,9 @@ describe("a band accent that follows a global colour", () => {
     expect(theme.accent).toBe(colorToken(BRAND));
   });
 
-  it("still picks its ink from the colour behind the reference", () => {
-    // Not from a fallback, and not from the band's own accent — a pale global
-    // colour needs dark ink on it whichever way it was written.
+  it("takes its ink from the palette, so the ink follows the colour", () => {
     expect(bandTheme("navy", colorToken(BRAND)).onAccent).toBe(
-      bandTheme("navy", BRAND.value).onAccent,
+      `var(--gc-a1b2c3d4-ink, ${bandTheme("navy", BRAND.value).onAccent})`,
     );
   });
 
@@ -142,5 +172,70 @@ describe("a band accent that follows a global colour", () => {
     for (const bad of ["var(--anything, #fff)", "url(x)", "red;background:url(y)"]) {
       expect(bandTheme("navy", bad).accent, bad).toBe(own);
     }
+  });
+});
+
+/**
+ * Every screen that sets a colour, and whether the link survives its save.
+ *
+ * Each of these has its own normalizer, and each one used to accept a hex and
+ * nothing else — so a global colour would have been quietly flattened to a
+ * copy. The control offers the choice on all of them now, and a field that
+ * offers a choice it silently discards is worse than one that never offered it.
+ */
+describe("a global colour survives every save path", () => {
+  const token = colorToken(BRAND);
+
+  it("the site's own typography", () => {
+    const parsed = SITE_TYPOGRAPHY_SCHEMA.parse({ body: { color: token } });
+    expect(parsed.body.color).toBe(token);
+  });
+
+  it("the header and its links", () => {
+    const parsed = SITE_SHELL_SCHEMA.parse({ barColor: token, linkColor: token });
+    expect(parsed.barColor).toBe(token);
+    expect(parsed.linkColor).toBe(token);
+  });
+
+  it("the order bump's accent, whose AA promise it must not break", () => {
+    expect(normalizeAccent(token)).toBe(token);
+    // The promise survives because the ink is published beside the colour
+    // rather than computed once and frozen into the page.
+    expect(bumpInk(normalizeAccent(token))).toBe(`var(--gc-${BRAND.id}-ink, #ffffff)`);
+  });
+
+  it("the two brand colours", () => {
+    expect(SETTINGS_SCHEMA.parse({ primaryColor: token }).primaryColor).toBe(token);
+  });
+
+  it("and none of them takes anything else", () => {
+    for (const bad of ["var(--anything, #fff)", "red", "rgb(0,0,0)"]) {
+      expect(SITE_TYPOGRAPHY_SCHEMA.parse({ body: { color: bad } }).body.color, bad).toBe("");
+      expect(SETTINGS_SCHEMA.safeParse({ primaryColor: bad }).success, bad).toBe(false);
+    }
+  });
+});
+
+/**
+ * A guard, not a test of behaviour.
+ *
+ * The failure this feature keeps finding is a normalizer that predates it:
+ * accept only a hex, and the picker appears to work while the link is thrown
+ * away on the next read. This fails if a new colour field is added the old way.
+ */
+describe("no colour field is left accepting only a hex", () => {
+  it("has no normalizeHex left on a stored colour", async () => {
+    const { readFileSync, readdirSync } = await import("node:fs");
+    const offenders: string[] = [];
+    for (const f of readdirSync("lib")) {
+      if (!f.endsWith(".ts") || f.endsWith(".test.ts") || f === "color.ts") continue;
+      const src = readFileSync(`lib/${f}`, "utf8");
+      for (const line of src.split("\n")) {
+        // A stored value being cleaned. `normalizeHex` is right for arithmetic
+        // and wrong for storage — `normalizeColor` is the storage one.
+        if (/normalizeHex\((raw|value|input|v)\b/.test(line)) offenders.push(`lib/${f}: ${line.trim()}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

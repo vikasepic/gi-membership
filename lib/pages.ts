@@ -3,8 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
 import { camelize } from "@/lib/case";
-import { normalizeHex } from "@/lib/color";
-import { isGlobalColor } from "@/lib/palette";
+import { normalizeColor } from "@/lib/color";
 import { normalizeBackground, normalizeBlocks, type Background, type Block } from "@/lib/blocks";
 import { priceProblems } from "@/lib/page-price-truth";
 import { homeStarterBlocks } from "@/lib/home-starter";
@@ -183,11 +182,7 @@ export async function saveSection(
       style,
       // Validated before it can reach a style attribute — a hex, or one of the
       // store's global colours, which is a reference of a shape we wrote.
-      accent: input.accent
-        ? isGlobalColor(input.accent)
-          ? input.accent.trim()
-          : normalizeHex(input.accent, def.defaultStyle)
-        : null,
+      accent: input.accent ? normalizeColor(input.accent, def.defaultStyle) : null,
       variant,
       content: input.content,
       // Normalised through the same reader a block's background uses — one

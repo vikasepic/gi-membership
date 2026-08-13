@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Group } from "@/components/admin/form-controls";
+import { ColorControl } from "@/components/admin/color-control";
 import { newColorId, type PaletteColor } from "@/lib/palette";
 
 /**
@@ -56,13 +57,6 @@ export function PaletteFields({ palette, name }: { palette: PaletteColor[]; name
         {list.map((c, i) => (
           <div key={c.id} className="flex items-center gap-2">
             <input
-              type="color"
-              aria-label={`${c.name || "Colour"} value`}
-              value={c.value}
-              onChange={(e) => edit(i, { value: e.target.value })}
-              className="size-8 shrink-0 rounded border border-border bg-surface"
-            />
-            <input
               aria-label={`${c.name || "Colour"} name`}
               placeholder="Name it — Brand, Ink, Panel"
               value={c.name}
@@ -70,8 +64,16 @@ export function PaletteFields({ palette, name }: { palette: PaletteColor[]; name
               onChange={(e) => edit(i, { name: e.target.value })}
               className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm outline-none focus:border-primary"
             />
-            <span className="hidden w-20 shrink-0 font-mono text-[0.68rem] text-muted sm:block">
-              {c.value}
+            {/* The same control as everywhere else, with the globe off: this is
+                where a global colour is DEFINED, and one pointing at another
+                has no answer. */}
+            <span className="flex w-40 shrink-0">
+              <ColorControl
+                label={`${c.name || "Colour"} value`}
+                value={c.value}
+                onChange={(v) => edit(i, { value: v ?? "#000000" })}
+                globals={false}
+              />
             </span>
             <button
               type="button"

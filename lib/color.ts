@@ -4,9 +4,44 @@
 // One implementation, because the interesting part is not the maths — it is
 // that the AA guarantee is total, and two copies of "total" drift.
 
-import { GLOBAL_COLOR_RE } from "@/lib/palette";
-
 const HEX = /^#[0-9a-f]{6}$/i;
+
+/**
+ * A reference to one of the store's global colours: `var(--gc-<id>, #hex)`.
+ *
+ * The shape lives here rather than with the palette because everything in this
+ * file has to know it — a value one module treats as a colour and another
+ * rejects is two modules disagreeing about what is safe to put in CSS. The
+ * palette re-exports these.
+ *
+ * Deliberately narrow: our own prefix, our own id shape, a hex fallback, and
+ * not one character more.
+ */
+export const GLOBAL_COLOR_RE = /^var\(--gc-[a-z0-9]{4,12},\s*#[0-9a-f]{3,8}\)$/i;
+
+export function isGlobalColor(v: unknown): v is string {
+  return typeof v === "string" && GLOBAL_COLOR_RE.test(v.trim());
+}
+
+/** The id inside a reference, or null when the value is a plain colour. */
+export function tokenId(value: unknown): string | null {
+  if (!isGlobalColor(value)) return null;
+  return /^var\(--gc-([a-z0-9]{4,12})/.exec(value.trim())![1];
+}
+
+/** The custom property a global colour is published under. */
+export const colorVar = (id: string): string => `--gc-${id}`;
+
+/**
+ * And the one its readable ink is published under.
+ *
+ * A second variable, not a nicety. `readableInk` is a calculation, and a
+ * calculation done once at render freezes: change that global colour to a pale
+ * one in settings and every button that took it keeps the white label it was
+ * given, which is the AA promise this file exists to make total. Publishing the
+ * ink alongside the colour is how the promise survives the colour changing.
+ */
+export const inkVar = (id: string): string => `--gc-${id}-ink`;
 
 /**
  * Coerce a stored colour to a safe six-digit hex.
@@ -80,11 +115,47 @@ const WHITE = "#ffffff";
  * between them. A test sweeps the colour cube to hold that true.
  */
 export function readableInk(background: string): string {
+  const id = tokenId(background);
+  // A reference: hand back the ink the palette publishes for that colour, with
+  // today's answer as the fallback. Computing it here and stopping would mean
+  // white-on-pale the day somebody lightens the brand colour in settings.
+  if (id) return `var(${inkVar(id)}, ${ink(background)})`;
+  return ink(background);
+}
+
+/** The calculation itself, on a colour that is already a colour. */
+function ink(background: string): string {
   return contrastRatio(background, WHITE) >= 4.5 ? WHITE : BLACK;
 }
 
-/** `rgba()` from a hex, for tinted panels. Avoids relying on color-mix(). */
+/**
+ * A colour safe to put in CSS: a hex, or one of the store's global colours.
+ *
+ * The counterpart to `normalizeHex`, and the distinction is the whole point.
+ * `normalizeHex` answers "what can I do arithmetic with" and resolves a
+ * reference to the hex inside it. This one answers "what should the page draw"
+ * and keeps the reference, so the colour still follows settings.
+ */
+export function normalizeColor(value: unknown, fallback: string): string {
+  return isGlobalColor(value) ? value.trim() : normalizeHex(value, fallback);
+}
+
+/**
+ * A translucent version of a colour, for tinted panels and hairlines.
+ *
+ * `rgba()` from the channels, which needs no `color-mix` — except for a global
+ * colour, where the channels are not knowable until the page renders. There the
+ * only honest answer is `color-mix`, and the reference carries its own hex
+ * fallback into it. A wash computed from the hex instead would stop following
+ * the colour the moment somebody changed it, which is the one thing a global
+ * colour is for.
+ */
 export function tint(hex: string, alpha: number): string {
+  const id = tokenId(hex);
+  if (id) {
+    const pct = Math.round(Math.max(0, Math.min(1, alpha)) * 1000) / 10;
+    return `color-mix(in srgb, ${hex} ${pct}%, transparent)`;
+  }
   const [r, g, b] = channels(hex);
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }

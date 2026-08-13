@@ -1,5 +1,7 @@
 "use client";
 
+import { ColorControl } from "@/components/admin/color-control";
+
 import { useActionState, useState, type CSSProperties } from "react";
 import { useFormStatus } from "react-dom";
 import { inputClass as input, Field, Group, Seg } from "@/components/admin/form-controls";
@@ -15,7 +17,6 @@ import {
   TYPOGRAPHY_STYLES,
   TYPOGRAPHY_TRANSFORMS,
   TYPOGRAPHY_WEIGHTS,
-  colorIsValid,
   metricIsValid,
   normalizeSiteTypography,
   siteTypographyCssAt,
@@ -480,37 +481,10 @@ function Metric({
  * nothing is set: a solid black square beside an empty field reads as "black".
  */
 function Colour({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const set = value.trim() !== "";
-  const bad = set && !colorIsValid(value);
-  return (
-    <span className="flex flex-col gap-1">
-      <span className="flex items-center gap-2">
-        {/* The picker and the text write the same value, because a hex you can
-            paste matters as much as one you can point at. */}
-        <input
-          type="color"
-          aria-label="Colour picker"
-          value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : "#000000"}
-          onChange={(e) => onChange(e.target.value)}
-          className={`size-8 shrink-0 cursor-pointer rounded-lg border border-border bg-surface p-1 ${
-            set ? "" : "opacity-40"
-          }`}
-        />
-        <input
-          aria-label="Colour"
-          value={value}
-          placeholder="Inherit"
-          onChange={(e) => onChange(e.target.value)}
-          className={cell}
-        />
-      </span>
-      {bad && (
-        <span className="text-[0.66rem] text-primary">
-          Not a colour — dropped on save. Try #c8653d.
-        </span>
-      )}
-    </span>
-  );
+  // The one control, so a colour here can point at a global colour exactly the
+  // way a colour on a block can. Its own validity note is gone with it: the
+  // control writes a hex or a reference and nothing else.
+  return <ColorControl label="Colour" value={value} onChange={(v) => onChange(v ?? "")} empty="Inherit" />;
 }
 
 /**

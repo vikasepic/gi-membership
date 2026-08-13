@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { PaletteColor } from "@/lib/palette";
 import { DEVICE_MAX, type Device } from "@/lib/blocks";
-import { normalizeHex } from "@/lib/color";
+import { normalizeColor } from "@/lib/color";
 import { familyToken } from "@/lib/fonts-catalogue";
 
 /**
@@ -150,11 +150,11 @@ export function metricIsValid(field: keyof TypographyMetrics, raw: string): bool
  * which is the function the save actually runs. `red`, `rgb(0,0,0)` and an
  * eight-digit hex with alpha all become "" on save, and until this existed
  * they did so without a word. Shared with the Header & navigation panel, whose
- * colour fields go through the identical `normalizeHex(raw, "")`.
+ * colour fields go through the identical `normalizeColor(raw, "")`.
  */
 export function colorIsValid(raw: string): boolean {
   const v = raw.trim();
-  return v === "" || normalizeHex(v, "") !== "";
+  return v === "" || normalizeColor(v, "") !== "";
 }
 
 const metricsSchema = z.object({
@@ -173,7 +173,10 @@ const styleSchema = z.object({
   style: oneOf(TYPOGRAPHY_STYLES),
   transform: oneOf(TYPOGRAPHY_TRANSFORMS),
   decoration: oneOf(TYPOGRAPHY_DECORATIONS),
-  color: cleaned((raw) => (raw ? normalizeHex(raw, "") : "")),
+  // normalizeCOLOUR, not normalizeHex: a global colour must survive the save
+  // as a reference, or the field would appear to work and quietly store a copy
+  // that never follows settings again.
+  color: cleaned((raw) => (raw ? normalizeColor(raw, "") : "")),
   desktop: nested(metricsSchema),
   tablet: nested(metricsSchema),
   mobile: nested(metricsSchema),
