@@ -155,7 +155,21 @@ export function OfferPriceFields({
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 @lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 @lg:grid-cols-5">
+                <label className="col-span-2 flex flex-col gap-1 text-[0.68rem] text-muted @lg:col-span-1">
+                  {/* A name, not a price claim. "Best value" outlives a price
+                      change; "$290 a year" does not, which is why the figures
+                      beside it are derived and this is not. */}
+                  Call it
+                  <input
+                    aria-label="Label"
+                    placeholder="optional"
+                    maxLength={40}
+                    className={inputClass}
+                    value={p.label}
+                    onChange={(e) => edit(i, { label: e.target.value })}
+                  />
+                </label>
                 <label className="flex flex-col gap-1 text-[0.68rem] text-muted">
                   Bills
                   <select
