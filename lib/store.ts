@@ -12,7 +12,7 @@ import { sortPrices, type OfferPrice } from "@/lib/offer-prices";
 const STORE_SLUG = "greater-inside";
 
 const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, bump_price_ids, upsell_price_ids, is_placeholder, sort_order, checkout_note, checkout_bullets";
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, offer_id, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, bump_price_ids, upsell_price_ids, is_placeholder, sort_order, checkout_note, checkout_bullets";
 
 /**
  * Every column an Offer is built from — in ONE place.

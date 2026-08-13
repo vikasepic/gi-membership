@@ -1,7 +1,7 @@
 import { COVER_ASPECT } from "@/lib/cover";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getProductBySlug } from "@/lib/store";
+import { getProductBySlug, getOffer } from "@/lib/store";
 import { ownedProductIdsForViewer, accessHrefForProduct } from "@/lib/library";
 import { productDisplay, type CourseType } from "@/lib/courses";
 import { publicCoverUrl } from "@/lib/media";
@@ -10,6 +10,7 @@ import { TrackView } from "@/components/track-view";
 import { BuyLink } from "@/components/buy-link";
 import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
 import { offersForRows } from "@/lib/block-offers";
+import { shownPrices } from "@/lib/offer-prices";
 import { resolveGlobals } from "@/lib/templates-store";
 import { SalesPage } from "@/components/page/sales-page";
 
@@ -56,6 +57,11 @@ export default async function ProductPage({
     // A product has one price of its own, so a Ways to pay block here has to
     // name the offer it sells. Resolved once, server-side.
     const byOffer = await offersForRows(rows);
+    // The offer this product is sold on, if it names one. A Ways to pay block
+    // here then needs no offer of its own — the page already knows.
+    const soldOn = product.offerId ? await getOffer(product.offerId) : null;
+    const soldPrices =
+      soldOn && soldOn.active ? shownPrices(soldOn.prices, soldOn.pagePriceIds ?? []) : [];
     return (
       // Full-bleed: the bands run edge to edge, which the padded store shell
       // would otherwise inset. -mx cancels the shell's own gutter.
@@ -79,7 +85,22 @@ export default async function ProductPage({
           rows={rows}
           settings={settings}
           globals={globals}
-          money={{ priceLabel: money(product.priceCents, product.currency), termsLabel: null, byOffer }}
+          money={{
+            priceLabel: money(product.priceCents, product.currency),
+            termsLabel: null,
+            byOffer,
+            // The named offer's prices, so a Ways to pay block left blank draws
+            // them. Its button goes to the offer's checkout, which is the one
+            // that can bill a subscription — the product's own checkout still
+            // takes the one-time price above.
+            ...(soldPrices.length > 0 && soldOn
+              ? {
+                  prices: soldPrices,
+                  currency: soldOn.currency,
+                  buyHref: `/checkout/offer?offer=${soldOn.id}`,
+                }
+              : {}),
+          }}
           cta={(label) => (
             <BuyLink
               href={owned ? accessHref : `/checkout?product=${product.slug}`}

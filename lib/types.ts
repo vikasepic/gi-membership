@@ -41,6 +41,14 @@ export type Product = {
    * below and kept only while placements are being moved across — an empty
    * price list falls through to this, so nothing that works today stops.
    */
+  /**
+   * The offer whose ways to pay this product is sold on.
+   *
+   * Null means its own one-time price, which is every product today. Naming one
+   * is what lets a product be offered monthly — the base charge still goes
+   * through the product's price until the checkout learns to route it.
+   */
+  offerId: string | null;
   bumpAltOfferId: string | null;
   upsellAltOfferId: string | null;
   /** Which of the bump offer's prices this checkout shows. Empty = the headline one. */

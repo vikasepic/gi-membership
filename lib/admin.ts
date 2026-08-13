@@ -16,7 +16,7 @@ import type {
 // Admin-side reads/writes. Service-role; callers are admin server actions/pages.
 
 const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, bump_price_ids, upsell_price_ids, is_placeholder, sort_order, checkout_note, checkout_bullets";
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, offer_id, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, bump_price_ids, upsell_price_ids, is_placeholder, sort_order, checkout_note, checkout_bullets";
 
 
 export type OfferOption = {
@@ -50,6 +50,7 @@ export type ProductInput = {
   status: ProductStatus;
   bumpOfferId: string | null;
   upsellOfferId: string | null;
+  offerId?: string | null;
   bumpAltOfferId?: string | null;
   upsellAltOfferId?: string | null;
   bumpPriceIds?: string[];
@@ -124,6 +125,7 @@ function toRow(input: ProductInput, storeId: string) {
     status: input.status,
     bump_offer_id: input.bumpOfferId,
     upsell_offer_id: input.upsellOfferId,
+    offer_id: input.offerId ?? null,
     bump_alt_offer_id: input.bumpAltOfferId ?? null,
     upsell_alt_offer_id: input.upsellAltOfferId ?? null,
     bump_price_ids: input.bumpPriceIds ?? [],

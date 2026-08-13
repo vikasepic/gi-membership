@@ -80,6 +80,7 @@ export function ProductForm({
   // Held here so each placement can say, as you pick, exactly what the buyer
   // will be shown.
   const [bumpOfferId, setBumpOfferId] = useState(product?.bumpOfferId ?? "");
+  const [offerId, setOfferId] = useState(product?.offerId ?? "");
   const [bumpAltOfferId] = useState(product?.bumpAltOfferId ?? "");
   const [bumpPriceIds, setBumpPriceIds] = useState<string[]>(product?.bumpPriceIds ?? []);
   const [upsellOfferId, setUpsellOfferId] = useState(product?.upsellOfferId ?? "");
@@ -413,7 +414,7 @@ export function ProductForm({
 
       <TabPanel tab="pricing">
       <Group label="Pricing"
-        hint="One-time price for this product. Subscriptions live in Offers, not here."
+        hint="The one-time price this product is charged at today."
       >
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label="Price ($)" required error={err("price")}>
@@ -494,6 +495,43 @@ export function ProductForm({
           </div>
         )}
         {err("courseIds") && <p className="text-sm text-primary">{err("courseIds")}</p>}
+      </Group>
+
+      <Group
+        label="Sold on"
+        hint="An offer holds several ways to pay — monthly, yearly, a one-off. Name one and this product's page can offer them."
+      >
+        <Field label="Ways to pay" hint="optional — leave empty for the single price above">
+          <select
+            name="offerId"
+            value={offerId}
+            onChange={(e) => setOfferId(e.target.value)}
+            className={inputClass}
+          >
+            <option value="">— just the price above —</option>
+            {offers.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+                {o.active ? "" : " (draft)"}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {/* Said plainly, because the honest answer is "not yet, and here is
+            what it does do". A field that implied the checkout had changed
+            would be the worst kind of half-shipped. */}
+        <p className="text-sm text-muted">
+          {offerId ? (
+            <>
+              A <b className="font-medium text-fg">Ways to pay</b> block on this
+              product&rsquo;s page now shows that offer&rsquo;s prices without having to
+              name it. The recurring ones are taken on the offer&rsquo;s own checkout;
+              the price above is still what this product&rsquo;s checkout charges.
+            </>
+          ) : (
+            <>This product is sold at the single price above.</>
+          )}
+        </p>
       </Group>
       </TabPanel>
 
