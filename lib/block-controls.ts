@@ -607,12 +607,31 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       // visible on all five skins with a hint explaining when it applied, which
       // is a note asking the reader to do the filtering the panel should do —
       // and on four of the five they stored text nothing ever drew.
+      // The heading above the group. Two fields for one idea, and that is not
+      // tidiness: `title` is the only one the one-card skin has ever drawn and
+      // `caption` the only one the grids draw, so reading either in the other
+      // place would print a forgotten string onto a live page. One label, one
+      // visible at a time.
       {
         kind: "text",
         key: "title",
-        label: "Card title",
+        label: "Heading",
         hint: "The small heading above the rows.",
         when: isOneCard,
+      },
+      {
+        kind: "text",
+        key: "caption",
+        label: "Heading",
+        hint: "The line above the cards.",
+        when: (b) => !isOneCard(b),
+      },
+      {
+        kind: "textarea",
+        key: "subheading",
+        label: "Text under the heading",
+        rows: 2,
+        hint: "A sentence between the heading and the cards. Blank draws nothing.",
       },
       {
         kind: "textarea",
@@ -687,12 +706,17 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       // nothing about which one it moves.
       { kind: "number", key: "cardTextGap", label: "Title to text", min: 0, max: 48, step: 1, unit: "px", hint: "Unset follows the skin." },
 
+      group("Heading above the cards"),
+      { kind: "number", key: "headingSize", label: "Heading size", min: 8, max: 72, step: 1, unit: "px", hint: "Unset keeps the size it has." },
+      { kind: "color", key: "headingColor", label: "Heading colour", hint: "Unset follows the band." },
+      { kind: "number", key: "subheadingSize", label: "Text size", min: 8, max: 48, step: 1, unit: "px", hint: "Unset keeps the size it has." },
+      { kind: "color", key: "subheadingColor", label: "Text colour", hint: "Unset follows the band." },
+
       group("Colour"),
       // Three lines, three controls, each named after what is on screen.
       // "Title" alone meant a card's title to this file and the line above the
       // cards to everybody reading the panel, which is the sort of label that
       // makes a working control look broken.
-      { kind: "color", key: "headingColor", label: "Heading above the cards", hint: "The caption over the group. Unset follows the band." },
       { kind: "color", key: "cardTitleColor", label: "Card title", hint: "The bold line on each card. Unset follows the band." },
       { kind: "color", key: "cardBodyColor", label: "Card text", hint: "The copy under it, and the closing note. Unset follows the band." },
 

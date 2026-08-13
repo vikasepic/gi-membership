@@ -136,7 +136,7 @@ export function sanitizeBlockHtml(dirty: string): string {
 const INLINE_FIELDS: Record<string, string[]> = {
   heading: ["text"],
   // The list skin's closing note and its caption, both handed to <Inline>.
-  cards: ["note", "caption"],
+  cards: ["note", "caption", "subheading"],
 };
 
 /** The same, for the objects inside a list-shaped prop. */

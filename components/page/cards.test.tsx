@@ -460,3 +460,42 @@ describe("a heading that has been given a width", () => {
     expect(render(phone)).not.toContain("text-balance");
   });
 });
+
+/**
+ * The line above the cards, and the line under that.
+ *
+ * `caption` was rendered and had no control at all — the field existed, the
+ * page drew it, and there was no way to type into it. Everything here is
+ * still "unset draws exactly what it drew before".
+ */
+describe("the heading over a cards block", () => {
+  const cards = (props: Record<string, unknown>) => render(stored({ items: ITEMS, ...props }));
+
+  it("takes a size on the grid's heading", () => {
+    expect(cards({ caption: "Trusted by", headingSize: 30 })).toContain("font-size:30px");
+  });
+
+  it("takes one on the one-card skin's heading too", () => {
+    expect(cards({ skin: "list", title: "YOUR PACKAGE", headingSize: 18 })).toContain("font-size:18px");
+  });
+
+  it("draws a line under the heading, with its own size and ink", () => {
+    const out = cards({ caption: "Trusted by", subheading: "The <em>whole</em> set.", subheadingSize: 15, subheadingColor: "#abcdef" });
+    expect(out).toContain("The <em>whole</em> set.");
+    expect(out).toContain("font-size:15px");
+    expect(out).toContain("#abcdef");
+  });
+
+  it("draws nothing at all when that line is blank", () => {
+    // The goldens above already pin this byte for byte; this says why.
+    expect(cards({ caption: "Trusted by" })).toBe(cards({ caption: "Trusted by", subheading: "" }));
+  });
+
+  it("filters the line under the heading, because it is markup", () => {
+    const [b] = sanitizeBlocks(
+      normalizeBlocks([{ id: "b1", type: "cards", props: { items: [], subheading: '<em>ok</em><script>x()</script>' } }]),
+    );
+    expect(String(b.props.subheading)).toContain("<em>ok</em>");
+    expect(String(b.props.subheading)).not.toContain("<script");
+  });
+});

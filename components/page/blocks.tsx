@@ -945,6 +945,22 @@ function Inner({
       // A different thing from a card's own title, and it had no control at
       // all: the only way to recolour "YOUR FUNNEL PACKAGE" was to not have it.
       const headingInk = str(p.headingColor) || theme.muted;
+      // Size only when one was typed, so a block that never had this control
+      // ships the identical markup it always has.
+      const headingSize = p.headingSize == null ? {} : { fontSize: num(p.headingSize, 0) };
+      // The line under the heading. Its own field, its own size and its own
+      // ink, because a heading with a sentence under it is two lines of type
+      // and one of them is not a heading.
+      const subInk = str(p.subheadingColor) || theme.muted;
+      const subSize = p.subheadingSize == null ? {} : { fontSize: num(p.subheadingSize, 0) };
+      const subheading = str(p.subheading) ? (
+        <Inline
+          as="p"
+          className="mb-3 leading-relaxed"
+          style={{ color: subInk, fontSize: "0.85rem", ...subSize }}
+          html={str(p.subheading)}
+        />
+      ) : null;
 
       // One card holding compact rows, rather than a stack of separate boxes.
       // Six boxes down the side of a hero is twice the height of the copy it
@@ -963,11 +979,12 @@ function Inner({
             {str(p.title) && (
               <div
                 className="mb-3 text-[0.68rem] uppercase tracking-[0.13em]"
-                style={{ color: headingInk }}
+                style={{ color: headingInk, ...headingSize }}
               >
                 {str(p.title)}
               </div>
             )}
+            {subheading}
             <div className="flex flex-col gap-2">
               {items.map((it, i) => (
                 <div key={i} className="flex items-baseline gap-3" style={rowStyle}>
@@ -1143,10 +1160,11 @@ function Inner({
             <Inline
               as="p"
               className="mb-3 text-[0.82rem]"
-              style={{ color: headingInk }}
+              style={{ color: headingInk, ...headingSize }}
               html={str(p.caption)}
             />
           )}
+          {subheading}
         <div className={gridClass} style={grid}>
           {items.map((it, i) => (
             <Card key={i} style={cellAt(i)} beside={beside} className={carousel ? "snap-start" : ""} tile={<IconTile item={it} p={p} colors={c} />}>

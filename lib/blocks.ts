@@ -639,6 +639,11 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     // Three separate things, because they are three separate lines on screen:
     // the heading above the cards, a card's own title, and its body copy.
     headingColor: null,
+    headingSize: null,
+    // The line under the heading, and what it looks like. Blank draws nothing.
+    subheading: "",
+    subheadingColor: null,
+    subheadingSize: null,
     cardTitleColor: null,
     cardBodyColor: null,
     // False, not null: a rule between cards is either there or it is not, and
