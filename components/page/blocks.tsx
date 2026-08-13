@@ -151,6 +151,19 @@ function cardPadCss(v: unknown): React.CSSProperties {
   return { padding: `${side("t")} ${side("r")} ${side("b")} ${side("l")}` };
 }
 
+/**
+ * Has this block been given a width of its own, at any size?
+ *
+ * Every device, not just the one being drawn: the class is static and the live
+ * page renders once, so a measure set on the phone has to be able to switch the
+ * balancer off for the markup that phone receives.
+ */
+function statesItsOwnMeasure(block: Block): boolean {
+  return (["desktop", "tablet", "mobile"] as const).some(
+    (d) => styleFor(block, d).width === "custom",
+  );
+}
+
 function Inline({
   as: Tag = "span",
   html,
@@ -369,7 +382,14 @@ function Inner({
         // set on mobile is not outranked by a utility class here.
         <Inline
           as={Tag}
-          className="font-display text-balance"
+          // `text-wrap: balance` evens the line lengths, which means it wraps
+          // NARROWER than the box on purpose — a heading given a measure of
+          // 980px broke at about 840 and looked like the width had not applied.
+          //
+          // So the balancer yields to a stated measure. Somebody who typed a
+          // number has already decided where the lines break; somebody who
+          // typed nothing gets the nicer default they have always had.
+          className={`font-display${statesItsOwnMeasure(block) ? "" : " text-balance"}`}
           style={{ whiteSpace: "pre-line" }}
           html={withLineBreaks(str(p.text))}
         />

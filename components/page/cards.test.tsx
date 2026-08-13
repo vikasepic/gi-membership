@@ -428,3 +428,35 @@ describe("what a card can now be told", () => {
     expect(out.slice(out.indexOf("The note") - 200, out.indexOf("The note"))).toContain("#00ff00");
   });
 });
+
+/**
+ * `text-wrap: balance` evens line lengths, so it wraps NARROWER than the box on
+ * purpose. A heading given a measure of 980px broke at about 840 and read as
+ * "the width did not apply". The balancer yields to a stated measure.
+ */
+describe("a heading that has been given a width", () => {
+  const heading = (style: Record<string, unknown> = {}) => {
+    const b = normalizeBlocks([{ id: "h1", type: "heading", props: { text: "A long enough heading to wrap" } }])[0];
+    return render({ ...b, style: { ...b.style, ...style } } as Block);
+  };
+
+  it("balances its lines when nothing says otherwise", () => {
+    expect(heading()).toContain("text-balance");
+  });
+
+  it("stops balancing once a measure is stated, so the width is the width", () => {
+    expect(heading({ width: "custom", maxWidthValue: 980, maxWidthUnit: "px" })).not.toContain("text-balance");
+  });
+
+  it("counts a measure set on the phone, which is the markup the phone gets", () => {
+    const b = normalizeBlocks([{ id: "h1", type: "heading", props: { text: "Wraps" } }])[0];
+    const phone = {
+      ...b,
+      responsive: {
+        tablet: { style: {}, props: {} },
+        mobile: { style: { width: "custom", maxWidthValue: 300, maxWidthUnit: "px" }, props: {} },
+      },
+    } as unknown as Block;
+    expect(render(phone)).not.toContain("text-balance");
+  });
+});
