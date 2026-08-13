@@ -24,9 +24,18 @@ const schema = z.object({
   // The old boolean still parses: a page loaded before this shipped and
   // submitted after it must not silently lose the bump someone ticked.
   bumpChoice: z
-    .union([z.enum(["none", "main", "alt"]), z.boolean(), z.string()])
+    .union([z.enum(["none", "main", "alt"]), z.boolean(), z.number(), z.string()])
     .optional()
     .transform((v) => {
+      // An index into the list the server built. Not an id, and not a price —
+      // the server rebuilds the same list from the placement and looks the
+      // index up in it, so a tampered request can only pick something it was
+      // already shown.
+      if (typeof v === "number" && Number.isInteger(v) && v >= 0) return v;
+      if (typeof v === "string" && /^\d+$/.test(v)) return Number(v);
+      // The two words the pairing used, and the boolean before that: a page
+      // loaded before this shipped and submitted after it must not silently
+      // lose the bump somebody ticked.
       if (v === "alt") return "alt" as const;
       if (v === "main") return "main" as const;
       if (v === true || v === "true" || v === "on") return "main" as const;

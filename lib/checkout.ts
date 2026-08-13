@@ -2,7 +2,8 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getStoreName, getProductBySlug, getOffer } from "@/lib/store";
-import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerForChoice, type Ownership } from "@/lib/offers";
+import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerForChoice, type Ownership } from "@/lib/offers";
+import { priceForChoice, shownPrices } from "@/lib/offer-prices";
 import type { BumpChoice } from "@/lib/bump";
 import { offerAsSoldTo, recordTrialStart } from "@/lib/trial-history";
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
@@ -223,14 +224,34 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   let bumpOffer: Offer | null = null;
   if (input.bumpChoice !== "none" && product.bumpOfferId) {
     const shown = await getOffer(product.bumpOfferId);
-    // The second price comes from THIS product, not from the offer — the same
-    // offer may be sold at two prices here and one price elsewhere. The request
-    // only says which side of it.
-    const alt = product.bumpAltOfferId ? await getOffer(product.bumpAltOfferId) : null;
-    const wantId = shown
-      ? offerForChoice(shown, alt, input.bumpChoice === "alt" ? "alt" : undefined)
-      : null;
-    const picked = wantId === shown?.id ? shown : wantId === alt?.id ? alt : null;
+    // The options come from THIS product, not from the request — the same offer
+    // may be sold at three prices here and one price elsewhere. The browser
+    // sends an INDEX into the list the server built, never an id, so the only
+    // thing a tampered request can pick is something it was already shown.
+    const options = shown ? shownPrices(shown.prices, product.bumpPriceIds ?? []) : [];
+    let picked: Offer | null = null;
+    if (typeof input.bumpChoice === "number") {
+      const price = priceForChoice(options, input.bumpChoice);
+      // Out of range REFUSES rather than falling back to the headline price.
+      // Charging somebody for a thing they did not choose is the failure this
+      // whole rule exists to prevent.
+      if (!price || !shown) {
+        return {
+          ok: false,
+          error: "That add-on option is no longer available. Choose another and try again.",
+          code: "bump_unavailable",
+        };
+      }
+      picked = offerAtPrice(shown, price);
+    } else {
+      // The old two-offer pairing, while placements are still on it. Removed
+      // with products.bump_alt_offer_id once they have all been moved.
+      const alt = product.bumpAltOfferId ? await getOffer(product.bumpAltOfferId) : null;
+      const wantId = shown
+        ? offerForChoice(shown, alt, input.bumpChoice === "alt" ? "alt" : undefined)
+        : null;
+      picked = wantId === shown?.id ? shown : wantId === alt?.id ? alt : null;
+    }
     // A free trial is a thing you get once. Resolved before anything is
     // charged, so the subscription, the amount taken today, the ownership
     // status and the CRM tags all follow the same decision.

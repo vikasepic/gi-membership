@@ -1,7 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { getProductBySlug, getOffer } from "@/lib/store";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { shouldShowOffer } from "@/lib/offers";
+import { shouldShowOffer, offerAtPrice } from "@/lib/offers";
+import { shownPrices } from "@/lib/offer-prices";
 import { ownershipFor } from "@/lib/checkout";
 import { stripePublishableKey } from "@/lib/env";
 import { CheckoutForm, type BumpSummary } from "@/components/checkout/checkout-form";
@@ -92,10 +93,26 @@ export default async function CheckoutPage({
   const bump: BumpSummary | null =
     bumpAsSold && shouldShowOffer(bumpAsSold, owned) ? buildBumpView(bumpAsSold) : null;
 
-  // The second price, if THIS product asks for one. On the product rather than
-  // the offer, so the same offer can be sold at two prices here and one price
-  // somewhere else. The browser sends "alt", never an id.
-  const altRaw = bump && product.bumpAltOfferId ? await getOffer(product.bumpAltOfferId) : null;
+  // Every way to buy the bump, in the order the placement stored them.
+  //
+  // Built here and rebuilt identically in createCheckoutIntent, from the same
+  // product row — the browser sends the INDEX of the one it was shown, never
+  // an id. If these two lists ever differ by one the buyer is charged the
+  // option beside the one they ticked, with no error anywhere, which is why
+  // both go through shownPrices and nothing else.
+  const bumpOptions: BumpSummary[] =
+    bumpAsSold && bump
+      ? shownPrices(bumpAsSold.prices, product.bumpPriceIds ?? []).map((price) =>
+          buildBumpView(offerAtPrice(bumpAsSold, price)),
+        )
+      : [];
+
+  // The old pairing, while placements are still on it. A ticked price list
+  // wins; this runs only when there is none.
+  const altRaw =
+    bump && bumpOptions.length < 2 && product.bumpAltOfferId
+      ? await getOffer(product.bumpAltOfferId)
+      : null;
   const altOffer = altRaw ? await offerAsSoldTo(user?.email ?? null, altRaw) : null;
   const bumpAlt: BumpSummary | null =
     altOffer && altOffer.active && shouldShowOffer(altOffer, owned) ? buildBumpView(altOffer) : null;
@@ -148,6 +165,7 @@ export default async function CheckoutPage({
         }}
           bump={bump}
           bumpAlt={bumpAlt}
+          bumpOptions={bumpOptions}
           publishableKey={stripePublishableKey()}
           signedInEmail={user?.email ?? null}
           defaultCountry={defaultCountry}

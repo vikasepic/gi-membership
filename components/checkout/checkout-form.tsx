@@ -7,7 +7,7 @@ import { startCheckout, previewCoupon, captureAbandonedCart } from "@/app/(store
 import { OrderBump } from "@/components/checkout/order-bump";
 import { track } from "@/components/analytics";
 import { eventIdFor } from "@/lib/analytics/events";
-import { bumpNeedsAnswer, type BumpChoice } from "@/lib/bump";
+import { needsAnswer, type BumpChoice } from "@/lib/bump";
 import type { BumpView } from "@/lib/bump";
 
 type AppliedDiscount = { label: string; discountCents: number; clamped: boolean };
@@ -55,6 +55,7 @@ export function CheckoutForm({
   product,
   bump,
   bumpAlt,
+  bumpOptions = [],
   publishableKey,
   signedInEmail,
   defaultCountry,
@@ -62,6 +63,8 @@ export function CheckoutForm({
   product: CheckoutProduct;
   bump: BumpSummary | null;
   bumpAlt?: BumpSummary | null;
+  /** Every price this placement shows, in order. The form posts an index into it. */
+  bumpOptions?: BumpSummary[];
   publishableKey: string;
   // Present when a member is already signed in — we then ask for nothing but
   // payment, since we already know who they are.
@@ -84,6 +87,7 @@ export function CheckoutForm({
         product={product}
         bump={bump}
         bumpAlt={bumpAlt ?? null}
+        bumpOptions={bumpOptions}
         signedInEmail={signedInEmail ?? null}
         defaultCountry={defaultCountry ?? ""}
       />
@@ -96,12 +100,15 @@ function Inner({
   bump,
   signedInEmail,
   bumpAlt,
+  bumpOptions = [],
   defaultCountry,
 }: {
   product: CheckoutProduct;
   bump: BumpSummary | null;
   /** The bump's second billing option, when it has one. */
   bumpAlt: BumpSummary | null;
+  /** Every price this placement shows, in order. The form posts an index into it. */
+  bumpOptions?: BumpSummary[];
   signedInEmail: string | null;
   defaultCountry: string;
 }) {
@@ -112,14 +119,24 @@ function Inner({
   const [country, setCountry] = useState(defaultCountry);
   // Which of the bump's prices was taken, if any.
   //
-  // null is "has not answered yet" and is NOT the same as "none" — with two
-  // prices nothing starts selected, so declining has to be a thing someone
-  // does rather than a thing that happens to them by not reading. A
-  // single-price bump has nothing to answer: an unticked box IS "none".
-  const [bumpChoice, setBumpChoice] = useState<BumpChoice | null>(bumpAlt ? null : "none");
-  const bumpUnanswered = bumpNeedsAnswer(!!bumpAlt, bumpChoice);
+  // Every way to buy the bump. A ticked price list wins; the old two-offer
+  // pairing is folded in behind it so one piece of code renders both.
+  const options = bumpOptions.length > 1 ? bumpOptions : bumpAlt && bump ? [bump, bumpAlt] : [];
+  // null is "has not answered yet" and is NOT the same as "none" — with a
+  // choice on the card nothing starts selected, so declining is a thing
+  // somebody does rather than a thing that happens to them by not reading. One
+  // option has nothing to answer: an unticked box IS "none".
+  const [bumpChoice, setBumpChoice] = useState<BumpChoice | null>(options.length > 1 ? null : "none");
+  const bumpUnanswered = needsAnswer(options.length, bumpChoice);
   const bumpRef = useRef<HTMLDivElement>(null);
-  const chosenBump = bumpChoice === "alt" ? bumpAlt : bumpChoice === "main" ? bump : null;
+  const chosenBump =
+    typeof bumpChoice === "number"
+      ? (options[bumpChoice] ?? null)
+      : bumpChoice === "alt"
+        ? bumpAlt
+        : bumpChoice === "main"
+          ? bump
+          : null;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -381,7 +398,16 @@ function Inner({
         {bump && (
           <div ref={bumpRef} className="flex flex-col gap-2">
             <span className="kicker text-muted">One more thing</span>
-            <OrderBump view={bump} alt={bumpAlt} choice={bumpChoice} onChoose={setBumpChoice} />
+            <OrderBump
+              view={bump}
+              // A ticked price list is passed as `options` and answers in
+              // indexes; the old pairing keeps `alt` and answers in the two
+              // words the server still understands. One component, both.
+              alt={bumpOptions.length > 1 ? null : bumpAlt}
+              options={bumpOptions.length > 1 ? bumpOptions : null}
+              choice={bumpChoice}
+              onChoose={setBumpChoice}
+            />
           </div>
         )}
 
