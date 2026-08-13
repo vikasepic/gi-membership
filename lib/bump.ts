@@ -92,7 +92,7 @@ export function saveBadge(offer: Pick<OfferLike, "billingType" | "priceCents" | 
  * control is a radio group, and a radio cannot be unticked by clicking it
  * again — so declining has to be something you can select.
  */
-export type BumpChoice = "none" | "main" | "alt";
+export type BumpChoice = "none" | "main" | "alt" | number;
 
 /**
  * Whether the buyer still owes an answer about the bump.
@@ -105,6 +105,17 @@ export type BumpChoice = "none" | "main" | "alt";
  */
 export function bumpNeedsAnswer(hasAlt: boolean, choice: BumpChoice | null): boolean {
   return hasAlt && choice === null;
+}
+
+/**
+ * The same rule, counted rather than paired.
+ *
+ * An offer holds its own list of prices now and a placement chooses which to
+ * show, so "is there an alternative" becomes "is there more than one option".
+ * One option has nothing to answer — an unticked box IS "none".
+ */
+export function needsAnswer(optionCount: number, choice: BumpChoice | null): boolean {
+  return optionCount > 1 && choice === null;
 }
 
 export type BumpView = {

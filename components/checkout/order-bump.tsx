@@ -36,6 +36,7 @@ function Check({ className = "", color }: { className?: string; color?: string }
 export function OrderBump({
   view,
   alt = null,
+  options = null,
   choice,
   onChoose,
   /** Tighter spacing for the admin preview pane. */
@@ -49,8 +50,20 @@ export function OrderBump({
    * say yes to. With two, ticking is not enough, so the card grows a radio
    * group and "No thanks" becomes an option someone has to be able to get back
    * to — a radio cannot be unticked by clicking it again.
+   *
+   * Superseded by `options`, which says the same thing for any number. Kept
+   * because it is what the live checkout still passes.
    */
   alt?: BumpView | null;
+  /**
+   * Every way to buy this, in the order the placement stored them.
+   *
+   * The generalisation of `alt`: an offer holds its own list of prices now, and
+   * a placement chooses which of them to show, so the card can carry two or
+   * four. `alt` is folded into this below, so there is one code path and the
+   * two-price layout that already exists is the three-item case of it.
+   */
+  options?: BumpView[] | null;
   /** null while nobody has answered — nothing is selected and nothing is implied. */
   choice: BumpChoice | null;
   onChoose: (next: BumpChoice) => void;
@@ -60,6 +73,18 @@ export function OrderBump({
   const descId = `${id}-desc`;
   const { accent, ink } = view;
   const checked = choice !== "none" && choice !== null;
+  // One list, however it arrived. A single price stays a tickbox — there is
+  // nothing to choose between — and anything more is a radio group.
+  const list = options && options.length > 0 ? options : alt ? [view, alt] : [];
+  const choosing = list.length > 1;
+  // Answers in the caller's own language. The live checkout posts "main" and
+  // "alt" and its server reads them, so a component that started replying with
+  // 0 and 1 would break the money path on the way past. Callers that pass a
+  // list get indexes; the two-price caller keeps the two words until the
+  // checkout itself moves over.
+  const legacy = !(options && options.length > 0);
+  const answer = (i: number): BumpChoice => (legacy ? (i === 0 ? "main" : "alt") : i);
+  const isPicked = (i: number) => choice === i || choice === answer(i);
 
   return (
     <div
@@ -100,7 +125,7 @@ export function OrderBump({
       )}
 
       <div className={`flex items-start gap-3 ${compact ? "p-3" : "p-4"}`}>
-        {!alt && (
+        {!choosing && (
           <input
             id={id}
             type="checkbox"
@@ -137,7 +162,7 @@ export function OrderBump({
 
                 Hidden when there are two prices: each option carries its own
                 below, and a third figure up here would be a price nobody chose. */}
-            <span className={`flex flex-wrap items-baseline gap-x-2 tabular-nums @md:max-w-[46%] @md:flex-col @md:items-end @md:gap-x-0 @md:text-right ${alt ? "hidden" : ""}`}>
+            <span className={`flex flex-wrap items-baseline gap-x-2 tabular-nums @md:max-w-[46%] @md:flex-col @md:items-end @md:gap-x-0 @md:text-right ${choosing ? "hidden" : ""}`}>
               {view.wasLabel && (
                 <span
                   className={`text-muted line-through ${compact ? "text-[0.75rem]" : "text-sm"}`}
@@ -193,34 +218,26 @@ export function OrderBump({
             </p>
           )}
 
-          {alt && (
+          {choosing && (
             <fieldset className="flex flex-col gap-1.5 border-0 p-0">
               <legend className="sr-only">{view.headline} — choose how you pay</legend>
-              <Option
-                name={id}
-                // The plan price, not the charge-now one: through a trial both
-                // options are $0 today, and a choice between two $0s is not a
-                // choice anyone can make.
-                label={view.planLabel ?? view.nowLabel}
-                terms={optionTerms(view)}
-                was={view.wasLabel}
-                badge={view.saveBadge}
-                selected={choice === "main"}
-                accent={accent}
-                compact={compact}
-                onSelect={() => onChoose("main")}
-              />
-              <Option
-                name={id}
-                label={alt.planLabel ?? alt.nowLabel}
-                terms={optionTerms(alt)}
-                was={alt.wasLabel}
-                badge={alt.saveBadge}
-                selected={choice === "alt"}
-                accent={accent}
-                compact={compact}
-                onSelect={() => onChoose("alt")}
-              />
+              {list.map((option, i) => (
+                <Option
+                  key={i}
+                  name={id}
+                  // The plan price, not the charge-now one: through a trial
+                  // every option is $0 today, and a choice between two $0s is
+                  // not a choice anyone can make.
+                  label={option.planLabel ?? option.nowLabel}
+                  terms={optionTerms(option)}
+                  was={option.wasLabel}
+                  badge={option.saveBadge}
+                  selected={isPicked(i)}
+                  accent={accent}
+                  compact={compact}
+                  onSelect={() => onChoose(answer(i))}
+                />
+              ))}
               {/* Last, and nothing is selected until someone does. A decline
                   offered first is offered before the reason to accept, and a
                   decline pre-selected is one the buyer never actually made. */}

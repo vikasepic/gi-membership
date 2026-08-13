@@ -532,7 +532,7 @@ describe("the Save button", () => {
     const { wasClosed } = mountWithSave(async () => {
       wrote++;
     });
-    const btn = byText("button", "Save")!;
+    const btn = byText("button", "Save") as HTMLButtonElement;
     expect(btn, "the button says Save when it can").toBeTruthy();
     await act(async () => btn.click());
     expect(wrote).toBe(1);
@@ -545,7 +545,7 @@ describe("the Save button", () => {
     const { wasClosed } = mountWithSave(async () => {
       throw new Error("Hero: someone else changed this section");
     });
-    await act(async () => byText("button", "Save")!.click());
+    await act(async () => (byText("button", "Save") as HTMLButtonElement).click());
     expect(wasClosed()).toBe(false);
     expect(document.body.textContent).toContain("someone else changed this section");
   });
