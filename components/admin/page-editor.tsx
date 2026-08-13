@@ -101,8 +101,16 @@ export function PageEditor({
    * section discarding another — but the writer should not have to think about
    * which rows are dirty. Only changed sections are sent.
    */
-  async function saveAll() {
-    if (dirtyKeys.length === 0 || saving) return;
+  /**
+   * Write every changed section, and SAY whether it worked.
+   *
+   * It set an error into state and returned quietly before, which is fine for
+   * the button beside the message. The builder needs the answer itself: it
+   * closes on success and must stay open on failure, and state set during an
+   * await is not readable by the caller that awaited it.
+   */
+  async function saveAll(): Promise<string | null> {
+    if (dirtyKeys.length === 0 || saving) return null;
     setSaving(true);
     setSaveError(null);
     for (const key of dirtyKeys) {
@@ -128,9 +136,10 @@ export function PageEditor({
       fd.append("baseUpdatedAt", row.updatedAt ?? "");
       const res = await saveSectionAction({}, fd);
       if (res.error) {
-        setSaveError(`${def?.title ?? row.sectionKey}: ${res.error}`);
+        const message = `${def?.title ?? row.sectionKey}: ${res.error}`;
+        setSaveError(message);
         setSaving(false);
-        return;
+        return message;
       }
       setDirty((d) => ({ ...d, [key]: false }));
       // Move the baseline forward, or the next save compares against a stamp
@@ -141,6 +150,7 @@ export function PageEditor({
     }
     setSaving(false);
     setSavedAt(Date.now());
+    return null;
   }
 
   // The scroll-into-view that used to run here is gone with the accordion:
@@ -239,7 +249,7 @@ export function PageEditor({
       <div className="sticky top-2 z-30 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface/95 px-3 py-2 backdrop-blur">
         <button
           type="button"
-          onClick={saveAll}
+          onClick={() => void saveAll()}
           disabled={saving || dirtyKeys.length === 0}
           className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
         >
@@ -310,6 +320,12 @@ export function PageEditor({
             clip={clip}
             onContext={sectionMenu}
             preview={preview}
+            // Thrown rather than returned, because the builder's button reads
+            // "did this finish" and nothing else.
+            onSave={async () => {
+              const failed = await saveAll();
+              if (failed) throw new Error(failed);
+            }}
           />
         ) : (
           <p className="p-6 text-sm text-muted">Pick a section on the left.</p>
@@ -432,6 +448,7 @@ function SectionPanel({
   preview,
   owner,
   store,
+  onSave,
 }: {
   row: SectionRow;
   money: PageMoney;
@@ -442,6 +459,8 @@ function SectionPanel({
   preview?: SitePreview;
   owner: OwnerType;
   store?: StoreRender;
+  /** Writes every changed section. Handed to the builder so it can finish. */
+  onSave: () => Promise<void>;
 }) {
   const def = sectionDef(row.sectionKey)!;
   const content = useMemo<Draft>(
@@ -498,6 +517,7 @@ function SectionPanel({
           preview={preview}
           owner={owner}
           store={store}
+          onSave={onSave}
         />
 
       </div>
@@ -550,6 +570,7 @@ function BlockCanvasField({
   onChange,
   preview,
   owner,
+  onSave,
 }: {
   row: SectionRow;
   title: string;
@@ -559,6 +580,7 @@ function BlockCanvasField({
   /** Passed through to the tray: the storefront blocks are one page's only. */
   owner: OwnerType;
   store?: StoreRender;
+  onSave: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   // The global designs this store has, so a pointer on the canvas draws what it
@@ -627,6 +649,7 @@ function BlockCanvasField({
           section={section}
           onChange={onChange}
           onClose={() => setOpen(false)}
+          onSave={onSave}
           preview={preview}
           owner={owner}
           globals={globals}

@@ -180,15 +180,22 @@ describe("what a control writes", () => {
 
 describe("leaving the builder", () => {
   it("offers one way out, not two that do the same thing", () => {
-    // "Back to the page" and "Done" both called onClose, and neither saved —
-    // the page's own Save persists the draft. A secondary beside a primary
-    // reads as "leave" beside "keep", so one of them looked like losing work.
+    // "Back to the page" and "Done" both called onClose. A secondary beside a
+    // primary reads as "leave" beside "keep", so one of them looked like
+    // losing work.
     mount([newBlock("heading")]);
-    expect(byText("button", "Done")).toBeTruthy();
     const ways = [...document.querySelectorAll("header button")].filter((b) =>
-      /back|done|close/i.test(b.textContent ?? ""),
+      /back|done|close|^save$/i.test(b.textContent ?? ""),
     );
     expect(ways).toHaveLength(1);
+  });
+
+  it("says Done when there is nothing here to save with", () => {
+    // The template editor and the nested global editor have their own idea of
+    // what saving means. A button that says Save and saves nothing is worse
+    // than one that says Done.
+    mount([newBlock("heading")]);
+    expect(byText("button", "Done")).toBeTruthy();
   });
 });
 
@@ -487,5 +494,59 @@ describe("undo and redo", () => {
     const before = editor.blocks;
     press("z", { meta: true });
     expect(editor.blocks).toBe(before);
+  });
+});
+
+/**
+ * Saving from inside the builder.
+ *
+ * "Done" sent you back to a page still holding unsaved work, with a Save
+ * button of its own — two steps, and the second one easy to walk away from.
+ */
+describe("the Save button", () => {
+  function mountWithSave(onSave: () => Promise<void>) {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    mounted = root;
+    let closed = false;
+    act(() => {
+      root.render(
+        <BlockEditor
+          blocks={[newBlock("heading")]}
+          theme={theme}
+          title="Hero"
+          onChange={() => {}}
+          onClose={() => {
+            closed = true;
+          }}
+          onSave={onSave}
+        />,
+      );
+    });
+    return { wasClosed: () => closed };
+  }
+
+  it("says Save, and writes when pressed", async () => {
+    let wrote = 0;
+    const { wasClosed } = mountWithSave(async () => {
+      wrote++;
+    });
+    const btn = byText("button", "Save")!;
+    expect(btn, "the button says Save when it can").toBeTruthy();
+    await act(async () => btn.click());
+    expect(wrote).toBe(1);
+    expect(wasClosed(), "and closes onto a saved page").toBe(true);
+  });
+
+  it("stays open and says why when the write fails", async () => {
+    // Closing onto a page that did not write is how an afternoon is lost while
+    // the screen says it went fine.
+    const { wasClosed } = mountWithSave(async () => {
+      throw new Error("Hero: someone else changed this section");
+    });
+    await act(async () => byText("button", "Save")!.click());
+    expect(wasClosed()).toBe(false);
+    expect(document.body.textContent).toContain("someone else changed this section");
   });
 });

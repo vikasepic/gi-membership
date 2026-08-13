@@ -137,6 +137,7 @@ export function BlockEditor({
   section,
   onChange,
   onClose,
+  onSave,
   preview,
   owner = "product",
   store,
@@ -146,6 +147,15 @@ export function BlockEditor({
   blocks: Block[];
   theme: BandTheme;
   title: string;
+  /**
+   * Write everything, from in here.
+   *
+   * Optional: the two screens that open this without one — the template editor
+   * and the nested global editor — have their own idea of what saving means,
+   * and a button that says Save while saving nothing is worse than one that
+   * says Done.
+   */
+  onSave?: () => Promise<void>;
   /**
    * Which kind of page this band belongs to.
    *
@@ -458,6 +468,9 @@ export function BlockEditor({
   }
 
   // The library popup, and whether the export has just been copied.
+  // Saving from in here, and what to say when it does not work.
+  const [busy, setBusy] = useState(false);
+  const [saveFailed, setSaveFailed] = useState<string | null>(null);
   const [library, setLibrary] = useState(false);
   const [exported, setExported] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -752,19 +765,44 @@ export function BlockEditor({
         <span className="text-xs text-muted">
           {blocks.length === 0 ? "Empty" : `${blocks.length} block${blocks.length === 1 ? "" : "s"}`}
         </span>
+        {saveFailed && (
+          <span className="max-w-[28rem] truncate text-xs text-primary" title={saveFailed}>
+            {saveFailed}
+          </span>
+        )}
         {/* One button, not two. "Back to the page" sat beside this one and
-            called the same onClose — no save on either, because edits stream
-            into the draft and the page's own Save is what persists them. A
-            secondary beside a primary reads as "leave" beside "keep", so the
-            pair taught people that one of the two loses work. "Done" survives
-            because it is the one that says nothing was lost. Escape is the
-            other way out and still needs no label — see the key handler. */}
+            called the same onClose, and a secondary beside a primary reads as
+            "leave" beside "keep" — so the pair taught people that one of the
+            two loses work. Escape is the other way out and still needs no
+            label; see the key handler.
+
+            It says Save now, and means it. Edits stream into the draft either
+            way, but "Done" then sent you back to a page still holding unsaved
+            work with a Save button of its own — two steps, and the second one
+            easy to walk away from. It only says Save where there is something
+            to save it with. */}
         <button
           type="button"
-          onClick={onClose}
-          className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg hover:bg-primary-hover"
+          onClick={async () => {
+            if (!onSave) return onClose();
+            if (busy) return;
+            setBusy(true);
+            setSaveFailed(null);
+            try {
+              await onSave();
+              onClose();
+            } catch (e) {
+              // Left OPEN on failure, with the reason. Closing onto a page that
+              // did not write is how an afternoon's work is lost while the
+              // screen says it went fine.
+              setSaveFailed(e instanceof Error ? e.message : "That did not save. Try again.");
+            }
+            setBusy(false);
+          }}
+          disabled={busy}
+          className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-60"
         >
-          Done
+          {onSave ? (busy ? "Saving…" : "Save") : "Done"}
         </button>
       </header>
 
