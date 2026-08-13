@@ -614,6 +614,9 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     expiredMessage: "",
   },
   prices: {
+    // Blank means "whatever this page is selling", which is what an offer's own
+    // page wants. Naming one lets a product page — or any page — sell an offer.
+    offerId: "",
     heading: "",
     note: "",
     acceptLabel: "Get instant access",

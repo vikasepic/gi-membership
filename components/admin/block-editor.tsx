@@ -366,6 +366,22 @@ export function BlockEditor({
   };
 
   const [families, setFamilies] = useState<string[]>([]);
+  // The store's offers, so a Ways to pay block can name which one it sells.
+  // Fetched here rather than threaded from the server for the same reason the
+  // fonts are: it is one list, wanted by one control, on one screen.
+  const [offerOptions, setOfferOptions] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void fetch("/api/offers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { offers?: { id: string; name: string }[] } | null) => {
+        if (alive && j?.offers) setOfferOptions(j.offers);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   useEffect(() => {
     let alive = true;
     void fetch("/api/fonts")
@@ -623,7 +639,7 @@ export function BlockEditor({
         // does not go through `controlsFor`, which is the only place a control's
         // `when` was ever evaluated.
         { content: [], style: columnControls(selected, rowIsGrid(column.row, device)), advanced: [] }
-      : controlsFor(selected, families);
+      : controlsFor(selected, families, offerOptions);
 
   /**
    * Select anything on the canvas or in the tree.

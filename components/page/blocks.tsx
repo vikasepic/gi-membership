@@ -93,6 +93,14 @@ export type BlockMoney = {
   currency?: string;
   /** Where the Ways to pay button goes; the chosen price is appended to it. */
   buyHref?: string | null;
+  /**
+   * Prices for the offers this page's blocks NAME, keyed by offer id.
+   *
+   * A Ways to pay block on an offer's own page draws the page's prices above;
+   * one that names an offer draws from here. Resolved server-side in one pass —
+   * see lib/block-offers.ts — so the renderer never asks the database anything.
+   */
+  byOffer?: Record<string, { prices: OfferPrice[]; currency: string; buyHref: string }>;
 };
 
 /**
@@ -422,7 +430,11 @@ function Inner({
       );
 
     case "prices": {
-      const list = money?.prices ?? [];
+      // Named offer first, then whatever this page is already selling.
+      const named = str(p.offerId) ? money?.byOffer?.[str(p.offerId)] : undefined;
+      const list = named?.prices ?? money?.prices ?? [];
+      const currency = named?.currency ?? money?.currency ?? "usd";
+      const href = named?.buyHref ?? money?.buyHref ?? null;
       if (list.length === 0) {
         // Nothing to choose between yet. Said out loud rather than drawn as an
         // empty box: on a page being built this is a step that has not been
@@ -432,7 +444,9 @@ function Inner({
             className="rounded-xl border border-dashed px-3 py-4 text-center text-sm"
             style={{ color: theme.muted, borderColor: theme.rule }}
           >
-            The ways to pay appear here once this page is attached to an offer.
+            {str(p.offerId)
+              ? "That offer has no price showing, or is switched off."
+              : "Pick which offer this sells on the Content tab — or leave it blank on an offer's own page."}
           </p>
         );
       }
@@ -442,12 +456,12 @@ function Inner({
         <div data-ways-to-pay>
           <PriceChoice
             prices={list}
-            currency={money?.currency ?? "usd"}
+            currency={currency}
             heading={str(p.heading)}
             note={str(p.note)}
             acceptLabel={str(p.acceptLabel, "Get instant access")}
             declineLabel={str(p.declineLabel)}
-            href={money?.buyHref ?? null}
+            href={href}
             band={{ fg: c.fg, muted: theme.muted, rule: theme.rule, accent: c.accent, panel: theme.panel }}
             s={{
               optionBg: str(p.optionBg) || null,

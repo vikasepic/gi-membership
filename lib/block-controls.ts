@@ -412,6 +412,13 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
 
   prices: {
     content: [
+      {
+        kind: "select",
+        key: "offerId",
+        label: "Sells",
+        hint: "Blank means whatever this page is already selling. Name one to put any offer's prices on any page.",
+        options: [["", "This page's own"]],
+      },
       { kind: "text", key: "heading", label: "Heading", hint: "Optional — a line above the choices." },
       { kind: "textarea", key: "note", label: "Note", rows: 2, hint: "Under the button. Blank draws nothing." },
       { kind: "text", key: "acceptLabel", label: "Button" },
@@ -1349,10 +1356,12 @@ export function controlsFor(
   block: Block,
   /** Families installed on this site, for the Font select. */
   fonts: readonly string[] = [],
+  /** The store's offers, for a block that names which one it sells. */
+  offers: readonly { id: string; name: string }[] = [],
 ): { content: Control[]; style: Control[]; advanced: Control[] } {
   const defs = BLOCK_CONTROLS[block.type];
   const keep = (list: Control[]) => list.filter((c) => !c.when || c.when(block));
-  const shape = (c: Control) => withFonts(forBlock(c, block), fonts);
+  const shape = (c: Control) => withOffers(withFonts(forBlock(c, block), fonts), offers);
   return {
     content: keep(defs.content).map(shape),
     style: keep(defs.style).map(shape),
@@ -1362,6 +1371,22 @@ export function controlsFor(
 
 /** The Font select, filled in with what the site actually has. */
 const FONT_KEYS = new Set(["fontFamily", "digitFont", "labelFont", "headingFont", "subheadingFont"]);
+
+/**
+ * The offer select, filled in with what the store has.
+ *
+ * Same shape as the font one: the control is declared with a single "the page's
+ * own" option, and the list arrives when it is handed out. A block cannot
+ * import the database, and a select that offered nothing would look like a
+ * store with no offers.
+ */
+function withOffers(c: Control, offers: readonly { id: string; name: string }[]): Control {
+  if (isGroup(c) || c.kind !== "select" || c.key !== "offerId") return c;
+  return {
+    ...c,
+    options: [["", "This page's own"], ...offers.map((o) => [o.id, o.name] as [string, string])],
+  };
+}
 
 function withFonts(c: Control, fonts: readonly string[]): Control {
   // Every font picker, not just the block-level one. The countdown has two of

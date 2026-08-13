@@ -49,6 +49,8 @@ export type PageMoney = {
   /** Where the Ways to pay button goes, with the chosen price appended. */
   buyHref?: string | null;
   currency?: string;
+  /** Prices for the offers this page's blocks NAME — see lib/block-offers.ts. */
+  byOffer?: Record<string, { prices: OfferPrice[]; currency: string; buyHref: string }>;
   /** e.g. "/month". */
   termsLabel: string | null;
   /** What is actually taken today, where that differs — "$0" during a trial. */
