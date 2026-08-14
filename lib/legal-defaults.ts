@@ -27,6 +27,22 @@ export const LEGAL_DEFAULTS = {
   /** Where customers reach a human. */
   contactEmail: "support@greaterinside.com",
 
+  /**
+   * The policies, where the company actually publishes them.
+   *
+   * This store's legal pages live on greaterinside.com and are maintained
+   * there. The in-app ones stay for anything that links to them directly, but
+   * the footer — the one place a buyer goes looking — points at the real ones,
+   * because two versions of a refund policy is one more than anybody wants to
+   * keep in step.
+   *
+   * Blank means "use the page this app renders", so a store that has no
+   * external policies still has working links.
+   */
+  privacyUrl: "https://greaterinside.com/privacy-policy/",
+  termsUrl: "https://greaterinside.com/terms-and-conditions/",
+  earningsUrl: "https://greaterinside.com/earnings-disclaimer/",
+
   /** Where privacy and data requests go. May be the same as contactEmail. */
   privacyEmail: "privacy@greaterinside.com",
 

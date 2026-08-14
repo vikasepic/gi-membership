@@ -95,6 +95,11 @@ export const SETTINGS_SCHEMA = z.object({
   vatNumber: z.string().trim().max(80).default(""),
   contactEmail: z.string().trim().max(160).default(LEGAL_DEFAULTS.contactEmail),
   privacyEmail: z.string().trim().max(160).default(LEGAL_DEFAULTS.privacyEmail),
+  // The policies as published. Blank falls back to the page this app renders,
+  // so a store with no external policies still has working footer links.
+  privacyUrl: optionalUrl.default(LEGAL_DEFAULTS.privacyUrl),
+  termsUrl: optionalUrl.default(LEGAL_DEFAULTS.termsUrl),
+  earningsUrl: optionalUrl.default(LEGAL_DEFAULTS.earningsUrl),
   // Coerced because a form sends a string. Floor of 14: below that is not
   // generally enforceable against EU/UK consumers, so the field refuses to
   // state a promise the law would override.
@@ -168,6 +173,9 @@ export const GROUP_FIELDS: Record<SettingsGroupKey, readonly (keyof Settings)[]>
     "companyNumber",
     "vatNumber",
     "privacyEmail",
+    "privacyUrl",
+    "termsUrl",
+    "earningsUrl",
     "refundWindowDays",
     "policiesUpdated",
   ],

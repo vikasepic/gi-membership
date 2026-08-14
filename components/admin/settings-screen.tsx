@@ -266,6 +266,25 @@ function LegalFields({ s, errors }: FieldsProps) {
         </div>
       </Group>
 
+      <Group
+        label="Where the policies live"
+        hint="the footer links to these. Leave one blank and the page this app renders is used instead — never a dead link."
+      >
+        <Field label="Terms &amp; conditions" hint="a full address, or blank for the built-in page" error={errors.termsUrl}>
+          <input name="termsUrl" defaultValue={s.termsUrl} className={input} placeholder="/terms" />
+        </Field>
+        <Field label="Privacy policy" error={errors.privacyUrl}>
+          <input name="privacyUrl" defaultValue={s.privacyUrl} className={input} placeholder="/privacy" />
+        </Field>
+        <Field
+          label="Earnings disclaimer"
+          hint="there is no built-in page for this one, so blank simply leaves the link off"
+          error={errors.earningsUrl}
+        >
+          <input name="earningsUrl" defaultValue={s.earningsUrl} className={input} />
+        </Field>
+      </Group>
+
       <Group label="What the store promises" hint="every one of these is quoted back to a buyer on a policy page">
         <div className={row}>
           <Field label="Governing law" hint="e.g. England and Wales" error={errors.governingLaw}>

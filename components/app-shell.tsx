@@ -83,6 +83,22 @@ export function AppShell({
       <Logo className={className} />
     );
 
+  // The policies, as published. A store that has named an external one links
+  // out to it; one that has not keeps the page this app renders, so the footer
+  // is never a dead link either way.
+  //
+  // The earnings disclaimer appears only where there is one — it is not a page
+  // this app has, so a blank setting means the link simply is not there rather
+  // than pointing at a 404.
+  const policies = [
+    { label: "Terms", href: settings.termsUrl || "/terms", external: Boolean(settings.termsUrl) },
+    { label: "Privacy", href: settings.privacyUrl || "/privacy", external: Boolean(settings.privacyUrl) },
+    { label: "Refunds", href: "/refunds", external: false },
+    ...(settings.earningsUrl
+      ? [{ label: "Earnings disclaimer", href: settings.earningsUrl, external: true }]
+      : []),
+  ];
+
   const socials = [
     { href: settings.socialInstagram, label: "Instagram" },
     { href: settings.socialYoutube, label: "YouTube" },
@@ -211,9 +227,28 @@ export function AppShell({
         <div className="flex flex-col gap-4 border-t border-border pt-6 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
           <Mark className={`h-5 w-auto text-fg${hook(SHELL_CLASS.brandFooter)}`} />
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <Link href="/terms" className="hover:text-fg">Terms</Link>
-            <Link href="/privacy" className="hover:text-fg">Privacy</Link>
-            <Link href="/refunds" className="hover:text-fg">Refunds</Link>
+            {policies.map((l) =>
+              // An external policy is a real link out; the in-app one is a
+              // route. `Link` prefetching an address on another domain does
+              // nothing useful, and `target` on an internal page is a tab
+              // nobody asked for — so the two are drawn differently rather
+              // than being forced into one shape.
+              l.external ? (
+                <a
+                  key={l.label}
+                  href={l.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-fg"
+                >
+                  {l.label}
+                </a>
+              ) : (
+                <Link key={l.label} href={l.href} className="hover:text-fg">
+                  {l.label}
+                </Link>
+              ),
+            )}
             {socials.map((l) => (
               <a
                 key={l.label}
