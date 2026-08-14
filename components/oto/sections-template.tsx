@@ -1,6 +1,8 @@
 import { OtoActions, type OtoView } from "@/components/oto/shell";
 import { OtoStickyBar } from "@/components/oto/sticky-bar";
 import { SalesPage } from "@/components/page/sales-page";
+import { offersForRows } from "@/lib/block-offers";
+import { livePrices } from "@/lib/offer-prices";
 import type { SectionRow } from "@/lib/page-sections";
 import type { GlobalBlocks } from "@/lib/section-to-blocks";
 import { money } from "@/lib/money";
@@ -14,7 +16,7 @@ import { money } from "@/lib/money";
  * Accepting stays the shell's: layout is the section's business, the money path
  * is not. The button label is editable and the action behind it is not.
  */
-export function SectionsOto({
+export async function SectionsOto({
   view,
   rows,
   globals,
@@ -43,6 +45,14 @@ export function SectionsOto({
           altPriceLabel: alt ? money(alt.priceCents, alt.currency) : null,
           altTermsLabel: alt?.interval ? `/${alt.interval}` : null,
           trialLabel: offer.trialDays ? `${offer.trialDays} days` : null,
+          // The offer's real prices, and the offers any block on this page
+          // names. Without them a Ways to pay block here says the offer has no
+          // price showing — which it says on the upsell, the one page where
+          // somebody has already got their card out.
+          prices: livePrices(offer.prices),
+          currency: offer.currency,
+          buyHref: `/checkout/offer?offer=${offer.id}`,
+          byOffer: await offersForRows(rows),
         }}
         // The band's own ink goes with it: the second price is an outlined
         // button, and an outline has to be drawn in a colour the band reads

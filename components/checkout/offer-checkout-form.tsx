@@ -114,19 +114,10 @@ function Inner({
         </div>
       </div>
 
-      <fieldset className="flex flex-col gap-3">
-        <legend className="kicker mb-2 text-muted">Payment method</legend>
-        <PaymentElement />
-      </fieldset>
-
-      {error && (
-        <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">
-          {error}
-        </p>
-      )}
-
-      {/* The choice again, here, because a page that takes a card is the last
-          honest place to change your mind. Preselected from the sales page. */}
+      {/* Above the payment methods, because what you are buying is a question
+          that comes before how you would like to pay for it — and a choice
+          underneath the card fields is one people meet after they have already
+          decided they are finished. */}
       {prices.length > 1 && (
         <fieldset className="flex flex-col gap-2 border-0 p-0">
           <legend className="kicker mb-1 text-muted">How you want to pay</legend>
@@ -158,6 +149,17 @@ function Inner({
             </label>
           ))}
         </fieldset>
+      )}
+
+      <fieldset className="flex flex-col gap-3">
+        <legend className="kicker mb-2 text-muted">Payment method</legend>
+        <PaymentElement />
+      </fieldset>
+
+      {error && (
+        <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">
+          {error}
+        </p>
       )}
 
       <div className="flex items-center justify-between border-t border-border pt-4">

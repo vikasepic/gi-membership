@@ -45,9 +45,14 @@ export function StickyBarBlock({
   const [show, setShow] = useState(false);
 
   useEffect(() => {
+    // Named first, then the choice, then the first thing that buys. The last
+    // of those is what makes a blank field work on a page that has no Ways to
+    // pay block on it — which is most pages, and the call to action is the
+    // thing a bar like this has always meant.
     const target = () =>
       (scrollTo.trim() ? document.getElementById(scrollTo.trim()) : null) ??
-      document.querySelector<HTMLElement>("[data-ways-to-pay]");
+      document.querySelector<HTMLElement>("[data-ways-to-pay]") ??
+      document.querySelector<HTMLElement>("[data-buy]");
     const check = () => {
       const el = target();
       if (!el) {
@@ -88,7 +93,8 @@ export function StickyBarBlock({
           onClick={() => {
             const el =
               (scrollTo.trim() ? document.getElementById(scrollTo.trim()) : null) ??
-              document.querySelector<HTMLElement>("[data-ways-to-pay]");
+              document.querySelector<HTMLElement>("[data-ways-to-pay]") ??
+              document.querySelector<HTMLElement>("[data-buy]");
             el?.scrollIntoView({ behavior: "smooth", block: "center" });
             // Focus the first radio once it is in view, so the keyboard and a
             // screen reader arrive where the eye does.

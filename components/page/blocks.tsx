@@ -470,7 +470,6 @@ function Inner({
             heading={str(p.heading)}
             note={str(p.note)}
             acceptLabel={str(p.acceptLabel, "Get instant access")}
-            declineLabel={str(p.declineLabel)}
             href={href}
             band={{ fg: c.fg, muted: theme.muted, rule: theme.rule, accent: c.accent, panel: theme.panel }}
             s={{
@@ -484,12 +483,10 @@ function Inner({
               termsColor: str(p.termsColor) || null,
               headingColor: str(p.headingColor) || null,
               noteColor: str(p.noteColor) || null,
-              declineColor: str(p.declineColor) || null,
               headingSize: p.headingSize == null ? null : num(p.headingSize, 0),
               priceSize: p.priceSize == null ? null : num(p.priceSize, 0),
               termsSize: p.termsSize == null ? null : num(p.termsSize, 0),
               noteSize: p.noteSize == null ? null : num(p.noteSize, 0),
-              declineSize: p.declineSize == null ? null : num(p.declineSize, 0),
               buttonSize: p.buttonSize == null ? null : num(p.buttonSize, 0),
               align: (str(p.align, "center") as "left" | "center" | "right"),
               badgeBg: str(p.badgeBg) || null,
@@ -803,7 +800,10 @@ function Inner({
       };
       // A buy button with no control to render is plain text — a sales page
       // nobody can buy from. Rendered through the page's own control instead.
-      if (str(p.action, "link") === "buy" && cta) return <>{cta(label, theme)}</>;
+      // Named in the DOM so a sticky bar can find the call to action without
+      // anybody having to type an id — the same way the Ways to pay block is.
+      if (str(p.action, "link") === "buy" && cta)
+        return <span data-buy>{cta(label, theme)}</span>;
       const link = str(p.link);
       return link ? (
         <a href={link} className={BUTTON_CLASS} style={style}>

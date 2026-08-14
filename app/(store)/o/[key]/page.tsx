@@ -9,6 +9,7 @@ import { resolveGlobals } from "@/lib/templates-store";
 import { SalesPage } from "@/components/page/sales-page";
 import { money } from "@/lib/money";
 import { livePrices } from "@/lib/offer-prices";
+import { offersForRows } from "@/lib/block-offers";
 import { TrackView } from "@/components/track-view";
 import { BuyLink } from "@/components/buy-link";
 import { buildBumpView } from "@/lib/bump";
@@ -90,6 +91,10 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
           prices: livePrices(offer.prices),
           currency: offer.currency,
           buyHref: `/checkout/offer?offer=${offer.id}`,
+          // And any OTHER offer a block on this page names. The page's own
+          // prices above are the common case; this is the block that sells
+          // something else from here.
+          byOffer: await offersForRows(rows),
         }}
         cta={(label, theme) =>
           alreadyHas ? (

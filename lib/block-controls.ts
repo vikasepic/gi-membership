@@ -422,7 +422,6 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "text", key: "heading", label: "Heading", hint: "Optional — a line above the choices." },
       { kind: "textarea", key: "note", label: "Note", rows: 2, hint: "Under the button. Blank draws nothing." },
       { kind: "text", key: "acceptLabel", label: "Button" },
-      { kind: "text", key: "declineLabel", label: "Decline link", hint: "Blank hides it — a sales page usually has nowhere to decline TO." },
       { kind: "toggle", key: "showTerms", label: "Show the terms under each price" },
       { kind: "toggle", key: "showCompareAt", label: "Show the was-price" },
       { kind: "toggle", key: "showSaving", label: "Show what the longer term saves" },
@@ -459,8 +458,6 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "number", key: "headingSize", label: "Heading size", min: 10, max: 48, step: 1, unit: "px" },
       { kind: "color", key: "noteColor", label: "Note", hint: "Unset follows the band." },
       { kind: "number", key: "noteSize", label: "Note size", min: 8, max: 32, step: 1, unit: "px" },
-      { kind: "color", key: "declineColor", label: "Decline link", hint: "Unset follows the band." },
-      { kind: "number", key: "declineSize", label: "Decline size", min: 8, max: 32, step: 1, unit: "px" },
 
       group("Saving badge"),
       { kind: "color", key: "badgeBg", label: "Background" },
@@ -482,7 +479,7 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         kind: "text",
         key: "scrollTo",
         label: "Scrolls to",
-        hint: "The CSS id of the block to jump to — set one on that block's Advanced tab. Blank finds the Ways to pay block.",
+        hint: "Blank aims at the first Ways to pay block, and then at the first buy button — which is the call to action on nearly every page. To send it somewhere else, put a CSS id on that block or section (Advanced tab) and type it here.",
       },
       { kind: "toggle", key: "showPrice", label: "Show the price beside the button" },
       {

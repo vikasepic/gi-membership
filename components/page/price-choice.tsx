@@ -38,12 +38,10 @@ export type PriceChoiceStyle = {
   termsColor: string | null;
   headingColor: string | null;
   noteColor: string | null;
-  declineColor: string | null;
   headingSize: number | null;
   priceSize: number | null;
   termsSize: number | null;
   noteSize: number | null;
-  declineSize: number | null;
   buttonSize: number | null;
   /** Where the block's own words sit. The option rows are always left. */
   align: "left" | "center" | "right";
@@ -64,7 +62,6 @@ export function PriceChoice({
   heading,
   note,
   acceptLabel,
-  declineLabel,
   href,
   onChoose,
   chosen,
@@ -76,7 +73,6 @@ export function PriceChoice({
   heading: string;
   note: string;
   acceptLabel: string;
-  declineLabel: string;
   /** Where the button goes. The chosen price is appended to it. */
   href: string | null;
   /** On the checkout, where choosing is the whole point and there is no link. */
@@ -236,14 +232,12 @@ export function PriceChoice({
           {note}
         </p>
       )}
-      {declineLabel.trim() && (
-        <p
-          className={`text-[0.76rem] underline ${alignment}`}
-          style={{ color: s.declineColor || band.muted, fontSize: px(s.declineSize) }}
-        >
-          {declineLabel}
-        </p>
-      )}
+      {/* No decline link here, deliberately.
+          A page selling something has nowhere to decline TO — the way to
+          decline a sales page is to leave it. The upsell has a real one,
+          because there the alternative is a thank-you page we are about to
+          send them to either way, and that belongs to the upsell's own layout
+          rather than to a block anybody can drop anywhere. */}
       {price && s.showDueToday && (
         <p className={`text-[0.72rem] ${alignment}`} style={{ color: s.termsColor || band.muted }}>
           {money(chargeNowCents(price), currency)} today

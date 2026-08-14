@@ -533,15 +533,13 @@ describe("styling the ways to pay", () => {
     const out = block({
       heading: "Pick one",
       note: "Cancel any time",
-      declineLabel: "No thanks",
       headingSize: 24,
       priceSize: 30,
       termsSize: 11,
       noteSize: 13,
-      declineSize: 12,
       buttonSize: 18,
     });
-    for (const px of [24, 30, 11, 13, 12, 18]) {
+    for (const px of [24, 30, 11, 13, 18]) {
       expect(out, `${px}px`).toContain(`font-size:${px}px`);
     }
   });

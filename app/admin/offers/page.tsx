@@ -5,6 +5,7 @@ import { usesOf, termsOf } from "@/lib/catalogue-view";
 import { CatalogueThumb } from "@/components/admin/catalogue-thumb";
 
 import { money } from "@/lib/money";
+import { livePrices, priceLabel, priceTerms } from "@/lib/offer-prices";
 
 export default async function AdminOffersPage() {
   const [offers, products] = await Promise.all([listOffers(), listAllProducts()]);
@@ -71,8 +72,21 @@ export default async function AdminOffersPage() {
                 <td className="px-4 py-3 text-muted">
                   {o.grantType === "subscription" ? "App subscription" : "Product"}
                 </td>
-                <td className="px-4 py-3 text-muted">{termsOf(o)}</td>
-                <td className="px-4 py-3">{money(o.priceCents)}</td>
+                {/* Every way to pay, not just the headline one. An offer sold
+                    monthly AND yearly read here as if it had one price, which
+                    is the row somebody scans to check what they built. */}
+                <td className="px-4 py-3 text-muted">
+                  {livePrices(o.prices).length > 1
+                    ? livePrices(o.prices)
+                        .map((p) => priceTerms(p, o.currency) ?? "one-time")
+                        .join(" · ")
+                    : termsOf(o)}
+                </td>
+                <td className="px-4 py-3">
+                  {livePrices(o.prices)
+                    .map((p) => priceLabel(p, o.currency))
+                    .join(" or ") || money(o.priceCents)}
+                </td>
                 <td className="px-4 py-3 text-sm">
                   {(uses.get(o.id) ?? []).length === 0 ? (
                     // Either a draft or a mistake, and both are worth seeing.
