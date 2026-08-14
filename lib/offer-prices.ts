@@ -143,6 +143,24 @@ export function priceSummary(price: OfferPrice, currency: string): string {
  * Order follows the offer's own order, not the order they were ticked in, so a
  * checkout cannot present them in an order the editor never saw.
  */
+/**
+ * Every price that is on offer.
+ *
+ * The difference from `shownPrices` is who decided. A PLACEMENT — a bump, an
+ * upsell — is opt-in per product: ticking nothing there means the headline
+ * price alone, so adding a third price to an offer cannot light up a third
+ * radio on somebody else's checkout without them asking.
+ *
+ * A page selling the offer is the opposite. You put the block there to sell the
+ * thing, so it sells all of it — and the way to show fewer is to hide one on
+ * the offer, where it is visible, rather than through a selection with no
+ * screen behind it. That hidden selection is what made the builder show two
+ * prices and the live page show one.
+ */
+export function livePrices(prices: OfferPrice[]): OfferPrice[] {
+  return prices.filter((p) => !p.archived);
+}
+
 export function shownPrices(prices: OfferPrice[], chosenIds: string[]): OfferPrice[] {
   const live = prices.filter((p) => !p.archived);
   if (live.length === 0) return [];

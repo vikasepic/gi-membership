@@ -4,7 +4,7 @@ import { getOffer } from "@/lib/store";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { ownershipFor } from "@/lib/checkout";
 import { isOfferEligible, immediateChargeCents } from "@/lib/offers";
-import { shownPrices } from "@/lib/offer-prices";
+import { livePrices } from "@/lib/offer-prices";
 import { stripePublishableKey } from "@/lib/env";
 import { OfferCheckoutForm } from "@/components/checkout/offer-checkout-form";
 
@@ -97,8 +97,8 @@ export default async function OfferCheckoutPage({
           // choice travels; it does not decide. What is charged is resolved on
           // the server from this same list, so an id it does not recognise
           // preselects nothing rather than buying something unexpected.
-          prices={shownPrices(offer.prices, offer.pagePriceIds ?? [])}
-          chosen={shownPrices(offer.prices, offer.pagePriceIds ?? []).findIndex(
+          prices={livePrices(offer.prices)}
+          chosen={livePrices(offer.prices).findIndex(
             (p) => p.id === wantPrice,
           )}
           email={user.email}

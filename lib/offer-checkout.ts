@@ -2,7 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getOffer } from "@/lib/store";
 import { isOfferEligible, immediateChargeCents, offerAtPrice } from "@/lib/offers";
-import { priceForChoice, shownPrices } from "@/lib/offer-prices";
+import { livePrices, priceForChoice } from "@/lib/offer-prices";
 import { ownershipFor, fulfilOffer, grantOfferOwnership, customerForUser } from "@/lib/checkout";
 import { stripe } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
@@ -36,7 +36,7 @@ export async function startOfferCheckout(args: {
   // the request — the browser sends an index into it and nothing else, so the
   // only thing it can buy is something it was shown. An index outside the list
   // refuses rather than falling back to the headline price.
-  const shown = shownPrices(offer.prices, offer.pagePriceIds ?? []);
+  const shown = livePrices(offer.prices);
   if (args.priceChoice !== undefined) {
     const price = priceForChoice(shown, args.priceChoice);
     if (!price) return { ok: false, error: "That option is no longer available." };

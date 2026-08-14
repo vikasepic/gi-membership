@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   chargeNowCents,
   everyLabel,
+  livePrices,
   needsAnswer,
   newOfferPrice,
   priceForChoice,
@@ -159,5 +160,32 @@ describe("hydrating a price row", () => {
     ]);
     expect(rows.map((r) => r.id)).toEqual(["first", "second"]);
     expect("sortOrder" in rows[0]).toBe(false);
+  });
+});
+
+/**
+ * Who decided which prices are on offer.
+ *
+ * These two look alike and answer opposite questions, and confusing them is
+ * what made the builder draw two prices while the live page drew one.
+ */
+describe("a page's prices versus a placement's", () => {
+  const all = [MONTHLY, YEARLY, { ...ONCE, archived: true }];
+
+  it("a page sells everything that is not hidden", () => {
+    // You put the block there to sell the thing, so it sells all of it. The
+    // way to show fewer is to hide one on the offer, where it is visible.
+    expect(livePrices(all).map((p) => p.id)).toEqual(["m", "y"]);
+  });
+
+  it("a placement shows only the headline until somebody ticks more", () => {
+    // Opt-in per product: adding a third price to an offer must not light up a
+    // third radio on a checkout nobody was looking at.
+    expect(shownPrices(all, []).map((p) => p.id)).toEqual(["m"]);
+  });
+
+  it("and both refuse to offer something hidden", () => {
+    expect(livePrices(all).some((p) => p.archived)).toBe(false);
+    expect(shownPrices(all, ["o"]).some((p) => p.archived)).toBe(false);
   });
 });

@@ -479,6 +479,7 @@ function Inner({
               optionRadius: num(p.optionRadius, 12),
               selectedColor: str(p.selectedColor) || null,
               selectedBg: str(p.selectedBg) || null,
+              selectedTextColor: str(p.selectedTextColor) || null,
               labelColor: str(p.labelColor) || null,
               termsColor: str(p.termsColor) || null,
               headingColor: str(p.headingColor) || null,
@@ -499,6 +500,7 @@ function Inner({
               showTerms: p.showTerms !== false,
               showCompareAt: p.showCompareAt !== false,
               showSaving: p.showSaving !== false,
+              showDueToday: p.showDueToday !== false,
             }}
           />
         </div>

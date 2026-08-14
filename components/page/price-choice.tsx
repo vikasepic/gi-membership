@@ -33,6 +33,7 @@ export type PriceChoiceStyle = {
   optionRadius: number;
   selectedColor: string | null;
   selectedBg: string | null;
+  selectedTextColor: string | null;
   labelColor: string | null;
   termsColor: string | null;
   headingColor: string | null;
@@ -54,6 +55,7 @@ export type PriceChoiceStyle = {
   showTerms: boolean;
   showCompareAt: boolean;
   showSaving: boolean;
+  showDueToday: boolean;
 };
 
 export function PriceChoice({
@@ -151,7 +153,7 @@ export function PriceChoice({
                   {p.label.trim() && (
                     <span
                       className="ml-2 text-[0.72rem] font-medium"
-                      style={{ color: s.termsColor || band.muted }}
+                      style={{ color: (on && s.selectedTextColor) || s.termsColor || band.muted }}
                     >
                       {p.label.trim()}
                     </span>
@@ -160,7 +162,10 @@ export function PriceChoice({
                 {s.showTerms && priceTerms(p, currency) && (
                   <span
                     className="text-[0.76rem] leading-snug"
-                    style={{ color: s.termsColor || band.muted, fontSize: px(s.termsSize) }}
+                    style={{
+                      color: (on && s.selectedTextColor) || s.termsColor || band.muted,
+                      fontSize: px(s.termsSize),
+                    }}
                   >
                     {priceTerms(p, currency)}
                   </span>
@@ -239,7 +244,7 @@ export function PriceChoice({
           {declineLabel}
         </p>
       )}
-      {price && (
+      {price && s.showDueToday && (
         <p className={`text-[0.72rem] ${alignment}`} style={{ color: s.termsColor || band.muted }}>
           {money(chargeNowCents(price), currency)} today
         </p>

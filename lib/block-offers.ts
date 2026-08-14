@@ -1,7 +1,7 @@
 import "server-only";
 import { getOffer } from "@/lib/store";
 import { normalizeBlocks, walkBlocks, type Block } from "@/lib/blocks";
-import { shownPrices, type OfferPrice } from "@/lib/offer-prices";
+import { livePrices, type OfferPrice } from "@/lib/offer-prices";
 
 /**
  * The prices for every offer a page's blocks name.
@@ -35,7 +35,7 @@ export async function offersForBlocks(blocks: Block[]): Promise<Record<string, B
       // withdrawn offer's prices is a page inviting a purchase that the
       // fulfilment side would refuse.
       if (!offer || !offer.active) return;
-      const prices = shownPrices(offer.prices, offer.pagePriceIds ?? []);
+      const prices = livePrices(offer.prices);
       if (prices.length === 0) return;
       out[id] = {
         prices,

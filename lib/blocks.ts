@@ -631,6 +631,10 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     // border and the ink on it — a tint derived from the border was fine until
     // somebody wanted a chosen row that is plainly a different colour.
     selectedBg: null,
+    // The rest of the words on the chosen row — its terms, its label. Without
+    // this only the price changed and the small print under it stayed the
+    // colour it has on an unchosen row, which on a strong fill is unreadable.
+    selectedTextColor: null,
     labelColor: null,
     termsColor: null,
     headingColor: null,
@@ -650,6 +654,10 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     // radio lives on the left and centring the words beside it opens a gap
     // between the control and what it controls.
     align: "center",
+    // "$0 today" under the button. True is what it has always drawn, and it
+    // earns its place on a checkout — on a sales page, where nothing is being
+    // charged yet, it is a figure with no question behind it.
+    showDueToday: true,
     badgeBg: null,
     badgeColor: null,
     buttonBg: null,

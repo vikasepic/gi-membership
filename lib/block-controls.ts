@@ -426,6 +426,12 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "toggle", key: "showTerms", label: "Show the terms under each price" },
       { kind: "toggle", key: "showCompareAt", label: "Show the was-price" },
       { kind: "toggle", key: "showSaving", label: "Show what the longer term saves" },
+      {
+        kind: "toggle",
+        key: "showDueToday",
+        label: "Show what is due today",
+        hint: "Under the button. Worth saying on a checkout; on a sales page it is a figure with no question behind it.",
+      },
     ],
     style: [
       group("Layout"),
@@ -436,6 +442,7 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "number", key: "optionRadius", label: "Corner", min: 0, max: 40, step: 1, unit: "px" },
       { kind: "color", key: "selectedColor", label: "When chosen", hint: "The border and the price on the picked one." },
       { kind: "color", key: "selectedBg", label: "Chosen background", hint: "Unset tints the colour above." },
+      { kind: "color", key: "selectedTextColor", label: "Chosen text", hint: "The terms and label on the picked one. Unset keeps them as they are." },
       { kind: "color", key: "labelColor", label: "Price", hint: "Unset follows the band." },
       { kind: "number", key: "priceSize", label: "Price size", min: 10, max: 48, step: 1, unit: "px" },
       { kind: "color", key: "termsColor", label: "Terms", hint: "Unset follows the band." },
