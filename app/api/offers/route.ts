@@ -16,6 +16,16 @@ export async function GET() {
   await requireAdmin();
   const offers = await listOfferOptions(true);
   return NextResponse.json({
-    offers: offers.map((o) => ({ id: o.id, name: o.active ? o.name : `${o.name} (draft)` })),
+    offers: offers.map((o) => ({
+      id: o.id,
+      name: o.active ? o.name : `${o.name} (draft)`,
+      currency: o.currency,
+      // The prices too, so the BUILDER can draw the block. On a live page they
+      // are resolved server-side per render; the builder has no such pass, and
+      // without them it drew "that offer has no price showing" over an offer
+      // with three. Admin-only, and it is the same list the editor already
+      // shows on the offer itself.
+      prices: o.prices.filter((p) => !p.archived),
+    })),
   });
 }

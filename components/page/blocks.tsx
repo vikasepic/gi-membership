@@ -350,6 +350,7 @@ export function BlockBody({
   theme,
   at,
   store,
+  money,
 }: {
   block: Block;
   theme: BandTheme;
@@ -357,8 +358,17 @@ export function BlockBody({
   /** The builder passes a preview payload so the storefront blocks draw here
    *  too. Without it they render nothing, which in an editor reads as broken. */
   store?: StoreRender;
+  /**
+   * And the prices, for the same reason.
+   *
+   * A Ways to pay block resolves its offer on the server when a page renders.
+   * The builder has no such pass, so without this it drew "that offer has no
+   * price showing" over an offer that has several — an editor telling the truth
+   * about nothing and a lie about the block in front of you.
+   */
+  money?: BlockMoney;
 }) {
-  return <Inner block={block} theme={theme} at={at} store={store} />;
+  return <Inner block={block} theme={theme} at={at} store={store} money={money} />;
 }
 
 function Inner({

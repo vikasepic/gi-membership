@@ -6,11 +6,12 @@ import { ContextMenu, menuAt, type MenuState } from "@/components/admin/context-
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BlockBody, Blocks } from "@/components/page/blocks";
+import { BlockBody, Blocks, type BlockMoney } from "@/components/page/blocks";
 import { IconPicker } from "@/components/admin/icon-picker";
 import { CanvasFrame } from "@/components/admin/canvas-frame";
 import { SpacingGuide } from "@/components/admin/spacing-guide";
 import { ColorControl, PaletteContext } from "@/components/admin/color-control";
+import type { OfferPrice } from "@/lib/offer-prices";
 import type { StoreRender } from "@/components/page/storefront-blocks";
 import { RichText } from "@/components/editor/rich-text";
 import {
@@ -369,12 +370,14 @@ export function BlockEditor({
   // The store's offers, so a Ways to pay block can name which one it sells.
   // Fetched here rather than threaded from the server for the same reason the
   // fonts are: it is one list, wanted by one control, on one screen.
-  const [offerOptions, setOfferOptions] = useState<{ id: string; name: string }[]>([]);
+  const [offerOptions, setOfferOptions] = useState<
+    { id: string; name: string; currency?: string; prices?: OfferPrice[] }[]
+  >([]);
   useEffect(() => {
     let alive = true;
     void fetch("/api/offers")
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { offers?: { id: string; name: string }[] } | null) => {
+      .then((j: { offers?: { id: string; name: string; currency?: string; prices?: OfferPrice[] }[] } | null) => {
         if (alive && j?.offers) setOfferOptions(j.offers);
       })
       .catch(() => {});
@@ -699,12 +702,34 @@ export function BlockEditor({
   // down inside a switch statement.
   const palette = preview?.palette ?? [];
 
+  /**
+   * The prices a Ways to pay block can draw, keyed by offer.
+   *
+   * The live page resolves this server-side per render. The builder cannot, so
+   * it is built here from the same list that fills the block's Sells picker —
+   * otherwise the canvas says an offer has no prices while the offer editor
+   * two clicks away lists three of them.
+   */
+  const previewMoney = useMemo(() => {
+    const byOffer: Record<string, { prices: OfferPrice[]; currency: string; buyHref: string }> = {};
+    for (const o of offerOptions) {
+      if (!o.prices || o.prices.length === 0) continue;
+      byOffer[o.id] = {
+        prices: o.prices,
+        currency: o.currency ?? "usd",
+        buyHref: `/checkout/offer?offer=${o.id}`,
+      };
+    }
+    return { byOffer };
+  }, [offerOptions]);
+
   const overlay = (
     <CanvasDevice.Provider value={device}>
     <CanvasStore.Provider value={store}>
     <Globals.Provider value={index}>
     <Dragging.Provider value={dragging}>
     <ColumnMenu.Provider value={columnMenu}>
+    <PreviewMoney.Provider value={previewMoney}>
     {/* The design itself, opened from a page that shows it.
         A second editor over the first rather than a trip to another screen,
         because the model chosen was "edit anywhere, changes everywhere" — and
@@ -1294,6 +1319,7 @@ export function BlockEditor({
         </aside>
       </div>
     </div>
+    </PreviewMoney.Provider>
     </ColumnMenu.Provider>
     </Dragging.Provider>
     </Globals.Provider>
@@ -1343,6 +1369,15 @@ const Dragging = createContext<{ label: string | null; type: BlockType | null }>
 const ColumnMenu = createContext<((e: React.MouseEvent, row: Block, index: number) => void) | null>(
   null,
 );
+
+/**
+ * The prices a Ways to pay block can draw here.
+ *
+ * A context for the same reason the palette is one: the block that needs it is
+ * rendered several levels down, and it is one value that does not change while
+ * the editor is open.
+ */
+const PreviewMoney = createContext<BlockMoney>({});
 
 /** A bin. Drawn rather than typed, so it reads as a delete at 12px. */
 function TrashIcon() {
@@ -1822,8 +1857,9 @@ function Editable({
   const device = useContext(CanvasDevice);
   const store = useContext(CanvasStore);
   const key = block.type === "heading" || block.type === "button" ? "text" : null;
-  if (!key) return <BlockBody block={block} theme={theme} at={device} store={store} />;
-  if (!selected) return <BlockBody block={block} theme={theme} at={device} store={store} />;
+  const previewMoney = useContext(PreviewMoney);
+  if (!key) return <BlockBody block={block} theme={theme} at={device} store={store} money={previewMoney} />;
+  if (!selected) return <BlockBody block={block} theme={theme} at={device} store={store} money={previewMoney} />;
   return (
     <div
       contentEditable
@@ -1841,7 +1877,7 @@ function Editable({
       onClick={(e) => e.stopPropagation()}
       className="cursor-text outline-none"
     >
-      <BlockBody block={block} theme={theme} at={device} store={store} />
+      <BlockBody block={block} theme={theme} at={device} store={store} money={previewMoney} />
     </div>
   );
 }
