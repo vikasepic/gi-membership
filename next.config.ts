@@ -2,6 +2,22 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone", // slim Docker image for Coolify/KVM
+  /**
+   * Which build this is, so a deploy does not break an open tab.
+   *
+   * Every build gives its chunks new hashed filenames and deletes the old
+   * ones. A tab that was open across a deploy still holds the previous page,
+   * so its next navigation asks for a chunk that no longer exists — and the
+   * admin 404s until somebody thinks to hard-reload. That is a bad way to find
+   * out a deploy happened, and it lands on the person who was mid-edit.
+   *
+   * Telling Next which deployment it is stamps the asset requests, so a
+   * mismatch is recognised as version skew and answered with a clean reload
+   * rather than a missing file. SOURCE_COMMIT is set by Coolify on every
+   * build; the fallback keeps local development working, where the dev server
+   * has no such problem.
+   */
+  deploymentId: process.env.SOURCE_COMMIT || undefined,
   reactStrictMode: true,
   poweredByHeader: false,
   experimental: {
