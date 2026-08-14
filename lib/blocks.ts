@@ -627,8 +627,15 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     optionBorder: null,
     optionRadius: 12,
     selectedColor: null,
+    // The fill of the chosen row. Separate from selectedColor, which is its
+    // border and the ink on it — a tint derived from the border was fine until
+    // somebody wanted a chosen row that is plainly a different colour.
+    selectedBg: null,
     labelColor: null,
     termsColor: null,
+    headingColor: null,
+    noteColor: null,
+    declineColor: null,
     badgeBg: null,
     badgeColor: null,
     buttonBg: null,

@@ -20,6 +20,7 @@ import {
 import { BlockEditor, type GlobalIndex } from "@/components/admin/block-editor";
 import { saveGlobalBlocksAction } from "@/app/admin/templates/actions";
 import type { SectionEdit } from "@/components/admin/section-settings";
+import type { OfferPrice } from "@/lib/offer-prices";
 import { DeviceSwitch } from "@/components/admin/device-switch";
 import { blocksForSection, isUnconverted } from "@/lib/section-to-blocks";
 import { starterBlocks } from "@/lib/page-starter";
@@ -93,6 +94,40 @@ export function PageEditor({
         : "",
     [preview, device],
   );
+
+  /**
+   * The prices a Ways to pay block can draw in these previews.
+   *
+   * Third renderer, same blind spot: the live page resolves a named offer
+   * server-side per render, and neither this preview nor the block builder has
+   * such a pass. Without it a section preview shows "that offer has no price
+   * showing" over an offer with three — and the preview's whole claim is that
+   * it is the component the live page renders.
+   */
+  const [byOffer, setByOffer] = useState<PageMoney["byOffer"]>({});
+  useEffect(() => {
+    let alive = true;
+    void fetch("/api/offers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { offers?: { id: string; currency?: string; prices?: OfferPrice[] }[] } | null) => {
+        if (!alive || !j?.offers) return;
+        const map: NonNullable<PageMoney["byOffer"]> = {};
+        for (const o of j.offers) {
+          if (!o.prices?.length) continue;
+          map[o.id] = {
+            prices: o.prices,
+            currency: o.currency ?? "usd",
+            buyHref: `/checkout/offer?offer=${o.id}`,
+          };
+        }
+        setByOffer(map);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const moneyWithPrices = useMemo(() => ({ ...money, byOffer }), [money, byOffer]);
 
   /**
    * One save for the whole page.
@@ -312,7 +347,7 @@ export function PageEditor({
         {openRow && openDef ? (
           <SectionPanel
             row={openRow}
-            money={money}
+            money={moneyWithPrices}
             owner={ownerType}
             store={store}
             onChange={(next) => patch(openRow.sectionKey, next)}

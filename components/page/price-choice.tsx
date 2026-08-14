@@ -32,8 +32,12 @@ export type PriceChoiceStyle = {
   optionBorder: string | null;
   optionRadius: number;
   selectedColor: string | null;
+  selectedBg: string | null;
   labelColor: string | null;
   termsColor: string | null;
+  headingColor: string | null;
+  noteColor: string | null;
+  declineColor: string | null;
   badgeBg: string | null;
   badgeColor: string | null;
   buttonBg: string | null;
@@ -89,7 +93,7 @@ export function PriceChoice({
   return (
     <div className="flex flex-col gap-3">
       {heading.trim() && (
-        <p className="font-display font-semibold" style={{ color: s.labelColor || band.fg }}>
+        <p className="font-display font-semibold" style={{ color: s.headingColor || band.fg }}>
           {heading}
         </p>
       )}
@@ -105,7 +109,9 @@ export function PriceChoice({
               style={{
                 borderRadius: s.optionRadius,
                 borderColor: on ? accent : s.optionBorder || band.rule,
-                background: on ? tint(accent, 0.08) : s.optionBg || "transparent",
+                // The chosen fill, or a tint of the chosen colour when none is
+                // set — which is what it always did.
+                background: on ? s.selectedBg || tint(accent, 0.08) : s.optionBg || "transparent",
               }}
             >
               <input
@@ -188,12 +194,12 @@ export function PriceChoice({
       )}
 
       {note.trim() && (
-        <p className="text-center text-[0.76rem]" style={{ color: s.termsColor || band.muted }}>
+        <p className="text-center text-[0.76rem]" style={{ color: s.noteColor || band.muted }}>
           {note}
         </p>
       )}
       {declineLabel.trim() && (
-        <p className="text-center text-[0.76rem] underline" style={{ color: band.muted }}>
+        <p className="text-center text-[0.76rem] underline" style={{ color: s.declineColor || band.muted }}>
           {declineLabel}
         </p>
       )}
