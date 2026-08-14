@@ -82,3 +82,97 @@ describe("the checkout blocks are wired end to end", () => {
     expect(src).toContain('href="/refunds"');
   });
 });
+
+describe("the sticky bar is one decision, asked once", () => {
+  // The upsell suppresses its built-in bar when the page carries a Sticky bar
+  // block, and the offer's page editor tells you which of the two you are
+  // looking at. Two copies of that check would be a panel saying one thing
+  // while the page does the other.
+  it("is asked through the shared helper in both places", () => {
+    for (const f of [
+      "components/oto/sections-template.tsx",
+      "app/admin/offers/[id]/page-editor/page.tsx",
+    ]) {
+      const src = readFileSync(f, "utf8");
+      expect(src, f).toContain("hasStickyBarBlock");
+      // Not reimplemented alongside it.
+      expect(src, f).not.toContain('b.type === "stickybar"');
+    }
+  });
+});
+
+describe("a link to an #id glides rather than jumps", () => {
+  const css = readFileSync("app/globals.css", "utf8");
+
+  it("scrolls smoothly by default", () => {
+    expect(css).toContain("scroll-behavior: smooth");
+  });
+
+  it("goes back to an instant jump for anyone who asked for less motion", () => {
+    // Long smooth travel is a documented migraine and vestibular trigger.
+    const at = css.indexOf("@media (prefers-reduced-motion: reduce)");
+    expect(css.slice(at, at + 400)).toContain("scroll-behavior: auto");
+  });
+
+  it("stops the target landing under the sticky header", () => {
+    expect(css).toContain("scroll-margin-top");
+  });
+
+  it("does not override the preference from JavaScript", () => {
+    // scrollIntoView({behavior:"smooth"}) wins over the media query, which the
+    // stylesheet cannot then undo.
+    const bar = readFileSync("components/page/sticky-bar-block.tsx", "utf8");
+    expect(bar).not.toContain('behavior: "smooth"');
+  });
+});
+
+describe("the store's typography cannot inflate the checkout", () => {
+  // Site typography writes `:root h1` and `:root p` for the sales pages. Those
+  // are 0-1-1 and beat every Tailwind size class (0-1-0), so a checkout that
+  // sized itself with classes rendered its product name at whatever the sales
+  // pages use — around 90px on this store — and its tax footnote as a
+  // paragraph. An inline style is the only declaration that wins without
+  // reaching into a setting that belongs to the sales pages.
+  it("sizes the checkout title inline", () => {
+    const src = readFileSync("components/checkout/checkout-panel.tsx", "utf8");
+    const h1 = src.slice(src.indexOf("<h1"), src.indexOf("</h1>"));
+    expect(h1).toContain("fontSize");
+    // clamp, not a breakpoint: the bad case is a long name in between, where
+    // it wraps to four lines and pushes the card fields off a phone.
+    expect(h1).toContain("clamp(");
+  });
+
+  it("sizes the checkout's small print inline", () => {
+    const src = readFileSync("components/checkout/slots.tsx", "utf8");
+    // Every <p> in the checkout's pieces carries its own size; the store's
+    // paragraph rule reaches all of them.
+    const paragraphs = src.match(/<p\b[^>]*>/g) ?? [];
+    expect(paragraphs.length).toBeGreaterThan(0);
+    for (const tag of paragraphs) expect(tag, tag).toMatch(/FINE|SMALL|fontSize/);
+  });
+});
+
+describe("the two checkouts ask their questions in the same order", () => {
+  // What am I buying, what does it cost, how do I pay. A form that asks for a
+  // card above the total asks somebody to commit before it has said to what.
+  const order = (src: string, marks: string[]) => marks.map((m) => src.indexOf(m));
+  const rising = (xs: number[]) => xs.every((x, i) => x > -1 && (i === 0 || x > xs[i - 1]));
+
+  it("puts the summary before the card fields on the product checkout", () => {
+    const src = readFileSync("components/checkout/slots.tsx", "utf8");
+    const layout = src.slice(src.indexOf("export function DefaultCheckoutLayout"));
+    expect(rising(order(layout, ["OrderSummarySlot", "CouponSlot", "CardFieldsSlot", "DueTodaySlot", "PayButtonSlot"]))).toBe(true);
+  });
+
+  it("puts it before the card fields on the offer checkout too", () => {
+    const src = readFileSync("components/checkout/offer-checkout-form.tsx", "utf8");
+    expect(rising(order(src, ["Order summary", "<PaymentElement", "type=\"submit\""]))).toBe(true);
+  });
+
+  it("gives the offer checkout a summary at all", () => {
+    // It had none: the one page where somebody confirms a subscription showed
+    // a total with nothing above it saying what the total was for.
+    const src = readFileSync("components/checkout/offer-checkout-form.tsx", "utf8");
+    expect(src).toContain("Order summary");
+  });
+});

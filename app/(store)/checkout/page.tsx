@@ -185,7 +185,11 @@ export default async function CheckoutPage({
           900px-wide box, which is what made this look like a page with the
           zoom stuck on. */}
       <div className="mx-auto flex w-full max-w-[30rem] flex-col gap-7 px-6 py-8 md:px-8 lg:mx-0 lg:ml-0 lg:mr-auto lg:py-10 lg:pl-10">
-        <h2 className="font-display text-xl">Checkout</h2>
+        {/* Small on purpose. It labels the column; it is not the page's
+            headline — that is on the panel beside it, and two things competing
+            to be the biggest word on a checkout is how the actual heading stops
+            being read. */}
+        <h2 className="font-display text-sm uppercase tracking-[0.12em] text-muted">Checkout</h2>
         <CheckoutForm
         product={{
           slug: product.slug,

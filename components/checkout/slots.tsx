@@ -95,6 +95,17 @@ export const useCheckout = () => useContext(Ctx);
 const input =
   "w-full rounded-xl border border-border bg-surface px-3.5 py-3 text-sm outline-none transition-colors placeholder:text-muted focus:border-primary";
 
+/**
+ * The small print, sized where the cascade cannot reach it.
+ *
+ * The store's typography writes `:root p` for its sales pages, which is 0-1-1
+ * and beats every Tailwind size class. On a checkout that turned a footnote
+ * about tax into a 21px paragraph competing with the total beside it. These
+ * lines are chrome, not copy, so they say their own size and stop arguing.
+ */
+const FINE = { fontSize: "0.75rem", lineHeight: 1.5 } as const;
+const SMALL = { fontSize: "0.875rem", lineHeight: 1.5 } as const;
+
 /** A style object with the nulls dropped, so an unset colour inherits. */
 const set = (o: Record<string, string | number | undefined | null>) =>
   Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== ""));
@@ -211,7 +222,7 @@ export function BuyerDetailsSlot(p: {
       {/* The typo suggestion. A wrong email is the most expensive mistake on
           this page: the receipt and the access link both follow it. */}
       {c.emailHint && (
-        <p className="-mt-1 text-sm">
+        <p className="-mt-1 text-sm" style={SMALL}>
           <span className="text-muted">Did you mean </span>
           <button
             type="button"
@@ -338,7 +349,7 @@ export function OrderSummarySlot(p: {
           quoting a figure here that the receipt then contradicts is worse than
           quoting none. */}
       {p.showTax !== false && (
-        <p className="text-xs text-muted" style={set({ color: p.labelColor })}>
+        <p className="text-xs text-muted" style={{ ...FINE, ...set({ color: p.labelColor }) }}>
           Tax is calculated at your country&rsquo;s rate and shown on your receipt.
         </p>
       )}
@@ -412,9 +423,13 @@ export function CouponSlot(p: {
           {c.couponBusy ? "…" : c.coupon ? "Change" : p.buttonLabel || "Apply"}
         </button>
       </div>
-      {c.couponError && <p className="text-xs text-primary">{c.couponError}</p>}
+      {c.couponError && (
+        <p className="text-xs text-primary" style={FINE}>
+          {c.couponError}
+        </p>
+      )}
       {c.coupon?.clamped && (
-        <p className="text-xs text-muted">
+        <p className="text-xs text-muted" style={FINE}>
           Discount capped — {money(MIN_CHARGE_CENTS_CLIENT, c.product.currency)} is the smallest
           charge a card can take.
         </p>
@@ -494,7 +509,10 @@ export function DueTodaySlot(p: {
           subscription that does not state its terms beside the amount is how a
           first renewal becomes a dispute. */}
       {p.showTerms !== false && c.chosenBump?.termsLabel && (
-        <p className="text-sm text-muted" style={set({ color: p.termsColor, fontSize: p.termsSize ?? undefined })}>
+        <p
+          className="text-sm text-muted"
+          style={{ ...SMALL, ...set({ color: p.termsColor, fontSize: p.termsSize ?? undefined }) }}
+        >
           {c.chosenBump.headline}: {c.chosenBump.termsLabel}.
         </p>
       )}
@@ -525,7 +543,7 @@ export function PayButtonSlot(p: {
   return (
     <div className="flex flex-col gap-4">
       {c.error && (
-        <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">
+        <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary" style={SMALL}>
           {c.error}
         </p>
       )}
@@ -582,7 +600,7 @@ export function PayButtonSlot(p: {
       {p.note?.trim() && (
         <p
           className="text-center text-xs text-muted"
-          style={set({ color: p.noteColor, fontSize: p.noteSize ?? undefined })}
+          style={{ ...FINE, ...set({ color: p.noteColor, fontSize: p.noteSize ?? undefined }) }}
         >
           {p.note}
         </p>
@@ -628,7 +646,7 @@ function TrustBlock() {
       {/* Stripe is on automatic payment methods, so what a buyer is offered
           depends on where they are — UPI in India, iDEAL in the Netherlands.
           Saying so beats listing marks that might be wrong for them. */}
-      <p className="text-center text-xs text-muted">
+      <p className="text-center text-xs text-muted" style={FINE}>
         Card, or whatever Stripe offers where you are — UPI, wallets, bank transfer.
       </p>
       <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
@@ -641,7 +659,7 @@ function TrustBlock() {
           </li>
         ))}
       </ul>
-      <p className="text-center text-[11px] text-muted">
+      <p className="text-center text-[11px] text-muted" style={{ fontSize: "0.69rem", lineHeight: 1.5 }}>
         By paying you agree to our{" "}
         <a href="/terms" className="underline underline-offset-2 hover:text-fg">
           terms
@@ -670,11 +688,18 @@ export function DefaultCheckoutLayout() {
       <div className="flex flex-col gap-6">
         <BuyerDetailsSlot title="Your details" />
         <OrderBumpSlot title="One more thing" />
-        <CardFieldsSlot heading="Payment" />
       </div>
+
+      {/* Summary, then card, then total and button.
+          What am I buying, what does it cost, how do I pay — the order the
+          questions actually arrive in. The card fields used to sit above the
+          summary, which asked somebody to commit before the page had finished
+          saying what to; and with a bump on the page the figure they had just
+          changed was below the fold while they typed a number in. */}
       <div className="flex flex-col gap-5 rounded-3xl border border-border bg-surface p-6">
         <OrderSummarySlot title="Order summary" />
         <CouponSlot />
+        <CardFieldsSlot heading="Payment" />
         <DueTodaySlot />
         <PayButtonSlot />
       </div>

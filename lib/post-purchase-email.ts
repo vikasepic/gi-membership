@@ -72,7 +72,10 @@ export const POST_PURCHASE_DEFAULTS: PostPurchaseSettings = {
   textColor: "#1a1a1a",
   linkColor: "#1155cc",
   background: "#ffffff",
-  fontFamily: "Poppins, 'Helvetica Neue', Helvetica, Arial, sans-serif",
+  // Roboto, with a stack behind it. No @font-face and no webfont link: Gmail
+  // strips both, so a face named here is a face the client either already has
+  // or silently replaces — and the replacement is what most people will read.
+  fontFamily: "Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif",
 };
 
 const escapeHtml = (s: string) =>
@@ -106,7 +109,7 @@ function paragraphs(text: string, s: PostPurchaseSettings): string {
     .filter(Boolean)
     .map(
       (p) =>
-        `<p style="margin:0 0 18px;font-size:15px;line-height:1.75;color:${s.textColor};">${autoLink(
+        `<p style="margin:0 0 18px;font-size:16px;line-height:1.75;color:${s.textColor};">${autoLink(
           escapeHtml(p),
           s.linkColor,
         ).replace(/\n/g, "<br>")}</p>`,
@@ -146,7 +149,7 @@ export function buildPostPurchaseEmail(args: {
       ? `<ul style="margin:0 0 18px;padding-left:20px;">${args.products
           .map(
             (p) =>
-              `<li style="margin:0 0 6px;font-size:15px;line-height:1.75;color:${s.textColor};">${escapeHtml(p)}</li>`,
+              `<li style="margin:0 0 6px;font-size:16px;line-height:1.75;color:${s.textColor};">${escapeHtml(p)}</li>`,
           )
           .join("")}</ul>`
       : "";

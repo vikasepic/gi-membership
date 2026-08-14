@@ -6,6 +6,7 @@ import { getPageSections, getPageSettings , listPageSources } from "@/lib/pages"
 import { PageEditor } from "@/components/admin/page-editor";
 import { PageSettings } from "@/components/admin/page-settings";
 import { PageSeo } from "@/components/admin/page-seo";
+import { hasStickyBarBlock } from "@/lib/page-sections";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import { publicCoverUrl } from "@/lib/media-url";
 import { buildBumpView } from "@/lib/bump";
@@ -34,6 +35,11 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
   // the same rule as the order bump.
   const view = buildBumpView(offer);
 
+  // Whether this page already carries a bar of its own — asked through the
+  // same helper the upsell uses, so this notice cannot say one thing while the
+  // live page does the other.
+  const hasStickyBar = hasStickyBarBlock(rows);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -49,6 +55,30 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
           <strong className="font-medium text-fg">Ten sections</strong>
         </span>
       </div>
+
+      {/* Where the sticky bar is.
+          It IS editable per offer and always has been — drop a Sticky bar block
+          on this page and it replaces the built-in one. Nothing said so, so the
+          honest state of it was "not editable": a feature nobody can find is
+          one that does not exist. */}
+      <p className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs leading-relaxed text-muted">
+        {hasStickyBar ? (
+          <>
+            <strong className="font-medium text-fg">The sticky bar on this page is yours.</strong>{" "}
+            It is the Sticky bar block in the sections below — its words, its colours, its position
+            and where its button scrolls to are all in its panel. The built-in upsell bar is off
+            while it is here; delete the block and that one comes back.
+          </>
+        ) : (
+          <>
+            <strong className="font-medium text-fg">This page is using the built-in bar</strong> —
+            the one with Accept and No thanks on it, which cannot be edited. To take it over, drag a{" "}
+            <strong className="font-medium text-fg">Sticky bar</strong> block from the tray (under
+            Sales) into any section. One appears and the built-in one steps aside, so the two never
+            argue.
+          </>
+        )}
+      </p>
 
       {/* Full-bleed out of the admin's 1024px column. The preview needs real
           width: the hero goes side-by-side at 768px, and the pane was narrower
@@ -112,7 +142,22 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
         ownerType="offer"
         ownerId={id}
         initial={rows}
-        money={{ priceLabel: view.nowLabel, termsLabel: view.termsLabel }}
+        money={{
+          priceLabel: view.nowLabel,
+          termsLabel: view.termsLabel,
+          // The decline, drawn in the editor as the upsell will draw it.
+          //
+          // The live page supplies this, never the block — a sales page has
+          // nowhere to decline TO, and the way to decline one is to leave it.
+          // But that meant the link was invisible here, so the one page where
+          // it DOES appear was the one place it could not be seen or styled,
+          // and it was being reported as missing.
+          //
+          // A real href would be a way out of the editor, so it points at the
+          // canvas itself: present, drawn, stylable, and going nowhere.
+          declineHref: "#",
+          declineLabel: offer.declineLabel,
+        }}
         preview={preview}
         liveHref={`/admin/offers/${id}/preview?template=sections`}
       />

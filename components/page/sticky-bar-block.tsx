@@ -95,7 +95,12 @@ export function StickyBarBlock({
               (scrollTo.trim() ? document.getElementById(scrollTo.trim()) : null) ??
               document.querySelector<HTMLElement>("[data-ways-to-pay]") ??
               document.querySelector<HTMLElement>("[data-buy]");
-            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+            // No `behavior` on purpose: unset means "whatever the stylesheet
+            // says", which is smooth for everybody and instant for anyone who
+            // has asked their system for less motion. Naming "smooth" here
+            // would override that preference from JavaScript, where the media
+            // query cannot reach it.
+            el?.scrollIntoView({ block: "center" });
             // Focus the first radio once it is in view, so the keyboard and a
             // screen reader arrive where the eye does.
             window.setTimeout(

@@ -37,9 +37,25 @@ describe("Meta gets a name it will accept", () => {
   });
 
   it("sends every standard event the standard way", () => {
+    // The rule is not "these two are custom" — it is that anything Meta HAS a
+    // name for must go through track(), because a standard event sent as a
+    // custom one is invisible to every built-in report and to optimisation.
+    // Listed explicitly so adding an event forces a decision about which it is.
+    const META_STANDARD = [
+      "PageView",
+      "ViewContent",
+      "AddToCart",
+      "Lead",
+      "CompleteRegistration",
+      "InitiateCheckout",
+      "AddPaymentInfo",
+      "Purchase",
+      "StartTrial",
+      "Subscribe",
+    ];
     for (const e of EVENTS) {
-      if (e === "LessonStarted" || e === "LessonCompleted") continue;
-      expect(META_CUSTOM, e).not.toContain(e);
+      if (META_STANDARD.includes(e)) expect(META_CUSTOM, e).not.toContain(e);
+      else expect(META_CUSTOM, `${e} is not a Meta event name — it must be sent as a custom one`).toContain(e);
     }
   });
 

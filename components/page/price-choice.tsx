@@ -43,6 +43,9 @@ export type PriceChoiceStyle = {
   termsSize: number | null;
   noteSize: number | null;
   buttonSize: number | null;
+  /** The decline link's own ink and size. See declineHref. */
+  declineColor: string | null;
+  declineSize: number | null;
   /** Where the block's own words sit. The option rows are always left. */
   align: "left" | "center" | "right";
   badgeBg: string | null;
@@ -248,7 +251,7 @@ export function PriceChoice({
         <a
           href={declineHref}
           className={`text-[0.76rem] underline ${alignment}`}
-          style={{ color: band.muted }}
+          style={{ color: s.declineColor || band.muted, fontSize: px(s.declineSize) }}
         >
           {declineLabel}
         </a>

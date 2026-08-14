@@ -23,6 +23,23 @@ export const EVENTS = [
   "Subscribe",
   "LessonStarted",
   "LessonCompleted",
+  /**
+   * The add-on decisions, reported as they are made.
+   *
+   * A bump and an upsell are the two places a buyer says yes or no to
+   * something extra, and until now only the yes ever surfaced — inside the
+   * eventual Purchase, folded into one total. So "how many people are offered
+   * the yearly and take it" was unanswerable, and a bump that nobody ever
+   * ticked looked exactly like a bump nobody was ever shown.
+   *
+   * The declines matter more than the accepts. An offer declined by 95% of
+   * people is a fact about the offer; without the event the only evidence is
+   * an absence, and an absence cannot be segmented.
+   */
+  "BumpSelected",
+  "BumpDeclined",
+  "UpsellSelected",
+  "UpsellDeclined",
 ] as const;
 
 export type EventName = (typeof EVENTS)[number];
@@ -48,6 +65,15 @@ export const GA4_NAME: Record<EventName, string> = {
   Subscribe: "purchase",
   LessonStarted: "tutorial_begin",
   LessonCompleted: "tutorial_complete",
+  // GA4 has `add_to_cart` and `remove_from_cart` and they fit exactly: an
+  // add-on taken IS added to the order, and one declined is refused. Using
+  // them rather than custom names means GA4's own funnel reports understand
+  // these without anybody building a report — and `item_name` on the event
+  // carries which option was chosen.
+  BumpSelected: "add_to_cart",
+  BumpDeclined: "remove_from_cart",
+  UpsellSelected: "add_to_cart",
+  UpsellDeclined: "remove_from_cart",
 };
 
 /**
@@ -80,7 +106,18 @@ export const SERVER_ONLY: EventName[] = ["Subscribe"];
  * These go through fbq('trackCustom', …) instead, which is what a custom event
  * has always needed.
  */
-export const META_CUSTOM: EventName[] = ["LessonStarted", "LessonCompleted"];
+export const META_CUSTOM: EventName[] = [
+  "LessonStarted",
+  "LessonCompleted",
+  // Meta has AddToCart, but these are not it. AddToCart is already sent when a
+  // buy button is pressed, and reporting a ticked bump under the same name
+  // would inflate that number with people who never reached a checkout — and
+  // then optimise delivery against it. Custom names keep both readable.
+  "BumpSelected",
+  "BumpDeclined",
+  "UpsellSelected",
+  "UpsellDeclined",
+];
 
 /** Events with no money on them; sending a value would invent revenue. */
 export const NO_VALUE: EventName[] = [
@@ -90,6 +127,10 @@ export const NO_VALUE: EventName[] = [
   "CompleteRegistration",
   "LessonStarted",
   "LessonCompleted",
+  // A decline moves no money. The value belongs on the accept, where there is
+  // an amount that might actually be charged.
+  "BumpDeclined",
+  "UpsellDeclined",
 ];
 
 /**

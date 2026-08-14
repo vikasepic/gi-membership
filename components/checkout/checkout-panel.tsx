@@ -102,9 +102,38 @@ export function CheckoutPanel({
         )}
 
         <div className="flex flex-col gap-2">
-          <h1 className="font-display text-2xl leading-tight md:text-3xl">{title}</h1>
-          {tagline && <p className="text-muted">{tagline}</p>}
-          {note && <p className="text-sm text-muted">{note}</p>}
+          {/* Sized inline, and that is not laziness.
+              The store's typography writes `:root h1`, which is 0-1-1 and
+              beats every Tailwind size class (0-1-0) — so this heading rendered
+              at whatever the SALES pages are set to no matter what class it
+              carried, which on this store is around 90px. Two products deep on
+              a phone that is the entire first screen: a name the buyer already
+              knows, above the fold, instead of the thing they came to do.
+              An inline style is the only declaration that wins without
+              reaching into a setting that belongs to the sales pages.
+
+              `clamp` rather than a breakpoint because the problem is worst in
+              between: a long product name at 430px wraps to four lines and
+              pushes the card fields off the screen entirely. */}
+          <h1
+            className="font-display leading-tight text-balance"
+            style={{ fontSize: "clamp(1.15rem, 3.4vw, 1.6rem)" }}
+          >
+            {title}
+          </h1>
+          {tagline && (
+            // The tagline follows the heading down. It is set from `:root p`
+            // for the same reason and was rendering at sales-page size, which
+            // left the two of them competing with the form for the screen.
+            <p className="text-muted text-balance" style={{ fontSize: "clamp(0.9rem, 2.2vw, 1rem)" }}>
+              {tagline}
+            </p>
+          )}
+          {note && (
+            <p className="text-sm text-muted" style={{ fontSize: "0.875rem", lineHeight: 1.5 }}>
+              {note}
+            </p>
+          )}
         </div>
 
         <ul className="flex flex-col gap-3 border-t border-border pt-6">

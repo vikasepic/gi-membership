@@ -3,11 +3,13 @@ import { money } from "@/lib/money";
 import { acceptOtoAction } from "@/app/(store)/checkout/oto/actions";
 import type { Offer } from "@/lib/types";
 import {
+  chargeNowCents,
   priceLabel,
   priceTerms,
   savingAgainst,
   type OfferPrice,
 } from "@/lib/offer-prices";
+import { TrackChoiceOnSubmit, TrackClick } from "@/components/oto/track-choice";
 import { altSaving } from "@/lib/offers";
 
 // The parts of an upsell page that must never vary.
@@ -148,6 +150,25 @@ export function OtoActions({
   const alt = view.altOffer;
   // A ticked price list wins; the old pairing runs when there is none.
   const options = view.prices ?? [];
+
+  // What each answer is worth, keyed by the value the form actually posts —
+  // an index for a price list, the word "alt" for the old pairing, and "0" for
+  // the single accept, which has no choice input at all. Reported as the amount
+  // charged TODAY rather than the sticker price: an upsell on a trial takes $0
+  // now, and reporting the headline would invent revenue that never moved.
+  const reported: Record<string, { name: string; valueCents: number }> =
+    options.length > 1
+      ? Object.fromEntries(
+          options.map((p, i) => [
+            String(i),
+            { name: `${view.offer.name} — ${priceLabel(p, view.offer.currency)}`, valueCents: chargeNowCents(p) },
+          ]),
+        )
+      : {
+          "0": { name: view.offer.name, valueCents: view.chargeNowCents },
+          ...(alt ? { alt: { name: `${view.offer.name} — ${altLabel(alt)}`, valueCents: alt.priceCents } } : {}),
+        };
+  const reportParams = { content_ids: [view.offer.id], currency: view.offer.currency.toUpperCase() };
   return (
     <div className={`flex flex-col gap-4 ${align === "start" ? "items-start" : ""} ${className}`}>
       <div className={`flex flex-wrap items-stretch gap-3 ${align === "start" ? "" : "w-full"}`}>
@@ -157,6 +178,7 @@ export function OtoActions({
       {options.length > 1 ? null : (
       <form action={acceptOtoAction} className={align === "start" ? "" : "flex-1"}>
         <input type="hidden" name="token" value={view.token} />
+        <TrackChoiceOnSubmit event="UpsellSelected" options={reported} params={reportParams} />
         <button
           type="submit"
           // White on brand terracotta (#c8653d) is 3.90:1 — under AA for a
@@ -179,6 +201,7 @@ export function OtoActions({
       {options.length > 1 ? (
         <form action={acceptOtoAction} className="flex w-full flex-col gap-2">
           <input type="hidden" name="token" value={view.token} />
+          <TrackChoiceOnSubmit event="UpsellSelected" options={reported} params={reportParams} />
           {options.map((p, i) => (
             <label
               key={p.id}
@@ -223,6 +246,7 @@ export function OtoActions({
         <form action={acceptOtoAction} className={align === "start" ? "" : "flex-1"}>
           <input type="hidden" name="token" value={view.token} />
           <input type="hidden" name="choice" value="alt" />
+          <TrackChoiceOnSubmit event="UpsellSelected" options={reported} params={reportParams} />
           <button
             type="submit"
             // Ink and rule from the band, not a fixed brand colour. Terracotta
@@ -255,14 +279,16 @@ export function OtoActions({
 
       {/* Declining is as findable as accepting. A buried decline converts once
           and refunds twice. */}
-      <Link
-        href="/checkout/thank-you?oto=declined"
-        className={`text-sm underline underline-offset-4 transition-colors ${align === "start" ? "" : "text-center"} ${
-          onBand ? "text-white/60 hover:text-white" : "text-muted hover:text-fg"
-        }`}
-      >
-        {view.offer.declineLabel}
-      </Link>
+      <TrackClick event="UpsellDeclined" params={{ ...reportParams, content_name: view.offer.name }}>
+        <Link
+          href="/checkout/thank-you?oto=declined"
+          className={`text-sm underline underline-offset-4 transition-colors ${align === "start" ? "" : "text-center"} ${
+            onBand ? "text-white/60 hover:text-white" : "text-muted hover:text-fg"
+          }`}
+        >
+          {view.offer.declineLabel}
+        </Link>
+      </TrackClick>
     </div>
   );
 }

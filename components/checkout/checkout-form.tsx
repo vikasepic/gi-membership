@@ -220,6 +220,51 @@ function Inner({
     setCouponBusy(false);
   }
 
+  /**
+   * The bump decision, reported as it is made.
+   *
+   * Until now the only trace of a bump was inside the eventual Purchase, folded
+   * into one total — so "how many people are shown this and take it" was
+   * unanswerable, and a bump nobody ever ticked looked identical to one nobody
+   * was ever shown.
+   *
+   * Both shapes go through here: the single tickbox answers "main"/"none" and a
+   * list of prices answers with an index, and the value reported is whatever
+   * that resolves to rather than the offer's headline price — a bump taken on a
+   * trial is $0 today, and reporting the sticker price would invent revenue.
+   *
+   * Fired on every change, including changing your mind. That is deliberate:
+   * the last event before a Purchase is the decision that stood, and the ones
+   * before it are the hesitation, which is the more interesting number.
+   */
+  function chooseBump(next: BumpChoice) {
+    setBumpChoice(next);
+    const taken =
+      typeof next === "number"
+        ? (options[next] ?? null)
+        : next === "alt"
+          ? bumpAlt
+          : next === "main"
+            ? bump
+            : null;
+    const currency = product.currency.toUpperCase();
+    if (taken) {
+      track("BumpSelected", {
+        content_name: taken.headline,
+        content_ids: [product.slug],
+        value: taken.chargeNowCents / 100,
+        currency,
+        // Which of the ways to pay, for a bump offering more than one. The
+        // index is what the server is sent, so this is the same answer.
+        variant: typeof next === "number" ? next : next,
+      });
+    } else if (bump) {
+      // "No thanks". Only where there was something to decline — a page with no
+      // bump must not report a decline nobody was offered.
+      track("BumpDeclined", { content_name: bump.headline, content_ids: [product.slug], currency });
+    }
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -297,7 +342,7 @@ function Inner({
     bumpAlt,
     bumpOptions,
     bumpChoice,
-    setBumpChoice,
+    setBumpChoice: chooseBump,
     bumpRef,
     chosenBump,
     bumpUnanswered,

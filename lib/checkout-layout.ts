@@ -116,6 +116,8 @@ export function checkoutStarterBlocks(): Record<string, Block[]> {
             b("orderbump", { title: "One more thing" }),
           ],
           [
+            // Summary, then card, then total and button — the order the
+            // built-in checkout uses, for the reasons in DefaultCheckoutLayout.
             b("ordersummary", { title: "Your order" }),
             b("coupon"),
             b("cardfields", { heading: "Payment" }),

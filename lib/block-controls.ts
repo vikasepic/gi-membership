@@ -459,6 +459,16 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "number", key: "headingSize", label: "Heading size", min: 10, max: 48, step: 1, unit: "px" },
       { kind: "color", key: "noteColor", label: "Note", hint: "Unset follows the band." },
       { kind: "number", key: "noteSize", label: "Note size", min: 8, max: 32, step: 1, unit: "px" },
+      // The decline link. It only DRAWS on a page that has somewhere to decline
+      // to — the upsell — so on a product's sales page these two do nothing,
+      // which is why the hint says where to look for the result.
+      {
+        kind: "color",
+        key: "declineColor",
+        label: "“No thanks” link",
+        hint: "Only drawn on the upsell, where declining goes somewhere. The offer page editor previews it so you can style it here.",
+      },
+      { kind: "number", key: "declineSize", label: "“No thanks” size", min: 8, max: 32, step: 1, unit: "px" },
 
       group("Saving badge"),
       { kind: "color", key: "badgeBg", label: "Background" },

@@ -70,3 +70,65 @@ describe("when the card step is reported", () => {
     expect(form).toContain("enteredPayment.current");
   });
 });
+
+describe("the add-on decisions are reported", () => {
+  // A bump and an upsell are the two places a buyer says yes or no to something
+  // extra, and until now only the yes ever surfaced — folded into the eventual
+  // Purchase as one total. So "how many are offered this and take it" was
+  // unanswerable, and a bump nobody ticked looked like a bump nobody was shown.
+  const events = readFileSync("lib/analytics/events.ts", "utf8");
+
+  it("names all four", () => {
+    for (const e of ["BumpSelected", "BumpDeclined", "UpsellSelected", "UpsellDeclined"]) {
+      expect(events, e).toContain(`"${e}"`);
+    }
+  });
+
+  it("sends them to Meta as custom events", () => {
+    // fbq('track') only accepts Meta's own vocabulary; anything else is dropped
+    // with a console warning nobody reads, and the event never arrives.
+    const custom = events.slice(events.indexOf("export const META_CUSTOM"));
+    for (const e of ["BumpSelected", "BumpDeclined", "UpsellSelected", "UpsellDeclined"]) {
+      expect(custom.slice(0, 500), e).toContain(e);
+    }
+  });
+
+  it("does not report a decline as revenue", () => {
+    const noValue = events.slice(events.indexOf("export const NO_VALUE"));
+    expect(noValue.slice(0, 400)).toContain("BumpDeclined");
+    expect(noValue.slice(0, 400)).toContain("UpsellDeclined");
+  });
+
+  it("does not reuse AddToCart for Meta, which would inflate it", () => {
+    // AddToCart already fires when a buy button is pressed. Reporting a ticked
+    // bump under the same name would pad that number with people who never
+    // reached a checkout — and then optimise delivery against it.
+    const both = events.slice(events.indexOf("export const META_BOTH_SIDES"), events.indexOf("export const SERVER_ONLY"));
+    expect(both).not.toContain("BumpSelected");
+  });
+
+  it("fires from the bump, on the choice rather than on submit", () => {
+    const form = readFileSync("components/checkout/checkout-form.tsx", "utf8");
+    expect(form).toContain('track("BumpSelected"');
+    expect(form).toContain('track("BumpDeclined"');
+    // Routed through one function, so the tickbox and the price list cannot
+    // report differently.
+    expect(form).toContain("function chooseBump");
+  });
+
+  it("fires from the upsell, including the decline", () => {
+    const shell = readFileSync("components/oto/shell.tsx", "utf8");
+    expect(shell).toContain('event="UpsellSelected"');
+    expect(shell).toContain('event="UpsellDeclined"');
+    // Every accept form carries one — the single price, the list, and the old
+    // two-offer pairing.
+    expect(shell.split("UpsellSelected").length - 1).toBeGreaterThanOrEqual(3);
+  });
+
+  it("keeps the upsell's decline a real link", () => {
+    // Wrapped, not replaced: middle-click and open-in-new-tab still work, and
+    // the event is a side effect of the click rather than a condition of it.
+    const shell = readFileSync("components/oto/shell.tsx", "utf8");
+    expect(shell).toContain('href="/checkout/thank-you?oto=declined"');
+  });
+});

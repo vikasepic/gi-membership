@@ -87,6 +87,32 @@ html {
      container and silently kill every `position: sticky` on the site, the
      header included. `clip` refuses the scroll without becoming a scroller. */
   overflow-x: clip;
+
+  /* A button pointing at #something glides there instead of teleporting.
+
+     Every anchor on a sales page — the sticky bar, a "see the plans" button, a
+     link into the FAQ — was a native jump, and a jump is the one navigation
+     that leaves people genuinely lost: the page is suddenly somewhere else
+     with nothing to say it moved, and on a long page the commonest reaction is
+     to scroll back up to check what happened.
+
+     On the root rather than per-link, because it also governs the jumps
+     nothing here controls: a page loaded with a #hash already in the URL, and
+     browser Find. Overridden below for anyone who asks for less motion —
+     smooth scrolling is a known migraine and vestibular trigger, and this is
+     exactly the kind of long travel that provokes it. */
+  scroll-behavior: smooth;
+}
+
+/* Anything a link can point at stops clear of the header.
+
+   The site header is `position: sticky`, so a target scrolled to the very top
+   of the viewport sits UNDER it — the heading you asked for is the one thing
+   hidden when you arrive. `scroll-margin-top` is the browser's own answer and
+   costs nothing anywhere else: it applies only when something is scrolled INTO
+   view, never to layout. */
+[id] {
+  scroll-margin-top: 5.5rem;
 }
 
 body {
@@ -166,6 +192,13 @@ textarea:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Back to an instant jump. Long smooth travel is a documented trigger for
+     migraine and vestibular disorders, and someone who has asked their
+     operating system for less motion has already told us so. */
+  html {
+    scroll-behavior: auto;
+  }
+
   button:active,
   a:active,
   [role="button"]:active,

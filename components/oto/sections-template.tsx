@@ -2,9 +2,8 @@ import { OtoActions, type OtoView } from "@/components/oto/shell";
 import { OtoStickyBar } from "@/components/oto/sticky-bar";
 import { SalesPage } from "@/components/page/sales-page";
 import { offersForRows } from "@/lib/block-offers";
-import { normalizeBlocks, walkBlocks } from "@/lib/blocks";
 import { livePrices } from "@/lib/offer-prices";
-import type { SectionRow } from "@/lib/page-sections";
+import { hasStickyBarBlock, type SectionRow } from "@/lib/page-sections";
 import type { GlobalBlocks } from "@/lib/section-to-blocks";
 import { money } from "@/lib/money";
 
@@ -30,13 +29,10 @@ export async function SectionsOto({
   const { offer, altOffer: alt } = view;
   const priceLabel = money(view.chargeNowCents, offer.currency);
 
-  // Does the page already carry a Sticky bar block?
-  const hasStickyBlock = rows.some((row) => {
-    const content = row.content as { blocks?: unknown } | null;
-    return Array.isArray(content?.blocks)
-      ? walkBlocks(normalizeBlocks(content.blocks)).some((b) => b.type === "stickybar")
-      : false;
-  });
+  // Does the page already carry a Sticky bar block? The offer's page editor
+  // asks the same question through the same helper, so what it tells you and
+  // what this renders cannot drift apart.
+  const hasStickyBlock = hasStickyBarBlock(rows);
 
   return (
     <div className="pb-28">

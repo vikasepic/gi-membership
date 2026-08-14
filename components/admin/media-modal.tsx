@@ -511,7 +511,15 @@ function Library({
  * twenty of those at once is how a shared box falls over — the one thing an
  * upload button must never do to the four other apps on it.
  */
-function useUploader(kind: MediaKind, onItem: (item: PickedMedia) => void) {
+/**
+ * Exported so the Media page can upload too.
+ *
+ * That page listed every file in the store and had no way to add one — the only
+ * uploader in the admin was inside this modal, which you can only reach from a
+ * field that wants a picture. So the page whose whole job is "every file this
+ * store holds" was the one place you could not put a file.
+ */
+export function useUploader(kind: MediaKind, onItem: (item: PickedMedia) => void) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(0);
   const [total, setTotal] = useState(0);
@@ -571,7 +579,7 @@ function useUploader(kind: MediaKind, onItem: (item: PickedMedia) => void) {
 }
 
 /** A hidden file input, `multiple`, that resets so the same file can be re-picked. */
-function FilePicker({
+export function FilePicker({
   inputRef,
   accept,
   onFiles,

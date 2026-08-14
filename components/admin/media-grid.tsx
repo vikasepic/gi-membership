@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FilePicker, useUploader } from "@/components/admin/media-modal";
 import type { MediaWithUrl } from "@/lib/media-urls";
 import type { MediaKind } from "@/lib/media-library";
 import {
@@ -20,9 +22,48 @@ const TABS: { key: MediaKind | null; label: string }[] = [
 
 export function MediaGrid({ items, kind }: { items: MediaWithUrl[]; kind: MediaKind | null }) {
   const [open, setOpen] = useState<string | null>(null);
+  const [over, setOver] = useState(false);
+  const router = useRouter();
+  const input = useRef<HTMLInputElement>(null);
+  // The tab you are on decides what the picker accepts. On Everything that is
+  // images, because it is what people are almost always adding — and the file
+  // dialog still lets them choose anything.
+  const up = useUploader(kind ?? "image", () => {});
+
+  const send = async (files: FileList | null) => {
+    if (!files?.length) return;
+    await up.send(files);
+    // The grid is server-rendered, so it does not know anything arrived.
+    router.refresh();
+  };
 
   return (
-    <div className="flex flex-col gap-5">
+    <div
+      // The whole page takes a drop, not a small dashed box in a corner.
+      // Aiming is the part of dragging a file that people get wrong, and the
+      // page is the biggest target available.
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        // Only when the pointer actually leaves the page — moving between two
+        // cards fires dragleave on the one being left, and without this the
+        // highlight flickers the whole way across the grid.
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setOver(false);
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.files.length) return;
+        e.preventDefault();
+        setOver(false);
+        void send(e.dataTransfer.files);
+      }}
+      className={`flex flex-col gap-5 rounded-2xl transition-colors ${
+        over ? "outline outline-2 outline-offset-8 outline-primary" : ""
+      }`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <nav className="flex flex-wrap gap-2">
           {TABS.map((t) => (
@@ -39,14 +80,28 @@ export function MediaGrid({ items, kind }: { items: MediaWithUrl[]; kind: MediaK
             </Link>
           ))}
         </nav>
-        <Adopt />
+        <span className="flex flex-wrap items-center gap-3">
+          <span className="flex items-center gap-3">
+            <FilePicker inputRef={input} accept={up.accept} onFiles={send} />
+            <button
+              type="button"
+              onClick={() => input.current?.click()}
+              disabled={up.busy}
+              className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-fg transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {up.busy ? up.label : "Upload"}
+            </button>
+            {up.error && <span className="text-xs text-primary">{up.error}</span>}
+          </span>
+          <Adopt />
+        </span>
       </div>
 
       {items.length === 0 ? (
         <p className="text-muted">
-          Nothing here yet. Upload a cover or a lesson file and it will appear — or use{" "}
-          <b className="font-medium text-fg">Find files</b> above to take in anything uploaded
-          before this page existed.
+          Nothing here yet. Press <b className="font-medium text-fg">Upload</b>, or drop files
+          anywhere on this page — or use <b className="font-medium text-fg">Find files</b> to take
+          in anything uploaded before this page existed.
         </p>
       ) : (
         <ul className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">

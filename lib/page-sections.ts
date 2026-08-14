@@ -1,4 +1,5 @@
 import { normalizeColor, readableInk, tint } from "@/lib/color";
+import { normalizeBlocks, walkBlocks } from "@/lib/blocks";
 
 // The ten-section sales page.
 //
@@ -675,6 +676,23 @@ export const CHECKOUT_SECTIONS: SectionDef[] = [
     defaults: {},
   },
 ];
+
+/**
+ * Does this page carry a Sticky bar block of its own?
+ *
+ * Asked in two places that must never disagree: the upsell, which suppresses
+ * its built-in bar when the answer is yes, and the offer's page editor, which
+ * tells you which of the two you are looking at. Two copies of this check would
+ * be a panel that says one thing and a page that does the other.
+ */
+export function hasStickyBarBlock(rows: { content?: unknown }[]): boolean {
+  return rows.some((row) => {
+    const blocks = (row.content as { blocks?: unknown } | null)?.blocks;
+    return Array.isArray(blocks)
+      ? walkBlocks(normalizeBlocks(blocks)).some((b) => b.type === "stickybar")
+      : false;
+  });
+}
 
 export const SECTION_KEYS = SECTIONS.map((s) => s.key);
 export const HOME_SECTION_KEYS = HOME_SECTIONS.map((s) => s.key);

@@ -510,6 +510,8 @@ function Inner({
               priceSize: p.priceSize == null ? null : num(p.priceSize, 0),
               termsSize: p.termsSize == null ? null : num(p.termsSize, 0),
               noteSize: p.noteSize == null ? null : num(p.noteSize, 0),
+              declineColor: str(p.declineColor) || null,
+              declineSize: p.declineSize == null ? null : num(p.declineSize, 0),
               buttonSize: p.buttonSize == null ? null : num(p.buttonSize, 0),
               align: (str(p.align, "center") as "left" | "center" | "right"),
               badgeBg: str(p.badgeBg) || null,

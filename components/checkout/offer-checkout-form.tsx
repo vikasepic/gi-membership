@@ -151,6 +151,60 @@ function Inner({
         </fieldset>
       )}
 
+      {/* The same summary the product checkout carries, in the same place.
+          It was missing here entirely, so the one page where somebody is
+          confirming a subscription showed a total with nothing above it saying
+          what the total was FOR. */}
+      <div className="flex flex-col gap-4 rounded-3xl border border-border bg-surface p-6">
+        <span className="kicker text-muted">Order summary</span>
+
+        <div className="flex items-center justify-between gap-4 text-sm">
+          <span className="min-w-0 text-muted">{offer.headline}</span>
+          <span className="shrink-0">
+            {money(picked ? picked.priceCents : offer.chargeNowCents, offer.currency)}
+          </span>
+        </div>
+
+        {/* What it renews at, where that differs from what is taken today —
+            which is every trial. Saying only "$0 due today" on a subscription
+            is how a first renewal becomes a dispute. */}
+        {picked && chargeNowCents(picked) !== picked.priceCents && (
+          <div className="flex items-center justify-between gap-4 text-sm">
+            <span className="text-muted">Due today</span>
+            <span className="shrink-0">{money(chargeNowCents(picked), offer.currency)}</span>
+          </div>
+        )}
+
+        {/* Sized inline for the same reason the product checkout's is: the
+            store writes `:root p` for its sales pages and it beats every class
+            here, which turned this footnote into a paragraph. */}
+        <p className="text-xs text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
+          Tax is calculated at your country&rsquo;s rate and shown on your receipt.
+        </p>
+
+        <div className="flex items-baseline justify-between border-t border-border pt-4">
+          <span className="text-muted">Due today</span>
+          <span className="font-display text-2xl">
+            {money(picked ? chargeNowCents(picked) : offer.chargeNowCents, offer.currency)}
+          </span>
+        </div>
+      </div>
+      {picked
+        ? priceTerms(picked, offer.currency) && (
+            <p className="-mt-3 text-sm text-muted" style={{ fontSize: "0.875rem", lineHeight: 1.5 }}>
+              {priceTerms(picked, offer.currency)}
+            </p>
+          )
+        : offer.recurringNote && (
+            <p className="-mt-3 text-sm text-muted" style={{ fontSize: "0.875rem", lineHeight: 1.5 }}>
+              {offer.recurringNote}
+            </p>
+          )}
+
+      {/* The card fields come after the summary, never before it.
+          What am I buying, what does it cost, then how do I pay — that is the
+          order the questions arrive in, and a form that asks for a card above
+          the total is asking somebody to commit before it has said to what. */}
       <fieldset className="flex flex-col gap-3">
         <legend className="kicker mb-2 text-muted">Payment method</legend>
         <PaymentElement />
@@ -161,18 +215,6 @@ function Inner({
           {error}
         </p>
       )}
-
-      <div className="flex items-center justify-between border-t border-border pt-4">
-        <span className="text-muted">Due today</span>
-        <span className="font-display text-2xl">
-          {money(picked ? chargeNowCents(picked) : offer.chargeNowCents, offer.currency)}
-        </span>
-      </div>
-      {picked
-        ? priceTerms(picked, offer.currency) && (
-            <p className="-mt-3 text-sm text-muted">{priceTerms(picked, offer.currency)}</p>
-          )
-        : offer.recurringNote && <p className="-mt-3 text-sm text-muted">{offer.recurringNote}</p>}
 
       <button
         type="submit"
