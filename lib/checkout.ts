@@ -24,7 +24,7 @@ import { otoSigningSecret } from "@/lib/env";
 import { ensureUserProfile } from "@/lib/users";
 import { applyPendingEntitlements } from "@/lib/app-sync";
 import { sendCrmEvent, type CrmItem } from "@/lib/crm";
-import { resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
+import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
 import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
 import { markLeadConverted } from "@/lib/leads";
 import type { Offer } from "@/lib/types";
@@ -417,6 +417,17 @@ export async function fulfilOffer(args: {
   order: { id: string; stripeCustomerId: string };
   offer: Offer;
   paymentMethodId: string;
+  /**
+   * A code the buyer typed, already resolved on the server.
+   *
+   * Applied two different ways because Stripe has two different mechanisms: a
+   * subscription is handed the promotion code and Stripe honours the coupon's
+   * own duration, while a one-off charge has no such concept and simply has the
+   * money taken off the amount. Doing the second to a subscription — editing
+   * `unit_amount` down — would discount every renewal forever, silently, which
+   * is the expensive version of this bug.
+   */
+  coupon?: { promotionCodeId: string; discountCents: number } | null;
   // Override for flows where the order row itself is created per attempt (the
   // standalone offer checkout mints a fresh $0 order each visit). Keying on the
   // SetupIntent instead makes Stripe dedupe the subscription even if two orders
@@ -424,7 +435,12 @@ export async function fulfilOffer(args: {
   idempotencyKey?: string;
 }): Promise<{ subscriptionId?: string; paymentIntentId?: string }> {
   const { order, offer, paymentMethodId } = args;
-  const idem = args.idempotencyKey ?? `fulfil_${order.id}_${offer.id}`;
+  const coupon = args.coupon ?? null;
+  // The code goes in the key. Without it, applying a coupon to an offer someone
+  // had already tried to buy without one would return Stripe's cached
+  // subscription from the first attempt — at full price, with no error.
+  const idem =
+    (args.idempotencyKey ?? `fulfil_${order.id}_${offer.id}`) + (coupon ? `_${coupon.promotionCodeId}` : "");
 
   if (offer.billingType === "recurring") {
     const productId = await ensureStripeProduct(offer);
@@ -449,6 +465,10 @@ export async function fulfilOffer(args: {
         // who has had one, so this is the single place it is granted and the
         // single place worth recording.
         trial_period_days: offer.trialDays ?? undefined,
+        // Stripe applies it for as long as the coupon says. On a trial that is
+        // the first REAL invoice, not today's £0 one, which is the behaviour a
+        // buyer expects and the one this cannot get wrong by computing itself.
+        ...(coupon ? { discounts: [{ promotion_code: coupon.promotionCodeId }] } : {}),
         // Tag as store-created so Content Engine's webhook doesn't clobber it.
         // offerName rides along for the same reason as the base charge: Zapier
         // and the dashboard can only filter on what Stripe holds.
@@ -466,7 +486,11 @@ export async function fulfilOffer(args: {
     return { subscriptionId: sub.id };
   }
 
-  const charge = immediateChargeCents(offer);
+  // A PaymentIntent cannot take a promotion code, so the discount is money off
+  // the amount — never below the floor Stripe will accept.
+  const charge = coupon
+    ? Math.max(MIN_CHARGE_CENTS, immediateChargeCents(offer) - coupon.discountCents)
+    : immediateChargeCents(offer);
   const pi = await stripe().paymentIntents.create(
     {
       amount: charge,

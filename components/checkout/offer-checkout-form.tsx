@@ -17,6 +17,8 @@ export type OfferSummary = {
 
 import { money } from "@/lib/money";
 import { priceLabel, priceTerms, chargeNowCents, type OfferPrice } from "@/lib/offer-prices";
+import { MIN_CHARGE_CENTS_CLIENT } from "@/components/checkout/checkout-types";
+import { previewOfferCouponAction } from "@/app/(store)/checkout/offer/actions";
 
 export function OfferCheckoutForm({
   offer,
@@ -73,6 +75,43 @@ function Inner({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [couponInput, setCouponInput] = useState("");
+  const [coupon, setCoupon] = useState<
+    { label: string; discountCents: number; clamped: boolean; recurringDiscount: boolean } | null
+  >(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponBusy, setCouponBusy] = useState(false);
+
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponBusy(true);
+    setCouponError(null);
+    const res = await previewOfferCouponAction(offer.id, code, pick >= 0 ? pick : undefined);
+    if (!res.ok) {
+      setCoupon(null);
+      setCouponError(res.error);
+    } else {
+      setCoupon(res);
+    }
+    setCouponBusy(false);
+  }
+
+  // Recurring where the chosen price renews — and where nothing has been
+  // chosen yet, from the offer's own note, which is the only signal this
+  // component is given.
+  const isRecurring = picked ? Boolean(picked.interval) : Boolean(offer.recurringNote);
+
+  // What is taken today, after any discount that applies today.
+  //
+  // On a subscription the coupon lands on the first REAL invoice — Stripe
+  // applies it for the coupon's own duration — so today's figure is unchanged
+  // and the saving is stated separately. Subtracting it here would promise a
+  // reduction on a $0 trial charge that no invoice will ever show.
+  const grossNow = picked ? chargeNowCents(picked) : offer.chargeNowCents;
+  const dueNow =
+    coupon && !isRecurring ? Math.max(MIN_CHARGE_CENTS_CLIENT, grossNow - coupon.discountCents) : grossNow;
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -86,7 +125,12 @@ function Inner({
       return;
     }
 
-    const res = await startOffer(offer.id, pick >= 0 ? pick : undefined);
+    const res = await startOffer(
+      offer.id,
+      pick >= 0 ? pick : undefined,
+      // The code, never the amount. The server prices it again.
+      coupon ? couponInput.trim() : null,
+    );
     if (!res.ok) {
       setError(res.error);
       setBusy(false);
@@ -160,9 +204,16 @@ function Inner({
 
         <div className="flex items-center justify-between gap-4 text-sm">
           <span className="min-w-0 text-muted">{offer.headline}</span>
-          <span className="shrink-0">
-            {money(picked ? picked.priceCents : offer.chargeNowCents, offer.currency)}
-          </span>
+          {/* The recurring price where there is one to state, and nothing at
+              all where there is not: an offer on a trial with no price list
+              would otherwise print "$0" beside its name and "$0" again as the
+              total, which reads as a free product rather than a trial. The
+              renewal line under this box carries the real figure. */}
+          {(picked || offer.chargeNowCents > 0) && (
+            <span className="shrink-0">
+              {money(picked ? picked.priceCents : offer.chargeNowCents, offer.currency)}
+            </span>
+          )}
         </div>
 
         {/* What it renews at, where that differs from what is taken today —
@@ -175,6 +226,15 @@ function Inner({
           </div>
         )}
 
+        {coupon && (
+          <div className="flex items-center justify-between gap-4 text-sm">
+            <span className="min-w-0 text-navy">{coupon.label}</span>
+            <span className="shrink-0 text-navy">
+              −{money(coupon.discountCents, offer.currency)}
+            </span>
+          </div>
+        )}
+
         {/* Sized inline for the same reason the product checkout's is: the
             store writes `:root p` for its sales pages and it beats every class
             here, which turned this footnote into a paragraph. */}
@@ -182,11 +242,69 @@ function Inner({
           Tax is calculated at your country&rsquo;s rate and shown on your receipt.
         </p>
 
+        {/* The same plain field the product checkout carries — not a "have a
+            code?" toggle. Hiding it makes people leave to hunt for one, and
+            this store hands its codes out deliberately. */}
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={couponInput}
+              onChange={(e) => {
+                setCouponInput(e.target.value);
+                setCouponError(null);
+              }}
+              // Enter must not submit the payment form. Pressing it to apply a
+              // code and having a card charged instead is how a purchase
+              // becomes a chargeback.
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void applyCoupon();
+                }
+              }}
+              placeholder="Discount code"
+              aria-label="Discount code"
+              autoCapitalize="characters"
+              spellCheck={false}
+              className="w-full rounded-xl border border-border bg-surface px-3.5 py-3 text-sm uppercase outline-none transition-colors placeholder:normal-case placeholder:text-muted focus:border-primary"
+            />
+            <button
+              type="button"
+              onClick={() => void applyCoupon()}
+              disabled={couponBusy || !couponInput.trim()}
+              className="shrink-0 rounded-xl border border-border px-4 text-sm font-medium transition-colors hover:border-primary disabled:opacity-50"
+            >
+              {couponBusy ? "…" : coupon ? "Change" : "Apply"}
+            </button>
+          </div>
+          {couponError && (
+            <p className="text-xs text-primary" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
+              {couponError}
+            </p>
+          )}
+          {/* Said out loud, because a subscription is the one place where "20%
+              off" can mean either one bill or every bill, and the buyer finds
+              out on the second one. Stripe's coupon decides which; this reports
+              what it actually chose. */}
+          {coupon && isRecurring && (
+            <p className="text-xs text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
+              {coupon.recurringDiscount
+                ? "Applies to this payment and the renewals after it."
+                : "Applies to your first payment. Renewals are at the full price."}
+            </p>
+          )}
+          {coupon?.clamped && (
+            <p className="text-xs text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
+              Discount capped — {money(MIN_CHARGE_CENTS_CLIENT, offer.currency)} is the smallest
+              charge a card can take.
+            </p>
+          )}
+        </div>
+
         <div className="flex items-baseline justify-between border-t border-border pt-4">
           <span className="text-muted">Due today</span>
-          <span className="font-display text-2xl">
-            {money(picked ? chargeNowCents(picked) : offer.chargeNowCents, offer.currency)}
-          </span>
+          <span className="font-display text-2xl">{money(dueNow, offer.currency)}</span>
         </div>
       </div>
       {picked

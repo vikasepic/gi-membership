@@ -7,6 +7,7 @@ import { ownershipFor, fulfilOffer, grantOfferOwnership, customerForUser } from 
 import { stripe } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
 import { ensureUserProfile } from "@/lib/users";
+import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
 
 // Standalone checkout for a single offer, for a member who has no card on file
 // yet (they were gifted access, or their only purchase predates a saved card).
@@ -22,12 +23,65 @@ export type StartResult =
   | { ok: true; clientSecret: string; customerId: string }
   | { ok: false; error: string };
 
+/**
+ * What a code is worth against this offer.
+ *
+ * The subtotal it is measured against is NOT what is charged today. A trial
+ * takes nothing today, so resolving against that would refuse every code with
+ * "this order is already at the minimum charge" — on the offers where a
+ * discount matters most. The honest subtotal for a subscription is the price
+ * that will actually be billed, which is what Stripe will discount too.
+ */
+function couponSubtotal(offer: { billingType: string; priceCents: number }, chargeNow: number): number {
+  return offer.billingType === "recurring" ? offer.priceCents : chargeNow;
+}
+
+/**
+ * Check a code before anyone commits to it.
+ *
+ * Display only. What is actually charged is resolved again at fulfilment, from
+ * the code stored on the SetupIntent by US — so a tampered preview can change
+ * what a page SAYS and never what a card is charged.
+ */
+export async function previewOfferCoupon(args: {
+  offerId: string;
+  code: string;
+  priceChoice?: number;
+}): Promise<
+  | { ok: true; label: string; discountCents: number; clamped: boolean; recurringDiscount: boolean }
+  | { ok: false; error: string }
+> {
+  const raw = await getOffer(args.offerId);
+  if (!raw || !raw.active) return { ok: false, error: "That offer isn’t available any more." };
+  const shown = livePrices(raw.prices);
+  const price = args.priceChoice !== undefined ? priceForChoice(shown, args.priceChoice) : null;
+  if (args.priceChoice !== undefined && !price) {
+    return { ok: false, error: "That option is no longer available." };
+  }
+  const offer = price ? offerAtPrice(raw, price) : raw;
+  const res = await resolveCoupon(
+    args.code,
+    couponSubtotal(offer, immediateChargeCents(offer)),
+    offer.currency,
+  );
+  if (!res.ok) return res;
+  return {
+    ok: true,
+    label: res.coupon.label,
+    discountCents: res.coupon.discountCents,
+    clamped: res.coupon.clamped,
+    recurringDiscount: res.coupon.recurringDiscount,
+  };
+}
+
 export async function startOfferCheckout(args: {
   userId: string;
   email: string;
   offerId: string;
   /** Which way to pay — an INDEX into the list this offer's page shows. */
   priceChoice?: number;
+  /** The code they typed. Re-checked here; never trusted for an amount. */
+  couponCode?: string | null;
 }): Promise<StartResult> {
   const offer = await getOffer(args.offerId);
   if (!offer || !offer.active) return { ok: false, error: "That offer isn’t available any more." };
@@ -51,6 +105,23 @@ export async function startOfferCheckout(args: {
   const storeId = await getStoreId();
   const customerId = await customerForUser(args.userId, args.email, storeId);
 
+  // Resolved now so a dead code fails while they can still see the field,
+  // rather than after the card is saved and there is no form left to say it on.
+  // The RESULT is not carried — only the code — because the amount is worked
+  // out again at fulfilment against the offer as it stands then.
+  let coupon: AppliedCoupon | null = null;
+  if (args.couponCode?.trim()) {
+    const chosen = args.priceChoice !== undefined ? priceForChoice(shown, args.priceChoice) : null;
+    const priced = chosen ? offerAtPrice(offer, chosen) : offer;
+    const res = await resolveCoupon(
+      args.couponCode,
+      couponSubtotal(priced, immediateChargeCents(priced)),
+      priced.currency,
+    );
+    if (!res.ok) return { ok: false, error: res.error };
+    coupon = res.coupon;
+  }
+
   const si = await stripe().setupIntents.create({
     customer: customerId,
     usage: "off_session",
@@ -66,6 +137,10 @@ export async function startOfferCheckout(args: {
         args.priceChoice !== undefined
           ? (priceForChoice(shown, args.priceChoice)?.id ?? "")
           : "",
+      // The code, not the discount. An amount written here would be an amount
+      // the browser could have influenced at preview time; the code is re-priced
+      // on the way back against whatever the coupon is worth then.
+      couponCode: coupon?.code ?? "",
     },
   });
   if (!si.client_secret) return { ok: false, error: "Could not start checkout." };
@@ -115,9 +190,39 @@ export async function completeOfferCheckout(
   // ever having had a profile row created for them.
   const email = (await ensureUserProfile(userId))?.email ?? "";
 
+  // The code WE wrote at start, priced again now. Never the amount previewed:
+  // between the preview and here a coupon can expire, hit its redemption limit
+  // or be deleted, and honouring a discount Stripe no longer recognises means
+  // an invoice that will not match the order.
+  //
+  // A code that has died since is dropped rather than refused. The card is
+  // already saved and the buyer is committed; failing the whole purchase over
+  // a discount is the worse of the two outcomes, and the order records what
+  // was actually charged.
+  const savedCode = si.metadata?.couponCode ?? "";
+  let coupon: AppliedCoupon | null = null;
+  if (savedCode) {
+    const res = await resolveCoupon(
+      savedCode,
+      couponSubtotal(offer, immediateChargeCents(offer)),
+      offer.currency,
+    );
+    coupon = res.ok ? res.coupon : null;
+  }
+
   // order_items.order_id is NOT NULL, so a standalone offer still books an
   // order. It is genuinely a $0 order when the offer is a trial.
-  const chargeNow = immediateChargeCents(offer);
+  //
+  // On a subscription the discount is Stripe's to apply — it lands on the first
+  // real invoice, not on today's $0 — so the order books the undiscounted
+  // charge-now figure and records the code beside it. Taking it off here would
+  // book money nobody was charged today.
+  const gross = immediateChargeCents(offer);
+  const discount =
+    coupon && offer.billingType !== "recurring"
+      ? Math.min(coupon.discountCents, Math.max(0, gross - MIN_CHARGE_CENTS))
+      : 0;
+  const chargeNow = gross - discount;
   const { data: order, error: orderErr } = await db
     .from("orders")
     .insert({
@@ -126,8 +231,10 @@ export async function completeOfferCheckout(
       email,
       status: "paid",
       currency: offer.currency,
-      subtotal_cents: chargeNow,
+      subtotal_cents: gross,
       total_cents: chargeNow,
+      coupon_code: coupon?.code ?? null,
+      discount_cents: discount,
       stripe_customer_id: customerId,
       buyer_country: normalizeCountry(country) ?? null,
     })
@@ -141,6 +248,7 @@ export async function completeOfferCheckout(
       order: { id: order.id as string, stripeCustomerId: customerId },
       offer,
       paymentMethodId: pm,
+      coupon: coupon ? { promotionCodeId: coupon.promotionCodeId, discountCents: coupon.discountCents } : null,
       idempotencyKey: `offerco_${setupIntentId}_${offer.id}`,
     });
   } catch {

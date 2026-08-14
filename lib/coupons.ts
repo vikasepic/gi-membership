@@ -22,7 +22,21 @@ export const MIN_CHARGE_CENTS = 50;
 
 export type AppliedCoupon = {
   code: string;
+  /**
+   * Stripe's own id for the promotion code.
+   *
+   * Needed by the subscription path and by nothing else. A PaymentIntent has no
+   * concept of a promotion code, so a one-off charge is discounted by
+   * subtracting `discountCents`; a subscription is handed the code itself, and
+   * Stripe then applies it for however long the coupon says — once, three
+   * months, forever. That duration is the merchant's decision, made in Stripe,
+   * and re-implementing it here is how the invoice and the receipt start
+   * disagreeing.
+   */
+  promotionCodeId: string;
   discountCents: number;
+  /** True when this coupon renews with the subscription rather than applying once. */
+  recurringDiscount: boolean;
   /** Human label for the order summary, e.g. "SAVE20 — 20% off". */
   label: string;
   /** True when the discount was capped by the minimum charge. */
@@ -111,5 +125,18 @@ export async function resolveCoupon(
     return { ok: false, error: "This order is already at the minimum charge." };
   }
 
-  return { ok: true, coupon: { code, discountCents: discount, label, clamped } };
+  return {
+    ok: true,
+    coupon: {
+      code,
+      promotionCodeId: promo.id,
+      discountCents: discount,
+      // `duration: "once"` is the common case and the one the display assumes.
+      // Anything else keeps discounting later invoices, which the buyer should
+      // be told about rather than discovering on their second bill.
+      recurringDiscount: c.duration !== "once",
+      label,
+      clamped,
+    },
+  };
 }
