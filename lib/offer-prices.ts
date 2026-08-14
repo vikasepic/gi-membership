@@ -44,10 +44,21 @@ export const INTERVALS = ["day", "week", "month", "year"] as const;
  * readers sorting differently is how the checkout ends up charging the option
  * beside the one that was ticked.
  */
-export function sortPrices(rows: (OfferPrice & { sortOrder?: number })[]): OfferPrice[] {
+export function sortPrices(
+  rows: (Partial<OfferPrice> & { sortOrder?: number })[],
+): OfferPrice[] {
   return [...rows]
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-    .map(({ sortOrder: _drop, ...price }) => price);
+    .map(({ sortOrder: _drop, ...price }) => ({
+      ...newOfferPrice(price.id ?? ""),
+      ...price,
+      // `label` is NULLABLE in the database and NOT nullable here, which is a
+      // difference the type system cannot see: a null arrives typed as string
+      // and the first `.trim()` throws. Every offer backfilled by 0048 has one.
+      // Coerced at the single point of hydration rather than defended at each
+      // of the six places that read it.
+      label: price.label ?? "",
+    }));
 }
 
 /** A blank price to start from — one-time, so nothing is claimed by default. */

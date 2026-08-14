@@ -10,6 +10,7 @@ import {
   priceTerms,
   savingAgainst,
   shownPrices,
+  sortPrices,
   type OfferPrice,
 } from "@/lib/offer-prices";
 
@@ -125,5 +126,38 @@ describe("what a longer term saves", () => {
     expect(savingAgainst(YEARLY, MONTHLY)).toBe(null);
     expect(savingAgainst(MONTHLY, ONCE)).toBe(null);
     expect(savingAgainst(MONTHLY, { ...YEARLY, priceCents: 34799 })).toBe(null);
+  });
+});
+
+/**
+ * What the database actually hands back.
+ *
+ * `offer_prices.label` is nullable there and not nullable here, and a
+ * difference like that is invisible to tsc: the null arrives typed as a string
+ * and the first `.trim()` throws. Every price the 0048 backfill created has
+ * one, so this took down every admin screen that listed a price — the type was
+ * green, the tests were green, the build was green, and a person found it.
+ */
+describe("hydrating a price row", () => {
+  it("turns a null label into an empty one", () => {
+    const [row] = sortPrices([{ id: "a", label: null as unknown as string, priceCents: 900 }]);
+    expect(row.label).toBe("");
+    expect(() => priceSummary(row, "usd")).not.toThrow();
+  });
+
+  it("fills in anything else the row is missing", () => {
+    // A row selected with fewer columns, or an older row, must still come out
+    // as a whole price rather than as something with holes in it.
+    const [row] = sortPrices([{ id: "b" }]);
+    expect(row).toMatchObject({ billingType: "one_time", intervalCount: 1, archived: false });
+  });
+
+  it("still orders by sortOrder and drops it", () => {
+    const rows = sortPrices([
+      { id: "second", sortOrder: 1 },
+      { id: "first", sortOrder: 0 },
+    ]);
+    expect(rows.map((r) => r.id)).toEqual(["first", "second"]);
+    expect("sortOrder" in rows[0]).toBe(false);
   });
 });
