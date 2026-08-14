@@ -1,7 +1,7 @@
 import { blockRendersNothing, styleFor, type Block, type Device } from "@/lib/blocks";
 import { PriceChoice } from "@/components/page/price-choice";
 import { StickyBarBlock } from "@/components/page/sticky-bar-block";
-import { priceLabel, type OfferPrice } from "@/lib/offer-prices";
+import { chosenPrices, priceLabel, type OfferPrice } from "@/lib/offer-prices";
 import { Countdown } from "@/components/page/countdown";
 import { SlideRail } from "@/components/page/slide-rail";
 import { evergreenKey, evergreenMinutes, instantFrom } from "@/lib/countdown";
@@ -463,7 +463,11 @@ function Inner({
     case "prices": {
       // Named offer first, then whatever this page is already selling.
       const named = str(p.offerId) ? money?.byOffer?.[str(p.offerId)] : undefined;
-      const list = named?.prices ?? money?.prices ?? [];
+      // Only the ways to pay this block was told to show. Deliberately NOT
+      // `shownPrices`, which is the placement rule: empty there means the
+      // headline price alone, and empty here means the whole menu — including
+      // a price added after this block was saved.
+      const list = chosenPrices(named?.prices ?? money?.prices ?? [], p.priceIds);
       const currency = named?.currency ?? money?.currency ?? "usd";
       const href = named?.buyHref ?? money?.buyHref ?? null;
       if (list.length === 0) {

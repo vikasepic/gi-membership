@@ -350,6 +350,9 @@ export function PageEditor({
             row={openRow}
             money={moneyWithPrices}
             owner={ownerType}
+            // An offer's page IS that offer, so a Ways to pay block on it can
+            // list its prices without anybody naming the offer again.
+            ownerOfferId={ownerType === "offer" ? ownerId : undefined}
             store={store}
             onChange={(next) => patch(openRow.sectionKey, next)}
             device={device}
@@ -495,6 +498,7 @@ function SectionPanel({
   owner,
   store,
   onSave,
+  ownerOfferId,
 }: {
   row: SectionRow;
   money: PageMoney;
@@ -504,6 +508,7 @@ function SectionPanel({
   onContext: (e: React.MouseEvent, row: SectionRow) => void;
   preview?: SitePreview;
   owner: OwnerType;
+  ownerOfferId?: string;
   store?: StoreRender;
   /** Writes every changed section. Handed to the builder so it can finish. */
   onSave: () => Promise<void>;
@@ -562,6 +567,7 @@ function SectionPanel({
           onChange={(next) => setField("blocks", next)}
           preview={preview}
           owner={owner}
+          ownerOfferId={ownerOfferId}
           store={store}
           onSave={onSave}
         />
@@ -617,6 +623,7 @@ function BlockCanvasField({
   preview,
   owner,
   onSave,
+  ownerOfferId,
 }: {
   row: SectionRow;
   title: string;
@@ -625,6 +632,7 @@ function BlockCanvasField({
   preview?: SitePreview;
   /** Passed through to the tray: the storefront blocks are one page's only. */
   owner: OwnerType;
+  ownerOfferId?: string;
   store?: StoreRender;
   onSave: () => Promise<void>;
 }) {
@@ -698,6 +706,7 @@ function BlockCanvasField({
           onSave={onSave}
           preview={preview}
           owner={owner}
+          ownerOfferId={ownerOfferId}
           globals={globals}
           onSaveGlobal={async (id, next) => {
             const fd = new FormData();

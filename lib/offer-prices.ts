@@ -161,6 +161,26 @@ export function livePrices(prices: OfferPrice[]): OfferPrice[] {
   return prices.filter((p) => !p.archived);
 }
 
+/**
+ * The ways to pay a PAGE block shows.
+ *
+ * Not `shownPrices`, and the difference matters. A placement offers one thing
+ * with an alternative, so an empty list there means "the headline price" — one
+ * option. A page is a menu, so an empty list here means the whole menu.
+ *
+ * Getting these two the wrong way round is not theoretical: it already shipped
+ * once, as a builder showing two prices above a live page showing one.
+ */
+export function chosenPrices(prices: OfferPrice[], chosenIds: unknown): OfferPrice[] {
+  const live = livePrices(prices);
+  const ids = Array.isArray(chosenIds) ? chosenIds.filter((x): x is string => typeof x === "string") : [];
+  if (ids.length === 0) return live;
+  const picked = live.filter((p) => ids.includes(p.id));
+  // Every ticked price archived or deleted since. The menu beats an empty
+  // block on the page that takes the money.
+  return picked.length > 0 ? picked : live;
+}
+
 export function shownPrices(prices: OfferPrice[], chosenIds: string[]): OfferPrice[] {
   const live = prices.filter((p) => !p.archived);
   if (live.length === 0) return [];

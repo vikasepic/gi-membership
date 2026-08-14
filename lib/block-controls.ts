@@ -1,5 +1,6 @@
 import { ALL_ZONES, describeDeadline, evergreenMinutes } from "@/lib/countdown";
 import { LIST_ICONS } from "@/lib/list-icons";
+import { priceLabel, type OfferPrice } from "@/lib/offer-prices";
 import {
   BLOCK_TYPES,
   MAX_COLUMNS,
@@ -54,6 +55,15 @@ export type Control =
   | (Base & { kind: "richtext" })
   | (Base & { kind: "image" })
   | (Base & { kind: "select"; options: [string, string][] })
+  /**
+   * Several of a list, or none of it.
+   *
+   * Stores an array of ids. EMPTY MEANS ALL, which is the only default that
+   * can be right: a block that stored "all of them" as a list would silently
+   * stop showing a price added afterwards, and nobody would connect the new
+   * price missing from a page to a checkbox they ticked months earlier.
+   */
+  | (Base & { kind: "checks"; options: [string, string][]; emptyLabel?: string })
   /**
    * `invert` shows the opposite of what is stored.
    *
@@ -419,6 +429,14 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         label: "Sells",
         hint: "Blank means whatever this page is already selling. Name one to put any offer's prices on any page.",
         options: [["", "This page's own"]],
+      },
+      {
+        kind: "checks",
+        key: "priceIds",
+        label: "Which prices",
+        options: [],
+        emptyLabel: "All of them",
+        hint: "Tick the ways to pay this page offers. None ticked shows every live price — including any added later, which a ticked list would silently leave out.",
       },
       { kind: "text", key: "heading", label: "Heading", hint: "Optional — a line above the choices." },
       { kind: "textarea", key: "note", label: "Note", rows: 2, hint: "Under the button. Blank draws nothing." },
@@ -1529,11 +1547,14 @@ export function controlsFor(
   /** Families installed on this site, for the Font select. */
   fonts: readonly string[] = [],
   /** The store's offers, for a block that names which one it sells. */
-  offers: readonly { id: string; name: string }[] = [],
+  offers: readonly { id: string; name: string; currency?: string; prices?: OfferPrice[] }[] = [],
+  /** The offer this PAGE belongs to, for a block that names none of its own. */
+  ownerOfferId?: string,
 ): { content: Control[]; style: Control[]; advanced: Control[] } {
   const defs = BLOCK_CONTROLS[block.type];
   const keep = (list: Control[]) => list.filter((c) => !c.when || c.when(block));
-  const shape = (c: Control) => withOffers(withFonts(forBlock(c, block), fonts), offers);
+  const shape = (c: Control) =>
+    withPrices(withOffers(withFonts(forBlock(c, block), fonts), offers), block, offers, ownerOfferId);
   return {
     content: keep(defs.content).map(shape),
     style: keep(defs.style).map(shape),
@@ -1557,6 +1578,30 @@ function withOffers(c: Control, offers: readonly { id: string; name: string }[])
   return {
     ...c,
     options: [["", "This page's own"], ...offers.map((o) => [o.id, o.name] as [string, string])],
+  };
+}
+
+/**
+ * The price picker, filled in from the offer the block is actually selling.
+ *
+ * Which offer that is depends on the block AND the page: a Ways to pay block
+ * with no offer named sells whatever the page sells, and on an offer's own page
+ * that is the page's owner. Without the second half the picker would be empty
+ * on the commonest page of all — the one selling a single offer.
+ */
+function withPrices(
+  c: Control,
+  block: Block,
+  offers: readonly { id: string; name: string; currency?: string; prices?: OfferPrice[] }[],
+  ownerOfferId?: string,
+): Control {
+  if (isGroup(c) || c.kind !== "checks" || c.key !== "priceIds") return c;
+  const id = String(block.props.offerId ?? "") || ownerOfferId || "";
+  const offer = offers.find((o) => o.id === id);
+  const live = (offer?.prices ?? []).filter((p) => !p.archived);
+  return {
+    ...c,
+    options: live.map((p) => [p.id, priceLabel(p, offer?.currency ?? "usd")] as [string, string]),
   };
 }
 

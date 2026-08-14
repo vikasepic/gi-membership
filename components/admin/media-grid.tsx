@@ -123,19 +123,74 @@ export function MediaGrid({ items, kind }: { items: MediaWithUrl[]; kind: MediaK
                   </span>
                 )}
               </div>
-              <button
-                type="button"
-                onClick={() => setOpen(open === item.id ? null : item.id)}
-                className="w-fit text-xs text-muted underline hover:text-fg"
-              >
-                {open === item.id ? "Close" : "Edit"}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setOpen(open === item.id ? null : item.id)}
+                  className="text-xs text-muted underline hover:text-fg"
+                >
+                  {open === item.id ? "Close" : "Edit"}
+                </button>
+                <CopyUrl url={item.url} />
+              </div>
               {open === item.id && <Describe item={item} />}
             </li>
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * The file's address, in one press.
+ *
+ * Everything in this admin that wants a picture has a picker, so for a long
+ * time nothing needed a URL. Then the email did: its header and its signature
+ * are fields holding a link, because an email is HTML sent to somewhere this
+ * app cannot reach — and there was no way to get one out of here at all.
+ *
+ * Shown as a button rather than the URL itself. A signed storage address is
+ * long enough to wrap a card into uselessness, and nobody was going to read it.
+ */
+function CopyUrl({ url }: { url: string | null }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  if (!url) return null;
+
+  // Clipboard access can be refused — over plain http, or by permission. The
+  // useful answer then is the URL itself, selectable, rather than a button that
+  // has quietly stopped working.
+  if (state === "failed") {
+    return (
+      <input
+        readOnly
+        value={url}
+        onFocus={(e) => e.currentTarget.select()}
+        autoFocus
+        aria-label="File address — copy it"
+        className="min-w-0 flex-1 rounded border border-border bg-surface-2 px-1.5 py-0.5 text-[0.65rem]"
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          setState("copied");
+          setTimeout(() => setState("idle"), 2000);
+        } catch {
+          // Refused over plain http, or by permission. Saying so beats a button
+          // that silently does nothing.
+          setState("failed");
+        }
+      }}
+      className="text-xs text-muted underline transition-colors hover:text-fg"
+    >
+      {state === "copied" ? "Copied" : "Copy link"}
+    </button>
   );
 }
 

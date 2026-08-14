@@ -142,6 +142,7 @@ export function BlockEditor({
   onSave,
   preview,
   owner = "product",
+  ownerOfferId,
   store,
   globals,
   onSaveGlobal,
@@ -166,6 +167,8 @@ export function BlockEditor({
    * would put blocks in the tray that render nothing wherever they are dropped.
    */
   owner?: BuilderOwner;
+  /** The offer this page belongs to, so a block naming none still lists prices. */
+  ownerOfferId?: string;
   /** Live catalogue and memberships, so Catalogue/Memberships/Featured draw
    *  something here instead of the nothing they drew before. Home page only. */
   store?: StoreRender;
@@ -679,7 +682,7 @@ export function BlockEditor({
         // does not go through `controlsFor`, which is the only place a control's
         // `when` was ever evaluated.
         { content: [], style: columnControls(selected, rowIsGrid(column.row, device)), advanced: [] }
-      : controlsFor(selected, families, offerOptions);
+      : controlsFor(selected, families, offerOptions, ownerOfferId);
 
   /**
    * Select anything on the canvas or in the tree.
@@ -2475,6 +2478,49 @@ function ControlField({
       return row(<RichText value={typeof value === "string" ? value : ""} onChange={onChange} />, {
         stack: true,
       });
+
+    case "checks": {
+      const ticked = Array.isArray(value) ? (value as string[]) : [];
+      // Nothing to tick means the block names an offer that has one price, or
+      // none at all. Saying which beats an empty box that reads as broken.
+      if (control.options.length === 0) {
+        return row(
+          <span className="text-xs text-muted">
+            Name an offer above, and its prices appear here to choose from.
+          </span>,
+        );
+      }
+      return row(
+        <div className="flex flex-col gap-1.5">
+          {control.options.map(([v, l]) => {
+            const on = ticked.includes(v);
+            return (
+              <label key={v} className="flex cursor-pointer items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() =>
+                    // Order follows the offer's own, not the order they were
+                    // ticked in: the page must not reshuffle because somebody
+                    // changed their mind about the second option.
+                    onChange(
+                      control.options
+                        .map(([id]) => id)
+                        .filter((id) => (id === v ? !on : ticked.includes(id))),
+                    )
+                  }
+                  className="size-3.5 shrink-0"
+                />
+                <span className="min-w-0 truncate">{l}</span>
+              </label>
+            );
+          })}
+          {ticked.length === 0 && (
+            <span className="text-[0.66rem] text-muted">{control.emptyLabel ?? "All of them"}</span>
+          )}
+        </div>,
+      );
+    }
 
     case "select": {
       const current = String(value ?? "");

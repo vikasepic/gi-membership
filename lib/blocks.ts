@@ -668,6 +668,10 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     // Blank means "whatever this page is selling", which is what an offer's own
     // page wants. Naming one lets a product page — or any page — sell an offer.
     offerId: "",
+    // Which of that offer's ways to pay this block shows. Empty means all of
+    // them — including any added later, which a stored list of "all" would
+    // silently leave out. Same rule, and the same helper, as a placement.
+    priceIds: [],
     heading: "",
     note: "",
     acceptLabel: "Get instant access",
