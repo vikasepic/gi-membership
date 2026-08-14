@@ -984,7 +984,11 @@ export type OtoAcceptResult =
 
 // Accept the OTO. POST-only, single-use: an atomic pending→completed update is
 // the replay guard, so a back-button/refresh/replay can never double-charge.
-export async function acceptOto(token: string, choice?: "alt"): Promise<OtoAcceptResult> {
+export async function acceptOto(
+  token: string,
+  /** An INDEX into the list this order's upsell shows, or the legacy "alt". */
+  choice?: "alt" | number,
+): Promise<OtoAcceptResult> {
   const verified = verifyOtoToken(token, otoSigningSecret());
   if (!verified.ok) return { ok: false, error: verified.reason };
   const { orderId, offerId, userId } = verified.payload;
@@ -1006,13 +1010,28 @@ export async function acceptOto(token: string, choice?: "alt"): Promise<OtoAccep
   const shown = await getOffer(offerId);
   if (!order || !shown) return { ok: false, error: "invalid" };
 
-  // "alt" is a choice between the two prices the page showed, not a free choice
-  // of offer. It resolves through the ORDER's product, so the worst a tampered
-  // form can do is buy the alternative it was already offered.
-  const alt = await upsellAltFor(orderId);
-  const buyId = offerForChoice(shown, alt, choice);
-  if (!buyId) return { ok: false, error: "invalid" };
-  const picked = buyId === shown.id ? shown : (alt as Offer);
+  // A choice between the prices the page showed, not a free choice of offer.
+  // It resolves through the ORDER's product, so the worst a tampered form can
+  // do is buy something it was already offered.
+  let picked: Offer;
+  if (typeof choice === "number") {
+    const options = await upsellPricesFor(orderId);
+    const price = priceForChoice(options, choice);
+    // Out of range refuses rather than falling back to the headline price.
+    // The token is already claimed at this point, so the release below is what
+    // gives them their offer back — see the note on failed charges.
+    if (!price) {
+      await db.from("oto_tokens").update({ status: "pending", consumed_at: null }).eq("token_hash", sha256(token));
+      return { ok: false, error: "invalid" };
+    }
+    picked = offerAtPrice(shown, price);
+  } else {
+    // The old two-offer pairing, while placements are still on it.
+    const alt = await upsellAltFor(orderId);
+    const buyId = offerForChoice(shown, alt, choice);
+    if (!buyId) return { ok: false, error: "invalid" };
+    picked = buyId === shown.id ? shown : (alt as Offer);
+  }
   // Same decision as the bump. The upsell always follows a purchase, so the
   // buyer is known and the page they were shown was already resolved for them
   // — there is nothing here to refuse, only a trial not to hand out twice.
@@ -1076,6 +1095,36 @@ export async function orderEmailFor(orderId: string): Promise<string | null> {
   const db = createServiceClient();
   const { data } = await db.from("orders").select("email").eq("id", orderId).maybeSingle();
   return (data?.email as string | null) ?? null;
+}
+
+/**
+ * The ways to pay the upsell for THIS order shows.
+ *
+ * Resolved from the order's product, never from the request — the same
+ * borrowing upsellAltFor does, and the same reason: the page shows the prices
+ * and the form sends an index into them, so the worst a tampered form can do
+ * is buy something it was already offered.
+ */
+export async function upsellPricesFor(orderId: string): Promise<OfferPrice[]> {
+  const db = createServiceClient();
+  const { data: items } = await db
+    .from("order_items")
+    .select("product_id")
+    .eq("order_id", orderId)
+    .not("product_id", "is", null);
+  const productId = items?.[0]?.product_id as string | undefined;
+  if (!productId) return [];
+  const { data: product } = await db
+    .from("products")
+    .select("upsell_offer_id, upsell_price_ids")
+    .eq("id", productId)
+    .maybeSingle();
+  const offerId = product?.upsell_offer_id as string | null | undefined;
+  if (!offerId) return [];
+  const offer = await getOffer(offerId);
+  if (!offer) return [];
+  const ids = product?.upsell_price_ids;
+  return shownPrices(offer.prices, Array.isArray(ids) ? (ids as string[]) : []);
 }
 
 export async function upsellAltFor(orderId: string): Promise<Offer | null> {

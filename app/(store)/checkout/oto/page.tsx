@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { verifyOtoToken } from "@/lib/oto-token";
 import { otoSigningSecret } from "@/lib/env";
 import { getOffer } from "@/lib/store";
-import { upsellAltFor, orderEmailFor } from "@/lib/checkout";
+import { upsellAltFor, upsellPricesFor, orderEmailFor } from "@/lib/checkout";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { immediateChargeCents } from "@/lib/offers";
 import { otoComponentFor } from "@/components/oto/registry";
@@ -42,10 +42,15 @@ export default async function OtoPage({
   // From the PRODUCT this order was for, never from the request. The page shows
   // two prices; the buyer picks a side, not an offer.
   const altOffer = await upsellAltFor(verified.payload.orderId);
+  // Every way to pay this order's upsell shows, in the placement's own order.
+  // Rebuilt identically in acceptOto from the same product row — the form
+  // sends the INDEX of the one that was picked and nothing else.
+  const prices = await upsellPricesFor(verified.payload.orderId);
 
   const view: OtoView = {
     offer,
     altOffer: altOffer?.active ? altOffer : null,
+    prices,
     token,
     // Straight from the signed payload — the same value the server enforces.
     expiresAt: verified.payload.exp * 1000,

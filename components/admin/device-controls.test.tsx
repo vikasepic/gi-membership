@@ -550,3 +550,37 @@ describe("the Save button", () => {
     expect(document.body.textContent).toContain("someone else changed this section");
   });
 });
+
+/**
+ * A way out that does not write.
+ *
+ * When "Done" became "Save" there was suddenly no way to leave without saving —
+ * a worse trap than the one it fixed, because somebody trying a colour on a
+ * live sales page had no way to put it back.
+ */
+describe("discarding", () => {
+  it("puts back what the editor opened with", () => {
+    const editor = mount([newBlock("heading")]);
+    // Add a block the way the palette does — this is a real edit, streamed
+    // into the draft exactly as typing in the panel is.
+    click(byText("button", "Heading")!);
+    expect(editor.blocks.length).toBeGreaterThan(1);
+
+    // jsdom's confirm returns undefined, which is falsy — so the guard would
+    // refuse. Accept it, since what is under test is what happens after.
+    const original = window.confirm;
+    window.confirm = () => true;
+    click(byText("button", "Discard")!);
+    window.confirm = original;
+
+    expect(editor.blocks).toHaveLength(1);
+  });
+
+  it("is not called Cancel", () => {
+    // There is already a Cancel on this screen — the take-apart confirmation —
+    // and one word for two different abandonments is how the wrong one gets
+    // pressed.
+    mount([newBlock("heading")]);
+    expect(byText("button", "Discard")).toBeTruthy();
+  });
+});

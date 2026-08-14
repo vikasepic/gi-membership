@@ -340,6 +340,31 @@ export function BlockEditor({
     setMenu(
       menuAt(e, [
         {
+          // First, because right-clicking INSIDE a column is nearly always
+          // "put the thing I copied here". The block menu could already paste
+          // beside a block; a column with nothing in it had no block to be
+          // beside, so the one place you most want to paste was the one place
+          // that could not.
+          label: clip?.kind === "block" ? `Paste ${clip.label} here` : "Paste",
+          disabled: clip?.kind === "block" ? undefined : "Nothing copied yet",
+          onSelect: () => {
+            if (clip?.kind !== "block") return;
+            const copy = reid(normalizeBlocks([clip.data])[0]);
+            if (!copy) return;
+            const next = insertBlock(blocks, copy, {
+              zone: "column",
+              rowId: row.id,
+              column: index,
+              index: row.columns?.[index]?.length ?? 0,
+            });
+            // Refused — a container two deep, say. Nothing committed rather
+            // than a menu item that appears to work and does nothing.
+            if (next === blocks) return;
+            commit(next);
+            setSelectedId(copy.id);
+          },
+        },
+        {
           label: "Duplicate this column",
           onSelect: () => {
             const next = duplicateColumn(row, index);
@@ -487,6 +512,17 @@ export function BlockEditor({
   }
 
   // The library popup, and whether the export has just been copied.
+  /**
+   * What this opened with, so leaving can actually leave.
+   *
+   * Edits stream into the draft as they are made — that is what makes the
+   * canvas live — so closing without writing is not the same as undoing. When
+   * "Done" became "Save" there was suddenly no way out at all except saving,
+   * which is a worse trap than the one it fixed: somebody trying a colour on a
+   * live sales page had no way to put it back.
+   */
+  const opening = useRef(blocks);
+
   // Saving from in here, and what to say when it does not work.
   const [busy, setBusy] = useState(false);
   const [saveFailed, setSaveFailed] = useState<string | null>(null);
@@ -806,6 +842,28 @@ export function BlockEditor({
         <span className="text-xs text-muted">
           {blocks.length === 0 ? "Empty" : `${blocks.length} block${blocks.length === 1 ? "" : "s"}`}
         </span>
+        {/* "Discard", not "Cancel". There is already a Cancel on this screen —
+            the one on the take-apart confirmation — and two of them at once is
+            a word that means two things a keystroke apart. This one also says
+            what it does: Cancel is what you press to abandon a dialog, and
+            this abandons an afternoon. */}
+        <button
+          type="button"
+          onClick={() => {
+            if (busy) return;
+            // Only ask when there is something to lose. A confirm on a
+            // no-op is a dialog people learn to dismiss without reading.
+            const changed = JSON.stringify(opening.current) !== JSON.stringify(blocks);
+            if (changed && !window.confirm("Throw away the changes made in here since you opened it?")) {
+              return;
+            }
+            if (changed) onChange(opening.current);
+            onClose();
+          }}
+          className="rounded-full border border-border px-4 py-2 text-sm text-muted transition-colors hover:border-fg hover:text-fg"
+        >
+          Discard
+        </button>
         {saveFailed && (
           <span className="max-w-[28rem] truncate text-xs text-primary" title={saveFailed}>
             {saveFailed}

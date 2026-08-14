@@ -2,6 +2,12 @@ import Link from "next/link";
 import { money } from "@/lib/money";
 import { acceptOtoAction } from "@/app/(store)/checkout/oto/actions";
 import type { Offer } from "@/lib/types";
+import {
+  priceLabel,
+  priceTerms,
+  savingAgainst,
+  type OfferPrice,
+} from "@/lib/offer-prices";
 import { altSaving } from "@/lib/offers";
 
 // The parts of an upsell page that must never vary.
@@ -22,6 +28,14 @@ export type OtoView = {
    * stays between the two prices the page actually displayed.
    */
   altOffer?: Offer | null;
+  /**
+   * Every way to pay, in the order the placement stored them.
+   *
+   * The generalisation of altOffer. One click on the same saved card either
+   * way; which one was picked travels as its INDEX in this list, never as an
+   * id, so the choice stays inside what the page displayed.
+   */
+  prices?: OfferPrice[];
   token: string;
   chargeNowCents: number;
   /** e.g. "then $47/month after your 7-day trial" — null for one-off offers. */
@@ -132,9 +146,15 @@ export function OtoActions({
 }) {
   const onBand = tone === "band";
   const alt = view.altOffer;
+  // A ticked price list wins; the old pairing runs when there is none.
+  const options = view.prices ?? [];
   return (
     <div className={`flex flex-col gap-4 ${align === "start" ? "items-start" : ""} ${className}`}>
       <div className={`flex flex-wrap items-stretch gap-3 ${align === "start" ? "" : "w-full"}`}>
+      {/* The single-price accept. Replaced entirely by the list below when
+          there is more than one way to pay — two accept buttons on one page is
+          the page asking the same question twice. */}
+      {options.length > 1 ? null : (
       <form action={acceptOtoAction} className={align === "start" ? "" : "flex-1"}>
         <input type="hidden" name="token" value={view.token} />
         <button
@@ -150,8 +170,54 @@ export function OtoActions({
           <ArrowRight className="transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0" />
         </button>
       </form>
+      )}
 
-      {alt && (
+      {/* More than two, or a list at all: one form, a choice inside it, one
+          submit. Two buttons reads well and four is a wall, and the click was
+          always the point of this page — so the cost of going to N is honestly
+          one extra decision before it, not two more buttons beside it. */}
+      {options.length > 1 ? (
+        <form action={acceptOtoAction} className="flex w-full flex-col gap-2">
+          <input type="hidden" name="token" value={view.token} />
+          {options.map((p, i) => (
+            <label
+              key={p.id}
+              className="flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 transition-colors"
+              style={{
+                color: ink ?? (onBand ? "#ffffff" : undefined),
+                borderColor: `color-mix(in srgb, ${ink ?? (onBand ? "#ffffff" : "currentColor")} 42%, transparent)`,
+              }}
+            >
+              <input
+                type="radio"
+                name="choice"
+                value={i}
+                defaultChecked={i === 0}
+                className="size-[18px] shrink-0 cursor-pointer"
+              />
+              <span className="flex min-w-0 flex-1 flex-col text-left">
+                <span className="text-[1.02rem] font-medium">
+                  {priceLabel(p, view.offer.currency)}
+                  {p.label.trim() && <span className="ml-2 text-xs opacity-75">{p.label.trim()}</span>}
+                </span>
+                {priceTerms(p, view.offer.currency) && (
+                  <span className="text-xs opacity-75">{priceTerms(p, view.offer.currency)}</span>
+                )}
+              </span>
+              {i > 0 && savingAgainst(options[0], p) && (
+                <span className="shrink-0 text-xs opacity-75">{savingAgainst(options[0], p)}</span>
+              )}
+            </label>
+          ))}
+          <button
+            type="submit"
+            className="group flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 font-display text-[1.05rem] font-semibold text-primary-fg transition-colors hover:bg-primary-hover"
+          >
+            {acceptLabel ?? view.offer.acceptLabel}
+            <ArrowRight className="transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0" />
+          </button>
+        </form>
+      ) : alt ? (
         // The second price, quieter than the first: one of them has to lead, or
         // the page asks the reader to make a decision before it has made a case.
         <form action={acceptOtoAction} className={align === "start" ? "" : "flex-1"}>
@@ -175,7 +241,7 @@ export function OtoActions({
             )}
           </button>
         </form>
-      )}
+      ) : null}
       </div>
 
       {showNote && (

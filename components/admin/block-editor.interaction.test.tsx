@@ -907,3 +907,30 @@ describe("dropping a container into a column", () => {
     expect(out).not.toEqual([row]);
   });
 });
+
+/**
+ * Pasting into a column.
+ *
+ * The block menu could already paste beside a block. A column with nothing in
+ * it has no block to be beside — so the one place you most want to paste was
+ * the one place that could not.
+ */
+describe("the column menu's paste", () => {
+  it("offers it, and says why when there is nothing to paste", () => {
+    mount([setColumnCount(newBlock("row"), 2)]);
+    rightClick(document.querySelector("[data-column]")!);
+    const paste = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) =>
+      b.textContent?.includes("Paste"),
+    );
+    expect(paste, "the column menu offers Paste").toBeTruthy();
+    // Greyed with a reason rather than hidden, the same way the block menu's is.
+    expect(paste!.disabled).toBe(true);
+    expect(paste!.title).toContain("Nothing copied");
+  });
+
+  it("offers it first, because that is what a right-click in a column means", () => {
+    mount([setColumnCount(newBlock("row"), 2)]);
+    rightClick(document.querySelector("[data-column]")!);
+    expect(menuItems()[0]).toContain("Paste");
+  });
+});

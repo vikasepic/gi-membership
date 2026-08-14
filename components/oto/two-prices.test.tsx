@@ -114,3 +114,56 @@ describe("the second price", () => {
     expect(alt).toContain("#ffffff");
   });
 });
+
+/**
+ * The upsell at more than two prices.
+ *
+ * Two buttons side by side reads well; four is a wall. So beyond two it becomes
+ * one form with a choice inside it and a single submit — the click was always
+ * the point of this page, and the honest cost of going to N is one decision
+ * before the click rather than three more buttons beside it.
+ *
+ * What must not change is where the answer comes from: the form posts the
+ * INDEX of the option it drew, and acceptOto rebuilds the same list from the
+ * order's product before looking that index up in it.
+ */
+describe("an upsell with three prices", () => {
+  const price = (id: string, cents: number, interval: "month" | "year") => ({
+    id,
+    label: "",
+    billingType: "recurring" as const,
+    interval,
+    intervalCount: 1,
+    trialDays: null,
+    priceCents: cents,
+    compareAtCents: null,
+    archived: false,
+  });
+
+  it("posts an index, never an id or a price", () => {
+    const out = renderToStaticMarkup(
+      <OtoActions
+        view={{
+          ...view(null),
+          prices: [price("a", 1900, "month"), price("b", 14900, "year"), price("c", 3900, "month")],
+        }}
+      />,
+    );
+    // One radio per option, values 0..n — and nothing carrying an id.
+    // Three radios named choice, valued by position. React puts `checked`
+    // between the name and the value on the first, so they are asserted apart.
+    expect((out.match(/name="choice"/g) ?? []).length).toBe(3);
+    for (const i of [0, 1, 2]) expect(out, `value ${i}`).toContain(`value="${i}"`);
+    // And nothing carrying a price id, which is the whole invariant.
+    expect(out).not.toContain('value="a"');
+  });
+
+  it("draws one submit, not one button per price", () => {
+    const out = renderToStaticMarkup(
+      <OtoActions
+        view={{ ...view(null), prices: [price("a", 1900, "month"), price("b", 14900, "year")] }}
+      />,
+    );
+    expect((out.match(/type="submit"/g) ?? []).length).toBe(1);
+  });
+});
