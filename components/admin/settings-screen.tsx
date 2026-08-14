@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { MediaButton, type PickedMedia } from "@/components/admin/media-modal";
+import { EmailPrototype } from "@/components/admin/email-prototype";
 import { publicCoverUrl } from "@/lib/media-url";
 import { inputClass as input, Field, Group } from "@/components/admin/form-controls";
 import { useSlowSave, useJustSaved } from "@/components/admin/save-status";
@@ -87,18 +88,6 @@ export function SettingsScreen({
               </button>
             );
           })}
-          {/* A prototype, so it is a link out rather than a group here — the
-              groups all save to the same settings row and this one saves
-              nothing yet. */}
-          <a
-            href="/admin/settings/email"
-            className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-muted transition-colors hover:text-fg md:mt-1 md:rounded-none md:border-t md:border-border md:pt-3"
-          >
-            Post-purchase email
-            <span className="ml-auto rounded-full border border-border px-1.5 text-[0.6rem] uppercase tracking-wide">
-              draft
-            </span>
-          </a>
         </nav>
 
         <div className="flex min-w-0 flex-col gap-4 p-5">
@@ -188,6 +177,9 @@ function GroupForm({
       {group === "shell" && <ShellFields siteShell={settings.siteShell} errors={errors} />}
       {group === "commerce" && <CommerceFields s={settings} errors={errors} />}
       {group === "seo" && <SeoFields s={settings} errors={errors} />}
+      {group === "email" && (
+        <EmailPrototype value={settings.postPurchaseEmail} fieldName="postPurchaseEmail" />
+      )}
       {group === "advanced" && <AdvancedFields s={settings} errors={errors} />}
 
       <SaveRow justSaved={justSaved} problem={summarise(errors)} />

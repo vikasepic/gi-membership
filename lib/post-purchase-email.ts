@@ -14,6 +14,8 @@
  * layout that collapses in half the clients that will receive it.
  */
 
+import { z } from "zod";
+
 export type PostPurchaseSettings = {
   /** Off means nothing is sent. Kept as a setting rather than a deploy. */
   enabled: boolean;
@@ -44,39 +46,59 @@ export type PostPurchaseSettings = {
 };
 
 /**
- * The copy as written, lowercase and all.
+ * The copy as written, lowercase and all — and the schema that stores it.
  *
- * Left exactly as it was given. The voice is the point — a "corrected" version
- * with capital letters is a different person writing.
+ * The copy is left exactly as it was given: the voice is the point, and a
+ * "corrected" version with capital letters is a different person writing.
+ *
+ * Schema and defaults are one thing rather than two, because they were two for
+ * about an hour and had already drifted. The defaults ARE `parse({})`.
  */
-export const POST_PURCHASE_DEFAULTS: PostPurchaseSettings = {
-  enabled: false,
-  senderName: "Ajit from Greater Inside",
-  senderEmail: "support@greaterinside.com",
-  replyTo: "support@greaterinside.com",
-  subject: "You’re in. Welcome to Greater Inside.",
-  headerImageUrl: "",
-  headerBackground: "#f5e0da",
-  signatureImageUrl: "",
-  signOff: "in love and service,\najit",
-  greeting: "hi {{first_name}}",
-  intro: "you are officially now a part of greater inside community. welcome!",
-  listIntro: "first things first, here is what you just got:",
-  accessIntro: "you can access it all here:",
-  accessUrl: "https://grow.greaterinside.com/login",
-  accessNote:
-    "just enter your email on the link, confirm it and you are in. No password needed. Voila!",
-  supportLine: "for anything that’s not working, email us at support@greaterinside.com.",
-  feedbackLine:
-    "now, we are a new-ish company. Which means that we thrive on feedback, stories of success and just overall love from our clients.\n\nfor any and all of it, you can simply email me directly at a@ajitnawalkha.com.",
-  textColor: "#1a1a1a",
-  linkColor: "#1155cc",
-  background: "#ffffff",
+export const postPurchaseSchema = z.object({
+  // Off until somebody turns it on. It replaces an email that currently works,
+  // so shipping it live would change what every buyer receives on deploy.
+  enabled: z.boolean().default(false),
+  senderName: z.string().trim().max(120).default("Ajit from Greater Inside"),
+  senderEmail: z.string().trim().max(200).default("support@greaterinside.com"),
+  replyTo: z.string().trim().max(200).default("support@greaterinside.com"),
+  subject: z.string().trim().max(200).default("You’re in. Welcome to Greater Inside."),
+  headerImageUrl: z.string().trim().max(600).default(""),
+  headerBackground: z.string().trim().max(40).default("#f5e0da"),
+  signatureImageUrl: z.string().trim().max(600).default(""),
+  signOff: z.string().max(300).default("in love and service,\najit"),
+  greeting: z.string().max(200).default("hi {{first_name}}"),
+  intro: z.string().max(600).default("you are officially now a part of greater inside community. welcome!"),
+  listIntro: z.string().max(300).default("first things first, here is what you just got:"),
+  accessIntro: z.string().max(300).default("you can access it all here:"),
+  accessUrl: z.string().trim().max(400).default("https://grow.greaterinside.com/login"),
+  accessNote: z
+    .string()
+    .max(600)
+    .default("just enter your email on the link, confirm it and you are in. No password needed. Voila!"),
+  supportLine: z
+    .string()
+    .max(600)
+    .default("for anything that’s not working, email us at support@greaterinside.com."),
+  feedbackLine: z
+    .string()
+    .max(1200)
+    .default(
+      "now, we are a new-ish company. Which means that we thrive on feedback, stories of success and just overall love from our clients.\n\nfor any and all of it, you can simply email me directly at a@ajitnawalkha.com.",
+    ),
+  textColor: z.string().trim().max(40).default("#1a1a1a"),
+  linkColor: z.string().trim().max(40).default("#1155cc"),
+  background: z.string().trim().max(40).default("#ffffff"),
   // Roboto, with a stack behind it. No @font-face and no webfont link: Gmail
   // strips both, so a face named here is a face the client either already has
   // or silently replaces — and the replacement is what most people will read.
-  fontFamily: "Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif",
-};
+  fontFamily: z
+    .string()
+    .trim()
+    .max(300)
+    .default("Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif"),
+});
+
+export const POST_PURCHASE_DEFAULTS: PostPurchaseSettings = postPurchaseSchema.parse({});
 
 const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

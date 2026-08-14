@@ -12,6 +12,7 @@ import { trackPurchase, trackServerEvent } from "@/lib/tracking";
 import { eventIdFor } from "@/lib/analytics/events";
 import { trialWorthFor } from "@/lib/tracking-receipt";
 import { sendEmail, buildWelcomeEmail, buildReceiptEmail } from "@/lib/email";
+import { getSettingsOrDefaults } from "@/lib/settings";
 import {
   TAX_ENABLED,
   calculateTax,
@@ -413,6 +414,23 @@ async function noteTrial(orderId: string, offer: Offer): Promise<void> {
   if (data?.email) await recordTrialStart(data.email as string, offer);
 }
 
+/**
+ * The order a PaymentIntent produced, if it produced one.
+ *
+ * The thank-you page is handed an intent id and needs the order to send the
+ * welcome. Kept here rather than re-queried at the call site so there is one
+ * place that knows how an order is joined to a payment.
+ */
+export async function orderIdForIntent(paymentIntentId: string): Promise<string | null> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("orders")
+    .select("id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle();
+  return (data?.id as string) ?? null;
+}
+
 export async function fulfilOffer(args: {
   order: { id: string; stripeCustomerId: string };
   offer: Offer;
@@ -615,14 +633,23 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
     }));
     const to = order.email as string;
 
-    await sendEmail(
-      to,
-      buildWelcomeEmail({
-        email: to,
-        productTitle: lines[0]?.description ?? "your purchase",
-        siteUrl: site,
-      }),
-    );
+    // The welcome, unless the store has written its own.
+    //
+    // The post-purchase email replaces this one and is sent later on purpose —
+    // once the bump and the upsell have been answered, so it can list
+    // everything in one message. Sending both would be two welcomes minutes
+    // apart saying the same thing. See lib/post-purchase-send.ts.
+    const ownWelcome = (await getSettingsOrDefaults()).postPurchaseEmail.enabled;
+    if (!ownWelcome) {
+      await sendEmail(
+        to,
+        buildWelcomeEmail({
+          email: to,
+          productTitle: lines[0]?.description ?? "your purchase",
+          siteUrl: site,
+        }),
+      );
+    }
     await sendEmail(
       to,
       buildReceiptEmail({

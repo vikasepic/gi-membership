@@ -115,7 +115,20 @@ Order ${args.orderId}`,
 
 // Fire-and-forget send. Failures are logged, never thrown — an email outage
 // must not roll back a completed purchase.
-export async function sendEmail(to: string, mail: BuiltEmail): Promise<void> {
+export async function sendEmail(
+  to: string,
+  mail: BuiltEmail,
+  /**
+   * Who it comes from, where the store has said.
+   *
+   * The transactional emails go from whatever RESEND_FROM is, which is right
+   * for a receipt. The welcome is signed by a person and replies to it are
+   * meant to reach that person, so it says so. Unset keeps the old behaviour
+   * exactly — and an address on an unverified domain is refused by Resend
+   * rather than sent from somewhere else, which is the failure worth having.
+   */
+  over?: { from?: string; replyTo?: string },
+): Promise<void> {
   const env: EmailEnv = {
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     RESEND_FROM: process.env.RESEND_FROM,
@@ -130,8 +143,9 @@ export async function sendEmail(to: string, mail: BuiltEmail): Promise<void> {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        from: env.RESEND_FROM,
+        from: over?.from?.trim() || env.RESEND_FROM,
         to: [to],
+        ...(over?.replyTo?.trim() ? { reply_to: over.replyTo.trim() } : {}),
         subject: mail.subject,
         html: mail.html,
         text: mail.text,

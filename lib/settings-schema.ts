@@ -2,6 +2,7 @@ import { z } from "zod";
 import { GLOBAL_COLOR_RE, paletteSchema } from "@/lib/palette";
 import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
 import { codeSnippetsSchema } from "@/lib/code-snippets";
+import { postPurchaseSchema } from "@/lib/post-purchase-email";
 import { SITE_TYPOGRAPHY_SCHEMA } from "@/lib/site-typography";
 import { SITE_SHELL_SCHEMA } from "@/lib/site-shell";
 
@@ -125,6 +126,12 @@ export const SETTINGS_SCHEMA = z.object({
   // Named snippets with a position of their own. `customJs` stays: it is one
   // box of JavaScript, and this is a list of vendors' markup.
   codeSnippets: codeSnippetsSchema,
+
+  // ---- Post-purchase email ------------------------------------------------
+  // One nested object rather than twenty flat fields: it is a single document
+  // edited by a single form, and flattening it would put twenty names into a
+  // schema that every other part of the store has to read past.
+  postPurchaseEmail: postPurchaseSchema.default(() => postPurchaseSchema.parse({})),
 });
 
 export type Settings = z.infer<typeof SETTINGS_SCHEMA> & { name: string };
@@ -146,6 +153,7 @@ export const SETTINGS_GROUPS = [
   { key: "shell", label: "Header & navigation" },
   { key: "commerce", label: "Commerce" },
   { key: "seo", label: "SEO & social" },
+  { key: "email", label: "Post-purchase email" },
   { key: "advanced", label: "Advanced" },
 ] as const;
 
@@ -177,6 +185,7 @@ export const GROUP_FIELDS: Record<SettingsGroupKey, readonly (keyof Settings)[]>
     "socialX",
     "socialLinkedin",
   ],
+  email: ["postPurchaseEmail"],
   advanced: ["customCss", "customJs", "codeSnippets"],
 };
 

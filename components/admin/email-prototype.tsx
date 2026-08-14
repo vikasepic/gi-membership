@@ -24,11 +24,24 @@ import {
 
 const SAMPLE = ["The Business Model Masterclass", "Funnel App — Yearly", "The Growth Vault"];
 
-export function EmailPrototype() {
-  const [s, setS] = useState<PostPurchaseSettings>({
-    ...POST_PURCHASE_DEFAULTS,
-    enabled: true,
-  });
+export function EmailPrototype({
+  value,
+  fieldName,
+}: {
+  /** What is stored. Absent means the prototype route, which saves nothing. */
+  value?: PostPurchaseSettings;
+  /**
+   * The hidden input this writes into, so the settings form saves it.
+   *
+   * The whole panel is one JSON field for the same reason the typography and
+   * header panels are: it is one document edited by one form, and twenty flat
+   * names would be twenty things every other reader of the schema scrolls past.
+   */
+  fieldName?: string;
+}) {
+  const [s, setS] = useState<PostPurchaseSettings>(
+    value ?? { ...POST_PURCHASE_DEFAULTS, enabled: true },
+  );
   const [name, setName] = useState("Priya");
   const [count, setCount] = useState(2);
 
@@ -69,6 +82,7 @@ export function EmailPrototype() {
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+      {fieldName && <input type="hidden" name={fieldName} value={JSON.stringify(s)} />}
       <div className="flex flex-col gap-4">
         <Section
           title="Send it"

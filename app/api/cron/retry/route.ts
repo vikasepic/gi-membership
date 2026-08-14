@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runDueJobs } from "@/lib/retry";
 import { flushDueLeads } from "@/lib/leads";
 import { repairSubscriptionDrift } from "@/lib/subscription-reconcile";
+import { sweepPostPurchaseEmails } from "@/lib/post-purchase-send";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,18 @@ export async function POST(request: Request) {
     // not report it — they churn — so this cannot wait for an admin to open
     // the errors page and notice.
     const drift = await repairSubscriptionDrift();
-    return NextResponse.json({ ok: true, leads, jobs, driftRepaired: drift.repaired.length, driftSkipped: drift.skipped.length });
+    // The buyers who closed the tab on the upsell and never reached the
+    // thank-you page. They have paid, they own what they bought, and nothing
+    // has told them so — without this they simply never get the email.
+    const welcome = await sweepPostPurchaseEmails();
+    return NextResponse.json({
+      ok: true,
+      leads,
+      jobs,
+      driftRepaired: drift.repaired.length,
+      driftSkipped: drift.skipped.length,
+      welcomeSent: welcome.sent,
+    });
   } catch (e) {
     // The sweep itself failing must be visible to whatever called it, but it
     // must not take the route down — cron will come back in five minutes.

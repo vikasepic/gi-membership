@@ -2,7 +2,8 @@
 
 import { z } from "zod";
 import { cookies } from "next/headers";
-import { createCheckoutIntent, finalizeOrder, type CheckoutResult } from "@/lib/checkout";
+import { createCheckoutIntent, finalizeOrder, orderIdForIntent, type CheckoutResult } from "@/lib/checkout";
+import { sendPostPurchaseIfDue } from "@/lib/post-purchase-send";
 import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
 import { createClient } from "@/lib/supabase/server";
 import { getProductBySlug } from "@/lib/store";
@@ -76,7 +77,22 @@ export async function startCheckout(input: unknown): Promise<CheckoutResult> {
 // Called by the thank-you page after Stripe redirects back. Idempotent — the
 // webhook (once wired) calls the same finalizeOrder.
 export async function confirmCheckout(paymentIntentId: string): Promise<void> {
-  if (paymentIntentId) await finalizeOrder(paymentIntentId);
+  if (!paymentIntentId) return;
+  await finalizeOrder(paymentIntentId);
+
+  // The funnel is over. Every path after payment lands on the thank-you page —
+  // straight through, or via the upsell accepted, declined or expired — so this
+  // is the one place that knows there is nothing else coming, and the email can
+  // finally list everything they bought.
+  //
+  // Never allowed to throw: the buyer is looking at a page that says their
+  // purchase worked, and it did.
+  try {
+    const orderId = await orderIdForIntent(paymentIntentId);
+    if (orderId) await sendPostPurchaseIfDue(orderId);
+  } catch (e) {
+    console.error("[confirmCheckout] post-purchase email failed (the sweep will retry):", e);
+  }
 }
 
 /**
