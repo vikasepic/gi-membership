@@ -27,6 +27,7 @@ import { starterBlocks } from "@/lib/page-starter";
 import { warnNotBuyable } from "@/lib/page-buyable";
 import { DEVICE_CANVAS, type Block, type Device } from "@/lib/blocks";
 import { PREVIEW_SCOPE, siteTypographyCssAt, type SitePreview } from "@/lib/site-typography";
+import { CheckoutSlots, previewCheckoutSlots } from "@/components/checkout/slots";
 import type { OwnerType } from "@/lib/pages";
 
 // The page editor.
@@ -266,7 +267,7 @@ export function PageEditor({
       ]),
     );
 
-  return (
+  const editor = (
     <div className="flex flex-col gap-4">
       {previewCss && <style dangerouslySetInnerHTML={{ __html: previewCss }} />}
       {notBuyable && (
@@ -367,6 +368,16 @@ export function PageEditor({
         )}
       </div>
     </div>
+  );
+
+  // The checkout's blocks read a live order out of context, and in here there
+  // is none — so without this a dropped Pay button draws nothing and reads as
+  // broken. A sample order, plainly a sample, wrapped around the whole editor
+  // so the canvas and the band preview both get it.
+  return ownerType === "checkout" ? (
+    <CheckoutSlots value={previewCheckoutSlots()}>{editor}</CheckoutSlots>
+  ) : (
+    editor
   );
 }
 

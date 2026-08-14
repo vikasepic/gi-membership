@@ -33,6 +33,7 @@ import {
   sections,
   SEGMENT_ICONS,
   type Control,
+  type BuilderOwner,
 } from "@/lib/block-controls";
 import { canExplode, explodeWarnings, takeApart } from "@/lib/cards-to-blocks";
 import {
@@ -164,7 +165,7 @@ export function BlockEditor({
    * data that no page but the storefront supplies, so offering them elsewhere
    * would put blocks in the tray that render nothing wherever they are dropped.
    */
-  owner?: "product" | "offer" | "store";
+  owner?: BuilderOwner;
   /** Live catalogue and memberships, so Catalogue/Memberships/Featured draw
    *  something here instead of the nothing they drew before. Home page only. */
   store?: StoreRender;

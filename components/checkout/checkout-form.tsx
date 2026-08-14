@@ -12,44 +12,23 @@ import type { BumpView } from "@/lib/bump";
 
 type AppliedDiscount = { label: string; discountCents: number; clamped: boolean };
 
-// Mirrors MIN_CHARGE_CENTS in lib/coupons.ts, which is server-only and cannot
-// be imported here. Display only — the server enforces the real floor.
-const MIN_CHARGE_CENTS_CLIENT = 50;
-
-// The bump's shape is now BumpView, built by lib/bump.ts so the checkout and
-// the admin preview cannot diverge. Kept as an alias because several call
-// sites and tests refer to it by the old name.
-export type BumpSummary = BumpView;
-
-export type CheckoutProduct = {
-  slug: string;
-  title: string;
-  tagline: string | null;
-  priceCents: number;
-  currency: string;
-  /** Cover thumbnail — the buyer should see what they're paying for. */
-  coverUrl?: string | null;
-};
-
 import { money } from "@/lib/money";
 import { suggestEmail } from "@/lib/email-hint";
+import { Blocks } from "@/components/page/blocks";
+import { bandTheme } from "@/lib/page-sections";
+import { CheckoutSlots, DefaultCheckoutLayout, type CheckoutSlotValue } from "@/components/checkout/slots";
+import type { Block } from "@/lib/blocks";
+import {
+  COUNTRIES,
+  MIN_CHARGE_CENTS_CLIENT,
+  type BumpSummary,
+  type CheckoutProduct,
+} from "@/components/checkout/checkout-types";
 
-// Buyer country drives the VAT rate. Common markets first, then the rest of the
-// EU/UK where digital-services VAT applies at the buyer's rate.
-const COUNTRIES = [
-  { code: "US", name: "United States" }, { code: "GB", name: "United Kingdom" },
-  { code: "CA", name: "Canada" }, { code: "AU", name: "Australia" },
-  { code: "IN", name: "India" }, { code: "IE", name: "Ireland" },
-  { code: "DE", name: "Germany" }, { code: "FR", name: "France" },
-  { code: "ES", name: "Spain" }, { code: "IT", name: "Italy" },
-  { code: "NL", name: "Netherlands" }, { code: "BE", name: "Belgium" },
-  { code: "AT", name: "Austria" }, { code: "PT", name: "Portugal" },
-  { code: "SE", name: "Sweden" }, { code: "DK", name: "Denmark" },
-  { code: "FI", name: "Finland" }, { code: "PL", name: "Poland" },
-  { code: "NO", name: "Norway" }, { code: "CH", name: "Switzerland" },
-  { code: "NZ", name: "New Zealand" }, { code: "SG", name: "Singapore" },
-  { code: "AE", name: "United Arab Emirates" }, { code: "ZA", name: "South Africa" },
-];
+// Re-exported rather than moved outright: several call sites and tests import
+// these from here, and a rename that touches the money path to save one line of
+// indirection is not worth making.
+export type { BumpSummary, CheckoutProduct } from "@/components/checkout/checkout-types";
 
 export function CheckoutForm({
   product,
@@ -59,6 +38,7 @@ export function CheckoutForm({
   publishableKey,
   signedInEmail,
   defaultCountry,
+  layout,
 }: {
   product: CheckoutProduct;
   bump: BumpSummary | null;
@@ -66,6 +46,15 @@ export function CheckoutForm({
   /** Every price this placement shows, in order. The form posts an index into it. */
   bumpOptions?: BumpSummary[];
   publishableKey: string;
+  /**
+   * The checkout the store laid out, already checked.
+   *
+   * Absent — a store that has never opened the editor, or one whose saved
+   * layout was missing a part a checkout cannot do without — and the
+   * arrangement that shipped renders instead. Never a page that cannot take
+   * money. See lib/checkout-layout.ts.
+   */
+  layout?: Block[] | null;
   // Present when a member is already signed in — we then ask for nothing but
   // payment, since we already know who they are.
   signedInEmail?: string | null;
@@ -90,6 +79,7 @@ export function CheckoutForm({
         bumpOptions={bumpOptions}
         signedInEmail={signedInEmail ?? null}
         defaultCountry={defaultCountry ?? ""}
+        layout={layout ?? null}
       />
     </Elements>
   );
@@ -102,6 +92,7 @@ function Inner({
   bumpAlt,
   bumpOptions = [],
   defaultCountry,
+  layout,
 }: {
   product: CheckoutProduct;
   bump: BumpSummary | null;
@@ -111,6 +102,7 @@ function Inner({
   bumpOptions?: BumpSummary[];
   signedInEmail: string | null;
   defaultCountry: string;
+  layout: Block[] | null;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -285,339 +277,65 @@ function Inner({
     setBusy(false);
   }
 
+  const slots: CheckoutSlotValue = {
+    product,
+    signedInEmail,
+    fullName,
+    setFullName,
+    email,
+    setEmail,
+    emailHint,
+    acceptEmailHint: () => {
+      setEmail(emailHint ?? "");
+      setEmailHint(null);
+      capturedEmail.current = null;
+    },
+    country,
+    setCountry,
+    captureEmail,
+    bump,
+    bumpAlt,
+    bumpOptions,
+    bumpChoice,
+    setBumpChoice,
+    bumpRef,
+    chosenBump,
+    bumpUnanswered,
+    coupon,
+    couponInput,
+    setCouponInput: (v: string) => {
+      setCouponInput(v);
+      setCouponError(null);
+    },
+    couponBusy,
+    couponError,
+    applyCoupon: () => void applyCoupon(),
+    totalNow,
+    busy,
+    error,
+    canPay: Boolean(stripe),
+    notePaymentInfo,
+  };
+
   return (
-    /* One column, in the order someone decides in: who am I, what else do I
-       want, how do I pay, what does it come to, pay. The half of the page that
-       keeps selling is beside this, not above it — see CheckoutPanel. */
-    <form onSubmit={onSubmit} className="flex flex-col gap-7">
-      <div className="flex flex-col gap-6">
-        {signedInEmail ? (
-          <div className="flex flex-col gap-2">
-            <span className="kicker text-muted">Your account</span>
-            <div className="flex flex-wrap items-center gap-x-2 rounded-xl border border-border bg-surface-2 px-3.5 py-3 text-sm">
-              <span className="text-fg">{signedInEmail}</span>
-              <span className="text-muted">— signed in</span>
-            </div>
-          </div>
+    /* One form, whatever the layout. Every piece of this page is a component
+       that reads the form out of context — see slots.tsx — so a store that has
+       laid the checkout out itself and a store that never has run the same
+       code in a different order.
+
+       The saved layout is trusted only after it has been checked for the parts
+       a checkout cannot do without. That check is not here: it runs on the
+       server before this ever renders, and what arrives is either a layout with
+       card fields, a total and a button in it, or nothing. See
+       lib/checkout-layout.ts. */
+    <CheckoutSlots value={slots}>
+      <form onSubmit={onSubmit} className="flex flex-col gap-7">
+        {layout && layout.length > 0 ? (
+          <Blocks blocks={layout} theme={bandTheme("paper")} />
         ) : (
-          /* Name, email and country are one block, two across from `sm` up.
-             Three stacked full-width fields each with its own heading pushed
-             the card entry below the fold on a laptop, and the further the
-             payment form sits from the top the more people leave before they
-             reach it. */
-          <fieldset className="flex flex-col gap-3">
-            <legend className="kicker mb-1 text-muted">Your details</legend>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <input
-                type="text" required placeholder="Full name" value={fullName}
-                autoComplete="name" aria-label="Full name"
-                onChange={(e) => setFullName(e.target.value)}
-                // A name typed after the address still belongs on the buffered
-                // lead. Re-runs the same capture; it re-sends only if the pair
-                // actually changed.
-                onBlur={captureEmail}
-                className={input}
-              />
-              <input
-                type="email" required placeholder="Email" value={email}
-                autoComplete="email" aria-label="Email"
-                onChange={(e) => setEmail(e.target.value)}
-                // On blur rather than on every keystroke: mid-typing an address
-                // is a different (and usually invalid) address, and tagging
-                // "jane@gm" would put a junk contact in ActiveCampaign.
-                onBlur={captureEmail}
-                className={input}
-              />
-            </div>
-
-            {/* The typo suggestion. This was computed and then thrown away when
-                the layout was tightened — the state was set on blur and never
-                rendered, so a mistyped address reached checkout silently. A
-                wrong email is the most expensive mistake on this page: the
-                receipt and the access link both follow it. */}
-            {emailHint && (
-              <p className="-mt-1 text-sm">
-                <span className="text-muted">Did you mean </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail(emailHint);
-                    setEmailHint(null);
-                    capturedEmail.current = null;
-                  }}
-                  className="font-medium text-primary underline underline-offset-2"
-                >
-                  {emailHint}
-                </button>
-                <span className="text-muted">?</span>
-              </p>
-            )}
-            {/* Country determines the VAT rate on digital sales — Stripe cannot
-                calculate tax without it. */}
-            <select
-              required
-              value={country}
-              onChange={(e) => setCountry(e.target.value)}
-              className={input}
-              aria-label="Billing country"
-              autoComplete="country"
-            >
-              <option value="">Billing country…</option>
-              {COUNTRIES.map((c) => (
-                <option key={c.code} value={c.code}>{c.name}</option>
-              ))}
-            </select>
-            {/* Kept: a typo in the email is the most expensive mistake
-                available on this page. */}
-            <span className="text-xs text-muted">
-              Your receipt and access link go to this email. No password to create.
-            </span>
-          </fieldset>
+          <DefaultCheckoutLayout />
         )}
-
-        {signedInEmail && (
-          <select
-            required
-            value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            className={input}
-            aria-label="Billing country"
-            autoComplete="country"
-          >
-            <option value="">Billing country…</option>
-            {COUNTRIES.map((c) => (
-              <option key={c.code} value={c.code}>{c.name}</option>
-            ))}
-          </select>
-        )}
-
-        {/* A decision, so it comes before the card fields rather than beside the
-            total. It also means the "choose one" rule is answered before anyone
-            has typed a number — being told to pick something after filling in a
-            card reads as the page changing its mind. */}
-        {bump && (
-          <div ref={bumpRef} className="flex flex-col gap-2">
-            <span className="kicker text-muted">One more thing</span>
-            <OrderBump
-              view={bump}
-              // A ticked price list is passed as `options` and answers in
-              // indexes; the old pairing keeps `alt` and answers in the two
-              // words the server still understands. One component, both.
-              alt={bumpOptions.length > 1 ? null : bumpAlt}
-              options={bumpOptions.length > 1 ? bumpOptions : null}
-              choice={bumpChoice}
-              onChoose={setBumpChoice}
-            />
-          </div>
-        )}
-
-        <fieldset className="flex flex-col gap-3">
-          <legend className="kicker mb-2 text-muted">Payment</legend>
-          {/* Reported the moment they start filling the card in, not when they
-              press pay. Meta optimises on this step, and the gap between
-              "began entering a card" and "completed a purchase" is the most
-              useful signal on the page — treating it as a submit event throws
-              away everyone who started and stopped. */}
-          <PaymentElement onChange={notePaymentInfo} />
-        </fieldset>
-      </div>
-
-      {/* What it comes to. No longer a sticky rail — it sits directly above the
-          button that charges it, which is the only place a total has to be. The
-          cover and the description moved to the panel beside this form, so they
-          are not said twice. */}
-      <div className="flex flex-col gap-5 rounded-3xl border border-border bg-surface p-6">
-          <span className="kicker text-muted">Order summary</span>
-
-          <div className="flex items-center justify-between gap-4 text-sm">
-            <span className="text-muted">{product.title}</span>
-            <span className="shrink-0">{money(product.priceCents, product.currency)}</span>
-          </div>
-
-          {coupon && (
-            <div className="flex items-center justify-between gap-4 text-sm">
-              <span className="text-navy">{coupon.label}</span>
-              <span className="shrink-0 text-navy">
-                −{money(coupon.discountCents, product.currency)}
-              </span>
-            </div>
-          )}
-
-          {chosenBump && (
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted">{chosenBump.headline}</span>
-              <span>{money(chosenBump.chargeNowCents, product.currency)}</span>
-            </div>
-          )}
-
-          {/* Discount code. A plain input rather than a "have a code?" toggle:
-              hiding it makes people leave to hunt for one, and this store's
-              codes are handed out deliberately rather than scattered around. */}
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={couponInput}
-                onChange={(e) => {
-                  setCouponInput(e.target.value);
-                  setCouponError(null);
-                }}
-                // Enter inside the discount field must not submit the payment
-                // form — pressing it to "apply a code" and being charged
-                // instead is the sort of surprise that ends in a chargeback.
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    void applyCoupon();
-                  }
-                }}
-                placeholder="Discount code"
-                aria-label="Discount code"
-                autoCapitalize="characters"
-                spellCheck={false}
-                className={`${input} uppercase placeholder:normal-case`}
-              />
-              <button
-                type="button"
-                onClick={() => void applyCoupon()}
-                disabled={couponBusy || !couponInput.trim()}
-                className="shrink-0 rounded-xl border border-border px-4 text-sm font-medium transition-colors hover:border-primary disabled:opacity-50"
-              >
-                {couponBusy ? "…" : coupon ? "Change" : "Apply"}
-              </button>
-            </div>
-            {couponError && <p className="text-xs text-primary">{couponError}</p>}
-            {coupon?.clamped && (
-              <p className="text-xs text-muted">
-                Discount capped — {money(MIN_CHARGE_CENTS_CLIENT, product.currency)} is the smallest
-                charge a card can take.
-              </p>
-            )}
-          </div>
-
-          <div className="flex items-baseline justify-between border-t border-border pt-4">
-            <span className="text-muted">Total now</span>
-            <span className="font-display text-2xl">{money(totalNow, product.currency)}</span>
-          </div>
-          {chosenBump?.termsLabel && (
-            <p className="-mt-2 text-sm text-muted">
-              {chosenBump.headline}: {chosenBump.termsLabel}.
-            </p>
-          )}
-          <p className="-mt-2 text-xs text-muted">
-            Tax is calculated at your country&rsquo;s rate and shown on your receipt.
-          </p>
-
-          {error && (
-            <p className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary">
-              {error}
-            </p>
-          )}
-
-          {/* The amount lives in the button so the thing being agreed to is on
-              the thing being pressed — and it moves with the bump, so ticking
-              the add-on visibly changes what you are about to pay. */}
-          {/* Held, not disabled, while the add-on is unanswered. A disabled
-              button cannot be clicked, so it can never say why it is not
-              working — it just fails silently and the buyer leaves. This one
-              looks inert, takes the click, and answers. */}
-          <button
-            type="submit"
-            disabled={busy || !stripe}
-            aria-disabled={bumpUnanswered || undefined}
-            className={`group relative flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-full bg-primary px-6 py-4 font-medium text-primary-fg transition-[transform,background-color,box-shadow,opacity,filter] duration-200 hover:bg-primary-hover hover:shadow-[0_14px_30px_-12px_color-mix(in_srgb,var(--primary)_70%,transparent)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:scale-100 ${
-              bumpUnanswered ? "opacity-55 blur-[0.7px] hover:bg-primary hover:shadow-none" : ""
-            }`}
-          >
-            {busy ? (
-              <>
-                <svg viewBox="0 0 24 24" aria-hidden className="size-4 animate-spin">
-                  <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="2.5" opacity="0.3" />
-                  <path d="M21 12a9 9 0 0 0-9-9" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                </svg>
-                Processing…
-              </>
-            ) : (
-              <>
-                <svg viewBox="0 0 24 24" aria-hidden className="size-4 shrink-0 fill-current opacity-90">
-                  <path d="M17 9V7a5 5 0 0 0-10 0v2H5v12h14V9h-2ZM9 7a3 3 0 1 1 6 0v2H9V7Z" />
-                </svg>
-                <span>Pay {money(totalNow, product.currency)}</span>
-                <svg
-                  viewBox="0 0 24 24"
-                  aria-hidden
-                  className="size-4 shrink-0 fill-current transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
-                >
-                  <path d="M13 5l7 7-7 7-1.4-1.4 4.6-4.6H4v-2h12.2l-4.6-4.6L13 5Z" />
-                </svg>
-              </>
-            )}
-          </button>
-
-          <TrustBlock />
-      </div>
-    </form>
+      </form>
+    </CheckoutSlots>
   );
 }
-
-// Reassurance under the pay button, where hesitation actually happens.
-//
-// Every line here is a claim this store can actually keep, and each is true of
-// the code as written: Stripe's Payment Element owns the card fields so no card
-// number ever reaches our server or database; access is granted by finalizeOrder
-// the moment payment succeeds; the refund window is the one the policy pages
-// state. No borrowed security-vendor badges — a logo we have no relationship
-// with is a lie, and the buyers who look closely are the ones who were already
-// hesitating.
-function TrustBlock() {
-  const items = [
-    {
-      label: "Stripe secure",
-      icon: "M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Zm0 6a2 2 0 0 1 2 2v1h.5a.5.5 0 0 1 .5.5v3a.5.5 0 0 1-.5.5h-5a.5.5 0 0 1-.5-.5v-3a.5.5 0 0 1 .5-.5H10v-1a2 2 0 0 1 2-2Zm0 1a1 1 0 0 0-1 1v1h2v-1a1 1 0 0 0-1-1Z",
-    },
-    {
-      label: "Card never stored",
-      icon: "M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 4H4V6h16v2Zm0 10H4v-6h16v6Z",
-    },
-    {
-      label: "Instant access",
-      icon: "M13 2 3 14h7l-1 8 11-13h-7l1-7Z",
-    },
-  ];
-
-  return (
-    <div className="flex flex-col gap-3 border-t border-border pt-4">
-      {/* Stripe is on automatic payment methods, so what a buyer is offered
-          depends on where they are — UPI in India, iDEAL in the Netherlands.
-          Saying so beats listing marks that might be wrong for them, and it
-          stays true without anyone maintaining it. */}
-      <p className="text-center text-xs text-muted">
-        Card, or whatever Stripe offers where you are — UPI, wallets, bank transfer.
-      </p>
-      {/* Icon plus two or three words. The long-form reassurance that lived here
-          was competing with the button it sits under: at the moment of paying,
-          a paragraph is something to read rather than something that reassures. */}
-      <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
-        {items.map((it) => (
-          <li key={it.label} className="flex items-center gap-1.5">
-            <svg viewBox="0 0 24 24" aria-hidden className="size-3.5 shrink-0 fill-current text-navy">
-              <path d={it.icon} />
-            </svg>
-            <span className="text-xs text-muted">{it.label}</span>
-          </li>
-        ))}
-      </ul>
-      {/* Kept deliberately: naming the terms and the withdrawal right at the
-          point of payment is a disclosure obligation for EU/UK digital sales,
-          not decoration. One line of fine print, not a badge. */}
-      <p className="text-center text-[11px] text-muted">
-        By paying you agree to our{" "}
-        <a href="/terms" className="underline underline-offset-2 hover:text-fg">terms</a> and{" "}
-        <a href="/refunds" className="underline underline-offset-2 hover:text-fg">refund policy</a>.
-      </p>
-    </div>
-  );
-}
-
-const input =
-  "w-full rounded-xl border border-border bg-surface px-3.5 py-3 text-sm outline-none transition-colors focus:border-primary";

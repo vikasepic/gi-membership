@@ -5,6 +5,10 @@ import { getProductById } from "@/lib/admin";
 import { getPageSections, getPageSettings , listPageSources } from "@/lib/pages";
 import { PageEditor } from "@/components/admin/page-editor";
 import { PageSettings } from "@/components/admin/page-settings";
+import { PageSeo } from "@/components/admin/page-seo";
+import { getSettingsOrDefaults } from "@/lib/settings";
+import { publicCoverUrl } from "@/lib/media-url";
+import { productDisplay } from "@/lib/courses";
 import { money } from "@/lib/money";
 import { siteUrl } from "@/lib/env";
 import { CopyLink } from "@/components/admin/copy-link";
@@ -18,14 +22,23 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
   const product = await getProductById(id);
   if (!product) notFound();
 
-  const [rows, settings, pageSources, preview] = await Promise.all([
+  const [rows, settings, pageSources, preview, store, display] = await Promise.all([
     getPageSections("product", id),
     getPageSettings("product", id),
     listPageSources(),
     // The store's fonts and site typography. The admin renders no StoreBrand,
     // so without this the preview draws in the app's own fonts.
     storePreview(),
+    getSettingsOrDefaults(),
+    productDisplay([id]),
   ]);
+
+  // What the card falls back to when the fields are left empty. Worked out here
+  // rather than in the panel so the preview shows the real picture instead of a
+  // description of which one it would be.
+  const fallbackImage =
+    publicCoverUrl(product.coverPath ?? display.get(id)?.coverPath ?? null) ??
+    publicCoverUrl(store.shareImagePath || null);
 
   return (
     <div className="flex flex-col gap-6">
@@ -104,6 +117,16 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
             </Link>
             .
           </p>
+          <PageSeo
+            ownerType="product"
+            ownerId={id}
+            metaTitle={settings.metaTitle}
+            metaDescription={settings.metaDescription}
+            shareImagePath={settings.shareImagePath}
+            fallbackTitle={product.title}
+            fallbackDescription={product.tagline ?? ""}
+            fallbackImageUrl={fallbackImage}
+          />
           <PageSettings
             ownerType="product"
             ownerId={id}

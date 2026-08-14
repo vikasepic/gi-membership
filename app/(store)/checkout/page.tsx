@@ -15,6 +15,10 @@ import { NOINDEX } from "@/lib/seo";
 import { CheckoutPanel } from "@/components/checkout/checkout-panel";
 import { legalFrom } from "@/lib/legal";
 import { getSettingsOrDefaults } from "@/lib/settings";
+import { getPageSections } from "@/lib/pages";
+import { getStoreId } from "@/lib/store";
+import { usableCheckoutLayout } from "@/lib/checkout-layout";
+import type { Block } from "@/lib/blocks";
 
 export const metadata = NOINDEX;
 
@@ -31,6 +35,31 @@ async function lastBillingCountry(userId: string): Promise<string | null> {
     .limit(1)
     .maybeSingle();
   return (data?.buyer_country as string) ?? null;
+}
+
+/**
+ * The store's checkout layout, flattened to one list of blocks.
+ *
+ * Both bands in order, disabled ones dropped. A band is a horizontal slice and
+ * this form is one column of the page, so they concatenate — the two-column
+ * arrangement inside the panel is a row block, not a band.
+ *
+ * Never throws. A settings read that fails must cost this page its layout, not
+ * its ability to take a payment.
+ */
+async function checkoutLayout(): Promise<Block[] | null> {
+  try {
+    const rows = await getPageSections("checkout", await getStoreId());
+    const blocks = rows
+      .filter((r) => r.enabled)
+      .flatMap((r) => {
+        const list = (r.content as Record<string, unknown> | undefined)?.blocks;
+        return Array.isArray(list) ? list : [];
+      });
+    return usableCheckoutLayout(blocks);
+  } catch {
+    return null;
+  }
 }
 
 export default async function CheckoutPage({
@@ -129,6 +158,12 @@ export default async function CheckoutPage({
   const settings = await getSettingsOrDefaults();
   const legal = legalFrom(settings);
 
+  // The checkout the store laid out, if it laid one out and if it can still
+  // take money. `usableCheckoutLayout` returns null on anything else, and null
+  // is the page that has always shipped — see lib/checkout-layout.ts for why
+  // this one page does not simply render whatever was saved.
+  const layout = await checkoutLayout();
+
   return (
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-2">
       <CheckoutPanel
@@ -169,6 +204,7 @@ export default async function CheckoutPage({
           publishableKey={stripePublishableKey()}
           signedInEmail={user?.email ?? null}
           defaultCountry={defaultCountry}
+          layout={layout}
         />
       </div>
     </div>

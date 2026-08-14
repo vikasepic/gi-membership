@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { BlockEditor, ImageControl } from "@/components/admin/block-editor";
 import { bandTheme } from "@/lib/page-sections";
 import { PALETTE, BLOCK_LABEL } from "@/lib/block-controls";
-import { STOREFRONT_TYPES } from "@/lib/blocks";
+import { CHECKOUT_TYPES, STOREFRONT_TYPES } from "@/lib/blocks";
 import { addTarget, edgeIndex, insertBlock, moveBlock, newBlock, type Block } from "@/lib/blocks";
 import { PREVIEW_SCOPE, normalizeSiteTypography } from "@/lib/site-typography";
 
@@ -20,11 +20,13 @@ describe("the builder shell", () => {
   });
 
   it("offers every block in the palette", () => {
-    // The shell defaults to a product page, whose tray is everything except the
-    // three storefront blocks — those need live store data no other page has.
+    // The shell defaults to a product page, whose tray is everything except
+    // the two live-data families: the storefront blocks need a catalogue and
+    // the checkout blocks need an order, and a product page has neither.
     const out = shell([]);
+    const gated = [...STOREFRONT_TYPES, ...CHECKOUT_TYPES];
     for (const p of PALETTE) {
-      if (STOREFRONT_TYPES.includes(p.type)) expect(out, p.label).not.toContain(p.label);
+      if (gated.includes(p.type)) expect(out, p.label).not.toContain(p.label);
       else expect(out, p.label).toContain(p.label);
     }
   });

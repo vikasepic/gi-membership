@@ -15,6 +15,9 @@ import { BuyLink } from "@/components/buy-link";
 import { buildBumpView } from "@/lib/bump";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { altSaving } from "@/lib/offers";
+import { pageMetadata, absoluteUrl } from "@/lib/page-metadata";
+import { getSettingsOrDefaults } from "@/lib/settings";
+import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +29,50 @@ export const dynamic = "force-dynamic";
  * through /checkout/offer, which already handles signing in and refuses anyone
  * who owns it, so nothing about eligibility is reimplemented here.
  */
+/**
+ * The offer page's own card.
+ *
+ * `image_url` is the offer's picture and it is a URL rather than a storage
+ * path, so it is used directly rather than through the media helper — the two
+ * are not interchangeable and passing one to the other yields a broken card
+ * rather than an error anybody would notice.
+ *
+ * Never throws: a share card is not worth a 500 on a page that sells something.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ key: string }>;
+}): Promise<Metadata> {
+  try {
+    const { key } = await params;
+    const offer = await getOfferByKey(key);
+    if (!offer || !offer.active) return {};
+    const [page, store] = await Promise.all([
+      getPageSettings("offer", offer.id),
+      getSettingsOrDefaults(),
+    ]);
+    const meta = pageMetadata({
+      page,
+      // The headline sells; the internal name does not. An offer called
+      // "Funnel App - Yearly (v2)" is an admin's filing, not a page title.
+      fallback: { title: offer.headline || offer.name, description: offer.description },
+      store,
+      url: absoluteUrl(`/o/${key}`),
+    });
+    // The offer's own artwork, where nothing better was chosen for the page.
+    const image = page.shareImagePath.trim() ? null : offer.imageUrl;
+    if (!image) return meta;
+    return {
+      ...meta,
+      openGraph: { ...meta.openGraph, images: [{ url: image }] },
+      twitter: { ...meta.twitter, card: "summary_large_image", images: [image] },
+    };
+  } catch {
+    return {};
+  }
+}
+
 export default async function OfferSalesPage({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
   const listed = await getOfferByKey(key);

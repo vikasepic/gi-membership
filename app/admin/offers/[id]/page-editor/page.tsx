@@ -5,6 +5,9 @@ import { getOfferById } from "@/lib/admin";
 import { getPageSections, getPageSettings , listPageSources } from "@/lib/pages";
 import { PageEditor } from "@/components/admin/page-editor";
 import { PageSettings } from "@/components/admin/page-settings";
+import { PageSeo } from "@/components/admin/page-seo";
+import { getSettingsOrDefaults } from "@/lib/settings";
+import { publicCoverUrl } from "@/lib/media-url";
 import { buildBumpView } from "@/lib/bump";
 import { siteUrl } from "@/lib/env";
 import { CopyLink } from "@/components/admin/copy-link";
@@ -18,13 +21,14 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
   const offer = await getOfferById(id);
   if (!offer) notFound();
 
-  const [rows, settings, pageSources, preview] = await Promise.all([
+  const [rows, settings, pageSources, preview, store] = await Promise.all([
     getPageSections("offer", id),
     getPageSettings("offer", id),
     listPageSources(),
     // The store's fonts and site typography. The admin renders no StoreBrand,
     // so without this the preview draws in the app's own fonts.
     storePreview(),
+    getSettingsOrDefaults(),
   ]);
   // The price shown on the page comes from the offer, never from a copy field —
   // the same rule as the order bump.
@@ -78,6 +82,20 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
             url={`${siteUrl()}/o/${offer.key}`}
             label="Public link"
             note="The same nine sections at an address you can paste into an ad or an email. Live once you save a section; buying goes through the normal checkout."
+          />
+          <PageSeo
+            ownerType="offer"
+            ownerId={id}
+            metaTitle={settings.metaTitle}
+            metaDescription={settings.metaDescription}
+            shareImagePath={settings.shareImagePath}
+            // The headline sells; the internal name files. An offer called
+            // "Funnel App - Yearly (v2)" is an admin's label, not a page title.
+            fallbackTitle={offer.headline || offer.name}
+            fallbackDescription={offer.description ?? ""}
+            // `imageUrl` is already a URL rather than a storage path — the two
+            // are not interchangeable and swapping them yields a broken card.
+            fallbackImageUrl={offer.imageUrl || publicCoverUrl(store.shareImagePath || null)}
           />
           <PageSettings
             ownerType="offer"

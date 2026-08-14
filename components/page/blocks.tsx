@@ -14,6 +14,15 @@ import {
   type StoreRender,
 } from "@/components/page/storefront-blocks";
 import {
+  BuyerDetailsSlot,
+  CardFieldsSlot,
+  CouponSlot,
+  DueTodaySlot,
+  OrderBumpSlot,
+  OrderSummarySlot,
+  PayButtonSlot,
+} from "@/components/checkout/slots";
+import {
   backgroundCss,
   blockClass,
   blockColors,
@@ -680,6 +689,109 @@ function Inner({
       return store ? (
         <FeaturedBlock store={store} title={str(p.title)} note={str(p.note)} />
       ) : null;
+
+    // The live checkout. These need no payload prop of their own: each one
+    // reads the form out of React context, and the form is what renders the
+    // block tree. Anywhere else there is no context, so each draws nothing —
+    // the same answer the storefront blocks give on a sales page, reached
+    // without threading a seventh argument through every render call.
+    case "buyerdetails":
+      return (
+        <BuyerDetailsSlot
+          title={str(p.title)}
+          namePlaceholder={str(p.namePlaceholder)}
+          emailPlaceholder={str(p.emailPlaceholder)}
+          countryPlaceholder={str(p.countryPlaceholder)}
+          note={str(p.note)}
+          titleColor={str(p.titleColor) || null}
+          titleSize={p.titleSize == null ? null : num(p.titleSize, 12)}
+          noteColor={str(p.noteColor) || null}
+          noteSize={p.noteSize == null ? null : num(p.noteSize, 12)}
+          inputBg={str(p.inputBg) || null}
+          inputBorder={str(p.inputBorder) || null}
+          inputColor={str(p.inputColor) || null}
+          radius={p.radius == null ? null : num(p.radius, 12)}
+        />
+      );
+
+    case "orderbump":
+      return (
+        <OrderBumpSlot
+          title={str(p.title)}
+          titleColor={str(p.titleColor) || null}
+          titleSize={p.titleSize == null ? null : num(p.titleSize, 12)}
+        />
+      );
+
+    case "ordersummary":
+      return (
+        <OrderSummarySlot
+          title={str(p.title)}
+          showThumb={p.showThumb !== false}
+          showLines={p.showLines !== false}
+          showTax={p.showTax !== false}
+          titleSize={p.titleSize == null ? null : num(p.titleSize, 12)}
+          textSize={p.textSize == null ? null : num(p.textSize, 14)}
+          labelColor={str(p.labelColor) || null}
+          valueColor={str(p.valueColor) || null}
+          ruleColor={str(p.ruleColor) || null}
+        />
+      );
+
+    case "coupon":
+      return (
+        <CouponSlot
+          label={str(p.label)}
+          placeholder={str(p.placeholder)}
+          buttonLabel={str(p.buttonLabel)}
+          labelColor={str(p.labelColor) || null}
+          inputBg={str(p.inputBg) || null}
+          inputBorder={str(p.inputBorder) || null}
+          inputColor={str(p.inputColor) || null}
+          buttonBg={str(p.buttonBg) || null}
+          buttonColor={str(p.buttonColor) || null}
+          radius={p.radius == null ? null : num(p.radius, 10)}
+        />
+      );
+
+    case "cardfields":
+      return (
+        <CardFieldsSlot
+          heading={str(p.heading)}
+          headingColor={str(p.headingColor) || null}
+          headingSize={p.headingSize == null ? null : num(p.headingSize, 12)}
+        />
+      );
+
+    case "duetoday":
+      return (
+        <DueTodaySlot
+          label={str(p.label)}
+          labelColor={str(p.labelColor) || null}
+          amountColor={str(p.amountColor) || null}
+          labelSize={p.labelSize == null ? null : num(p.labelSize, 15)}
+          amountSize={p.amountSize == null ? null : num(p.amountSize, 24)}
+          showTerms={p.showTerms !== false}
+          termsColor={str(p.termsColor) || null}
+          termsSize={p.termsSize == null ? null : num(p.termsSize, 13)}
+        />
+      );
+
+    case "paybutton":
+      return (
+        <PayButtonSlot
+          label={str(p.label)}
+          trialLabel={str(p.trialLabel)}
+          bg={str(p.bg) || null}
+          color={str(p.color) || null}
+          radius={p.radius == null ? null : num(p.radius, 999)}
+          size={p.size == null ? null : num(p.size, 16)}
+          fullWidth={p.fullWidth !== false}
+          note={str(p.note)}
+          noteColor={str(p.noteColor) || null}
+          noteSize={p.noteSize == null ? null : num(p.noteSize, 12)}
+        />
+      );
 
     case "image": {
       const src = imageSrc(str(p.url));

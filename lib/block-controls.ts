@@ -3,6 +3,7 @@ import { LIST_ICONS } from "@/lib/list-icons";
 import {
   BLOCK_TYPES,
   MAX_COLUMNS,
+  CHECKOUT_TYPES,
   STOREFRONT_TYPES,
   clearAt,
   propsFor,
@@ -530,6 +531,144 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       { kind: "text", key: "note", label: "Line under it" },
     ],
     style: [],
+  },
+
+  // ---------------------------------------------------------------------------
+  // The checkout five
+  // ---------------------------------------------------------------------------
+
+  buyerdetails: {
+    content: [
+      { kind: "text", key: "title", label: "Heading", hint: "Left empty the fields start straight away." },
+      { kind: "text", key: "namePlaceholder", label: "Name field" },
+      { kind: "text", key: "emailPlaceholder", label: "Email field" },
+      { kind: "text", key: "countryPlaceholder", label: "Country field" },
+      {
+        kind: "text",
+        key: "note",
+        label: "Line under them",
+        hint: "Worth keeping. A typo in the email is the most expensive mistake available on this page — the receipt and the access link both follow it.",
+      },
+    ],
+    style: [
+      { kind: "number", key: "titleSize", label: "Heading size", min: 10, max: 32, step: 1, responsive: true },
+      { kind: "color", key: "titleColor", label: "Heading" },
+      { kind: "color", key: "inputBg", label: "Fields" },
+      { kind: "color", key: "inputBorder", label: "Field border" },
+      { kind: "color", key: "inputColor", label: "Typed text" },
+      { kind: "number", key: "radius", label: "Corners", min: 0, max: 30, step: 1 },
+      { kind: "number", key: "noteSize", label: "Note size", min: 9, max: 20, step: 1, responsive: true },
+      { kind: "color", key: "noteColor", label: "Note" },
+    ],
+  },
+
+  orderbump: {
+    content: [
+      { kind: "text", key: "title", label: "Heading", hint: "Above the offer. Left empty there is no heading — the offer stands alone." },
+    ],
+    style: [
+      { kind: "number", key: "titleSize", label: "Heading size", min: 10, max: 32, step: 1, responsive: true },
+      { kind: "color", key: "titleColor", label: "Heading" },
+    ],
+  },
+
+  ordersummary: {
+    content: [
+      { kind: "text", key: "title", label: "Heading", hint: "Left empty there is no heading." },
+      { kind: "toggle", key: "showThumb", label: "Show the cover" },
+      { kind: "toggle", key: "showLines", label: "List what is in the order", hint: "Off shows only the total. The bump and any upsell are lines here." },
+      { kind: "toggle", key: "showTax", label: "Show tax as its own line", hint: "Only ever drawn where tax is actually charged." },
+    ],
+    style: [
+      { kind: "number", key: "titleSize", label: "Heading size", min: 11, max: 40, step: 1, responsive: true },
+      { kind: "number", key: "textSize", label: "Line size", min: 10, max: 24, step: 1, responsive: true },
+      { kind: "color", key: "labelColor", label: "What it is" },
+      { kind: "color", key: "valueColor", label: "What it costs" },
+      { kind: "color", key: "ruleColor", label: "Rules" },
+    ],
+  },
+
+  coupon: {
+    content: [
+      { kind: "text", key: "label", label: "Label", hint: "Left empty the field stands on its own." },
+      { kind: "text", key: "placeholder", label: "Placeholder" },
+      { kind: "text", key: "buttonLabel", label: "Button" },
+    ],
+    style: [
+      { kind: "color", key: "labelColor", label: "Label" },
+      { kind: "color", key: "inputBg", label: "Field" },
+      { kind: "color", key: "inputBorder", label: "Field border" },
+      { kind: "color", key: "inputColor", label: "Typed text" },
+      { kind: "color", key: "buttonBg", label: "Button" },
+      { kind: "color", key: "buttonColor", label: "Button text" },
+      { kind: "number", key: "radius", label: "Corners", min: 0, max: 999, step: 1 },
+    ],
+  },
+
+  cardfields: {
+    content: [
+      { kind: "text", key: "heading", label: "Heading", hint: "Left empty the fields start straight away." },
+    ],
+    style: [
+      { kind: "number", key: "headingSize", label: "Heading size", min: 11, max: 40, step: 1, responsive: true },
+      { kind: "color", key: "headingColor", label: "Heading" },
+      {
+        kind: "select",
+        key: "theme",
+        label: "Field style",
+        hint: "Stripe draws these fields in a frame of its own, so this is the only thing that reaches inside them.",
+        options: [
+          ["stripe", "Stripe's own"],
+          ["flat", "Flat"],
+          ["night", "Dark"],
+        ],
+      },
+      { kind: "color", key: "accent", label: "Focus" },
+      { kind: "number", key: "radius", label: "Corners", min: 0, max: 30, step: 1 },
+      { kind: "number", key: "fontSize", label: "Text size", min: 12, max: 22, step: 1 },
+    ],
+  },
+
+  duetoday: {
+    content: [
+      { kind: "text", key: "label", label: "Label" },
+      {
+        kind: "toggle",
+        key: "showTerms",
+        label: "Say what happens next",
+        hint: "The renewal date and amount, on anything recurring. Off is safe only on a one-off — a subscription that never states its terms is how a first charge becomes a dispute.",
+      },
+    ],
+    style: [
+      { kind: "number", key: "labelSize", label: "Label size", min: 10, max: 30, step: 1, responsive: true },
+      { kind: "number", key: "amountSize", label: "Amount size", min: 14, max: 56, step: 1, responsive: true },
+      { kind: "color", key: "labelColor", label: "Label" },
+      { kind: "color", key: "amountColor", label: "Amount" },
+      { kind: "number", key: "termsSize", label: "Terms size", min: 9, max: 20, step: 1, responsive: true },
+      { kind: "color", key: "termsColor", label: "Terms" },
+    ],
+  },
+
+  paybutton: {
+    content: [
+      { kind: "text", key: "label", label: "Words on it" },
+      {
+        kind: "text",
+        key: "trialLabel",
+        label: "Words when it is a trial",
+        hint: "Used instead wherever the order starts a free trial — \"Pay now\" on a button that charges nothing today is a surprise nobody wants.",
+      },
+      { kind: "text", key: "note", label: "Line under it", hint: "Left empty there is nothing under the button." },
+      { kind: "toggle", key: "fullWidth", label: "Full width" },
+    ],
+    style: [
+      { kind: "color", key: "bg", label: "Button" },
+      { kind: "color", key: "color", label: "Button text" },
+      { kind: "number", key: "size", label: "Text size", min: 12, max: 30, step: 1, responsive: true },
+      { kind: "number", key: "radius", label: "Corners", min: 0, max: 999, step: 1 },
+      { kind: "number", key: "noteSize", label: "Note size", min: 9, max: 20, step: 1, responsive: true },
+      { kind: "color", key: "noteColor", label: "Note" },
+    ],
   },
 
   slides: {
@@ -1725,6 +1864,14 @@ export const PALETTE: { type: BlockType; label: string; props?: Record<string, u
   { type: "catalog", label: "Catalogue" },
   { type: "memberships", label: "Memberships" },
   { type: "featured", label: "Featured" },
+  // Checkout only, and for the same reason: nothing else can supply an order.
+  { type: "buyerdetails", label: "Their details" },
+  { type: "orderbump", label: "Order bump" },
+  { type: "ordersummary", label: "Order summary" },
+  { type: "coupon", label: "Coupon field" },
+  { type: "cardfields", label: "Card fields" },
+  { type: "duetoday", label: "Due today" },
+  { type: "paybutton", label: "Pay button" },
 ];
 
 /**
@@ -1735,10 +1882,24 @@ export const PALETTE: { type: BlockType; label: string; props?: Record<string, u
  * them elsewhere would put a block in the tray that renders nothing wherever it
  * is dropped, which is a worse answer than not offering it.
  */
-export function paletteFor(owner: "product" | "offer" | "store"): typeof PALETTE {
-  return owner === "store"
-    ? PALETTE
-    : PALETTE.filter((p) => !STOREFRONT_TYPES.includes(p.type));
+/**
+ * Whose page the builder is pointed at.
+ *
+ * The same four as `OwnerType`, restated here because that one lives in a
+ * server-only module and the builder is a client component.
+ */
+export type BuilderOwner = "product" | "offer" | "store" | "checkout";
+
+export function paletteFor(owner: BuilderOwner): typeof PALETTE {
+  // Two live-data families, each offered on exactly the page that can supply
+  // it. Everything else is offered everywhere.
+  const hide: readonly BlockType[] =
+    owner === "store"
+      ? CHECKOUT_TYPES
+      : owner === "checkout"
+        ? STOREFRONT_TYPES
+        : [...STOREFRONT_TYPES, ...CHECKOUT_TYPES];
+  return PALETTE.filter((p) => !hide.includes(p.type));
 }
 
 /**
@@ -1836,6 +1997,10 @@ export const PALETTE_GROUPS: { title: string; types: string[] }[] = [
   { title: "Layout", types: ["Container", "Divider", "Spacer"] },
   { title: "Sales", types: ["Ways to pay", "Cards", "Figures", "Price card", "Price table", "FAQ", "Countdown", "Sticky bar", "HTML"] },
   { title: "Storefront", types: ["Catalogue", "Memberships", "Featured"] },
+  {
+    title: "Checkout",
+    types: ["Their details", "Order bump", "Order summary", "Coupon field", "Card fields", "Due today", "Pay button"],
+  },
 ];
 
 /** One glyph per block type, so you learn the shapes and stop reading. */
@@ -1851,6 +2016,20 @@ export const BLOCK_ICON: Record<BlockType, string> = {
   catalog: "M3 4h8v7H3V4Zm10 0h8v7h-8V4ZM3 13h8v7H3v-7Zm10 0h8v7h-8v-7Z",
   memberships: "M3 6h18v12H3V6Zm2 2v8h14V8H5Zm2 2h6v2H7v-2Zm0 3h4v2H7v-2Z",
   featured: "M12 2.6l2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9l6.1-.8L12 2.6Z",
+  // A receipt with two lines and a torn foot.
+  // A person's head and shoulders.
+  buyerdetails: "M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0 10c4.4 0 8 2.2 8 5v3H4v-3c0-2.8 3.6-5 8-5Z",
+  // A box with a plus on it — the thing offered on the way past.
+  orderbump: "M4 6h16v12H4V6Zm2 2v8h12V8H6Zm5 1h2v2h2v2h-2v2h-2v-2H9v-2h2V9Z",
+  ordersummary: "M5 3h14v16.5l-2.3-1.4-2.4 1.4-2.3-1.4-2.4 1.4L7 18.1 5 19.5V3Zm3 4h8v2H8V7Zm0 4h8v2H8v-2Z",
+  // A ticket with a notch out of each side.
+  coupon: "M3 6h18v3.2a2.8 2.8 0 0 0 0 5.6V18H3v-3.2a2.8 2.8 0 0 0 0-5.6V6Zm6 2v8h2V8H9Z",
+  // A card with a magnetic stripe.
+  cardfields: "M3 5h18v14H3V5Zm2 3v2h14V8H5Zm0 5v4h6v-4H5Z",
+  // A price tag with its hole.
+  duetoday: "M11.6 2.6 21 12l-8.4 8.4-9.4-9.4V2.6h8.4ZM7 5.6a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2Z",
+  // A pill with an arrow leaving it.
+  paybutton: "M3 8h11v8H3V8Zm2 2v4h7v-4H5Zm11.6-2.4 4.4 4.4-4.4 4.4-1.4-1.4 2-2H14v-2h3.2l-2-2 1.4-1.4Z",
   heading: "M4 4h2v7h8V4h2v16h-2v-7H6v7H4V4Z",
   text: "M3 5h18v2H3V5Zm0 5h18v2H3v-2Zm0 5h12v2H3v-2Z",
   image: "M4 5h16v14H4V5Zm2 2v7l3.5-3.5L13 14l3-3 2 2V7H6Z",
@@ -1873,7 +2052,7 @@ export const BLOCK_ICON: Record<BlockType, string> = {
 export function groupedPalette(
   query = "",
   /** Which page's tray this is. The storefront blocks are offered on one page. */
-  owner: "product" | "offer" | "store" = "product",
+  owner: BuilderOwner = "product",
 ): { title: string; items: typeof PALETTE }[] {
   const q = query.trim().toLowerCase();
   const offered = paletteFor(owner);

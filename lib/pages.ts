@@ -7,9 +7,11 @@ import { normalizeColor } from "@/lib/color";
 import { normalizeBackground, normalizeBlocks, type Background, type Block } from "@/lib/blocks";
 import { priceProblems } from "@/lib/page-price-truth";
 import { homeStarterBlocks } from "@/lib/home-starter";
+import { checkoutStarterBlocks } from "@/lib/checkout-layout";
 import { codeSnippetsSchema, type CodeSnippet } from "@/lib/code-snippets";
 import { realPriceLabel } from "@/lib/page-money";
 import {
+  CHECKOUT_SECTIONS,
   HOME_SECTIONS,
   SECTIONS,
   BAND_STYLE_KEYS,
@@ -28,11 +30,17 @@ import {
  * table, keyed by the store id, and it reads a different band list — see
  * HOME_SECTIONS. Everything else about it is a page like any other, which is
  * the point: one editor, one renderer, one save path.
+ *
+ * "checkout" is the same arrangement for the page that takes the money: one
+ * row set per store, its own band list, and the same editor. It is the reason
+ * that sentence is worth repeating — the checkout was the last page in this
+ * store nobody could edit without a deploy.
  */
-export type OwnerType = "product" | "offer" | "store";
+export type OwnerType = "product" | "offer" | "store" | "checkout";
 
 /** The band list a page of this kind is made of. */
-export const sectionsFor = (owner: OwnerType) => (owner === "store" ? HOME_SECTIONS : SECTIONS);
+export const sectionsFor = (owner: OwnerType) =>
+  owner === "store" ? HOME_SECTIONS : owner === "checkout" ? CHECKOUT_SECTIONS : SECTIONS;
 
 /**
  * The sections for one page, in order.
@@ -281,9 +289,25 @@ async function updateIfUnchanged(
  * happened rather than claiming to have done something it did not.
  */
 export async function seedHomeFromDefault(): Promise<{ written: string[]; skipped: string[] }> {
+  return seedFromStarter("store", homeStarterBlocks());
+}
+
+/**
+ * The same route out of an empty editor, for the checkout.
+ *
+ * The checkout falls back to the built-in page until a band holds a block, so
+ * this is what turns "the page buyers are seeing" into blocks you can move.
+ */
+export async function seedCheckoutFromDefault(): Promise<{ written: string[]; skipped: string[] }> {
+  return seedFromStarter("checkout", checkoutStarterBlocks());
+}
+
+async function seedFromStarter(
+  owner: OwnerType,
+  starter: Record<string, Block[]>,
+): Promise<{ written: string[]; skipped: string[] }> {
   const storeId = await getStoreId();
-  const rows = await getPageSections("store", storeId);
-  const starter = homeStarterBlocks();
+  const rows = await getPageSections(owner, storeId);
 
   const written: string[] = [];
   const skipped: string[] = [];
@@ -296,7 +320,7 @@ export async function seedHomeFromDefault(): Promise<{ written: string[]; skippe
       skipped.push(row.sectionKey);
       continue;
     }
-    await saveSection("store", storeId, row.sectionKey, {
+    await saveSection(owner, storeId, row.sectionKey, {
       enabled: true,
       style: row.style ?? sectionDef(row.sectionKey)?.defaultStyle ?? "cream",
       accent: row.accent ?? null,
@@ -337,25 +361,75 @@ export async function seedPage(owner: OwnerType, ownerId: string): Promise<void>
 
 // --- page-level custom code -------------------------------------------------
 
-export type PageSettings = { customCss: string; customJs: string; snippets: CodeSnippet[] };
+export type PageSettings = {
+  customCss: string;
+  customJs: string;
+  snippets: CodeSnippet[];
+  /**
+   * How this page looks in a search result and a pasted link.
+   *
+   * Every one of these is empty by default, and empty means "work it out from
+   * the page" rather than "leave it blank" — see lib/page-metadata.ts. A store
+   * that fills in nothing still gets a sensible card.
+   */
+  metaTitle: string;
+  metaDescription: string;
+  shareImagePath: string;
+};
 
-export const NO_PAGE_SETTINGS: PageSettings = { customCss: "", customJs: "", snippets: [] };
+export const NO_PAGE_SETTINGS: PageSettings = {
+  customCss: "",
+  customJs: "",
+  snippets: [],
+  metaTitle: "",
+  metaDescription: "",
+  shareImagePath: "",
+};
+
+/**
+ * The SEO columns, asked for separately.
+ *
+ * They arrive in migration 0052, and a deploy can reach a database that has not
+ * run it yet — PostgREST answers an unknown column with an error for the WHOLE
+ * select, so asking for all six together would mean a database one migration
+ * behind silently losing every page's custom CSS and JavaScript. Splitting the
+ * question makes the code work either side of the migration, in the only
+ * direction that matters: the old columns always answer.
+ */
+const SEO_COLUMNS = "meta_title, meta_description, share_image_path";
 
 export async function getPageSettings(owner: OwnerType, ownerId: string): Promise<PageSettings> {
   const db = createServiceClient();
-  const { data, error } = await db
-    .from("page_settings")
-    .select("custom_css, custom_js, snippets")
-    .eq("owner_type", owner)
-    .eq("owner_id", ownerId)
-    .maybeSingle();
+  const read = async (columns: string) =>
+    db
+      .from("page_settings")
+      .select(columns)
+      .eq("owner_type", owner)
+      .eq("owner_id", ownerId)
+      .maybeSingle();
+
+  const full = await read(`custom_css, custom_js, snippets, ${SEO_COLUMNS}`);
+  const { data, error } = full.error ? await read("custom_css, custom_js, snippets") : full;
   // A page renders without its custom code; it does not render without the
   // page. So a failure here is empty custom code, not a 500 on a sales page.
   if (error || !data) return NO_PAGE_SETTINGS;
-  const row = camelize<{ customCss: string; customJs: string; snippets: unknown }>(data);
+  const row = camelize<{
+    customCss: string;
+    customJs: string;
+    snippets: unknown;
+    metaTitle: string | null;
+    metaDescription: string | null;
+    shareImagePath: string | null;
+  }>(data);
   return {
     customCss: row.customCss ?? "",
     customJs: row.customJs ?? "",
+    // Coerced, not asserted. These columns arrived after the rows did, so an
+    // older row reads them as null — and a null reaching `.trim()` is the
+    // shape of bug that has taken a page down here before.
+    metaTitle: row.metaTitle ?? "",
+    metaDescription: row.metaDescription ?? "",
+    shareImagePath: row.shareImagePath ?? "",
     // Parsed, never cast. These rows predate the column, and a page whose
     // snippets are `null` must render rather than throw on `.filter`.
     snippets: codeSnippetsSchema.safeParse(row.snippets).data ?? [],
@@ -368,7 +442,8 @@ export async function savePageSettings(
   input: PageSettings,
 ): Promise<void> {
   const db = createServiceClient();
-  const { error } = await db.from("page_settings").upsert(
+  const write = async (seo: Record<string, string>) =>
+    db.from("page_settings").upsert(
     {
       store_id: await getStoreId(),
       owner_type: owner,
@@ -376,9 +451,21 @@ export async function savePageSettings(
       custom_css: input.customCss,
       custom_js: input.customJs,
       snippets: codeSnippetsSchema.safeParse(input.snippets).data ?? [],
+      ...seo,
     },
-    { onConflict: "owner_type,owner_id" },
-  );
+      { onConflict: "owner_type,owner_id" },
+    );
+
+  // Same reason as the read: a deploy can land before 0052 does, and an upsert
+  // naming a column that does not exist fails the WHOLE write — which would
+  // mean nobody could save custom code either. The second attempt drops the
+  // three new fields rather than the save.
+  const first = await write({
+    meta_title: input.metaTitle.trim(),
+    meta_description: input.metaDescription.trim(),
+    share_image_path: input.shareImagePath.trim(),
+  });
+  const { error } = first.error ? await write({}) : first;
   if (error) throw new Error(`savePageSettings: ${error.message}`);
 }
 

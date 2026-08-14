@@ -87,6 +87,18 @@ export function SettingsScreen({
               </button>
             );
           })}
+          {/* A prototype, so it is a link out rather than a group here — the
+              groups all save to the same settings row and this one saves
+              nothing yet. */}
+          <a
+            href="/admin/settings/email"
+            className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-muted transition-colors hover:text-fg md:mt-1 md:rounded-none md:border-t md:border-border md:pt-3"
+          >
+            Post-purchase email
+            <span className="ml-auto rounded-full border border-border px-1.5 text-[0.6rem] uppercase tracking-wide">
+              draft
+            </span>
+          </a>
         </nav>
 
         <div className="flex min-w-0 flex-col gap-4 p-5">

@@ -112,7 +112,10 @@ export type SectionKey =
   | "welcome"
   | "browse"
   | "membership"
-  | "closing";
+  | "closing"
+  // The checkout's two. See CHECKOUT_SECTIONS.
+  | "panel"
+  | "after";
 
 export type SectionDef = {
   key: SectionKey;
@@ -636,12 +639,50 @@ export const HOME_SECTIONS: SectionDef[] = [
   },
 ];
 
+/**
+ * The checkout, as bands.
+ *
+ * Two, not one. The panel is where the money is and it is the reason the page
+ * exists; everything a buyer wants to read AFTER deciding — the refund policy
+ * in full, the questions, who to email — belongs under it rather than beside
+ * the card fields, where it competes with the button.
+ *
+ * "Panel" is deliberately not called Left and Right. The two zones are a row
+ * block with two columns inside this band, which means they reorder, restack
+ * on a phone and resize with the same handles as every other column in the
+ * store — and on a narrow screen the money column can be made to come first,
+ * which no hard-coded left/right could do.
+ */
+export const CHECKOUT_SECTIONS: SectionDef[] = [
+  {
+    key: "panel",
+    n: "1",
+    title: "Panel",
+    purpose: "The card fields and everything sitting beside them.",
+    shape: "Blocks. Two columns: what they are buying, and what takes the money.",
+    defaultStyle: "paper",
+    fields: [],
+    defaults: {},
+  },
+  {
+    key: "after",
+    n: "2",
+    title: "After",
+    purpose: "Anything below the fold — the policy in full, questions, how to reach a person.",
+    shape: "Blocks.",
+    defaultStyle: "cream",
+    fields: [],
+    defaults: {},
+  },
+];
+
 export const SECTION_KEYS = SECTIONS.map((s) => s.key);
 export const HOME_SECTION_KEYS = HOME_SECTIONS.map((s) => s.key);
+export const CHECKOUT_SECTION_KEYS = CHECKOUT_SECTIONS.map((s) => s.key);
 
-// Both lists, because `sectionDef` is asked about a key by the editor, the
+// Every list, because `sectionDef` is asked about a key by the editor, the
 // clipboard and the save without any of them knowing which page it came from.
-const BY_KEY = new Map([...SECTIONS, ...HOME_SECTIONS].map((s) => [s.key, s]));
+const BY_KEY = new Map([...SECTIONS, ...HOME_SECTIONS, ...CHECKOUT_SECTIONS].map((s) => [s.key, s]));
 export const sectionDef = (key: string): SectionDef | undefined => BY_KEY.get(key as SectionKey);
 
 // ---------------------------------------------------------------------------

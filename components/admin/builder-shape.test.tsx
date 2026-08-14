@@ -66,9 +66,12 @@ describe("which selects become buttons", () => {
 
 describe("the palette", () => {
   it("groups every block type somewhere", () => {
-    // A type added to PALETTE and forgotten here would be invisible. Asked as
-    // the storefront, which is the tray that offers everything.
-    const shown = groupedPalette("", "store").flatMap((g) => g.items.map((i) => i.label));
+    // A type added to PALETTE and forgotten here would be invisible. No single
+    // owner offers everything any more — the storefront blocks and the checkout
+    // blocks are gated to opposite pages — so the two trays are asked together.
+    const shown = [...groupedPalette("", "store"), ...groupedPalette("", "checkout")].flatMap((g) =>
+      g.items.map((i) => i.label),
+    );
     for (const p of PALETTE) expect(shown, p.label).toContain(p.label);
   });
 
@@ -76,16 +79,39 @@ describe("the palette", () => {
     // They draw the catalogue and the subscriptions, and only the storefront
     // supplies that. In a product page's tray they would be blocks that render
     // nothing wherever they were dropped.
-    const labels = (owner: "product" | "offer" | "store") =>
+    const labels = (owner: "product" | "offer" | "store" | "checkout") =>
       groupedPalette("", owner).flatMap((g) => g.items.map((i) => i.label));
     for (const label of ["Catalogue", "Memberships", "Featured"]) {
       expect(labels("store"), label).toContain(label);
       expect(labels("product"), label).not.toContain(label);
       expect(labels("offer"), label).not.toContain(label);
+      expect(labels("checkout"), label).not.toContain(label);
     }
     // And nothing else was lost on the way.
     expect(labels("product")).toContain("Heading");
     expect(labels("product").length).toBe(labels("store").length - 3);
+  });
+
+  it("offers the checkout blocks on the checkout and nowhere else", () => {
+    // Same rule, other direction: only the checkout can supply an order, so a
+    // card-fields block anywhere else would draw nothing.
+    const labels = (owner: "product" | "offer" | "store" | "checkout") =>
+      groupedPalette("", owner).flatMap((g) => g.items.map((i) => i.label));
+    for (const label of [
+      "Their details",
+      "Order bump",
+      "Order summary",
+      "Coupon field",
+      "Card fields",
+      "Due today",
+      "Pay button",
+    ]) {
+      expect(labels("checkout"), label).toContain(label);
+      expect(labels("product"), label).not.toContain(label);
+      expect(labels("store"), label).not.toContain(label);
+    }
+    expect(labels("checkout")).toContain("Heading");
+    expect(labels("checkout").length).toBe(labels("product").length + 7);
   });
 
   it("has an icon for every type", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { PageSettings } from "@/lib/pages";
+import { NO_PAGE_SETTINGS, type PageSettings } from "@/lib/pages";
 import { SalesPage } from "@/components/page/sales-page";
 import { defaultRows } from "@/lib/page-sections";
 
@@ -17,7 +17,7 @@ const render = (settings?: Partial<PageSettings>) =>
     <SalesPage
       rows={rows()}
       money={money}
-      settings={settings && { customCss: "", customJs: "", snippets: [], ...settings }}
+      settings={settings && { ...NO_PAGE_SETTINGS, ...settings }}
     />,
   );
 

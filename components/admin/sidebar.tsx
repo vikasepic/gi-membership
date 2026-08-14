@@ -29,6 +29,8 @@ const ICON = {
   members: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5Z",
   apps: "M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z",
   errors: "M12 2 1 21h22L12 2Zm1 15h-2v-2h2v2Zm0-4h-2V9h2v4Z",
+  // A card with a stripe. The page money passes through.
+  checkout: "M3 5h18v14H3V5Zm2 3v2h14V8H5Zm0 5v4h6v-4H5Z",
   // A page with its bands stacked up — what a template is a piece of.
   templates: "M4 3h16v4H4V3Zm0 6h7v12H4V9Zm9 0h7v5h-7V9Zm0 7h7v5h-7v-5Z",
   settings:
@@ -56,6 +58,8 @@ function groups(c: NavCounts): { title: string; items: Item[] }[] {
     {
       title: "Customers",
       items: [
+        // Above Orders, because it is the page an order comes from.
+        { href: "/admin/checkout", label: "Checkout", icon: ICON.checkout },
         { href: "/admin/orders", label: "Orders", icon: ICON.orders, badge: n(c.orders) },
         { href: "/admin/members", label: "Members", icon: ICON.members, badge: n(c.members) },
       ],

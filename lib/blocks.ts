@@ -60,6 +60,19 @@ export const BLOCK_TYPES = [
   "catalog",
   "memberships",
   "featured",
+  // The checkout's five living parts. Same reasoning as the storefront three:
+  // they read the live order — what is in it, what it costs, what the card is
+  // about to be charged — so they cannot be built out of typed blocks, and they
+  // render to nothing anywhere the checkout does not supply that. See
+  // CHECKOUT_TYPES, and FIXED_CHECKOUT_TYPES for the three that cannot be
+  // removed.
+  "buyerdetails",
+  "orderbump",
+  "ordersummary",
+  "coupon",
+  "cardfields",
+  "duetoday",
+  "paybutton",
   // A pointer at a design kept elsewhere, so editing that design changes every
   // page pointing at it. It draws NOTHING itself — the resolve step replaces it
   // with the blocks it names before anything renders.
@@ -82,6 +95,44 @@ export type BlockType = (typeof BLOCK_TYPES)[number];
  * and a memberships list on an upsell competes with the offer being made.
  */
 export const STOREFRONT_TYPES: readonly BlockType[] = ["catalog", "memberships", "featured"];
+
+/**
+ * Blocks that draw the live order. Offered on the checkout and nowhere else.
+ *
+ * A sales page cannot supply an order, so dropping card fields on one would put
+ * a block in the tray that renders nothing wherever it lands — the same reason
+ * the storefront three are gated.
+ */
+export const CHECKOUT_TYPES: readonly BlockType[] = [
+  "buyerdetails",
+  "orderbump",
+  "ordersummary",
+  "coupon",
+  "cardfields",
+  "duetoday",
+  "paybutton",
+];
+
+/**
+ * The three that can be moved but not removed.
+ *
+ * Without the card fields there is nowhere to type a card; without the total
+ * the page charges an amount it never stated; without the button nothing
+ * happens. Position is a design decision and stays editable — existence is not.
+ *
+ * This is a rule the editor enforces and the RENDERER does not trust: a layout
+ * that somehow arrives without them falls back to the built-in panel rather
+ * than serving a checkout that cannot take money. See lib/checkout-layout.ts.
+ */
+export const FIXED_CHECKOUT_TYPES: readonly BlockType[] = [
+  // Who is buying. An email is where the receipt and the access link go, and a
+  // billing country is what Stripe calculates tax from — a checkout without
+  // them cannot deliver what it sold or charge the right amount.
+  "buyerdetails",
+  "cardfields",
+  "duetoday",
+  "paybutton",
+];
 
 export type Unit = "px" | "em" | "%" | "rem";
 export type Dim = { t: number; r: number; b: number; l: number; u: Unit; link: boolean };
@@ -685,6 +736,90 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   catalog: { title: "", limit: 0, columns: 3, showPrice: true },
   memberships: { title: "", showOwned: true },
   featured: { title: "", note: "" },
+  // The checkout five. Every default is what the hand-written panel does
+  // today, so a store that opens the editor and saves without touching
+  // anything gets the checkout it already had.
+  buyerdetails: {
+    title: "Your details",
+    namePlaceholder: "Full name",
+    emailPlaceholder: "Email",
+    countryPlaceholder: "Billing country…",
+    note: "Your receipt and access link go to this email. No password to create.",
+    titleColor: null,
+    titleSize: null,
+    noteColor: null,
+    noteSize: null,
+    inputBg: null,
+    inputBorder: null,
+    inputColor: null,
+    radius: 12,
+  },
+  orderbump: {
+    title: "One more thing",
+    titleColor: null,
+    titleSize: null,
+  },
+  ordersummary: {
+    title: "Your order",
+    showThumb: true,
+    showLines: true,
+    showTax: true,
+    titleSize: null,
+    textSize: null,
+    labelColor: null,
+    valueColor: null,
+    ruleColor: null,
+  },
+  coupon: {
+    label: "Have a code?",
+    placeholder: "Discount code",
+    buttonLabel: "Apply",
+    labelColor: null,
+    inputBg: null,
+    inputBorder: null,
+    inputColor: null,
+    buttonBg: null,
+    buttonColor: null,
+    radius: 10,
+  },
+  cardfields: {
+    heading: "Payment",
+    headingColor: null,
+    headingSize: null,
+    // Handed to Stripe's Payment Element appearance API. The card fields are
+    // an iframe Stripe draws, so this is the only way they can be styled at
+    // all — and the reason it is worth having: fields that do not match the
+    // page around them are the most common reason a checkout looks broken.
+    theme: "stripe",
+    accent: null,
+    radius: 10,
+    fontSize: null,
+  },
+  duetoday: {
+    label: "Due today",
+    labelColor: null,
+    amountColor: null,
+    labelSize: null,
+    amountSize: null,
+    showTerms: true,
+    termsColor: null,
+    termsSize: null,
+  },
+  paybutton: {
+    label: "Pay now",
+    // Shown instead when the order starts a free trial, because "Pay now" on a
+    // button that charges nothing today is the kind of surprise that becomes a
+    // dispute.
+    trialLabel: "Start free trial",
+    bg: null,
+    color: null,
+    radius: 999,
+    size: null,
+    fullWidth: true,
+    note: "",
+    noteColor: null,
+    noteSize: null,
+  },
   cards: {
     items: [],
     columns: 3,
@@ -1839,6 +1974,17 @@ export function blockRendersNothing(block: Block): boolean {
     case "stickybar":
       // Never empty: both draw real prices that come from the offer rather
       // than from anything typed into them, so there is nothing to be missing.
+      return false;
+    case "buyerdetails":
+    case "orderbump":
+    case "ordersummary":
+    case "coupon":
+    case "cardfields":
+    case "duetoday":
+    case "paybutton":
+      // Same again, and more so — these draw the order being paid for. A pay
+      // button treated as "empty" because its label was blanked would be
+      // dropped from the page that charges the card.
       return false;
     case "heading":
       return !text(p.text);

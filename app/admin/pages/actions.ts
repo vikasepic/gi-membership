@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import { codeSnippetsSchema } from "@/lib/code-snippets";
-import { savePageSettings, saveSection, seedPage, seedHomeFromDefault, copyPage, StaleSectionError, type OwnerType } from "@/lib/pages";
+import { getPageSettings, savePageSettings, saveSection, seedPage, seedHomeFromDefault, seedCheckoutFromDefault, copyPage, StaleSectionError, type OwnerType } from "@/lib/pages";
 import { sectionDef } from "@/lib/page-sections";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
 import { priceProblems, priceProblemMessage } from "@/lib/page-price-truth";
@@ -160,16 +160,36 @@ export async function savePageSettingsAction(
   if (!ownerId) return { error: "Unknown page." };
 
   try {
+    // Merged, never replaced.
+    //
+    // This row is now written by two panels — the SEO fields and the custom
+    // code — and a full upsert from either one blanks whatever the other owns.
+    // A field the form did not post is a field nobody was editing, so it keeps
+    // what it had. The same rule the store-wide settings save follows, and for
+    // the same reason: it was learnt by blanking something.
+    const current = await getPageSettings(owner, ownerId);
+    const text = (key: string, cap: number, fallback: string) =>
+      formData.has(key) ? String(formData.get(key) ?? "").slice(0, cap) : fallback;
+
     await savePageSettings(owner, ownerId, {
-      customCss: String(formData.get("customCss") ?? ""),
-      customJs: String(formData.get("customJs") ?? ""),
+      customCss: text("customCss", 100_000, current.customCss),
+      customJs: text("customJs", 100_000, current.customJs),
       // Posted as JSON from a hidden input, the way every list on this admin
       // is. Unreadable means none rather than a save that throws.
-      snippets: codeSnippetsSchema.safeParse(
-        JSON.parse(String(formData.get("snippets") ?? "[]") || "[]"),
-      ).data ?? [],
+      snippets: formData.has("snippets")
+        ? (codeSnippetsSchema.safeParse(
+            JSON.parse(String(formData.get("snippets") ?? "[]") || "[]"),
+          ).data ?? [])
+        : current.snippets,
+      // Capped at what a search result and a share card actually show. A
+      // 400-character description is not a longer description, it is one
+      // truncated by Google rather than by whoever wrote it.
+      metaTitle: text("metaTitle", 200, current.metaTitle),
+      metaDescription: text("metaDescription", 400, current.metaDescription),
+      shareImagePath: text("shareImagePath", 300, current.shareImagePath),
     });
     revalidatePath(`/admin/${owner === "product" ? "products" : "offers"}/${ownerId}/page-editor`);
+    revalidatePath("/", "layout");
     return { saved: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not save." };
@@ -246,5 +266,33 @@ export async function seedHomeAction(
     };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not start from the current page." };
+  }
+}
+
+export async function seedCheckoutAction(
+  _prev: HomeSeedState,
+  _formData: FormData,
+): Promise<HomeSeedState> {
+  await requireAdmin();
+  try {
+    const { written, skipped } = await seedCheckoutFromDefault();
+    revalidatePath("/admin/checkout");
+    // Every checkout, not one — this layout is the store's, not a product's.
+    revalidatePath("/checkout", "layout");
+    if (written.length === 0) {
+      return {
+        ok: true,
+        message:
+          skipped.length > 0
+            ? "Every band already has something in it, so nothing was changed."
+            : "There was nothing to add.",
+      };
+    }
+    return {
+      ok: true,
+      message: `Filled ${written.length} ${written.length === 1 ? "band" : "bands"} with the checkout buyers are seeing. Move anything you like — the card fields, the total and the pay button can go anywhere, but not away.`,
+    };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not start from the current checkout." };
   }
 }

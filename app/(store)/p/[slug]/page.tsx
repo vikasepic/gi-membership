@@ -13,6 +13,9 @@ import { offersForRows } from "@/lib/block-offers";
 import { shownPrices } from "@/lib/offer-prices";
 import { resolveGlobals } from "@/lib/templates-store";
 import { SalesPage } from "@/components/page/sales-page";
+import { pageMetadata, absoluteUrl } from "@/lib/page-metadata";
+import { getSettingsOrDefaults } from "@/lib/settings";
+import type { Metadata } from "next";
 
 const TYPE_LABEL: Record<CourseType, string> = {
   video: "Video",
@@ -20,6 +23,45 @@ const TYPE_LABEL: Record<CourseType, string> = {
   pdf: "Guide",
   text: "Reading",
 };
+
+/**
+ * This page's own title, description and share card.
+ *
+ * Falls all the way through to the store's defaults, so a product nobody has
+ * filled anything in for previews exactly as it did before this existed. See
+ * lib/page-metadata.ts.
+ *
+ * Never throws. Metadata is decoration; a settings row that cannot be read must
+ * cost this page its share card, not its ability to render.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  try {
+    const { slug } = await params;
+    const product = await getProductBySlug(slug);
+    if (!product || product.status !== "published") return {};
+    const [page, store, display] = await Promise.all([
+      getPageSettings("product", product.id),
+      getSettingsOrDefaults(),
+      productDisplay([product.id]),
+    ]);
+    return pageMetadata({
+      page,
+      fallback: {
+        title: product.title,
+        description: product.tagline,
+        coverPath: product.coverPath ?? display.get(product.id)?.coverPath ?? null,
+      },
+      store,
+      url: absoluteUrl(`/p/${product.slug}`),
+    });
+  } catch {
+    return {};
+  }
+}
 
 export default async function ProductPage({
   params,
