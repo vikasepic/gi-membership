@@ -48,6 +48,9 @@ export type PageMoney = {
   prices?: OfferPrice[];
   /** Where the Ways to pay button goes, with the chosen price appended. */
   buyHref?: string | null;
+  /** Where declining goes. Only the upsell has anywhere — see BlockMoney. */
+  declineHref?: string | null;
+  declineLabel?: string | null;
   currency?: string;
   /** Prices for the offers this page's blocks NAME — see lib/block-offers.ts. */
   byOffer?: Record<string, { prices: OfferPrice[]; currency: string; buyHref: string }>;

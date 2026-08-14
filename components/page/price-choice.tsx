@@ -63,6 +63,8 @@ export function PriceChoice({
   note,
   acceptLabel,
   href,
+  declineHref,
+  declineLabel,
   onChoose,
   chosen,
   band,
@@ -75,6 +77,16 @@ export function PriceChoice({
   acceptLabel: string;
   /** Where the button goes. The chosen price is appended to it. */
   href: string | null;
+  /**
+   * Where declining goes, and what it is called.
+   *
+   * Given by the PAGE, never typed into the block. The upsell has somewhere to
+   * decline to; a sales page does not, and the way to decline one is to leave
+   * it. A block cannot know which of the two it was dropped on, so it is not
+   * asked to.
+   */
+  declineHref?: string | null;
+  declineLabel?: string | null;
   /** On the checkout, where choosing is the whole point and there is no link. */
   onChoose?: (index: number) => void;
   /** Preselected — from the link that brought them here. */
@@ -232,12 +244,15 @@ export function PriceChoice({
           {note}
         </p>
       )}
-      {/* No decline link here, deliberately.
-          A page selling something has nowhere to decline TO — the way to
-          decline a sales page is to leave it. The upsell has a real one,
-          because there the alternative is a thank-you page we are about to
-          send them to either way, and that belongs to the upsell's own layout
-          rather than to a block anybody can drop anywhere. */}
+      {declineHref && declineLabel?.trim() && (
+        <a
+          href={declineHref}
+          className={`text-[0.76rem] underline ${alignment}`}
+          style={{ color: band.muted }}
+        >
+          {declineLabel}
+        </a>
+      )}
       {price && s.showDueToday && (
         <p className={`text-[0.72rem] ${alignment}`} style={{ color: s.termsColor || band.muted }}>
           {money(chargeNowCents(price), currency)} today

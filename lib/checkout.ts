@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getStoreName, getProductBySlug, getOffer } from "@/lib/store";
 import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerForChoice, type Ownership } from "@/lib/offers";
-import { priceForChoice, shownPrices } from "@/lib/offer-prices";
+import { priceForChoice, shownPrices, type OfferPrice } from "@/lib/offer-prices";
 import type { BumpChoice } from "@/lib/bump";
 import { offerAsSoldTo, recordTrialStart } from "@/lib/trial-history";
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
@@ -1118,4 +1118,28 @@ async function previewAltFor(offerId: string, column: "bump" | "upsell"): Promis
 }
 
 export const previewBumpAlt = (offerId: string) => previewAltFor(offerId, "bump");
+
+/**
+ * The prices a PREVIEW of this placement should show.
+ *
+ * Same borrowing as previewAltFor: a preview has no product behind it, so it
+ * takes the first product that places this offer and shows what that checkout
+ * shows. Nothing placed yet falls back to the headline price, which is what an
+ * unplaced offer would draw anyway.
+ */
+export async function previewPricesFor(
+  offerId: string,
+  column: "bump" | "upsell",
+): Promise<OfferPrice[]> {
+  const offer = await getOffer(offerId);
+  if (!offer) return [];
+  const db = createServiceClient();
+  const { data } = await db
+    .from("products")
+    .select(`${column}_price_ids`)
+    .eq(`${column}_offer_id`, offerId)
+    .limit(1);
+  const ids = (data?.[0] as Record<string, unknown> | undefined)?.[`${column}_price_ids`];
+  return shownPrices(offer.prices, Array.isArray(ids) ? (ids as string[]) : []);
+}
 export const previewUpsellAlt = (offerId: string) => previewAltFor(offerId, "upsell");

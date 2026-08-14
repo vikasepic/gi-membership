@@ -2,6 +2,7 @@ import { OtoActions, type OtoView } from "@/components/oto/shell";
 import { OtoStickyBar } from "@/components/oto/sticky-bar";
 import { SalesPage } from "@/components/page/sales-page";
 import { offersForRows } from "@/lib/block-offers";
+import { normalizeBlocks, walkBlocks } from "@/lib/blocks";
 import { livePrices } from "@/lib/offer-prices";
 import type { SectionRow } from "@/lib/page-sections";
 import type { GlobalBlocks } from "@/lib/section-to-blocks";
@@ -29,6 +30,14 @@ export async function SectionsOto({
   const { offer, altOffer: alt } = view;
   const priceLabel = money(view.chargeNowCents, offer.currency);
 
+  // Does the page already carry a Sticky bar block?
+  const hasStickyBlock = rows.some((row) => {
+    const content = row.content as { blocks?: unknown } | null;
+    return Array.isArray(content?.blocks)
+      ? walkBlocks(normalizeBlocks(content.blocks)).some((b) => b.type === "stickybar")
+      : false;
+  });
+
   return (
     <div className="pb-28">
       <SalesPage
@@ -53,6 +62,11 @@ export async function SectionsOto({
           currency: offer.currency,
           buyHref: `/checkout/offer?offer=${offer.id}`,
           byOffer: await offersForRows(rows),
+          // The upsell is the one page with somewhere to decline TO, so it is
+          // the one page that hands the block a decline. The same destination
+          // the built-in layout uses, and the offer's own wording.
+          declineHref: "/checkout/thank-you?oto=declined",
+          declineLabel: offer.declineLabel,
         }}
         // The band's own ink goes with it: the second price is an outlined
         // button, and an outline has to be drawn in a colour the band reads
@@ -68,6 +82,11 @@ export async function SectionsOto({
           />
         )}
       />
+      {/* The built-in bar, unless the page carries one of its own.
+          A Sticky bar block is editable — its words, its colours, where it
+          scrolls to — and this one is not. Two bars at once would be the page
+          arguing with itself, so the block wins where there is one. */}
+      {!hasStickyBlock && (
       <OtoStickyBar
         token={view.token}
         acceptLabel={offer.acceptLabel}
@@ -78,6 +97,7 @@ export async function SectionsOto({
         subLine={view.recurringNote ? `${view.recurringNote}. Cancel any time.` : null}
         expiresAt={view.expiresAt}
       />
+      )}
     </div>
   );
 }

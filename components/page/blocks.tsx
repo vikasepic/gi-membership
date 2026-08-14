@@ -94,6 +94,18 @@ export type BlockMoney = {
   /** Where the Ways to pay button goes; the chosen price is appended to it. */
   buyHref?: string | null;
   /**
+   * Where declining goes, and what it is called.
+   *
+   * Present only on a page that HAS somewhere to decline to — the upsell,
+   * where the alternative is the thank-you page we are about to send them to
+   * anyway. A sales page has none: the way to decline one is to leave it. So
+   * this is not a field on the block, because a block cannot know which page
+   * it was dropped on and a field that has to be right is a field that will be
+   * wrong.
+   */
+  declineHref?: string | null;
+  declineLabel?: string | null;
+  /**
    * Prices for the offers this page's blocks NAME, keyed by offer id.
    *
    * A Ways to pay block on an offer's own page draws the page's prices above;
@@ -471,6 +483,8 @@ function Inner({
             note={str(p.note)}
             acceptLabel={str(p.acceptLabel, "Get instant access")}
             href={href}
+            declineHref={money?.declineHref ?? null}
+            declineLabel={money?.declineLabel ?? null}
             band={{ fg: c.fg, muted: theme.muted, rule: theme.rule, accent: c.accent, panel: theme.panel }}
             s={{
               optionBg: str(p.optionBg) || null,

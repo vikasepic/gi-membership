@@ -3,6 +3,8 @@
 import { useActionState, useMemo, useState } from "react";
 import { saveBumpAction, type BumpSaveState } from "@/app/admin/offers/[id]/bump/actions";
 import { OrderBump } from "@/components/checkout/order-bump";
+import { offerAtPrice } from "@/lib/offers";
+import type { OfferPrice } from "@/lib/offer-prices";
 import { buildBumpView, normalizeAccent, BUMP_ACCENT_DEFAULT, defaultBanner, type BumpChoice } from "@/lib/bump";
 import { inputClass } from "@/components/admin/form-controls";
 import { ColorControl } from "@/components/admin/color-control";
@@ -24,7 +26,16 @@ const SWATCHES = [
   { hex: "#8a5a2b", name: "Bronze" },
 ];
 
-export function BumpEditor({ offer, alt }: { offer: Offer; alt?: Offer | null }) {
+export function BumpEditor({
+  offer,
+  alt,
+  prices = [],
+}: {
+  offer: Offer;
+  alt?: Offer | null;
+  /** What the product placing this bump actually shows. */
+  prices?: OfferPrice[];
+}) {
   const [state, action, pending] = useActionState<BumpSaveState, FormData>(saveBumpAction, {});
 
   // Pre-filled with what is live. The banner shows its effective value, so
@@ -39,7 +50,7 @@ export function BumpEditor({ offer, alt }: { offer: Offer; alt?: Offer | null })
   // null when there is a second price, matching what a buyer first sees:
   // nothing selected, including the decline. Starting the preview on "No
   // thanks" reviews a state the checkout never renders.
-  const [choice, setChoice] = useState<BumpChoice | null>(alt ? null : "none");
+  const [choice, setChoice] = useState<BumpChoice | null>(alt || prices.length > 1 ? null : "none");
 
   const view = useMemo(
     () =>
@@ -53,6 +64,30 @@ export function BumpEditor({ offer, alt }: { offer: Offer; alt?: Offer | null })
         bumpAccent: accent,
       }),
     [offer, headline, description, banner, bullets, note, accent],
+  );
+
+  /**
+   * One card per way to pay, with the copy from the fields above.
+   *
+   * The words belong to the offer and the money to each price, which is the
+   * same split buildBumpView has always made — so this is the copy being
+   * edited, priced N ways, rather than a second thing to keep in step.
+   */
+  const options = useMemo(
+    () =>
+      prices.map((p) =>
+        buildBumpView({
+          ...offer,
+          ...offerAtPrice(offer, p),
+          bumpHeadline: headline,
+          bumpDescription: description,
+          bumpBanner: banner,
+          bumpBullets: bullets.split("\n").map((b) => b.trim()).filter(Boolean),
+          bumpNote: note,
+          bumpAccent: accent,
+        }),
+      ),
+    [prices, offer, headline, description, banner, bullets, note, accent],
   );
 
   return (
@@ -222,10 +257,11 @@ export function BumpEditor({ offer, alt }: { offer: Offer; alt?: Offer | null })
             <OrderBump
               view={view}
               // The preview has to show the control the checkout will render.
-              // With a second price that is a radio group, not a tickbox, and
-              // reviewing the tickbox version would be reviewing a card nobody
-              // gets.
-              alt={alt ? buildBumpView(alt) : null}
+              // With more than one price that is a radio group, not a tickbox,
+              // and reviewing the tickbox version would be reviewing a card
+              // nobody gets.
+              alt={options.length > 1 ? null : alt ? buildBumpView(alt) : null}
+              options={options.length > 1 ? options : null}
               choice={choice}
               onChoose={setChoice}
             />
@@ -234,6 +270,25 @@ export function BumpEditor({ offer, alt }: { offer: Offer; alt?: Offer | null })
           <p className="text-sm text-muted">
             This is the component the checkout renders, not a mock-up — so it cannot drift from what
             buyers actually see.
+          </p>
+          {/* Said here because this is where somebody looks when the card is
+              showing the wrong number of prices, and the answer is on another
+              screen entirely. */}
+          <p className="text-sm text-muted">
+            {options.length > 1 ? (
+              <>
+                Showing <b className="font-medium text-fg">{options.length} prices</b>, because
+                that is what the product placing this bump ticked. Change which ones on the
+                product&rsquo;s <b className="font-medium text-fg">Funnel</b> tab; add or hide a
+                price on this offer&rsquo;s <b className="font-medium text-fg">Pricing</b> tab.
+              </>
+            ) : (
+              <>
+                Showing one price, so the buyer gets a tick-box. To offer a choice, add another way
+                to pay on this offer&rsquo;s <b className="font-medium text-fg">Pricing</b> tab and
+                tick both on the product&rsquo;s <b className="font-medium text-fg">Funnel</b> tab.
+              </>
+            )}
           </p>
         </div>
       </div>
