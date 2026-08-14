@@ -492,3 +492,72 @@ describe("where an image sits in its block", () => {
     expect(img).not.toContain("margin-right:auto");
   });
 });
+
+/**
+ * The Ways to pay block, sized and aligned per element.
+ *
+ * The block's own Typography sets one size for everything in it, which is right
+ * for a paragraph and wrong for a card holding a price, its small print, a
+ * button and a decline link. Every one of these is null by default and null
+ * renders exactly what it rendered before.
+ */
+describe("styling the ways to pay", () => {
+  const money = {
+    currency: "usd",
+    buyHref: "/checkout/offer?offer=x",
+    prices: [
+      {
+        id: "m",
+        label: "",
+        billingType: "recurring" as const,
+        interval: "month" as const,
+        intervalCount: 1,
+        trialDays: null,
+        priceCents: 2900,
+        compareAtCents: null,
+        archived: false,
+      },
+    ],
+  };
+  const block = (props: Record<string, unknown>) =>
+    renderToStaticMarkup(
+      <Blocks blocks={[make("prices", props)]} theme={paper} money={money} />,
+    );
+
+  it("draws nothing extra when no size is set", () => {
+    // The whole point of null: a block nobody has touched must not move.
+    expect(block({ heading: "Pick one" })).not.toContain("font-size:");
+  });
+
+  it("sizes each thing on its own", () => {
+    const out = block({
+      heading: "Pick one",
+      note: "Cancel any time",
+      declineLabel: "No thanks",
+      headingSize: 24,
+      priceSize: 30,
+      termsSize: 11,
+      noteSize: 13,
+      declineSize: 12,
+      buttonSize: 18,
+    });
+    for (const px of [24, 30, 11, 13, 12, 18]) {
+      expect(out, `${px}px`).toContain(`font-size:${px}px`);
+    }
+  });
+
+  it("aligns its own words and leaves the option rows alone", () => {
+    // A radio lives on the left; centring the words beside it opens a gap
+    // between the control and the thing it controls.
+    const out = block({ heading: "Pick one", align: "left" });
+    // The heading itself, not the page: the button keeps centring its own
+    // label inside itself, which is a different question entirely.
+    const heading = out.slice(out.indexOf("Pick one") - 200, out.indexOf("Pick one"));
+    expect(heading).toContain("text-left");
+    expect(heading).not.toContain("text-center");
+  });
+
+  it("centres by default, which is what it always did", () => {
+    expect(block({ note: "Cancel any time" })).toContain("text-center");
+  });
+});

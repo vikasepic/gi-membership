@@ -38,6 +38,14 @@ export type PriceChoiceStyle = {
   headingColor: string | null;
   noteColor: string | null;
   declineColor: string | null;
+  headingSize: number | null;
+  priceSize: number | null;
+  termsSize: number | null;
+  noteSize: number | null;
+  declineSize: number | null;
+  buttonSize: number | null;
+  /** Where the block's own words sit. The option rows are always left. */
+  align: "left" | "center" | "right";
   badgeBg: string | null;
   badgeColor: string | null;
   buttonBg: string | null;
@@ -85,6 +93,12 @@ export function PriceChoice({
   const waiting = prices.length > 1 && picked === null;
   const price = picked === null ? null : prices[picked];
 
+  // A size only when one was set, so a block that has never been touched
+  // renders the identical markup it always has.
+  const px = (n: number | null) => (n == null ? undefined : n);
+  const alignment =
+    s.align === "left" ? "text-left" : s.align === "right" ? "text-right" : "text-center";
+
   const take = (i: number) => {
     setPicked(i);
     onChoose?.(i);
@@ -93,7 +107,10 @@ export function PriceChoice({
   return (
     <div className="flex flex-col gap-3">
       {heading.trim() && (
-        <p className="font-display font-semibold" style={{ color: s.headingColor || band.fg }}>
+        <p
+          className={`font-display font-semibold ${alignment}`}
+          style={{ color: s.headingColor || band.fg, fontSize: px(s.headingSize) }}
+        >
           {heading}
         </p>
       )}
@@ -125,7 +142,10 @@ export function PriceChoice({
               <span className="flex min-w-0 flex-1 flex-col">
                 <span
                   className="font-display text-[1.02rem] font-semibold tabular-nums"
-                  style={{ color: on ? accent : s.labelColor || band.fg }}
+                  style={{
+                    color: on ? accent : s.labelColor || band.fg,
+                    fontSize: px(s.priceSize),
+                  }}
                 >
                   {priceLabel(p, currency)}
                   {p.label.trim() && (
@@ -140,7 +160,7 @@ export function PriceChoice({
                 {s.showTerms && priceTerms(p, currency) && (
                   <span
                     className="text-[0.76rem] leading-snug"
-                    style={{ color: s.termsColor || band.muted }}
+                    style={{ color: s.termsColor || band.muted, fontSize: px(s.termsSize) }}
                   >
                     {priceTerms(p, currency)}
                   </span>
@@ -177,7 +197,12 @@ export function PriceChoice({
         <a
           href={price ? `${href}${href.includes("?") ? "&" : "?"}price=${price.id}` : href}
           className="w-full px-5 py-3 text-center text-sm font-medium transition-opacity hover:opacity-90"
-          style={{ background: buttonBg, color: buttonFg, borderRadius: s.buttonRadius }}
+          style={{
+            background: buttonBg,
+            color: buttonFg,
+            borderRadius: s.buttonRadius,
+            fontSize: px(s.buttonSize),
+          }}
         >
           {acceptLabel}
         </a>
@@ -187,24 +212,35 @@ export function PriceChoice({
           disabled={waiting}
           onClick={() => price && onChoose?.(picked as number)}
           className="w-full px-5 py-3 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-          style={{ background: buttonBg, color: buttonFg, borderRadius: s.buttonRadius }}
+          style={{
+            background: buttonBg,
+            color: buttonFg,
+            borderRadius: s.buttonRadius,
+            fontSize: px(s.buttonSize),
+          }}
         >
           {waiting ? "Choose one above" : acceptLabel}
         </button>
       )}
 
       {note.trim() && (
-        <p className="text-center text-[0.76rem]" style={{ color: s.noteColor || band.muted }}>
+        <p
+          className={`text-[0.76rem] ${alignment}`}
+          style={{ color: s.noteColor || band.muted, fontSize: px(s.noteSize) }}
+        >
           {note}
         </p>
       )}
       {declineLabel.trim() && (
-        <p className="text-center text-[0.76rem] underline" style={{ color: s.declineColor || band.muted }}>
+        <p
+          className={`text-[0.76rem] underline ${alignment}`}
+          style={{ color: s.declineColor || band.muted, fontSize: px(s.declineSize) }}
+        >
           {declineLabel}
         </p>
       )}
       {price && (
-        <p className="text-center text-[0.72rem]" style={{ color: s.termsColor || band.muted }}>
+        <p className={`text-[0.72rem] ${alignment}`} style={{ color: s.termsColor || band.muted }}>
           {money(chargeNowCents(price), currency)} today
         </p>
       )}

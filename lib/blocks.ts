@@ -636,6 +636,20 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     headingColor: null,
     noteColor: null,
     declineColor: null,
+    // Null everywhere: each one keeps the size it has until somebody sets it.
+    // The block's own Typography still sets the family and the weight for all
+    // of them — this is only the sizes, which is what differs between a price
+    // and the line of small print under it.
+    headingSize: null,
+    priceSize: null,
+    termsSize: null,
+    noteSize: null,
+    declineSize: null,
+    buttonSize: null,
+    // Where the block's own words sit. The option rows are always left: a
+    // radio lives on the left and centring the words beside it opens a gap
+    // between the control and what it controls.
+    align: "center",
     badgeBg: null,
     badgeColor: null,
     buttonBg: null,
