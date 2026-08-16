@@ -566,7 +566,24 @@ export function CardFieldsSlot(p: {
         /* Reported the moment they start filling the card in, not when they
            press pay. The gap between "began entering a card" and "completed a
            purchase" is the most useful signal on the page. */
-        <PaymentElement onChange={c.notePaymentInfo} />
+        <PaymentElement
+          onChange={c.notePaymentInfo}
+          options={{
+            // Open, always. Left to itself the Element renders its methods as a
+            // collapsed accordion, so a buyer who has already decided to pay
+            // meets one more thing to click before there is anywhere to type a
+            // card. On a page whose whole job is taking a card, the card fields
+            // are not an option to be chosen — they are the page.
+            layout: {
+              type: "accordion",
+              defaultCollapsed: false,
+              // "if_multiple", not "always": a radio beside the only way to pay
+              // is a choice with one option, which reads as something missing.
+              radios: "if_multiple",
+              spacedAccordionItems: false,
+            },
+          }}
+        />
       )}
     </fieldset>
   );

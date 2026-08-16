@@ -65,8 +65,15 @@ export default async function OfferCheckoutPage({
   const settings = await getSettingsOrDefaults();
   const legal = legalFrom(settings);
 
+  // The selling half is narrower than the paying half.
+  //
+  // They were equal, which gave the panel — a title, a picture and three
+  // reassurances somebody has already read — the same room as the form that
+  // actually takes the card. On a laptop that pushed the card fields into a
+  // column narrower than the copy beside them. Two-fifths and three-fifths: the
+  // panel still holds its picture, and the form gets the space.
   return (
-    <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-2">
+    <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <CheckoutPanel
         title={offer.headline ?? offer.name}
         tagline={offer.description}
@@ -81,7 +88,7 @@ export default async function OfferCheckoutPage({
           stretched across half a large monitor turns every field into a
           900px-wide box, which is what made this look like a page with the
           zoom stuck on. */}
-      <div className="mx-auto flex w-full max-w-[30rem] flex-col gap-7 px-6 py-8 md:px-8 lg:mx-0 lg:ml-0 lg:mr-auto lg:py-10 lg:pl-10">
+      <div className="mx-auto flex w-full max-w-[34rem] flex-col gap-7 px-6 py-8 md:px-8 lg:mx-0 lg:ml-0 lg:mr-auto lg:py-10 lg:pl-10">
         {/* Small on purpose. It labels the column; it is not the page's
             headline — that is on the panel beside it, and two things competing
             to be the biggest word on a checkout is how the actual heading stops

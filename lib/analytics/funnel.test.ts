@@ -57,7 +57,11 @@ describe("when the card step is reported", () => {
     // The gap between "began entering a card" and "bought" is the most useful
     // signal on the page; treating it as a submit event throws away everyone
     // who started and stopped.
-    expect(slots).toContain("<PaymentElement onChange={c.notePaymentInfo} />");
+    // The callback, not the exact markup — the element carries layout options
+    // now and a one-line assertion would break on formatting rather than on
+    // anything that matters.
+    const el = slots.slice(slots.indexOf("<PaymentElement"));
+    expect(el.slice(0, 400)).toContain("onChange={c.notePaymentInfo}");
   });
 
   it("still fires for a wallet, which never touches the card fields", () => {
