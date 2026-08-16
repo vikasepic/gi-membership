@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { MediaButton, type PickedMedia } from "@/components/admin/media-modal";
 import { EmailPrototype } from "@/components/admin/email-prototype";
+import { RedirectFields } from "@/components/admin/redirect-fields";
 import { publicCoverUrl } from "@/lib/media-url";
 import { inputClass as input, Field, Group } from "@/components/admin/form-controls";
 import { useSlowSave, useJustSaved } from "@/components/admin/save-status";
@@ -177,6 +178,14 @@ function GroupForm({
       {group === "shell" && <ShellFields siteShell={settings.siteShell} errors={errors} />}
       {group === "commerce" && <CommerceFields s={settings} errors={errors} />}
       {group === "seo" && <SeoFields s={settings} errors={errors} />}
+      {group === "redirects" && (
+        <Group
+          label="Redirects"
+          hint="Old addresses and where they should send somebody now. Checked only when a page would 404, so nothing that works is slowed down by them."
+        >
+          <RedirectFields redirects={settings.redirects} name="redirects" />
+        </Group>
+      )}
       {group === "email" && (
         <EmailPrototype value={settings.postPurchaseEmail} fieldName="postPurchaseEmail" />
       )}
