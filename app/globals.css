@@ -179,6 +179,26 @@ textarea:focus-visible {
   }
 }
 
+/* A button looks like a button under the pointer.
+   Tailwind v4 changed its reset: `button` now gets `cursor: default`, where v3
+   gave it `pointer`. Nothing in this app asked for that and every button in the
+   store and the admin lost it at once — including the one that takes the money,
+   which is where it reads worst: a pay button that does not respond to the
+   cursor looks like a picture of a pay button.
+   Disabled is the exception, and says so — `not-allowed` is the difference
+   between "this is broken" and "not yet". */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+label[for],
+summary {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 /* iOS zooms the whole page when a focused input is under 16px, and never zooms
    back out. That fires on the checkout email/password fields, which is the
    worst place for it — so form controls are 16px on touch regardless of the

@@ -81,6 +81,7 @@ function Inner({
   >(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponBusy, setCouponBusy] = useState(false);
+  const [couponOpen, setCouponOpen] = useState(false);
 
   async function applyCoupon() {
     const code = couponInput.trim();
@@ -242,65 +243,76 @@ function Inner({
           Tax is calculated at your country&rsquo;s rate and shown on your receipt.
         </p>
 
-        {/* The same plain field the product checkout carries — not a "have a
-            code?" toggle. Hiding it makes people leave to hunt for one, and
-            this store hands its codes out deliberately. */}
-        <div className="flex flex-col gap-2">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={couponInput}
-              onChange={(e) => {
-                setCouponInput(e.target.value);
-                setCouponError(null);
-              }}
-              // Enter must not submit the payment form. Pressing it to apply a
-              // code and having a card charged instead is how a purchase
-              // becomes a chargeback.
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  void applyCoupon();
-                }
-              }}
-              placeholder="Discount code"
-              aria-label="Discount code"
-              autoCapitalize="characters"
-              spellCheck={false}
-              className="w-full rounded-xl border border-border bg-surface px-3.5 py-3 text-sm uppercase outline-none transition-colors placeholder:normal-case placeholder:text-muted focus:border-primary"
-            />
-            <button
-              type="button"
-              onClick={() => void applyCoupon()}
-              disabled={couponBusy || !couponInput.trim()}
-              className="shrink-0 rounded-xl border border-border px-4 text-sm font-medium transition-colors hover:border-primary disabled:opacity-50"
-            >
-              {couponBusy ? "…" : coupon ? "Change" : "Apply"}
-            </button>
+        {/* Folded away until asked for, the same as the product checkout. An
+            always-open field on a confirmation page is an empty box asking a
+            question most buyers cannot answer. */}
+        {couponOpen || coupon || couponError ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-1 rounded-xl border border-border bg-surface pr-1 transition-colors focus-within:border-primary">
+              <input
+                type="text"
+                value={couponInput}
+                onChange={(e) => {
+                  setCouponInput(e.target.value);
+                  setCouponError(null);
+                }}
+                // Enter must not submit the payment form. Pressing it to apply
+                // a code and having a card charged instead is how a purchase
+                // becomes a chargeback.
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void applyCoupon();
+                  }
+                }}
+                placeholder="Discount code"
+                aria-label="Discount code"
+                autoCapitalize="characters"
+                spellCheck={false}
+                autoFocus={couponOpen}
+                className="min-w-0 flex-1 bg-transparent px-3.5 py-3 text-sm uppercase outline-none placeholder:normal-case placeholder:text-muted"
+              />
+              <button
+                type="button"
+                onClick={() => void applyCoupon()}
+                disabled={couponBusy || !couponInput.trim()}
+                className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
+              >
+                {couponBusy ? "…" : coupon ? "Change" : "Apply"}
+              </button>
+            </div>
+            {couponError && (
+              <p className="text-xs text-primary" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
+                {couponError}
+              </p>
+            )}
+            {/* Said out loud, because a subscription is the one place where "20%
+                off" can mean either one bill or every bill, and the buyer finds
+                out on the second one. */}
+            {coupon && isRecurring && (
+              <p className="text-xs text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
+                {coupon.recurringDiscount
+                  ? "Applies to this payment and the renewals after it."
+                  : "Applies to your first payment. Renewals are at the full price."}
+              </p>
+            )}
+            {coupon?.clamped && (
+              <p className="text-xs text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
+                Discount capped — {money(MIN_CHARGE_CENTS_CLIENT, offer.currency)} is the smallest
+                charge a card can take.
+              </p>
+            )}
           </div>
-          {couponError && (
-            <p className="text-xs text-primary" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
-              {couponError}
-            </p>
-          )}
-          {/* Said out loud, because a subscription is the one place where "20%
-              off" can mean either one bill or every bill, and the buyer finds
-              out on the second one. Stripe's coupon decides which; this reports
-              what it actually chose. */}
-          {coupon && isRecurring && (
-            <p className="text-xs text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
-              {coupon.recurringDiscount
-                ? "Applies to this payment and the renewals after it."
-                : "Applies to your first payment. Renewals are at the full price."}
-            </p>
-          )}
-          {coupon?.clamped && (
-            <p className="text-xs text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
-              Discount capped — {money(MIN_CHARGE_CENTS_CLIENT, offer.currency)} is the smallest
-              charge a card can take.
-            </p>
-          )}
-        </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCouponOpen(true)}
+            className="self-start text-sm text-muted underline underline-offset-4 transition-colors hover:text-fg"
+            style={{ fontSize: "0.875rem", lineHeight: 1.5 }}
+          >
+            Have a discount code?
+          </button>
+        )}
 
         <div className="flex items-baseline justify-between border-t border-border pt-4">
           <span className="text-muted">Due today</span>

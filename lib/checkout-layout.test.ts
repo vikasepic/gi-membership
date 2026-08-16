@@ -176,3 +176,44 @@ describe("the two checkouts ask their questions in the same order", () => {
     expect(src).toContain("Order summary");
   });
 });
+
+describe("a button looks like a button", () => {
+  // Tailwind v4 changed its reset: `button` gets `cursor: default`, where v3
+  // gave it `pointer`. Every button in the store and the admin lost it at once,
+  // and it reads worst on the one that takes the money — a pay button that does
+  // not respond to the cursor looks like a picture of a pay button.
+  const css = readFileSync("app/globals.css", "utf8");
+
+  it("restores the pointer", () => {
+    expect(css).toContain("button:not(:disabled)");
+    expect(css).toContain("cursor: pointer");
+  });
+
+  it("says not-allowed on a disabled one", () => {
+    // The difference between "this is broken" and "not yet".
+    expect(css).toContain("cursor: not-allowed");
+  });
+});
+
+describe("the discount field is folded away until asked for", () => {
+  const slots = readFileSync("components/checkout/slots.tsx", "utf8");
+
+  it("shows a link rather than an empty box", () => {
+    expect(slots).toContain("Have a discount code?");
+  });
+
+  it("stays open once a code has stuck", () => {
+    // A panel that collapses over an applied discount looks like it removed it.
+    expect(slots).toContain("open || Boolean(c.coupon) || Boolean(c.couponError)");
+  });
+
+  it("confirms the discount at the control that applied it", () => {
+    expect(slots).toContain("applied");
+  });
+
+  it("does the same on the offer checkout", () => {
+    const offer = readFileSync("components/checkout/offer-checkout-form.tsx", "utf8");
+    expect(offer).toContain("Have a discount code?");
+    expect(offer).toContain("couponOpen");
+  });
+});

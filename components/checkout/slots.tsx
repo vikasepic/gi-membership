@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, type ReactNode, type RefObject } from "react";
+import { createContext, useContext, useState, type ReactNode, type RefObject } from "react";
 import { PaymentElement } from "@stripe/react-stripe-js";
 import { money } from "@/lib/money";
 import { priceLabel, priceTerms, type OfferPrice } from "@/lib/offer-prices";
@@ -429,25 +429,55 @@ export function CouponSlot(p: {
   radius?: number | null;
 }) {
   const c = useCheckout();
+  // Open once it has been asked for, and stay open once a code has stuck — a
+  // panel that collapses over an applied discount looks like it removed it.
+  const [open, setOpen] = useState(false);
   if (!c) return null;
+  const showing = open || Boolean(c.coupon) || Boolean(c.couponError);
+
+  /* Folded away until asked for.
+     It was a permanently open field, and on a checkout that is an empty box
+     asking a question most buyers cannot answer — it competed with the total
+     beside it and made the panel read as a form with something missing. The
+     old argument for leaving it open was that hiding it sends people off to
+     hunt for a code; a one-line link they can see does not, because the answer
+     to "do I have one" is already known before it is clicked. */
+  if (!showing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="self-start text-sm text-muted underline underline-offset-4 transition-colors hover:text-fg"
+        style={SMALL}
+      >
+        {p.label?.trim() || "Have a discount code?"}
+      </button>
+    );
+  }
+
+  const applied = Boolean(c.coupon);
+
   return (
-    /* A plain input rather than a "have a code?" toggle: hiding it makes people
-       leave to hunt for one, and this store's codes are handed out deliberately
-       rather than scattered around. */
     <div className="flex flex-col gap-2">
-      {p.label?.trim() && (
-        <span className="kicker text-muted" style={set({ color: p.labelColor })}>
-          {p.label}
-        </span>
-      )}
-      <div className="flex gap-2">
+      {/* One field with the action inside it, rather than a box and a button
+          fighting for the same row. The seam between the two was the clumsy
+          part: two borders, two corner radii, and a gap down the middle of a
+          control that does one thing. */}
+      <div
+        className="flex items-center gap-1 rounded-xl border border-border bg-surface pr-1 transition-colors focus-within:border-primary"
+        style={set({
+          background: p.inputBg,
+          borderColor: applied ? undefined : p.inputBorder,
+          borderRadius: p.radius ?? undefined,
+        })}
+      >
         <input
           type="text"
           value={c.couponInput}
           onChange={(e) => c.setCouponInput(e.target.value)}
-          // Enter inside the discount field must not submit the payment form —
-          // pressing it to "apply a code" and being charged instead is the sort
-          // of surprise that ends in a chargeback.
+          // Enter here must not submit the payment form — pressing it to apply
+          // a code and being charged instead is the sort of surprise that ends
+          // in a chargeback.
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
@@ -458,29 +488,31 @@ export function CouponSlot(p: {
           aria-label="Discount code"
           autoCapitalize="characters"
           spellCheck={false}
-          className={`${input} uppercase placeholder:normal-case`}
-          style={set({
-            background: p.inputBg,
-            borderColor: p.inputBorder,
-            color: p.inputColor,
-            borderRadius: p.radius ?? undefined,
-          })}
+          autoFocus={open}
+          className="min-w-0 flex-1 bg-transparent px-3.5 py-3 text-sm uppercase outline-none placeholder:normal-case placeholder:text-muted"
+          style={set({ color: p.inputColor })}
         />
         <button
           type="button"
           onClick={c.applyCoupon}
           disabled={c.couponBusy || !c.couponInput.trim()}
-          className="shrink-0 rounded-xl border border-border px-4 text-sm font-medium transition-colors hover:border-primary disabled:opacity-50"
-          style={set({
-            background: p.buttonBg,
-            color: p.buttonColor,
-            borderColor: p.buttonBg,
-            borderRadius: p.radius ?? undefined,
-          })}
+          className="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10 disabled:opacity-40"
+          style={set({ background: p.buttonBg, color: p.buttonColor })}
         >
-          {c.couponBusy ? "…" : c.coupon ? "Change" : p.buttonLabel || "Apply"}
+          {c.couponBusy ? "…" : applied ? "Change" : p.buttonLabel || "Apply"}
         </button>
       </div>
+
+      {/* What it took off, where it worked. The order summary says it too, but
+          the confirmation belongs at the control that did it. */}
+      {applied && (
+        <p className="flex items-center gap-1.5 text-xs text-navy" style={FINE}>
+          <svg viewBox="0 0 24 24" aria-hidden className="size-3.5 shrink-0 fill-current">
+            <path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2Z" />
+          </svg>
+          {c.coupon!.label} applied
+        </p>
+      )}
       {c.couponError && (
         <p className="text-xs text-primary" style={FINE}>
           {c.couponError}
