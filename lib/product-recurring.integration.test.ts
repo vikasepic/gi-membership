@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from "vitest";
-import { createCheckoutIntent, finalizeOrder, ownershipFor } from "@/lib/checkout";
+import { createCheckoutIntent, finalizeOrder, ownershipFor, resolveOtoForOrder } from "@/lib/checkout";
 import { syncSubscriptionOwnership } from "@/lib/subscription-sync";
 import { stripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -181,6 +181,54 @@ describe.skipIf(!canRun)("a product sold on a recurring price (integration)", ()
     await syncSubscriptionOwnership(subId, "canceled");
 
     expect((await ownershipFor(user!.id)).productIds.has(product.id)).toBe(false);
+  }, 60_000);
+
+  it("still offers the upsell after a subscription order", async () => {
+    // The last unproven path in the funnel. resolveOtoForOrder was written for
+    // PaymentIntents and now has to recognise a SetupIntent order too — get it
+    // wrong and every buyer on a recurring price silently skips the upsell,
+    // which looks like nothing at all rather than like a bug.
+    const db = createServiceClient();
+    const storeId = await getStoreId();
+    // An offer to upsell them to. Any active one will do.
+    const { data: offer } = await db
+      .from("offers")
+      .select("id")
+      .eq("store_id", storeId)
+      .eq("active", true)
+      .limit(1)
+      .maybeSingle();
+    if (!offer) return; // nothing to upsell with in this database
+
+    const product = await makeProduct({
+      billing_type: "recurring",
+      interval: "month",
+      price_cents: 800,
+    });
+    await db.from("products").update({ upsell_offer_id: offer.id }).eq("id", product.id);
+
+    const { email, res } = await buy(product.slug);
+    if (!res.ok) throw new Error("unreachable");
+    expect(res.mode).toBe("setup");
+    const siId = res.clientSecret.split("_secret_")[0];
+    await stripe().setupIntents.confirm(siId, {
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/checkout/complete",
+    });
+    await finalizeOrder(siId);
+
+    const { data: user } = await db.from("users").select("id").eq("email", email).single();
+    const { data: own } = await db
+      .from("ownership")
+      .select("stripe_subscription_id")
+      .eq("user_id", user!.id)
+      .not("stripe_subscription_id", "is", null)
+      .maybeSingle();
+    if (own?.stripe_subscription_id) createdSubs.push(own.stripe_subscription_id as string);
+
+    // The token is what the complete route redirects to the upsell with.
+    const token = await resolveOtoForOrder(siId);
+    expect(token).toBeTruthy();
   }, 60_000);
 
   it("still takes a one-off product as a payment, not a setup", async () => {

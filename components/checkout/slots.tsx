@@ -71,6 +71,8 @@ export type CheckoutSlotValue = {
   error: string | null;
   canPay: boolean;
   notePaymentInfo: () => void;
+  /** The published terms, where the store has named one. See TrustBlock. */
+  termsUrl?: string;
 
   /**
    * Drawn in the builder, not on a real checkout.
@@ -716,6 +718,7 @@ export function PayButtonSlot(p: {
  * the policy pages state. No borrowed security-vendor badges.
  */
 function TrustBlock() {
+  const c = useCheckout();
   const items = [
     {
       label: "Stripe secure",
@@ -749,9 +752,23 @@ function TrustBlock() {
           </li>
         ))}
       </ul>
+      {/* The policies as published, the same two the footer links to.
+          These used to point at the in-app pages while the footer pointed at
+          greaterinside.com, which is two different sets of terms for one
+          purchase — and this is the copy the buyer is agreeing to. Either one
+          alone is fine; two is the problem.
+
+          Supplied by the page rather than read here: this is a client
+          component and settings are server-side. Unset falls back to the
+          built-in pages, so a store that publishes nothing external still has
+          working links. */}
       <p className="text-center text-[11px] text-muted" style={{ fontSize: "0.69rem", lineHeight: 1.5 }}>
         By paying you agree to our{" "}
-        <a href="/terms" className="underline underline-offset-2 hover:text-fg">
+        <a
+          href={c?.termsUrl || "/terms"}
+          {...(c?.termsUrl ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+          className="underline underline-offset-2 hover:text-fg"
+        >
           terms
         </a>{" "}
         and{" "}

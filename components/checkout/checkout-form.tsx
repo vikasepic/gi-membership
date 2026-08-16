@@ -36,6 +36,7 @@ export function CheckoutForm({
   signedInEmail,
   defaultCountry,
   layout,
+  termsUrl,
 }: {
   product: CheckoutProduct;
   bump: BumpSummary | null;
@@ -52,6 +53,8 @@ export function CheckoutForm({
    * money. See lib/checkout-layout.ts.
    */
   layout?: Block[] | null;
+  /** The store's published terms, for the line under the pay button. */
+  termsUrl?: string;
   // Present when a member is already signed in — we then ask for nothing but
   // payment, since we already know who they are.
   signedInEmail?: string | null;
@@ -77,6 +80,7 @@ export function CheckoutForm({
         signedInEmail={signedInEmail ?? null}
         defaultCountry={defaultCountry ?? ""}
         layout={layout ?? null}
+        termsUrl={termsUrl}
       />
     </Elements>
   );
@@ -90,6 +94,7 @@ function Inner({
   bumpOptions = [],
   defaultCountry,
   layout,
+  termsUrl,
 }: {
   product: CheckoutProduct;
   bump: BumpSummary | null;
@@ -100,6 +105,7 @@ function Inner({
   signedInEmail: string | null;
   defaultCountry: string;
   layout: Block[] | null;
+  termsUrl?: string;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -381,6 +387,7 @@ function Inner({
     error,
     canPay: Boolean(stripe),
     notePaymentInfo,
+    termsUrl,
   };
 
   return (

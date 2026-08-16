@@ -212,6 +212,9 @@ export default async function CheckoutPage({
           signedInEmail={user?.email ?? null}
           defaultCountry={defaultCountry}
           layout={layout}
+          // The published terms, so this page and the footer cannot name two
+          // different sets of terms for the same purchase.
+          termsUrl={settings.termsUrl || undefined}
         />
       </div>
     </div>

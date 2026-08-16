@@ -73,7 +73,6 @@ export const productSchema = z.object({
   upsellOfferId: z.preprocess(emptyToNull, uuidish.nullable().default(null)),
   // The second price at each placement. Optional, and dropped below when it
   // would be the same offer twice.
-  offerId: z.preprocess(emptyToNull, uuidish.nullable().default(null)),
   bumpAltOfferId: z.preprocess(emptyToNull, uuidish.nullable().default(null)),
   upsellAltOfferId: z.preprocess(emptyToNull, uuidish.nullable().default(null)),
   // A list of ids, posted as JSON the way every list in this admin is. Never
@@ -120,7 +119,6 @@ export type ParsedProduct = {
   status: "draft" | "published";
   bumpOfferId: string | null;
   upsellOfferId: string | null;
-  offerId: string | null;
   bumpAltOfferId: string | null;
   upsellAltOfferId: string | null;
   bumpPriceIds: string[];
@@ -167,7 +165,6 @@ export function parseProductForm(raw: Record<string, unknown>): ParseResult {
       // A second price with no first price is nothing, and a second price that
       // IS the first would render the same figure twice — the database refuses
       // it, so it is dropped here rather than failing the save.
-      offerId: v.offerId,
       bumpAltOfferId: altFor(v.bumpOfferId, v.bumpAltOfferId),
       upsellAltOfferId: altFor(v.upsellOfferId, v.upsellAltOfferId),
       // Dropped with the offer, like the alt above: a list of prices belonging

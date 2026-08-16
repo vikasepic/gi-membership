@@ -61,7 +61,6 @@ export type ProductInput = {
   status: ProductStatus;
   bumpOfferId: string | null;
   upsellOfferId: string | null;
-  offerId?: string | null;
   bumpAltOfferId?: string | null;
   upsellAltOfferId?: string | null;
   bumpPriceIds?: string[];
@@ -141,7 +140,6 @@ function toRow(input: ProductInput, storeId: string) {
     status: input.status,
     bump_offer_id: input.bumpOfferId,
     upsell_offer_id: input.upsellOfferId,
-    offer_id: input.offerId ?? null,
     bump_alt_offer_id: input.bumpAltOfferId ?? null,
     upsell_alt_offer_id: input.upsellAltOfferId ?? null,
     bump_price_ids: input.bumpPriceIds ?? [],

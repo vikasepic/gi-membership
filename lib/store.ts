@@ -17,7 +17,7 @@ const STORE_SLUG = "greater-inside";
  * test exists precisely because they had already drifted.
  */
 export const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, offer_id, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, bump_price_ids, upsell_price_ids, is_placeholder, sort_order, checkout_note, checkout_bullets, stripe_product_id_test, stripe_product_id_live, " +
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, bump_price_ids, upsell_price_ids, is_placeholder, sort_order, checkout_note, checkout_bullets, stripe_product_id_test, stripe_product_id_live, " +
   // The ways to buy, embedded rather than fetched one product at a time —
   // every reader of a product is a reader of its prices, and a second round
   // trip per product on a storefront that lists them all is a query nobody
