@@ -488,6 +488,17 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       },
       { kind: "number", key: "declineSize", label: "“No thanks” size", min: 8, max: 32, step: 1, unit: "px" },
 
+      // Its own, not the terms'. They are different sentences in different
+      // places — the terms describe an option, this says what pressing the
+      // button does — and sharing a colour meant restyling one restyled both.
+      {
+        kind: "color",
+        key: "dueTodayColor",
+        label: "“Due today” line",
+        hint: "The line under the button. Hide it entirely with “Show what is due today” under Content.",
+      },
+      { kind: "number", key: "dueTodaySize", label: "“Due today” size", min: 8, max: 32, step: 1, unit: "px" },
+
       group("Saving badge"),
       { kind: "color", key: "badgeBg", label: "Background" },
       { kind: "color", key: "badgeColor", label: "Text" },

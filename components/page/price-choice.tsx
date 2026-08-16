@@ -46,6 +46,16 @@ export type PriceChoiceStyle = {
   /** The decline link's own ink and size. See declineHref. */
   declineColor: string | null;
   declineSize: number | null;
+  /**
+   * The "$0 today" line's own ink and size.
+   *
+   * Its own, and not the terms', because they are different sentences in
+   * different places: the terms sit inside an option describing what it is,
+   * and this sits under the button saying what happens when it is pressed.
+   * Sharing a colour meant restyling one silently restyled the other.
+   */
+  dueTodayColor: string | null;
+  dueTodaySize: number | null;
   /** Where the block's own words sit. The option rows are always left. */
   align: "left" | "center" | "right";
   badgeBg: string | null;
@@ -257,7 +267,10 @@ export function PriceChoice({
         </a>
       )}
       {price && s.showDueToday && (
-        <p className={`text-[0.72rem] ${alignment}`} style={{ color: s.termsColor || band.muted }}>
+        <p
+          className={`text-[0.72rem] ${alignment}`}
+          style={{ color: s.dueTodayColor || band.muted, fontSize: px(s.dueTodaySize) }}
+        >
           {money(chargeNowCents(price), currency)} today
         </p>
       )}

@@ -140,7 +140,10 @@ export function TemplateLibrary({
                 </button>
               ))}
             </aside>
-            <div className="grid content-start gap-3 overflow-y-auto p-4 sm:grid-cols-2">
+            {/* Three across where there is room. Two made every tile 460px
+                wide in a 1024px modal, which is a lot of scrolling for a shelf
+                whose job is "show me what there is". */}
+            <div className="grid content-start gap-3 overflow-y-auto p-4 sm:grid-cols-2 xl:grid-cols-3">
               {showing.map((t) => (
                 <div
                   key={t.id}
@@ -152,7 +155,10 @@ export function TemplateLibrary({
                     aria-label={`Preview ${t.name}`}
                     className="block w-full cursor-zoom-in"
                   >
-                    <TemplatePreview template={t} theme={theme} height={240} />
+                    {/* Shorter, because there are three of them now — a tile
+                        shows what a design IS, and the full size is one click
+                        away for what it says. */}
+                    <TemplatePreview template={t} theme={theme} height={200} />
                   </button>
                   <div className="flex items-center gap-2 border-t border-border px-2.5 py-1.5">
                     <span className="truncate text-xs text-fg">{t.name}</span>

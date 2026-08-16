@@ -89,12 +89,25 @@ export function TemplatePreview({
   const ASSUMED = 460 / PREVIEW_WIDTH;
   const shown = size.w > 0 ? size.w / PREVIEW_WIDTH : ASSUMED;
 
+  // A floor, not just a height.
+  //
+  // Everything about this tile's size depends on a measurement, and a
+  // measurement can fail to arrive for reasons this component cannot see — an
+  // observer that never fires, a grid mounted inside a collapsed parent, a
+  // modal opened before layout. Every one of those ends the same way: a tile a
+  // few pixels tall, which is a library of coloured strips.
+  //
+  // `minHeight` costs nothing when the measurement works and is the whole
+  // difference when it does not.
+  const tall = height ?? (size.h > 0 ? Math.round(size.h * shown) : 240);
+
   return (
     <div
       ref={box}
       className="relative w-full overflow-hidden"
       style={{
-        height: height ?? (size.h > 0 ? Math.round(size.h * shown) : 240),
+        height: tall,
+        minHeight: height ?? 200,
         background: band?.color ?? previewTheme.bg,
       }}
     >

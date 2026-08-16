@@ -516,6 +516,8 @@ function Inner({
               noteSize: p.noteSize == null ? null : num(p.noteSize, 0),
               declineColor: str(p.declineColor) || null,
               declineSize: p.declineSize == null ? null : num(p.declineSize, 0),
+              dueTodayColor: str(p.dueTodayColor) || null,
+              dueTodaySize: p.dueTodaySize == null ? null : num(p.dueTodaySize, 0),
               buttonSize: p.buttonSize == null ? null : num(p.buttonSize, 0),
               align: (str(p.align, "center") as "left" | "center" | "right"),
               badgeBg: str(p.badgeBg) || null,

@@ -713,6 +713,10 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     // earns its place on a checkout — on a sales page, where nothing is being
     // charged yet, it is a figure with no question behind it.
     showDueToday: true,
+    // Its own ink and size. It used to borrow the terms', so restyling the
+    // line inside an option silently restyled the line under the button.
+    dueTodayColor: null,
+    dueTodaySize: null,
     badgeBg: null,
     badgeColor: null,
     buttonBg: null,
