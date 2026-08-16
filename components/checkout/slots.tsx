@@ -3,6 +3,7 @@
 import { createContext, useContext, type ReactNode, type RefObject } from "react";
 import { PaymentElement } from "@stripe/react-stripe-js";
 import { money } from "@/lib/money";
+import { priceLabel, priceTerms, type OfferPrice } from "@/lib/offer-prices";
 import { OrderBump } from "@/components/checkout/order-bump";
 import {
   COUNTRIES,
@@ -43,6 +44,11 @@ export type CheckoutSlotValue = {
   country: string;
   setCountry: (v: string) => void;
   captureEmail: () => void;
+
+  /** Every way to buy the product, and which is picked. */
+  prices: OfferPrice[];
+  pricePick: number | null;
+  setPricePick: (i: number) => void;
 
   bump: BumpSummary | null;
   bumpAlt: BumpSummary | null;
@@ -247,6 +253,58 @@ export function BuyerDetailsSlot(p: {
           {p.note ?? "Your receipt and access link go to this email. No password to create."}
         </span>
       )}
+    </fieldset>
+  );
+}
+
+/**
+ * How they want to buy it — monthly, yearly, once.
+ *
+ * Only drawn where there is more than one way, so a product sold at a single
+ * price renders exactly what it always has. Nothing is preselected when there
+ * IS a choice: picking one FOR somebody is how a person ends up subscribed
+ * when they meant to buy once.
+ */
+export function PriceChoiceSlot(p: { title?: string; titleColor?: string | null; titleSize?: number | null }) {
+  const c = useCheckout();
+  if (!c || c.prices.length < 2) return null;
+  return (
+    <fieldset className="flex flex-col gap-2">
+      {p.title?.trim() && (
+        <legend className="kicker mb-1 text-muted" style={set({ color: p.titleColor, fontSize: p.titleSize ?? undefined })}>
+          {p.title}
+        </legend>
+      )}
+      {c.prices.map((price, i) => {
+        const on = c.pricePick === i;
+        return (
+          <label
+            key={price.id}
+            className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-3 text-sm transition-colors ${
+              on ? "border-primary bg-primary/5" : "border-border hover:border-primary"
+            }`}
+          >
+            <input
+              type="radio"
+              name="way-to-buy"
+              checked={on}
+              onChange={() => c.setPricePick(i)}
+              className="size-[18px] shrink-0 cursor-pointer accent-[var(--primary)]"
+            />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span className="font-display font-semibold tabular-nums">
+                {priceLabel(price, c.product.currency)}
+                {price.label.trim() && (
+                  <span className="ml-2 text-[0.72rem] font-medium text-muted">{price.label.trim()}</span>
+                )}
+              </span>
+              {priceTerms(price, c.product.currency) && (
+                <span className="text-[0.76rem] text-muted">{priceTerms(price, c.product.currency)}</span>
+              )}
+            </span>
+          </label>
+        );
+      })}
     </fieldset>
   );
 }
@@ -687,6 +745,10 @@ export function DefaultCheckoutLayout() {
     <>
       <div className="flex flex-col gap-6">
         <BuyerDetailsSlot title="Your details" />
+        {/* Before the bump, and well before the card: how you are buying the
+            thing decides what the add-on beside it costs, and a decision that
+            changes the total has to come before the total. */}
+        <PriceChoiceSlot title="How you want to pay" />
         <OrderBumpSlot title="One more thing" />
       </div>
 
@@ -738,6 +800,9 @@ export function previewCheckoutSlots(): CheckoutSlotValue {
     bump: null,
     bumpAlt: null,
     bumpOptions: [],
+    prices: [],
+    pricePick: 0,
+    setPricePick: noop,
     bumpChoice: "none",
     setBumpChoice: noop,
     bumpRef: { current: null },

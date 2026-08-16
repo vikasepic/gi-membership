@@ -1,7 +1,13 @@
 import { money } from "@/lib/money";
 
 /**
- * One way to buy an offer.
+ * One way to buy a thing.
+ *
+ * Named for offers because they had it first; a product's ways to pay are
+ * these, exactly — same columns, same rules, same helpers. Renaming the type
+ * would touch forty files to say something this sentence says, so it says it
+ * here instead.
+ *
  *
  * An offer used to be one price, and a second price meant a second offer —
  * with its own copy, its own bump design, its own OTO page and its own CRM
@@ -157,8 +163,12 @@ export function priceSummary(price: OfferPrice, currency: string): string {
  * screen behind it. That hidden selection is what made the builder show two
  * prices and the live page show one.
  */
-export function livePrices(prices: OfferPrice[]): OfferPrice[] {
-  return prices.filter((p) => !p.archived);
+export function livePrices(prices: OfferPrice[] | null | undefined): OfferPrice[] {
+  // Tolerates absent, because not every caller has one. A product built by a
+  // fixture, or read through a path that predates product_prices, has no list
+  // at all — and `undefined.filter` on the checkout is a page that 500s instead
+  // of selling something.
+  return (prices ?? []).filter((p) => !p.archived);
 }
 
 /**

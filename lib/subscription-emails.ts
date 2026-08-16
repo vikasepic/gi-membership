@@ -26,20 +26,49 @@ async function subscriberFor(stripeSubscriptionId: string) {
   const db = createServiceClient();
   const { data: rows } = await db
     .from("ownership")
-    .select("user_id, offer_id")
+    .select("user_id, offer_id, product_id, product_price_id")
     .eq("stripe_subscription_id", stripeSubscriptionId)
     .limit(1);
   const row = rows?.[0];
   if (!row) return null;
 
-  const [{ data: user }, { data: offer }] = await Promise.all([
+  // A product subscription is the other half of this now. Without it the
+  // trial-ending email says "your subscription" three days before charging
+  // somebody — which is the exact ambiguity this email exists to remove.
+  //
+  // The price comes from the row they are ON, not the product's headline: a
+  // product sold monthly and yearly would otherwise warn the yearly subscriber
+  // about the monthly figure.
+  const [{ data: user }, { data: offer }, { data: product }, { data: price }] = await Promise.all([
     db.from("users").select("email").eq("id", row.user_id as string).maybeSingle(),
     row.offer_id
       ? db.from("offers").select("name, price_cents, currency, interval").eq("id", row.offer_id as string).maybeSingle()
       : Promise.resolve({ data: null }),
+    row.product_id
+      ? db.from("products").select("title, currency").eq("id", row.product_id as string).maybeSingle()
+      : Promise.resolve({ data: null }),
+    row.product_price_id
+      ? db
+          .from("product_prices")
+          .select("price_cents, interval")
+          .eq("id", row.product_price_id as string)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
   if (!user?.email) return null;
-  return { email: user.email as string, offer };
+  // Presented as the same shape either way, so the two senders below stay one
+  // piece of code rather than growing a branch each.
+  const asOffer =
+    offer ??
+    (product
+      ? {
+          name: product.title as string,
+          price_cents: (price?.price_cents as number) ?? 0,
+          currency: product.currency as string,
+          interval: (price?.interval as string) ?? null,
+        }
+      : null);
+  return { email: user.email as string, offer: asOffer };
 }
 
 const on = (unix: number | null | undefined) =>

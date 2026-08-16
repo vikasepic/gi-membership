@@ -48,20 +48,29 @@ export async function findSubscriptionDrift(): Promise<SubscriptionDrift[]> {
   const db = createServiceClient();
   const { data: rows } = await db
     .from("ownership")
-    .select("id, user_id, offer_id, status, stripe_subscription_id")
+    .select("id, user_id, offer_id, product_id, status, stripe_subscription_id")
     .not("stripe_subscription_id", "is", null);
   if (!rows || rows.length === 0) return [];
 
   const userIds = [...new Set(rows.map((r) => r.user_id as string))];
   const offerIds = [...new Set(rows.map((r) => r.offer_id).filter(Boolean) as string[])];
-  const [{ data: users }, { data: offers }] = await Promise.all([
+  // Products subscribe too now. A drifting row with no name beside it is a row
+  // nobody can act on — and acting on it is the entire point of this screen.
+  const productIds = [...new Set(rows.map((r) => r.product_id).filter(Boolean) as string[])];
+  const [{ data: users }, { data: offers }, { data: products }] = await Promise.all([
     db.from("users").select("id, email").in("id", userIds),
     offerIds.length > 0
       ? db.from("offers").select("id, name").in("id", offerIds)
       : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    productIds.length > 0
+      ? db.from("products").select("id, title").in("id", productIds)
+      : Promise.resolve({ data: [] as { id: string; title: string }[] }),
   ]);
   const emailOf = new Map((users ?? []).map((u) => [u.id as string, u.email as string]));
-  const nameOf = new Map((offers ?? []).map((o) => [o.id as string, o.name as string]));
+  const nameOf = new Map<string, string>([
+    ...(offers ?? []).map((o) => [o.id as string, o.name as string] as [string, string]),
+    ...(products ?? []).map((p) => [p.id as string, p.title as string] as [string, string]),
+  ]);
 
   const out: SubscriptionDrift[] = [];
   for (const row of rows) {
@@ -84,7 +93,13 @@ export async function findSubscriptionDrift(): Promise<SubscriptionDrift[]> {
       userId: row.user_id as string,
       email: emailOf.get(row.user_id as string) ?? null,
       offerId: (row.offer_id as string | null) ?? null,
-      offerName: row.offer_id ? (nameOf.get(row.offer_id as string) ?? null) : null,
+      // Whichever this row is for. The field is still called offerName because
+      // every screen reading it says "what is drifting", and a second field
+      // would mean every one of them learning which kind it was.
+      offerName:
+        nameOf.get((row.offer_id as string) ?? "") ??
+        nameOf.get((row.product_id as string) ?? "") ??
+        null,
       subscriptionId,
       ours,
       theirs,

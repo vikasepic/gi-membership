@@ -13,8 +13,25 @@ export type Product = {
   // Legacy: the storefront badge now comes from the product's course, not this.
   // Nullable since products are saved without it.
   type: ProductType | null;
+  /**
+   * The headline price, mirrored from the first non-archived row in `prices`.
+   *
+   * A cache, not a fact — written by the database trigger in 0054 and by
+   * nothing else. Read it for a card or a summary; charge from `prices`.
+   */
   priceCents: number;
   compareAtCents: number | null;
+  /** Every way to buy this, in the order the editor put them in. */
+  prices: OfferPrice[];
+  /**
+   * The Stripe Product this product's recurring prices bill against.
+   *
+   * Two, because test and live are separate object spaces in Stripe and a test
+   * id sent to the live API is a 404 at the moment of a real purchase. Written
+   * on first use — see ensureStripeProductForProduct.
+   */
+  stripeProductIdTest?: string | null;
+  stripeProductIdLive?: string | null;
   currency: string;
   mediaMode: MediaMode | null;
   mediaPath: string | null;

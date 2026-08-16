@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { pricesField } from "@/lib/prices-field";
 import { parseOtoSections } from "@/lib/oto-sections";
 import { OTO_TEMPLATES } from "@/lib/oto-template";
 import { revalidatePath } from "next/cache";
@@ -27,46 +28,7 @@ const schema = z
     // this admin is. Every rule here is a rule the database also states as a
     // CHECK — a save that gets past this and fails there arrives as a bare
     // Postgres message about a constraint nobody can find.
-    prices: z
-      .string()
-      .transform((raw, ctx) => {
-        try {
-          return JSON.parse(raw) as unknown;
-        } catch {
-          ctx.addIssue({ code: "custom", message: "The prices could not be read. Reload and try again." });
-          return z.NEVER;
-        }
-      })
-      .pipe(
-        z
-          .array(
-            z
-              .object({
-                id: z.string().default(""),
-                label: z.string().default(""),
-                billingType: z.enum(["one_time", "recurring"]),
-                interval: z.enum(["day", "week", "month", "year"]).nullable().default(null),
-                intervalCount: z.coerce.number().int().min(1).default(1),
-                trialDays: z.coerce.number().int().min(0).nullable().default(null),
-                priceCents: z.coerce.number().int().min(0),
-                compareAtCents: z.coerce.number().int().min(0).nullable().default(null),
-                archived: z.boolean().default(false),
-              })
-              .refine((p) => p.billingType !== "recurring" || p.interval !== null, {
-                message: "A recurring price needs an interval",
-              })
-              .refine((p) => p.billingType !== "one_time" || p.trialDays === null, {
-                message: "A one-off purchase has nothing to trial",
-              })
-              .refine((p) => p.compareAtCents === null || p.compareAtCents >= p.priceCents, {
-                message: "A was-price below the price reads as a markup",
-              }),
-          )
-          .min(1, "An offer needs a way to pay")
-          .refine((list) => list.some((p) => !p.archived), {
-            message: "At least one way to pay has to be showing",
-          }),
-      ),
+    prices: pricesField,
     currency: z.string().trim().min(1).default("usd"),
     headline: z.string().trim().min(1, "Headline required"),
     description: z.preprocess(emptyToNull, z.string().nullable()),

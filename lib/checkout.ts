@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getStoreId, getStoreName, getProductBySlug, getOffer } from "@/lib/store";
+import { getStoreId, getStoreName, getProductBySlug, getProductById, getOffer } from "@/lib/store";
 import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerForChoice, type Ownership } from "@/lib/offers";
 import { priceForChoice, shownPrices, type OfferPrice } from "@/lib/offer-prices";
 import type { BumpChoice } from "@/lib/bump";
@@ -26,6 +26,7 @@ import { ensureUserProfile } from "@/lib/users";
 import { applyPendingEntitlements } from "@/lib/app-sync";
 import { sendCrmEvent, type CrmItem } from "@/lib/crm";
 import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
+import { livePrices, chargeNowCents as chargeNowFor } from "@/lib/offer-prices";
 import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
 import { markLeadConverted } from "@/lib/leads";
 import type { Offer } from "@/lib/types";
@@ -35,6 +36,35 @@ const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
 // A Stripe subscription price needs a Stripe Product id. Create one per offer
 // on first use and cache it on the offer row (per mode).
+/**
+ * The Stripe Product a product's recurring prices bill against.
+ *
+ * One per product, not one per price: every way to buy a thing is the same
+ * thing on different terms, and a Stripe product per price turns a dashboard
+ * into a list nobody can read.
+ *
+ * Written on first use rather than at creation, so a store that sells nothing
+ * recurring never accumulates Stripe products it did not ask for.
+ */
+async function ensureStripeProductForProduct(product: {
+  id: string;
+  title: string;
+  stripeProductIdTest?: string | null;
+  stripeProductIdLive?: string | null;
+}): Promise<string> {
+  const mode = stripeMode();
+  const existing = mode === "live" ? product.stripeProductIdLive : product.stripeProductIdTest;
+  if (existing) return existing;
+  const created = await stripe().products.create(
+    { name: product.title, metadata: { productId: product.id } },
+    { idempotencyKey: `prod_product_${product.id}_${mode}` },
+  );
+  const db = createServiceClient();
+  const col = mode === "live" ? "stripe_product_id_live" : "stripe_product_id_test";
+  await db.from("products").update({ [col]: created.id }).eq("id", product.id);
+  return created.id;
+}
+
 async function ensureStripeProduct(offer: Offer): Promise<string> {
   const mode = stripeMode();
   const existing = mode === "live" ? offer.stripeProductIdLive : offer.stripeProductIdTest;
@@ -81,13 +111,32 @@ export type CheckoutInput = {
    * the deception this feature exists to avoid.
    */
   bumpTrialShown?: boolean;
+  /**
+   * Which way to buy the product itself — an INDEX into the list its page
+   * showed, never an id and never an amount.
+   *
+   * The server rebuilds that list from the product's own rows and takes the
+   * index from it, so the only thing a tampered post can buy is something it
+   * was actually shown. Out of range refuses rather than falling back to the
+   * headline price. Undefined means the headline price, which is what every
+   * product with one way to buy sends.
+   */
+  priceChoice?: number;
   anonId?: string | null; // attribution visitor cookie, read by the action layer
   country?: string | null; // ISO-2, required when Stripe Tax is enabled
   trackingConsent?: boolean; // GDPR opt-in, read from the cookie by the action layer
 };
 
 export type CheckoutResult =
-  | { ok: true; clientSecret: string }
+  /**
+   * `mode` says which Stripe object the browser must confirm.
+   *
+   * "payment" is a charge today; "setup" saves the card and the subscription
+   * bills on its own schedule, which is the only shape that works when a trial
+   * means nothing is due today. Confirming the wrong one fails with a message
+   * about a client secret, so the client is told rather than left to guess.
+   */
+  | { ok: true; clientSecret: string; mode: "payment" | "setup" }
   | { ok: false; error: string; code?: "account_exists" | "already_owned" | "bump_unavailable" | "bump_trial_used" };
 
 const normEmail = (e: string) => e.trim().toLowerCase();
@@ -147,6 +196,22 @@ export async function ownershipFor(userId: string): Promise<Ownership> {
     if (row.app_id) appIds.add(row.app_id as string);
   }
   return { productIds, appIds };
+}
+
+/** The attribution visitor captured on landing, if there is one. */
+async function visitorFor(
+  db: ReturnType<typeof createServiceClient>,
+  storeId: string,
+  anonId: string | null | undefined,
+): Promise<string | null> {
+  if (!anonId) return null;
+  const { data } = await db
+    .from("visitors")
+    .select("id")
+    .eq("store_id", storeId)
+    .eq("anon_id", anonId)
+    .maybeSingle();
+  return (data?.id as string) ?? null;
 }
 
 export async function createCheckoutIntent(input: CheckoutInput): Promise<CheckoutResult> {
@@ -287,6 +352,19 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
 
   const customerId = await customerForUser(userId, email, storeId);
 
+  // Which way to buy, rebuilt here from the product's own rows.
+  //
+  // The browser sends an INDEX into the list its page drew; this list is built
+  // from the database, so the only thing a tampered post can buy is something
+  // it was shown. Out of range refuses — falling back to the headline price
+  // would charge somebody for an option they did not choose.
+  const ways = livePrices(product.prices);
+  const chosen =
+    input.priceChoice === undefined ? (ways[0] ?? null) : (ways[input.priceChoice] ?? null);
+  if (input.priceChoice !== undefined && !chosen) {
+    return { ok: false, error: "That option is no longer available." };
+  }
+
   // VAT for EU/UK digital sales is charged at the buyer's country rate, so the
   // amount charged is price + calculated tax. Returns zero tax (and behaves
   // exactly as before) when tax is disabled or no country is known.
@@ -298,13 +376,74 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   // from the browser. The client's preview is for display; this is the number
   // that gets charged, and the two are computed by the same function so they
   // cannot disagree.
+  // Priced against the way they chose, not the headline. A coupon resolved
+  // against $49 and applied to a $9 monthly would take more off than the price.
+  const listCents = chosen?.priceCents ?? product.priceCents;
+  const recurring = chosen?.billingType === "recurring";
+
   let coupon: AppliedCoupon | null = null;
   if (input.couponCode?.trim()) {
-    const res = await resolveCoupon(input.couponCode, product.priceCents, product.currency);
+    const res = await resolveCoupon(input.couponCode, listCents, product.currency);
     if (!res.ok) return { ok: false, error: res.error };
     coupon = res.coupon;
   }
-  const payableCents = product.priceCents - (coupon?.discountCents ?? 0);
+  const payableCents = listCents - (coupon?.discountCents ?? 0);
+
+  // A subscription, so nothing is charged here.
+  //
+  // A trial takes nothing today and a $0 PaymentIntent is not a thing Stripe
+  // will make, so the card is SAVED and the subscription bills on its own
+  // schedule — the same shape the offer checkout has always used. Tax is
+  // Stripe's `automatic_tax` on the subscription rather than a calculation of
+  // ours: an invoice Stripe raises monthly has to carry a rate Stripe worked
+  // out, or the two disagree from the second month onwards.
+  if (recurring && chosen) {
+    const si = await stripe().setupIntents.create({
+      customer: customerId,
+      usage: "off_session",
+      automatic_payment_methods: { enabled: true },
+      description: `${product.title} — ${await getStoreName()}`,
+      metadata: {
+        store_created: "true",
+        storeId,
+        userId,
+        productId: product.id,
+        productSlug: product.slug,
+        productTitle: product.title,
+        // The price id is written by US, from a list we rebuilt — never copied
+        // out of the request — so finalize charges the option they were shown.
+        productPriceId: chosen.id,
+        couponCode: coupon?.code ?? "",
+        bumpOfferId: bumpOffer?.id ?? "",
+        country: country ?? "",
+      },
+    });
+    if (!si.client_secret) return { ok: false, error: "No client secret" };
+
+    const visitor = await visitorFor(db, storeId, input.anonId);
+    const { error: orderErr } = await db.from("orders").insert({
+      store_id: storeId,
+      user_id: userId,
+      email,
+      status: "pending",
+      currency: product.currency,
+      // What today costs. A trial is genuinely a $0 order; without one the
+      // first invoice is raised by Stripe the moment the subscription starts,
+      // and finalize writes back what it actually came to.
+      subtotal_cents: listCents,
+      total_cents: chargeNowFor(chosen),
+      coupon_code: coupon?.code ?? null,
+      discount_cents: coupon?.discountCents ?? 0,
+      tax_cents: 0,
+      buyer_country: country,
+      tracking_consent: input.trackingConsent === true,
+      stripe_customer_id: customerId,
+      stripe_setup_intent_id: si.id,
+      visitor_id: visitor,
+    });
+    if (orderErr) return { ok: false, error: `order: ${orderErr.message}` };
+    return { ok: true, clientSecret: si.client_secret, mode: "setup" };
+  }
 
   const tax = await calculateTax({
     priceCents: payableCents,
@@ -339,6 +478,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       productId: product.id,
       productSlug: product.slug,
       productTitle: product.title,
+      productPriceId: chosen?.id ?? "",
       couponCode: coupon?.code ?? "",
       discountCents: String(coupon?.discountCents ?? 0),
       bumpOfferId: bumpOffer?.id ?? "",
@@ -347,16 +487,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   });
 
   // Attach the attribution visitor (captured on landing) to this order.
-  let visitorId: string | null = null;
-  if (input.anonId) {
-    const { data: v } = await db
-      .from("visitors")
-      .select("id")
-      .eq("store_id", storeId)
-      .eq("anon_id", input.anonId)
-      .maybeSingle();
-    visitorId = v?.id ?? null;
-  }
+  const visitorId = await visitorFor(db, storeId, input.anonId);
 
   const { data: order, error: orderErr } = await db
     .from("orders")
@@ -366,7 +497,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       email,
       status: "pending",
       currency: product.currency,
-      subtotal_cents: product.priceCents,
+      subtotal_cents: listCents,
       total_cents: tax.totalCents,
       coupon_code: coupon?.code ?? null,
       discount_cents: coupon?.discountCents ?? 0,
@@ -387,6 +518,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
     order_id: order.id,
     kind: "product",
     product_id: product.id,
+    product_price_id: chosen?.id ?? null,
     description: product.title,
     // What this line actually cost after the discount, not the list price —
     // the receipt and the CRM both read from here.
@@ -394,7 +526,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   });
 
   if (!pi.client_secret) return { ok: false, error: "No client secret" };
-  return { ok: true, clientSecret: pi.client_secret };
+  return { ok: true, clientSecret: pi.client_secret, mode: "payment" };
 }
 
 // Fulfil an offer on the customer's saved card. one-time -> off-session
@@ -532,20 +664,49 @@ export async function fulfilOffer(args: {
 
 // Idempotently finalize a paid order: mark paid, grant base ownership, fulfil
 // the bump. Safe to call twice (thank-you confirm AND webhook).
-export async function finalizeOrder(paymentIntentId: string): Promise<void> {
+export async function finalizeOrder(intentId: string): Promise<void> {
   const db = createServiceClient();
-  const { data: order } = await db
+  const COLUMNS =
+    "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents, stripe_setup_intent_id, currency";
+
+  // Either kind of intent. A one-off product order points at a PaymentIntent; a
+  // recurring one points at a SetupIntent, because a trial charges nothing
+  // today and a $0 PaymentIntent is not a thing. Both arrive here, from the
+  // thank-you page and from the Stripe webhook, and both are idempotent.
+  const byPayment = await db
     .from("orders")
-    .select(
-      "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents",
-    )
-    .eq("stripe_payment_intent_id", paymentIntentId)
+    .select(COLUMNS)
+    .eq("stripe_payment_intent_id", intentId)
     .maybeSingle();
+  const found =
+    byPayment.data ??
+    (await db.from("orders").select(COLUMNS).eq("stripe_setup_intent_id", intentId).maybeSingle())
+      .data;
+  const order = found;
   if (!order || !order.user_id) return;
   if (order.status !== "pending") return; // already finalized, or refunded
 
-  const pi = await stripe().paymentIntents.retrieve(paymentIntentId);
-  if (pi.status !== "succeeded") return;
+  const isSetup = Boolean(order.stripe_setup_intent_id);
+  // The metadata WE wrote, read back off whichever object this is. Nothing
+  // below cares which kind it was except the part that has to create the
+  // subscription.
+  const intent = isSetup
+    ? await stripe().setupIntents.retrieve(intentId)
+    : await stripe().paymentIntents.retrieve(intentId);
+  if (intent.status !== "succeeded") return;
+  const pi = intent as unknown as {
+    id: string;
+    metadata: Record<string, string>;
+    payment_method?: string | { id: string } | null;
+    /** A SetupIntent charges nothing, so its "amount today" is zero. */
+    amount: number;
+    currency: string;
+  };
+  if (isSetup) {
+    // A SetupIntent has neither, and everything downstream reads both.
+    pi.amount = 0;
+    pi.currency = (order.currency as string) ?? "usd";
+  }
 
   // CLAIM the order, and only continue if this call is the one that won.
   //
@@ -566,14 +727,95 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
     .select("id");
   if (!claimed || claimed.length === 0) return; // someone else got there first
 
+  // The subscription, where they bought a recurring way to pay.
+  //
+  // Created BEFORE ownership is granted, so a card that fails at this point
+  // leaves nothing granted — the order is already claimed as paid and cannot be
+  // replayed, so granting first and failing here would hand out access nobody
+  // is being billed for.
+  //
+  // The price is read back from metadata WE wrote at start, never from the
+  // request: what is billed is the option the page actually showed.
+  const productId = pi.metadata.productId;
+  const paymentMethodId = typeof pi.payment_method === "string" ? pi.payment_method : pi.payment_method?.id;
+  let baseSubscriptionId: string | null = null;
+  const basePriceId: string | null = pi.metadata.productPriceId || null;
+
+  if (isSetup && productId && paymentMethodId && order.stripe_customer_id) {
+    const prod = await getProductById(productId);
+    const price = prod?.prices.find((x: OfferPrice) => x.id === basePriceId && !x.archived) ?? null;
+    if (!prod || !price) {
+      // The price was archived or deleted between saving the card and landing
+      // here. Refuse rather than guess: charging the headline price instead
+      // would bill somebody for something they never chose.
+      await db.from("orders").update({ status: "failed" }).eq("id", order.id);
+      throw new Error("finalizeOrder: the chosen way to pay no longer exists");
+    }
+
+    // Make it the default card, so renewals and any off-session fulfilment
+    // charge the card they just entered.
+    await stripe().customers.update(order.stripe_customer_id as string, {
+      invoice_settings: { default_payment_method: paymentMethodId },
+    });
+
+    const coupon = pi.metadata.couponCode
+      ? await resolveCoupon(pi.metadata.couponCode, price.priceCents, prod.currency)
+      : null;
+
+    const sub = await stripe().subscriptions.create(
+      {
+        customer: order.stripe_customer_id as string,
+        default_payment_method: paymentMethodId,
+        items: [
+          {
+            price_data: {
+              currency: prod.currency,
+              product: await ensureStripeProductForProduct(prod),
+              unit_amount: price.priceCents,
+              recurring: {
+                interval: price.interval ?? "month",
+                interval_count: price.intervalCount || 1,
+              },
+            },
+          },
+        ],
+        trial_period_days: price.trialDays ?? undefined,
+        // Stripe applies the coupon for as long as the coupon says — on a trial
+        // that is the first REAL invoice, not today's £0 one. Computing it here
+        // is how the invoice and the receipt start disagreeing.
+        ...(coupon?.ok ? { discounts: [{ promotion_code: coupon.coupon.promotionCodeId }] } : {}),
+        // Stripe works out the rate on every future invoice. Ours could only
+        // ever be right for the first one.
+        automatic_tax: { enabled: TAX_ENABLED },
+        description: `${prod.title} — ${await getStoreName()}`,
+        metadata: {
+          store_created: "true",
+          orderId: order.id as string,
+          productId: prod.id,
+          productTitle: prod.title,
+          productPriceId: price.id,
+        },
+      },
+      // Keyed on the SetupIntent, so the thank-you page and the webhook racing
+      // each other produce ONE subscription rather than two.
+      { idempotencyKey: `basesub_${intentId}` },
+    );
+    baseSubscriptionId = sub.id;
+  }
+
   // Grant ownership of the base product. Plain insert — the order-paid guard
   // above makes finalize idempotent; a unique-violation (already owned) is fine.
-  const productId = pi.metadata.productId;
   if (productId) {
     const { error } = await db.from("ownership").insert({
       store_id: order.store_id,
       user_id: order.user_id,
       product_id: productId,
+      product_price_id: basePriceId,
+      // A recurring product is owned for as long as it is paid for, so the
+      // subscription has to be findable from the thing it grants — the
+      // reconciler, the cancel flow and the trial-ending email all ask "who is
+      // on this".
+      stripe_subscription_id: baseSubscriptionId,
       source: "purchase",
       status: "active",
     });
@@ -582,7 +824,6 @@ export async function finalizeOrder(paymentIntentId: string): Promise<void> {
 
   // Fulfil the bump if one was taken.
   const bumpOfferId = pi.metadata.bumpOfferId;
-  const paymentMethodId = typeof pi.payment_method === "string" ? pi.payment_method : pi.payment_method?.id;
   if (bumpOfferId && paymentMethodId && order.stripe_customer_id) {
     const offer = await getOffer(bumpOfferId);
     // A deactivated offer must not be fulfilled even though the PaymentIntent
@@ -891,20 +1132,25 @@ export async function grantOfferOwnership(
 // Decide whether an OTO should show for a just-finalized order. Returns a
 // signed single-use token to carry into the OTO page, or null to skip to
 // thank-you.
-export async function resolveOtoForOrder(paymentIntentId: string): Promise<string | null> {
-  const pi = await stripe().paymentIntents.retrieve(paymentIntentId);
+export async function resolveOtoForOrder(intentId: string): Promise<string | null> {
+  const db = createServiceClient();
+  // Which kind of intent this is decides which Stripe object to retrieve, and
+  // asking our own order first avoids a 404 from Stripe for the other type.
+  const { data: order } = await db
+    .from("orders")
+    .select("id, store_id, stripe_setup_intent_id")
+    .or(`stripe_payment_intent_id.eq.${intentId},stripe_setup_intent_id.eq.${intentId}`)
+    .maybeSingle();
+  if (!order) return null;
+
+  const intent = order.stripe_setup_intent_id
+    ? await stripe().setupIntents.retrieve(intentId)
+    : await stripe().paymentIntents.retrieve(intentId);
+  const pi = intent as unknown as { metadata: Record<string, string> };
   if (pi.metadata.bumpOfferId) return null; // bump already taken → no OTO
   const productId = pi.metadata.productId;
   const userId = pi.metadata.userId;
   if (!productId || !userId) return null;
-
-  const db = createServiceClient();
-  const { data: order } = await db
-    .from("orders")
-    .select("id, store_id")
-    .eq("stripe_payment_intent_id", paymentIntentId)
-    .maybeSingle();
-  if (!order) return null;
 
   const { data: prod } = await db
     .from("products")

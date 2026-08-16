@@ -14,8 +14,10 @@ const formPayload = (over: Record<string, string> = {}) => ({
   title: "The Field Guide",
   tagline: "",
   description: "",
-  price: "27",
-  compareAt: "",
+  // The ways to buy, posted as JSON the way the editor posts them. `price` and
+  // `compareAt` are gone: a product's price is a row in product_prices now, and
+  // products.price_cents is a mirror the database keeps.
+  prices: JSON.stringify([{ billingType: "one_time", priceCents: 2700 }]),
   status: "published",
   bumpOfferId: "",
   upsellOfferId: "",
@@ -29,6 +31,7 @@ describe("parseProductForm", () => {
     expect(res.data.slug).toBe("field-guide");
     expect(res.data.priceCents).toBe(2700);
     expect(res.data.compareAtCents).toBeNull();
+    expect(res.data.prices).toHaveLength(1);
     expect(res.data.bumpOfferId).toBeNull();
   });
 
@@ -41,9 +44,15 @@ describe("parseProductForm", () => {
   });
 
   it("reports errors per field, so each shows next to its own input", () => {
-    const res = parseProductForm(formPayload({ slug: "Not A Slug", title: "  ", price: "-5" }));
+    const res = parseProductForm(
+      formPayload({
+        slug: "Not A Slug",
+        title: "  ",
+        prices: JSON.stringify([{ billingType: "one_time", priceCents: -5 }]),
+      }),
+    );
     if (res.ok) throw new Error("should have failed");
-    expect(Object.keys(res.errors).sort()).toEqual(["price", "slug", "title"]);
+    expect(Object.keys(res.errors).sort()).toEqual(["prices", "slug", "title"]);
     expect(res.errors.slug).toMatch(/lowercase/i);
     expect(res.errors.title).toMatch(/required/i);
   });
@@ -53,11 +62,29 @@ describe("parseProductForm", () => {
     expect(parseProductForm({ ...noId, status: "draft" }).ok).toBe(true);
   });
 
-  it("converts dollars to cents without float drift", () => {
-    const res = parseProductForm(formPayload({ price: "19.99", compareAt: "29.99" }));
-    if (!res.ok) throw new Error("should have parsed");
+  it("takes the headline price from the first way to pay", () => {
+    // The mirror. products.price_cents is not typed in twice — it is whatever
+    // the top row of the list says, which is what the database trigger will
+    // also make it.
+    const res = parseProductForm(
+      formPayload({
+        prices: JSON.stringify([
+          { billingType: "one_time", priceCents: 1999, compareAtCents: 2999 },
+          { billingType: "recurring", interval: "month", priceCents: 900 },
+        ]),
+      }),
+    );
+    if (!res.ok) throw new Error(`should have parsed, got: ${JSON.stringify(res.errors)}`);
     expect(res.data.priceCents).toBe(1999);
     expect(res.data.compareAtCents).toBe(2999);
+    expect(res.data.prices).toHaveLength(2);
+  });
+
+  it("refuses a recurring price with no interval, the way the database does", () => {
+    const res = parseProductForm(
+      formPayload({ prices: JSON.stringify([{ billingType: "recurring", priceCents: 900 }]) }),
+    );
+    expect(res.ok).toBe(false);
   });
 });
 

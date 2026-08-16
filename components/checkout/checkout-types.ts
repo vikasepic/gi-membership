@@ -1,4 +1,5 @@
 import type { BumpView } from "@/lib/bump";
+import type { OfferPrice } from "@/lib/offer-prices";
 export type { BumpChoice } from "@/lib/bump";
 
 /**
@@ -25,6 +26,14 @@ export type CheckoutProduct = {
   currency: string;
   /** Cover thumbnail — the buyer should see what they're paying for. */
   coverUrl?: string | null;
+  /**
+   * Every way to buy it, in the order the page showed them.
+   *
+   * The form posts the INDEX of the one chosen; the server rebuilds this same
+   * list from the product's own rows and takes that position. So the only thing
+   * a tampered post can buy is something it was shown.
+   */
+  prices?: OfferPrice[];
 };
 
 // Mirrors MIN_CHARGE_CENTS in lib/coupons.ts, which is server-only and cannot

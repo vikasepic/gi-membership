@@ -14,8 +14,15 @@ export const dynamic = "force-dynamic";
 // way; every path here ends in a redirect.
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const paymentIntent = url.searchParams.get("payment_intent");
-  const clientSecret = url.searchParams.get("payment_intent_client_secret");
+  // Either kind. A one-off product comes back from confirmPayment with a
+  // payment_intent; a recurring one comes back from confirmSetup with a
+  // setup_intent, because nothing was charged today. Everything below treats
+  // them the same — finalizeOrder takes whichever id it is handed.
+  const paymentIntent =
+    url.searchParams.get("payment_intent") ?? url.searchParams.get("setup_intent");
+  const clientSecret =
+    url.searchParams.get("payment_intent_client_secret") ??
+    url.searchParams.get("setup_intent_client_secret");
   const redirectStatus = url.searchParams.get("redirect_status");
 
   if (!paymentIntent || redirectStatus !== "succeeded") {

@@ -11,8 +11,44 @@ import { sortPrices, type OfferPrice } from "@/lib/offer-prices";
 
 const STORE_SLUG = "greater-inside";
 
-const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, offer_id, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, bump_price_ids, upsell_price_ids, is_placeholder, sort_order, checkout_note, checkout_bullets";
+/**
+ * Every column a Product is built from — in ONE place, for the reason the
+ * offers list gives below: this one was three hand-written copies too, and a
+ * test exists precisely because they had already drifted.
+ */
+export const PRODUCT_COLUMNS =
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, offer_id, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, bump_price_ids, upsell_price_ids, is_placeholder, sort_order, checkout_note, checkout_bullets, stripe_product_id_test, stripe_product_id_live, " +
+  // The ways to buy, embedded rather than fetched one product at a time —
+  // every reader of a product is a reader of its prices, and a second round
+  // trip per product on a storefront that lists them all is a query nobody
+  // would write on purpose.
+  "product_prices(id, label, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, sort_order, archived)";
+
+/**
+ * A row from `products` with its prices, as a Product.
+ *
+ * One place, because the prices arrive under `product_prices` and have to be
+ * put in order — two readers sorting differently is how a checkout charges the
+ * option beside the one that was ticked.
+ */
+/**
+ * One product by id, with its ways to pay.
+ *
+ * The admin has had this for ever; the money path needs it too — finalizeOrder
+ * knows a product id from the intent's metadata and nothing else. Kept here
+ * rather than imported from lib/admin.ts, which is a screen's module and pulls
+ * in half the editor.
+ */
+export async function getProductById(id: string): Promise<Product | null> {
+  const db = createServiceClient();
+  const { data } = await db.from("products").select(PRODUCT_COLUMNS).eq("id", id).maybeSingle();
+  return data ? hydrateProduct(data) : null;
+}
+
+export function hydrateProduct(row: unknown): Product {
+  const p = camelize<Product & { productPrices?: (OfferPrice & { sortOrder?: number })[] }>(row);
+  return { ...p, prices: sortPrices(p.productPrices ?? []) };
+}
 
 /**
  * Every column an Offer is built from — in ONE place.
@@ -79,7 +115,7 @@ export async function listPublishedProducts(): Promise<Product[]> {
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
   if (error) throw new Error(`listPublishedProducts: ${error.message}`);
-  return camelize<Product[]>(data ?? []);
+  return (data ?? []).map(hydrateProduct);
 }
 
 export async function getProductBySlug(slug: string): Promise<Product | null> {
@@ -91,7 +127,7 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
     .eq("slug", slug)
     .maybeSingle();
   if (error) throw new Error(`getProductBySlug: ${error.message}`);
-  return data ? camelize<Product>(data) : null;
+  return data ? hydrateProduct(data) : null;
 }
 
 export async function getOffer(id: string): Promise<Offer | null> {

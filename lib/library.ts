@@ -1,7 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
-import { getStoreId, hydrateOffer, OFFER_COLUMNS } from "@/lib/store";
+import { getStoreId, hydrateOffer, hydrateProduct, OFFER_COLUMNS, PRODUCT_COLUMNS } from "@/lib/store";
 import { savedPaymentMethodFor, ownershipFor } from "@/lib/checkout";
 import { createClient } from "@/lib/supabase/server";
 import { coursesForProduct } from "@/lib/courses";
@@ -12,8 +12,11 @@ import type { Product, Offer } from "@/lib/types";
 // Ownership-gated library reads + signed-URL delivery. Paid assets live in the
 // PRIVATE bucket and are only ever reached through an ownership check here.
 
-const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, is_placeholder, sort_order, checkout_note, checkout_bullets, chapter_label, lesson_label";
+// The shared list plus the two the library alone needs. Written as a sum
+// rather than a third hand-copied list — this one was already missing five
+// columns the storefront reads, which is exactly how a product loaded for a
+// member became a different shape from the same product on the shop.
+const LIBRARY_PRODUCT_COLUMNS = `${PRODUCT_COLUMNS}, chapter_label, lesson_label`;
 
 export async function listOwnedProducts(userId: string): Promise<Product[]> {
   const db = createServiceClient();
@@ -24,8 +27,8 @@ export async function listOwnedProducts(userId: string): Promise<Product[]> {
     .not("product_id", "is", null);
   const ids = (owns ?? []).map((o) => o.product_id as string);
   if (ids.length === 0) return [];
-  const { data } = await db.from("products").select(PRODUCT_COLUMNS).in("id", ids);
-  return camelize<Product[]>(data ?? []);
+  const { data } = await db.from("products").select(LIBRARY_PRODUCT_COLUMNS).in("id", ids);
+  return (data ?? []).map(hydrateProduct);
 }
 
 export async function ownsProduct(userId: string, productId: string): Promise<boolean> {
@@ -94,12 +97,12 @@ export async function getOwnedProduct(
   const db = createServiceClient();
   const { data: p } = await db
     .from("products")
-    .select(PRODUCT_COLUMNS)
+    .select(LIBRARY_PRODUCT_COLUMNS)
     .eq("store_id", await getStoreId())
     .eq("slug", slug)
     .maybeSingle();
   if (!p) return null;
-  const product = camelize<Product>(p);
+  const product = hydrateProduct(p);
   if (!(await ownsProduct(userId, product.id))) return null;
   return product;
 }

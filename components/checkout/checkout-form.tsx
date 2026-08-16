@@ -2,17 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
-import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { Elements, useStripe, useElements } from "@stripe/react-stripe-js";
 import { startCheckout, previewCoupon, captureAbandonedCart } from "@/app/(store)/checkout/actions";
-import { OrderBump } from "@/components/checkout/order-bump";
 import { track } from "@/components/analytics";
 import { eventIdFor } from "@/lib/analytics/events";
 import { needsAnswer, type BumpChoice } from "@/lib/bump";
-import type { BumpView } from "@/lib/bump";
 
 type AppliedDiscount = { label: string; discountCents: number; clamped: boolean };
 
-import { money } from "@/lib/money";
 import { suggestEmail } from "@/lib/email-hint";
 import { Blocks } from "@/components/page/blocks";
 import { bandTheme } from "@/lib/page-sections";
@@ -191,6 +188,13 @@ function Inner({
     void captureAbandonedCart(product.slug, value, name || undefined);
   }
 
+  // Which way to buy the product itself. Null where it has only one, which is
+  // every product until somebody adds a second — and then the form asks.
+  const [pricePick, setPricePick] = useState<number | null>(
+    (product.prices?.length ?? 0) > 1 ? null : 0,
+  );
+  const chosenPrice = product.prices?.[pricePick ?? 0] ?? null;
+
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState<AppliedDiscount | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
@@ -198,7 +202,14 @@ function Inner({
 
   const bumpNow = chosenBump?.chargeNowCents ?? 0;
   const discount = coupon?.discountCents ?? 0;
-  const totalNow = product.priceCents - discount + bumpNow;
+  // What the chosen way to pay takes TODAY — nothing, on a trial. The product's
+  // own price_cents is the headline and only right when nothing was chosen.
+  const baseNow = chosenPrice
+    ? chosenPrice.trialDays && chosenPrice.billingType === "recurring"
+      ? 0
+      : chosenPrice.priceCents
+    : product.priceCents;
+  const totalNow = baseNow - discount + bumpNow;
   // Held in a ref so the payment-info callback reads today's total without
   // being rebuilt — and re-registered on the Stripe element — every time the
   // bump or a coupon changes it.
@@ -298,6 +309,9 @@ function Inner({
       ...(signedInEmail ? {} : { email, fullName }),
       // The code, never the amount: the server prices it again.
       couponCode: coupon ? couponInput.trim() : null,
+      // The INDEX of the way to pay they picked, never its price. The server
+      // rebuilds the same list and takes this position in it.
+      priceChoice: pricePick ?? undefined,
       bumpChoice: bumpChoice ?? "none",
       // What this page actually promised. Only ever used to refuse: an
       // anonymous buyer is shown a trial we cannot yet know they have used,
@@ -312,11 +326,15 @@ function Inner({
       return;
     }
 
-    const { error: payError } = await stripe.confirmPayment({
-      elements,
-      clientSecret: res.clientSecret,
-      confirmParams: { return_url: `${window.location.origin}/checkout/complete` },
-    });
+    // Which object to confirm is the server's answer, not a guess. A recurring
+    // way to pay charges nothing today, so there is a SetupIntent to confirm
+    // rather than a payment — and confirming the wrong one fails with a message
+    // about a client secret that tells the buyer nothing.
+    const confirmParams = { return_url: `${window.location.origin}/checkout/complete` };
+    const { error: payError } =
+      res.mode === "setup"
+        ? await stripe.confirmSetup({ elements, clientSecret: res.clientSecret, confirmParams })
+        : await stripe.confirmPayment({ elements, clientSecret: res.clientSecret, confirmParams });
     // Only reached if confirmation didn't redirect (i.e. an error occurred).
     if (payError) setError(payError.message ?? "Payment failed");
     setBusy(false);
@@ -338,6 +356,9 @@ function Inner({
     country,
     setCountry,
     captureEmail,
+    prices: product.prices ?? [],
+    pricePick,
+    setPricePick,
     bump,
     bumpAlt,
     bumpOptions,

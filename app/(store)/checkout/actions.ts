@@ -42,6 +42,15 @@ const schema = z.object({
       if (v === true || v === "true" || v === "on") return "main" as const;
       return "none" as const;
     }),
+  /**
+   * Which way to buy the product itself — an index into the list its page drew.
+   *
+   * Same invariant as the bump above: never an id and never an amount, because
+   * the server rebuilds the list from the product's own rows and takes this
+   * position in it. Absent means the headline price, which is what a product
+   * with one way to buy sends.
+   */
+  priceChoice: z.coerce.number().int().min(0).optional(),
   bumpTaken: z.union([z.boolean(), z.string()]).optional(),
   bumpTrialShown: z.coerce.boolean().optional(),
   country: z.string().trim().optional().nullable(),

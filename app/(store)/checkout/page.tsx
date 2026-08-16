@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { getProductBySlug, getOffer } from "@/lib/store";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { shouldShowOffer, offerAtPrice } from "@/lib/offers";
-import { shownPrices } from "@/lib/offer-prices";
+import { livePrices, shownPrices } from "@/lib/offer-prices";
 import { ownershipFor } from "@/lib/checkout";
 import { stripePublishableKey } from "@/lib/env";
 import { CheckoutForm, type BumpSummary } from "@/components/checkout/checkout-form";
@@ -201,6 +201,9 @@ export default async function CheckoutPage({
           // storefront card uses, so the panel beside this shows the image they
           // clicked on to get here.
           coverUrl,
+          // Every way to buy it. The form posts the INDEX of the one chosen and
+          // createCheckoutIntent rebuilds this same list to resolve it.
+          prices: livePrices(product.prices),
         }}
           bump={bump}
           bumpAlt={bumpAlt}

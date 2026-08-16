@@ -1,7 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
-import { getStoreId, hydrateOffer, OFFER_COLUMNS } from "@/lib/store";
+import { getStoreId, hydrateOffer, hydrateProduct, OFFER_COLUMNS, PRODUCT_COLUMNS } from "@/lib/store";
 import { money } from "@/lib/money";
 import { sortPrices, type OfferPrice } from "@/lib/offer-prices";
 import type {
@@ -15,8 +15,10 @@ import type {
 
 // Admin-side reads/writes. Service-role; callers are admin server actions/pages.
 
-const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, offer_id, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, bump_price_ids, upsell_price_ids, is_placeholder, sort_order, checkout_note, checkout_bullets";
+// The one list, imported rather than copied. This file's copy had already
+// drifted from the storefront's once; a second list of thirty columns cannot
+// stay equal to the first, and the one that falls behind is the one nobody
+// reads.
 
 
 export type OfferOption = {
@@ -41,8 +43,17 @@ export type ProductInput = {
   title: string;
   tagline: string | null;
   description: string | null;
+  /**
+   * The headline price, and the mirror the trigger keeps.
+   *
+   * Still here because a save that carries no `prices` list — an import, a
+   * script — must still produce a product with a price. Where `prices` IS
+   * given it is the truth and this is overwritten from it.
+   */
   priceCents: number;
   compareAtCents: number | null;
+  /** Every way to buy this. The same model an offer's ways to pay use. */
+  prices?: OfferPrice[];
   // media_mode / media_path / media_embed_url / cover_image_url are NOT here on
   // purpose. The product form has no inputs for them, and uploadPaidAsset owns
   // media_mode + media_path — letting a form save write them would null out an
@@ -70,14 +81,14 @@ export async function listAllProducts(): Promise<Product[]> {
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
   if (error) throw new Error(`listAllProducts: ${error.message}`);
-  return camelize<Product[]>(data ?? []);
+  return (data ?? []).map(hydrateProduct);
 }
 
 export async function getProductById(id: string): Promise<Product | null> {
   const db = createServiceClient();
   const { data, error } = await db.from("products").select(PRODUCT_COLUMNS).eq("id", id).maybeSingle();
   if (error) throw new Error(`getProductById: ${error.message}`);
-  return data ? camelize<Product>(data) : null;
+  return data ? hydrateProduct(data) : null;
 }
 
 /**
@@ -120,6 +131,11 @@ function toRow(input: ProductInput, storeId: string) {
     title: input.title,
     tagline: input.tagline,
     description: input.description,
+    // NOT written here any more where a price list exists: `products.price_cents`
+    // is a mirror of the headline row, kept by the trigger in 0054, and a second
+    // writer is how a cache starts disagreeing with itself. Kept for the update
+    // path only so a product saved by something that has no list still has a
+    // price — the trigger overwrites it the moment a row changes.
     price_cents: input.priceCents,
     compare_at_cents: input.compareAtCents,
     status: input.status,
@@ -144,12 +160,19 @@ function toRow(input: ProductInput, storeId: string) {
 
 export async function createProduct(input: ProductInput): Promise<string> {
   const db = createServiceClient();
+  const first = input.prices?.[0];
   const { data, error } = await db
     .from("products")
-    .insert(toRow(input, await getStoreId()))
+    .insert({
+      ...toRow(input, await getStoreId()),
+      // A seed only. price_cents is NOT NULL and the trigger has nothing to
+      // copy from until the first price row exists a moment from now.
+      ...(first ? { price_cents: first.priceCents, compare_at_cents: first.compareAtCents } : {}),
+    })
     .select("id")
     .single();
   if (error) throw new Error(`createProduct: ${error.message}`);
+  if (input.prices?.length) await savePrices(data.id as string, input.prices, "product");
   return data.id as string;
 }
 
@@ -157,6 +180,10 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
   const db = createServiceClient();
   const { error } = await db.from("products").update(toRow(input, await getStoreId())).eq("id", id);
   if (error) throw new Error(`updateProduct: ${error.message}`);
+  // After the row, so a save that fails its own validation has not already
+  // rewritten the prices. savePrices refuses a reprice with live buyers and
+  // throws, which the form reports.
+  if (input.prices?.length) await savePrices(id, input.prices, "product");
 }
 
 export async function deleteProduct(id: string): Promise<void> {
@@ -325,21 +352,38 @@ export async function updateOffer(id: string, input: OfferInput): Promise<void> 
 }
 
 /** How many people are on each price of this offer, and still paying. */
-export async function priceUsage(offerId: string): Promise<Record<string, number>> {
+/**
+ * Whose ways to pay these are.
+ *
+ * Offers had them first and products now have the same model, so both go
+ * through the same two functions. A second copy of the reprice guard would be a
+ * second place for it to be subtly weaker, and the weaker one is the one that
+ * lets somebody's billing change underneath them.
+ */
+export type PriceOwner = "offer" | "product";
+
+const TABLE = { offer: "offer_prices", product: "product_prices" } as const;
+const OWNER_COL = { offer: "offer_id", product: "product_id" } as const;
+const PRICE_COL = { offer: "offer_price_id", product: "product_price_id" } as const;
+
+export async function priceUsage(
+  ownerId: string,
+  owner: PriceOwner = "offer",
+): Promise<Record<string, number>> {
   const db = createServiceClient();
   // 'canceled' is deliberately excluded: those rows are kept and revived on a
   // re-purchase, and counting them would block archiving a price for ever.
   const { data, error } = await db
     .from("ownership")
-    .select("offer_price_id")
-    .eq("offer_id", offerId)
+    .select(PRICE_COL[owner])
+    .eq(OWNER_COL[owner], ownerId)
     .in("status", ["active", "trialing", "past_due"])
-    .not("offer_price_id", "is", null);
+    .not(PRICE_COL[owner], "is", null);
   if (error) throw new Error(`priceUsage: ${error.message}`);
   const out: Record<string, number> = {};
   for (const row of data ?? []) {
-    const id = (row as { offer_price_id: string }).offer_price_id;
-    out[id] = (out[id] ?? 0) + 1;
+    const id = (row as unknown as Record<string, string>)[PRICE_COL[owner]];
+    if (id) out[id] = (out[id] ?? 0) + 1;
   }
   return out;
 }
@@ -357,18 +401,24 @@ export async function priceUsage(offerId: string): Promise<Record<string, number
  * other than this function does the writing. This half is the one that can say
  * why.
  */
-export async function savePrices(offerId: string, prices: OfferPrice[]): Promise<void> {
+export async function savePrices(
+  ownerId: string,
+  prices: OfferPrice[],
+  owner: PriceOwner = "offer",
+): Promise<void> {
   const db = createServiceClient();
   const live = prices.filter((p) => !p.archived);
-  if (live.length === 0) throw new Error("An offer needs at least one way to pay that is showing.");
+  if (live.length === 0) {
+    throw new Error(`A ${owner} needs at least one way to pay that is showing.`);
+  }
 
   const { data: existingRows, error: readErr } = await db
-    .from("offer_prices")
+    .from(TABLE[owner])
     .select("id, billing_type, interval, interval_count, trial_days, price_cents")
-    .eq("offer_id", offerId);
+    .eq(OWNER_COL[owner], ownerId);
   if (readErr) throw new Error(`savePrices: ${readErr.message}`);
   const existing = new Map((existingRows ?? []).map((r) => [r.id as string, r]));
-  const usage = await priceUsage(offerId);
+  const usage = await priceUsage(ownerId, owner);
 
   const keep = new Set(prices.map((p) => p.id));
   for (const [id] of existing) {
@@ -378,13 +428,13 @@ export async function savePrices(offerId: string, prices: OfferPrice[]): Promise
         `${usage[id]} ${usage[id] === 1 ? "person is" : "people are"} on one of the prices you removed. Hide it instead — it stops being offered and nobody's billing changes.`,
       );
     }
-    const { error } = await db.from("offer_prices").delete().eq("id", id);
+    const { error } = await db.from(TABLE[owner]).delete().eq("id", id);
     if (error) throw new Error(`savePrices: ${error.message}`);
   }
 
   for (const [i, p] of prices.entries()) {
     const row = {
-      offer_id: offerId,
+      [OWNER_COL[owner]]: ownerId,
       label: p.label.trim() || null,
       billing_type: p.billingType,
       interval: p.billingType === "recurring" ? p.interval : null,
@@ -408,12 +458,12 @@ export async function savePrices(offerId: string, prices: OfferPrice[]): Promise
           `${usage[p.id]} ${usage[p.id] === 1 ? "person is" : "people are"} on ${money(was.price_cents as number)} — its terms cannot change. Add a new way to pay and hide this one.`,
         );
       }
-      const { error } = await db.from("offer_prices").update(row).eq("id", p.id);
+      const { error } = await db.from(TABLE[owner]).update(row).eq("id", p.id);
       if (error) throw new Error(`savePrices: ${error.message}`);
     } else {
       // The id came from the browser, so it is a suggestion rather than a
       // fact — the database mints its own.
-      const { error } = await db.from("offer_prices").insert(row);
+      const { error } = await db.from(TABLE[owner]).insert(row);
       if (error) throw new Error(`savePrices: ${error.message}`);
     }
   }

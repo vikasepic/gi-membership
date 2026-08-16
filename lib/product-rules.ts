@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { pricesField } from "@/lib/prices-field";
+import type { OfferPrice } from "@/lib/offer-prices";
 
 // The library delivers courses and nothing else, so a published product with no
 // course attached is something a buyer can pay for and never receive. Publishing
@@ -59,9 +61,13 @@ export const productSchema = z.object({
   title: z.string().trim().min(1, "Title required"),
   tagline: z.preprocess(emptyToNull, z.string().nullable().default(null)),
   description: z.preprocess(emptyToNull, z.string().nullable().default(null)),
-  // dollars from the form -> cents
-  price: z.coerce.number().min(0, "Price must be 0 or more"),
-  compareAt: z.preprocess(emptyToNull, z.coerce.number().min(0, "Must be 0 or more").nullable().default(null)),
+  // The ways to buy, through the very same schema the offer form uses — so a
+  // rule cannot be stricter on one and looser on the other.
+  //
+  // Optional, because a save that carries no list (a script, an import, an
+  // older form) must still produce a product. Where it IS given it is the
+  // truth, and the product's own price column becomes a mirror of it.
+  prices: pricesField.optional(),
   status: z.enum(["draft", "published"]),
   bumpOfferId: z.preprocess(emptyToNull, uuidish.nullable().default(null)),
   upsellOfferId: z.preprocess(emptyToNull, uuidish.nullable().default(null)),
@@ -109,6 +115,8 @@ export type ParsedProduct = {
   description: string | null;
   priceCents: number;
   compareAtCents: number | null;
+  /** Every way to buy this. Absent where the form did not carry a list. */
+  prices?: OfferPrice[];
   status: "draft" | "published";
   bumpOfferId: string | null;
   upsellOfferId: string | null;
@@ -147,9 +155,12 @@ export function parseProductForm(raw: Record<string, unknown>): ParseResult {
       title: v.title,
       tagline: v.tagline,
       description: v.description,
-      // Round after scaling: 19.99 * 100 is 1998.9999… in binary floating point.
-      priceCents: Math.round(v.price * 100),
-      compareAtCents: v.compareAt == null ? null : Math.round(v.compareAt * 100),
+      // The headline, taken from the list rather than typed twice. It is a
+      // mirror the database keeps; this only seeds a brand-new row, which is
+      // NOT NULL and has no price rows to copy from yet.
+      priceCents: v.prices?.[0]?.priceCents ?? 0,
+      compareAtCents: v.prices?.[0]?.compareAtCents ?? null,
+      prices: v.prices,
       status: v.status,
       bumpOfferId: v.bumpOfferId,
       upsellOfferId: v.upsellOfferId,

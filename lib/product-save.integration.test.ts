@@ -15,7 +15,7 @@ const payload = (over: Record<string, string> = {}) => ({
   title: "Save Test Product",
   tagline: "",
   description: "",
-  price: "27",
+  prices: JSON.stringify([{ billingType: "one_time", priceCents: 2700 }]),
   compareAt: "",
   status: "draft",
   bumpOfferId: "",
@@ -46,7 +46,11 @@ describe.skipIf(!canRun)("product save path (integration)", () => {
     await setProductCourses(productId, [courseId]);
 
     const saved = await getProductById(productId);
+    // The mirror, written by the trigger from the row savePrices inserted —
+    // not by the form. If the trigger stops firing this is what catches it.
     expect(saved?.priceCents).toBe(2700);
+    expect(saved?.prices).toHaveLength(1);
+    expect(saved?.prices[0].billingType).toBe("one_time");
     expect(saved?.title).toBe("Save Test Product");
     // This join is what coursesForUser walks — an empty product_courses is
     // exactly why the library showed nothing.

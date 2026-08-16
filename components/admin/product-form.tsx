@@ -12,6 +12,8 @@ import { publicCoverUrl } from "@/lib/media-url";
 import { MediaButton, type PickedMedia } from "@/components/admin/media-modal";
 import { StorefrontPreview, BumpPreview, Readiness } from "@/components/admin/editor-preview";
 import { slugify, slugDraft } from "@/lib/slug";
+import { OfferPriceFields, type PriceUsage } from "@/components/admin/offer-price-fields";
+import type { OfferPrice } from "@/lib/offer-prices";
 import type { Product } from "@/lib/types";
 import type { OfferOption } from "@/lib/admin";
 import type { Course } from "@/lib/courses";
@@ -24,13 +26,14 @@ const SLUG_RE = /^[a-z0-9-]+$/;
 // submitted so a bad value is flagged inline with no round trip and no reload.
 // The server re-validates and owns what the client can't know — whether the slug
 // is already taken, and whether this product has a course to deliver.
-function clientErrors(title: string, slug: string, price: string): Record<string, string> {
+// The price is no longer checked here: it is a row in the ways-to-pay list, and
+// that list is validated by the same schema the offer editor uses — on the
+// server, where the rules and the database CHECKs are written once.
+function clientErrors(title: string, slug: string): Record<string, string> {
   const e: Record<string, string> = {};
   if (!title.trim()) e.title = "Title required";
   if (!slug.trim()) e.slug = "Slug required";
   else if (!SLUG_RE.test(slug)) e.slug = "Use lowercase letters, numbers and hyphens only";
-  if (price.trim() === "") e.price = "Price required";
-  else if (!Number.isFinite(Number(price)) || Number(price) < 0) e.price = "Price must be 0 or more";
   return e;
 }
 
@@ -48,8 +51,11 @@ export function ProductForm({
   hasSalesPage = false,
   salesPageHref,
   liveHref,
+  priceUsage = {},
 }: {
   product?: Product;
+  /** How many people are on each price, so one they are on cannot be repriced. */
+  priceUsage?: PriceUsage;
   offers: OfferOption[];
   // Required, not defaulted. This used to default to [], which let the
   // new-product page omit it: the Content section then said "No courses yet"
@@ -72,7 +78,7 @@ export function ProductForm({
 
   const [title, setTitle] = useState(product?.title ?? "");
   const [slug, setSlug] = useState(product?.slug ?? "");
-  const [price, setPrice] = useState(product ? String(product.priceCents / 100) : "");
+  const [prices, setPrices] = useState<OfferPrice[]>(product?.prices ?? []);
   // Until someone edits the slug themselves it tracks the title. A saved product
   // already has a slug people may have linked to, so we never auto-touch that.
   const [slugEdited, setSlugEdited] = useState(Boolean(product));
@@ -80,7 +86,6 @@ export function ProductForm({
   // Held here so each placement can say, as you pick, exactly what the buyer
   // will be shown.
   const [bumpOfferId, setBumpOfferId] = useState(product?.bumpOfferId ?? "");
-  const [offerId, setOfferId] = useState(product?.offerId ?? "");
   const [bumpAltOfferId] = useState(product?.bumpAltOfferId ?? "");
   const [bumpPriceIds, setBumpPriceIds] = useState<string[]>(product?.bumpPriceIds ?? []);
   const [upsellOfferId, setUpsellOfferId] = useState(product?.upsellOfferId ?? "");
@@ -133,7 +138,7 @@ export function ProductForm({
     const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLElement | null;
     if (submitter?.dataset.action === "delete") return;
 
-    const errs = clientErrors(title, slug, price);
+    const errs = clientErrors(title, slug);
     if (Object.keys(errs).length > 0) {
       e.preventDefault(); // stops the server action — no submit, no reload
       setClientErr(errs);
@@ -143,9 +148,15 @@ export function ProductForm({
     }
   }
 
+  // The headline, as the database will mirror it: the first way to pay that is
+  // showing. Derived rather than stored, so the header and the preview follow
+  // the list while somebody is still editing it.
+  const headline = prices.find((p) => !p.archived) ?? null;
+  const price = headline ? (headline.priceCents / 100).toFixed(2) : "";
+
   const checks = [
     { ok: courseIds.length > 0, label: "Course attached", detail: "The library delivers courses — without one a buyer gets nothing." },
-    { ok: price.trim() !== "" && Number(price) >= 0, label: "Price set" },
+    { ok: prices.some((p) => !p.archived), label: "A way to pay", detail: "Every product needs at least one price that is showing." },
     { ok: Boolean(shownCover), label: "Cover image", detail: "The catalog card shows a plain gradient without one." },
     { ok: hasSalesPage, label: "Sales page built", detail: "Buyers land on the plain product page instead." },
     { ok: title.trim().length > 0 && slug.trim().length > 0, label: "Named and addressable" },
@@ -413,29 +424,20 @@ export function ProductForm({
       </TabPanel>
 
       <TabPanel tab="pricing">
-      <Group label="Pricing"
-        hint="The one-time price this product is charged at today."
+      <Group
+        label="Ways to pay"
+        hint="One product, however many prices — a one-off, monthly, yearly, with or without a trial. The same model an offer uses, so a buyer's price is recorded the same way and a price somebody is on can be hidden but never repriced."
       >
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <Field label="Price ($)" required error={err("price")}>
-            <input
-              name="price" type="number" min="0" step="0.01"
-              value={price}
-              onChange={(e) => {
-                setPrice(e.target.value);
-                setClientErr((c) => ({ ...c, price: "" }));
-              }}
-              className={invalid(inputClass, Boolean(err("price")))}
-            />
-          </Field>
-          <Field label="Compare-at ($)" hint="shown struck through, for anchoring" error={err("compareAt")}>
-            <input
-              name="compareAt" type="number" min="0" step="0.01"
-              defaultValue={product?.compareAtCents ? product.compareAtCents / 100 : ""}
-              className={invalid(inputClass, Boolean(err("compareAt")))}
-            />
-          </Field>
-        </div>
+        {/* The very same component the offer editor uses. A second price list
+            that looked the same and behaved slightly differently is how one of
+            them ends up letting somebody's billing change underneath them. */}
+        <OfferPriceFields
+          prices={product?.prices ?? []}
+          currency={product?.currency ?? "usd"}
+          name="prices"
+          usage={priceUsage}
+          onChange={setPrices}
+        />
       </Group>
       </TabPanel>
 
@@ -497,42 +499,6 @@ export function ProductForm({
         {err("courseIds") && <p className="text-sm text-primary">{err("courseIds")}</p>}
       </Group>
 
-      <Group
-        label="Sold on"
-        hint="An offer holds several ways to pay — monthly, yearly, a one-off. Name one and this product's page can offer them."
-      >
-        <Field label="Ways to pay" hint="optional — leave empty for the single price above">
-          <select
-            name="offerId"
-            value={offerId}
-            onChange={(e) => setOfferId(e.target.value)}
-            className={inputClass}
-          >
-            <option value="">— just the price above —</option>
-            {offers.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-                {o.active ? "" : " (draft)"}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {/* Said plainly, because the honest answer is "not yet, and here is
-            what it does do". A field that implied the checkout had changed
-            would be the worst kind of half-shipped. */}
-        <p className="text-sm text-muted">
-          {offerId ? (
-            <>
-              A <b className="font-medium text-fg">Ways to pay</b> block on this
-              product&rsquo;s page now shows that offer&rsquo;s prices without having to
-              name it. The recurring ones are taken on the offer&rsquo;s own checkout;
-              the price above is still what this product&rsquo;s checkout charges.
-            </>
-          ) : (
-            <>This product is sold at the single price above.</>
-          )}
-        </p>
-      </Group>
       </TabPanel>
 
       <TabPanel tab="funnel">
