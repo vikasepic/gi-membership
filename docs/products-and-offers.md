@@ -147,11 +147,47 @@ translation layer is what nobody can ever remove.
 
 ---
 
-## Open questions for the owner
+## Answered, 16 Aug — the merge is on
 
-1. Will there be more connected apps, or are Content Engine and Funnel App the
-   set? This decides whether app-granting is a first-class shape or an exception.
-2. Does an offer ever need to sell something a product could not — a bundle
-   across two products, say, or access without a catalogue entry?
-3. Is `/o/key` an address anybody has published? If those links are in ads or
-   emails, slice 6 needs redirects rather than deletions.
+**1. More apps are coming, as many as there turn out to be.**
+
+That settles it. App-granting is not an exception to work around; it is a shape
+the store will keep doing. Every new app under the current model means another
+offer that exists only because a product cannot grant an app — the two lists
+drift further apart with each one, and the reason for the split gets weaker
+every time it is used.
+
+**2. "A product could grant an app too" — correct, and better than that.**
+
+Worth one correction, because it makes the case stronger rather than weaker: an
+offer today grants a product **or** an app, never both. `grant_type` is
+`'product' | 'subscription'` and `grantOfferOwnership` branches on it.
+
+So `product_grants` as a LIST is not parity with offers — it is more than offers
+can do. "Buy this and get the course AND the app" is currently impossible; under
+the merged model it is a second row. That is exactly the bundle case, and it
+arrives free.
+
+**3. `/o/key` is not published, and redirects should exist anyway.**
+
+So slice 6 has nothing to break. And the redirect section is worth building on
+its own merits — see slice 0 below, which is now first because it is small,
+useful immediately, and removes the only external risk from the last slice.
+
+---
+
+## The decision
+
+**Merge.** One catalogue of products; offers become pitches. The answers above
+remove both reasons to hesitate: apps are permanent, so the distinction is not
+worth keeping, and nothing outside links to `/o/key`, so the ending is clean.
+
+The slices below stand, with one added at the front.
+
+**Slice 0 — a redirects table in settings.**
+`from` path to `to` URL, matched before the router 404s. Useful the day it
+ships — any dead link, any renamed slug, any campaign URL — and it is what makes
+retiring `/o/key` a redirect rather than a deletion.
+
+Everything else is unchanged, except that slice 2 gets bigger and better: a
+product grants a LIST, so a product can grant a course and an app together.
