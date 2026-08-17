@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { tagContact } from "@/lib/activecampaign";
 import { notifyAppEntitlement } from "@/lib/apps";
 import { sendCrmEvent, type CrmEvent } from "@/lib/crm";
+import { fulfilBump } from "@/lib/checkout";
 import { messageOf, nextAttemptAt, MAX_ATTEMPTS, type JobKind } from "@/lib/errors";
 
 // Replaying failed side effects.
@@ -51,6 +52,22 @@ const RUNNERS: Record<JobKind, Runner> = {
     // notifyAppEntitlement reports failure by return value rather than by
     // throwing, so without this the sweep would mark a still-broken push done.
     if (!res.ok) throw new Error(res.error ?? `app returned ${res.status}`);
+  },
+  bump_charge: async (p) => {
+    // The same steps the purchase runs, not a second copy of them — charge,
+    // grant, record — so a replay cannot grant access it did not charge for.
+    // Throws on failure, which is how the sweep records the attempt and backs
+    // off; the charge is idempotent on order+offer, so the run that eventually
+    // succeeds cannot bill twice for the ones before it.
+    await fulfilBump({
+      orderId: String(p.orderId),
+      storeId: String(p.storeId),
+      userId: String(p.userId),
+      email: String(p.email),
+      stripeCustomerId: String(p.stripeCustomerId),
+      offerId: String(p.offerId),
+      paymentMethodId: String(p.paymentMethodId),
+    });
   },
   crm_event: async (p) => {
     await sendCrmEvent(p as unknown as CrmEvent);

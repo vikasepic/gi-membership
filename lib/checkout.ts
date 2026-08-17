@@ -30,6 +30,7 @@ import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupo
 import { livePrices, chargeNowCents as chargeNowFor } from "@/lib/offer-prices";
 import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
 import { markLeadConverted } from "@/lib/leads";
+import { recordError } from "@/lib/errors";
 import type { Offer } from "@/lib/types";
 
 const OTO_TTL_SECONDS = 15 * 60; // 15 minutes
@@ -663,6 +664,70 @@ export async function fulfilOffer(args: {
   return { paymentIntentId: pi.id };
 }
 
+/**
+ * Charge and grant an order bump.
+ *
+ * Lifted out of finalizeOrder so the retry sweep can run exactly the same
+ * steps rather than a second implementation of them — a replay that granted
+ * access without charging, or charged without granting, would be worse than
+ * the failure it was replaying.
+ *
+ * Safe to run twice. The charge is idempotent on order+offer inside
+ * fulfilOffer, the ownership insert tolerates its unique violation, and the
+ * order_items write is guarded on there being no row for this bump already.
+ */
+export async function fulfilBump(args: {
+  orderId: string;
+  storeId: string;
+  userId: string;
+  email: string;
+  stripeCustomerId: string;
+  offerId: string;
+  paymentMethodId: string;
+}): Promise<void> {
+  const db = createServiceClient();
+  const offer = await getOffer(args.offerId);
+  // A deactivated offer must not be fulfilled even though the PaymentIntent
+  // still carries its id: an admin may have withdrawn it between intent
+  // creation and confirmation. Returning rather than throwing — there is
+  // nothing here for a retry to fix.
+  if (!offer?.active) return;
+
+  const result = await fulfilOffer({
+    order: { id: args.orderId, stripeCustomerId: args.stripeCustomerId },
+    offer,
+    paymentMethodId: args.paymentMethodId,
+  });
+
+  await grantOfferOwnership(args.storeId, args.userId, offer, "bump", result.subscriptionId ?? null, {
+    email: args.email,
+    stripeCustomerId: args.stripeCustomerId,
+  });
+
+  // One line per bump, however many times this runs. order_items has no unique
+  // constraint to lean on, and a replay that appended a second line would
+  // double the recorded revenue on an order that was charged once.
+  const { data: already } = await db
+    .from("order_items")
+    .select("id")
+    .eq("order_id", args.orderId)
+    .eq("kind", "bump")
+    .eq("offer_id", offer.id)
+    .maybeSingle();
+  if (already) return;
+
+  await db.from("order_items").insert({
+    store_id: args.storeId,
+    order_id: args.orderId,
+    kind: "bump",
+    offer_id: offer.id,
+    description: offer.name,
+    amount_cents: immediateChargeCents(offer),
+    stripe_subscription_id: result.subscriptionId ?? null,
+    stripe_payment_intent_id: result.paymentIntentId ?? null,
+  });
+}
+
 // Idempotently finalize a paid order: mark paid, grant base ownership, fulfil
 // the bump. Safe to call twice (thank-you confirm AND webhook).
 export async function finalizeOrder(intentId: string): Promise<void> {
@@ -824,31 +889,52 @@ export async function finalizeOrder(intentId: string): Promise<void> {
   }
 
   // Fulfil the bump if one was taken.
+  //
+  // Guarded, and this is the whole point of the guard: the bump is a SEPARATE
+  // off-session charge on the saved card, and an off-session charge genuinely
+  // fails sometimes — that is why dunning exists. It was unguarded, so a
+  // declined add-on threw out of finalizeOrder: the thank-you route errored on
+  // a purchase that had in fact succeeded, and Stripe's webhook retried the
+  // whole finalize forever behind it. The buyer kept the product, never got the
+  // add-on, and nobody was told.
+  //
+  // Wallets make it likelier rather than new — a device token is refused for a
+  // merchant-initiated charge more often than a typed card is.
   const bumpOfferId = pi.metadata.bumpOfferId;
   if (bumpOfferId && paymentMethodId && order.stripe_customer_id) {
-    const offer = await getOffer(bumpOfferId);
-    // A deactivated offer must not be fulfilled even though the PaymentIntent
-    // still carries its id: an admin may have withdrawn it between intent
-    // creation and confirmation.
-    if (offer?.active) {
-      const result = await fulfilOffer({
-        order: { id: order.id, stripeCustomerId: order.stripe_customer_id },
-        offer,
+    try {
+      await fulfilBump({
+        orderId: order.id as string,
+        storeId: order.store_id as string,
+        userId: order.user_id as string,
+        email: order.email as string,
+        stripeCustomerId: order.stripe_customer_id as string,
+        offerId: bumpOfferId,
         paymentMethodId,
       });
-      await grantOfferOwnership(order.store_id, order.user_id, offer, "bump", result.subscriptionId ?? null, {
-        email: order.email as string,
-        stripeCustomerId: order.stripe_customer_id,
-      });
-      await db.from("order_items").insert({
-        store_id: order.store_id,
-        order_id: order.id,
-        kind: "bump",
-        offer_id: offer.id,
-        description: offer.name,
-        amount_cents: immediateChargeCents(offer),
-        stripe_subscription_id: result.subscriptionId ?? null,
-        stripe_payment_intent_id: result.paymentIntentId ?? null,
+    } catch (e) {
+      // Queued, not lost. The sweep replays it every few minutes and the charge
+      // is idempotent on order+offer, so a blip heals itself and a hard decline
+      // ends up in front of an admin instead of nowhere.
+      //
+      // NOT rethrown: the product is bought and paid for by this point, and an
+      // add-on that could not be charged must not undo that or wedge the
+      // webhook. The buyer is not out of pocket — the base PaymentIntent never
+      // included the bump, which is charged on its own.
+      await recordError({
+        source: "bump_charge",
+        message: `Could not charge the order bump: ${e instanceof Error ? e.message : String(e)}`,
+        context: { orderId: order.id, offerId: bumpOfferId },
+        jobKind: "bump_charge",
+        jobPayload: {
+          orderId: order.id,
+          storeId: order.store_id,
+          userId: order.user_id,
+          email: order.email,
+          stripeCustomerId: order.stripe_customer_id,
+          offerId: bumpOfferId,
+          paymentMethodId,
+        },
       });
     }
   }
