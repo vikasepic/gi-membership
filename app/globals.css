@@ -375,3 +375,32 @@ h1, h2, h3, h4 {
   --muted: #8fa0b4;
   --border: rgba(243, 237, 230, 0.16);
 }
+
+/* The redesign runs a notch smaller than the store's own scale.
+
+   The pieces it is built from are shared with the checkout that ships, and
+   that one is a single column where 15px fields and a 17px button are right.
+   The redesign puts the same fields in a half-width column beside a panel,
+   where the identical sizes read as a form somebody zoomed in on.
+
+   Scoped by element under the wrapper rather than by editing the components:
+   a class on the shared input would take the shipped checkout down with it,
+   and these are the same controls doing the same job at a different size.
+   Element selectors are 0-1-1, which is how they beat the utility classes
+   already on them without anything shouting !important.
+
+   Radios and checkboxes are excluded by name — they are sized in `size-*` and
+   padding on them puts the dot off centre. */
+.checkout-v2 input:not([type="radio"]):not([type="checkbox"]),
+.checkout-v2 select,
+.checkout-v2 textarea {
+  font-size: 0.875rem;
+  padding-top: 0.6rem;
+  padding-bottom: 0.6rem;
+}
+
+.checkout-v2 button[type="submit"] {
+  font-size: 0.95rem;
+  padding-top: 0.9rem;
+  padding-bottom: 0.9rem;
+}

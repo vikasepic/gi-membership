@@ -43,11 +43,11 @@ export function CheckoutStage({
   priceCaption: string | null;
 }) {
   const summary = (
-    <div className="order-2 flex flex-col gap-4">
+    <div className="order-2 flex flex-col gap-2.5 lg:gap-4">
       {eyebrow && (
         <span
-          className="self-start rounded-full border border-[#c05f3c]/50 bg-[#c05f3c]/20 px-3 py-1.5 font-semibold uppercase tracking-[0.13em] text-[#e8a183]"
-          style={{ fontSize: "0.69rem" }}
+          className="self-start rounded-full border border-[#c05f3c]/50 bg-[#c05f3c]/20 px-2.5 py-1 font-semibold uppercase tracking-[0.13em] text-[#e8a183]"
+          style={{ fontSize: "0.63rem" }}
         >
           {eyebrow}
         </span>
@@ -55,27 +55,27 @@ export function CheckoutStage({
 
       <h1
         className="font-display font-semibold leading-[1.1] tracking-[-0.025em]"
-        style={{ fontSize: "clamp(1.45rem, 1.1rem + 1.3vw, 2rem)", textWrap: "balance" }}
+        style={{ fontSize: "clamp(1.2rem, 0.95rem + 1.1vw, 1.8rem)", textWrap: "balance" }}
       >
         {title}
       </h1>
 
       {priceLabel && (
-        <div className="flex flex-col">
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 lg:flex-col lg:items-start lg:gap-0">
           <span
-            className="font-semibold uppercase tracking-[0.14em] text-[#8fa0b4]"
-            style={{ fontSize: "0.68rem" }}
+            className="hidden font-semibold uppercase tracking-[0.14em] text-[#8fa0b4] lg:block"
+            style={{ fontSize: "0.66rem" }}
           >
             Price
           </span>
           <span
             className="font-display font-bold leading-none tracking-[-0.03em]"
-            style={{ fontSize: "clamp(1.75rem, 1.2rem + 1.8vw, 2.6rem)" }}
+            style={{ fontSize: "clamp(1.4rem, 1rem + 1.4vw, 2.3rem)" }}
           >
             {priceLabel}
           </span>
           {priceCaption && (
-            <span className="mt-1.5 text-[#c3cbd6]" style={{ fontSize: "0.8rem" }}>
+            <span className="text-[#c3cbd6] lg:mt-1.5" style={{ fontSize: "0.75rem" }}>
               {priceCaption}
             </span>
           )}
@@ -137,7 +137,7 @@ export function CheckoutStage({
   const hasDetails = Boolean(imageUrl || sub || bullets.length > 0);
 
   return (
-    <div className="checkout-v2-stage flex flex-col gap-6 bg-[#1d2b3a] px-6 py-8 text-[#f3ede6] md:px-8 lg:py-12 lg:pl-0 lg:pr-10">
+    <div className="checkout-v2-stage flex flex-col gap-4 bg-[#1d2b3a] px-5 py-5 text-[#f3ede6] md:px-8 lg:gap-6 lg:py-12 lg:pl-0 lg:pr-10">
       <div className="ml-auto flex w-full max-w-[30rem] items-center justify-between gap-4">
         <Link
           href={backHref}

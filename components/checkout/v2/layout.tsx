@@ -38,10 +38,10 @@ export function CheckoutV2Layout() {
   if (!c) return null;
 
   const known = Boolean(c.signedInEmail);
-  const card = "flex flex-col gap-5 rounded-2xl border border-border bg-surface p-5 sm:p-6";
+  const card = "flex flex-col gap-4 rounded-2xl border border-border bg-surface p-4 sm:p-5";
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
       {/* Who this attaches to, and how they want it. Both before the card:
           a form that asks for a card first is asking somebody to commit
           before it has finished saying to what. */}
@@ -57,7 +57,7 @@ export function CheckoutV2Layout() {
       <div className={card}>
         {!known && <Step n={2} label="Payment" />}
         <CardFieldsSlot heading={known ? "Payment method" : ""} tabs collectCountry />
-        <span className="text-muted" style={{ fontSize: "0.74rem", lineHeight: 1.5 }}>
+        <span className="text-muted" style={{ fontSize: "0.72rem", lineHeight: 1.5 }}>
           {c.totalNow === 0
             ? "Your card is saved for the renewal. Nothing is charged today."
             : "The country above sets the tax rate on your receipt."}
@@ -83,12 +83,12 @@ function Step({ n, label }: { n: number; label: string }) {
   return (
     <span className="flex items-center gap-2.5">
       <span
-        className="grid size-[22px] shrink-0 place-items-center rounded-full bg-navy font-semibold text-white"
-        style={{ fontSize: "0.72rem" }}
+        className="grid size-5 shrink-0 place-items-center rounded-full bg-navy font-semibold text-white"
+        style={{ fontSize: "0.68rem" }}
       >
         {n}
       </span>
-      <span className="font-display font-semibold text-fg" style={{ fontSize: "0.95rem" }}>
+      <span className="font-display font-semibold text-fg" style={{ fontSize: "0.88rem" }}>
         {label}
       </span>
     </span>
@@ -119,22 +119,22 @@ function DueRow() {
   return (
     <div className="flex flex-col gap-2 border-t border-border pt-4">
       <div className="flex items-baseline justify-between gap-4">
-        <span className="font-display font-semibold text-fg" style={{ fontSize: "1rem" }}>
+        <span className="font-display font-semibold text-fg" style={{ fontSize: "0.95rem" }}>
           {trial ? "Due today" : "Total today"}
         </span>
         <span
           className="font-display font-bold tabular-nums tracking-[-0.02em] text-fg"
-          style={{ fontSize: "1.75rem" }}
+          style={{ fontSize: "1.5rem" }}
         >
           {money(c.totalNow, c.product.currency)}
         </span>
       </div>
       {renewals.map((line) => (
-        <span key={line} className="text-fg/85" style={{ fontSize: "0.82rem", lineHeight: 1.5 }}>
+        <span key={line} className="text-fg/85" style={{ fontSize: "0.79rem", lineHeight: 1.5 }}>
           {line.charAt(0).toUpperCase() + line.slice(1)}.
         </span>
       ))}
-      <span className="text-muted" style={{ fontSize: "0.76rem", lineHeight: 1.5 }}>
+      <span className="text-muted" style={{ fontSize: "0.73rem", lineHeight: 1.5 }}>
         Tax is calculated at your country&rsquo;s rate and shown on your receipt.
       </span>
     </div>

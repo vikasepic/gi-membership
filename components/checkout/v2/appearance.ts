@@ -28,15 +28,15 @@ export function stripeAppearance(skin: CheckoutSkin = "v1"): Appearance {
       colorTextSecondary: "#6b6259",
       colorTextPlaceholder: "#a9a29b",
       colorDanger: "#c0392b",
-      borderRadius: "11px",
-      spacingUnit: "4px",
-      fontSizeBase: "15px",
+      borderRadius: "10px",
+      spacingUnit: "3.6px",
+      fontSizeBase: "14px",
     },
     rules: {
       ".Input": {
         border: "1px solid #dcd4cb",
         boxShadow: "none",
-        padding: "14px",
+        padding: "11px 12px",
       },
       ".Input:focus": {
         border: "1px solid #c05f3c",
@@ -45,7 +45,7 @@ export function stripeAppearance(skin: CheckoutSkin = "v1"): Appearance {
       ".Label": {
         color: "#3c4757",
         fontWeight: "600",
-        fontSize: "12.5px",
+        fontSize: "12px",
       },
       // The method tabs across the top of the box, which is what the design
       // draws as Card / UPI / Netbanking — except these are Stripe's, so they

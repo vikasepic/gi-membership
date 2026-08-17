@@ -36,7 +36,7 @@ export function StageBody({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="ml-auto flex w-full max-w-[30rem] flex-col gap-5">
+    <div className="ml-auto flex w-full max-w-[30rem] flex-col gap-4 lg:gap-5">
       {summary}
 
       <div className={`${open ? "contents" : "hidden"} lg:contents`}>{details}</div>
@@ -47,8 +47,8 @@ export function StageBody({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="order-last flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-[#f3ede6]/20 px-4 py-3 text-left text-[#e7eaef] transition-colors hover:border-[#f3ede6]/35 lg:hidden"
-        style={{ fontSize: "0.85rem" }}
+        className="order-last flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-[#f3ede6]/20 px-3.5 py-2.5 text-left text-[#e7eaef] transition-colors hover:border-[#f3ede6]/35 lg:hidden"
+        style={{ fontSize: "0.8rem" }}
       >
         <span className="font-medium">{open ? "Hide the details" : moreLabel}</span>
         <svg
