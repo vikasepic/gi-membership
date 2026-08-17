@@ -1095,6 +1095,7 @@ export async function grantOfferOwnership(
         email: ctx.email,
         fullName: ctx.fullName ?? (buyer?.username as string | null) ?? null,
         entitlementKey: offer.grantEntitlementKey,
+        channels: offer.grantChannels,
         status: trialing ? "trialing" : "active",
         stripeCustomerId: ctx.stripeCustomerId,
         stripeSubscriptionId: subscriptionId,

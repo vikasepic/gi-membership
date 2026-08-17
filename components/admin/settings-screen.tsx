@@ -15,6 +15,7 @@ import { TypographyFields, FontLibrary, type InstalledFont } from "@/components/
 import { ShellFields } from "@/components/admin/shell-fields";
 import { SnippetFields } from "@/components/admin/snippet-fields";
 import { PaletteFields } from "@/components/admin/palette-fields";
+import { CheckoutDesignFields } from "@/components/admin/checkout-design-fields";
 import { ColorField as SharedColorField, PaletteContext } from "@/components/admin/color-control";
 
 /**
@@ -185,6 +186,9 @@ function GroupForm({
         >
           <RedirectFields redirects={settings.redirects} name="redirects" />
         </Group>
+      )}
+      {group === "checkout" && (
+        <CheckoutDesignFields value={settings.checkoutDesign} name="checkoutDesign" />
       )}
       {group === "email" && (
         <EmailPrototype value={settings.postPurchaseEmail} fieldName="postPurchaseEmail" />

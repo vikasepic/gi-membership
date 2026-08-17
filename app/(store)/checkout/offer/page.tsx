@@ -17,6 +17,7 @@ import { NOINDEX } from "@/lib/seo";
 import { CheckoutPanel } from "@/components/checkout/checkout-panel";
 import { legalFrom } from "@/lib/legal";
 import { getSettingsOrDefaults } from "@/lib/settings";
+import { checkoutDesignVars } from "@/lib/checkout-design";
 import { publicCoverUrl } from "@/lib/media";
 import { productDisplay } from "@/lib/courses";
 
@@ -74,6 +75,9 @@ export default async function OfferCheckoutPage({
   // Never the throwing read: a settings row that cannot be parsed must cost this
   // page its logo, not its ability to take a payment.
   const settings = await getSettingsOrDefaults();
+  // Three colours and a set of switches — everything the store can change
+  // about this page. See lib/checkout-design.
+  const design = settings.checkoutDesign;
   const legal = legalFrom(settings);
 
   // The selling half is narrower than the paying half.
@@ -104,13 +108,14 @@ export default async function OfferCheckoutPage({
       email={user.email}
       publishableKey={stripePublishableKey()}
       skin={skin}
+      design={design}
       termsUrl={settings.termsUrl || undefined}
     />
   );
 
   if (skin === "v2") {
     return (
-      <div className="checkout-v2 min-h-dvh bg-bg">
+      <div className="checkout-v2 min-h-dvh bg-bg" style={checkoutDesignVars(design)}>
         {/* Half and half, both hugging the seam — the arrangement Stripe's own
             checkout uses, and for the reason it uses it: two columns of equal
             width with their content pinned to the middle read as one object
@@ -120,6 +125,7 @@ export default async function OfferCheckoutPage({
             room that grows on a big screen grows on the OUTSIDE, evenly. */}
         <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-2">
         <CheckoutStage
+          design={design}
           backHref="/library"
           backLabel="Back"
           // The terms as a label, never a claim. An offer with no trial says

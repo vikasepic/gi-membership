@@ -17,12 +17,29 @@
  */
 export type CheckoutSkin = "v1" | "v2";
 
-export const DEFAULT_SKIN: CheckoutSkin = "v1";
+/**
+ * The checkout everybody gets.
+ *
+ * Approved 17 Aug 2026. It was "v1" while the redesign was being looked at,
+ * reachable only by asking for it in the URL; it is the checkout now.
+ *
+ * The old one has not been deleted and is one word away — see below.
+ */
+export const DEFAULT_SKIN: CheckoutSkin = "v2";
 
-/** Anything but an explicit `v2` is the checkout that ships. */
+/**
+ * Which checkout this request gets.
+ *
+ * Both are namable, and that is deliberate now that the redesign is the
+ * default: `?skin=v1` is the way back. If something about the new one goes
+ * wrong on a live sale, the fix is a link — not a deploy, not a revert, not a
+ * rebuild while people are trying to pay.
+ */
 export function checkoutSkin(raw: string | string[] | undefined): CheckoutSkin {
-  const value = Array.isArray(raw) ? raw[0] : raw;
-  return value?.trim().toLowerCase() === "v2" ? "v2" : DEFAULT_SKIN;
+  const value = (Array.isArray(raw) ? raw[0] : raw)?.trim().toLowerCase();
+  if (value === "v2") return "v2";
+  if (value === "v1") return "v1";
+  return DEFAULT_SKIN;
 }
 
 /**
@@ -34,5 +51,5 @@ export function checkoutSkin(raw: string | string[] | undefined): CheckoutSkin {
  */
 export function withSkin(href: string, skin: CheckoutSkin): string {
   if (skin === DEFAULT_SKIN) return href;
-  return href + (href.includes("?") ? "&" : "?") + "skin=v2";
+  return href + (href.includes("?") ? "&" : "?") + `skin=${skin}`;
 }

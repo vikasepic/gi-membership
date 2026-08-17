@@ -220,6 +220,8 @@ export type OfferInput = {
   grantProductId: string | null;
   grantAppId: string | null;
   grantEntitlementKey: string | null;
+  /** Which channels inside the granted app. See lib/app-channels. */
+  grantChannels?: string[];
   /** The ways to pay. Never empty — an offer with no price cannot be bought. */
   prices: OfferPrice[];
   currency: string;
@@ -292,6 +294,7 @@ function toOfferRow(input: OfferInput, storeId: string) {
     grant_product_id: input.grantType === "product" ? input.grantProductId : null,
     grant_app_id: input.grantType === "subscription" ? input.grantAppId : null,
     grant_entitlement_key: input.grantEntitlementKey,
+    grant_channels: input.grantChannels ?? [],
     // The price columns are NOT written here any more. They are a mirror of
     // the headline price, kept by offer_prices_sync, and a second writer of a
     // cache is how a cache starts disagreeing with itself. `savePrices` below

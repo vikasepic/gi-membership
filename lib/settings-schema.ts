@@ -4,6 +4,7 @@ import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
 import { codeSnippetsSchema } from "@/lib/code-snippets";
 import { postPurchaseSchema } from "@/lib/post-purchase-email";
 import { redirectsSchema } from "@/lib/redirects";
+import { checkoutDesignSchema } from "@/lib/checkout-design";
 import { SITE_TYPOGRAPHY_SCHEMA } from "@/lib/site-typography";
 import { SITE_SHELL_SCHEMA } from "@/lib/site-shell";
 
@@ -143,6 +144,7 @@ export const SETTINGS_SCHEMA = z.object({
   // edited by a single form, and flattening it would put twenty names into a
   // schema that every other part of the store has to read past.
   postPurchaseEmail: postPurchaseSchema.default(() => postPurchaseSchema.parse({})),
+  checkoutDesign: checkoutDesignSchema.default(() => checkoutDesignSchema.parse({})),
 });
 
 export type Settings = z.infer<typeof SETTINGS_SCHEMA> & { name: string };
@@ -164,6 +166,7 @@ export const SETTINGS_GROUPS = [
   { key: "shell", label: "Header & navigation" },
   { key: "commerce", label: "Commerce" },
   { key: "seo", label: "SEO & social" },
+  { key: "checkout", label: "Checkout" },
   { key: "email", label: "Post-purchase email" },
   { key: "redirects", label: "Redirects" },
   { key: "advanced", label: "Advanced" },
@@ -200,6 +203,7 @@ export const GROUP_FIELDS: Record<SettingsGroupKey, readonly (keyof Settings)[]>
     "socialX",
     "socialLinkedin",
   ],
+  checkout: ["checkoutDesign"],
   email: ["postPurchaseEmail"],
   redirects: ["redirects"],
   advanced: ["customCss", "customJs", "codeSnippets"],

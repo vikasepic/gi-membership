@@ -23,6 +23,7 @@ import { CheckoutSlots, type CheckoutSlotValue } from "@/components/checkout/slo
 import { CheckoutV2Layout } from "@/components/checkout/v2/layout";
 import { stripeAppearance } from "@/components/checkout/v2/appearance";
 import type { CheckoutSkin } from "@/lib/checkout-skin";
+import type { CheckoutDesign } from "@/lib/checkout-design";
 
 export function OfferCheckoutForm({
   offer,
@@ -32,6 +33,7 @@ export function OfferCheckoutForm({
   chosen = -1,
   skin = "v1",
   termsUrl,
+  design,
 }: {
   offer: OfferSummary;
   email: string;
@@ -43,6 +45,7 @@ export function OfferCheckoutForm({
   /** Which arrangement. See lib/checkout-skin.ts — v1 unless asked for. */
   skin?: CheckoutSkin;
   termsUrl?: string;
+  design?: CheckoutDesign;
 }) {
   const stripePromise = useMemo(() => loadStripe(publishableKey), [publishableKey]);
   return (
@@ -55,10 +58,10 @@ export function OfferCheckoutForm({
         // and mode:"setup" already means "save this card for later".
         mode: "setup",
         currency: offer.currency,
-        appearance: stripeAppearance(skin),
+        appearance: stripeAppearance(skin, design?.buttonColor),
       }}
     >
-      <Inner offer={offer} email={email} prices={prices} chosen={chosen} skin={skin} termsUrl={termsUrl} />
+      <Inner offer={offer} email={email} prices={prices} chosen={chosen} skin={skin} termsUrl={termsUrl} design={design} />
     </Elements>
   );
 }
@@ -70,6 +73,7 @@ function Inner({
   chosen,
   skin,
   termsUrl,
+  design,
 }: {
   offer: OfferSummary;
   email: string;
@@ -77,6 +81,7 @@ function Inner({
   chosen: number;
   skin: CheckoutSkin;
   termsUrl?: string;
+  design?: CheckoutDesign;
 }) {
   // Preselected from the sales page, and still changeable — somebody who
   // picked the yearly two pages ago should not have to pick it again, and
@@ -225,6 +230,7 @@ function Inner({
     canPay: Boolean(stripe),
     notePaymentInfo: () => {},
     termsUrl,
+    design,
   };
 
   if (skin === "v2") {

@@ -129,14 +129,17 @@ function DueRow() {
           {money(c.totalNow, c.product.currency)}
         </span>
       </div>
-      {renewals.map((line) => (
-        <span key={line} className="text-fg/85" style={{ fontSize: "0.79rem", lineHeight: 1.5 }}>
-          {line.charAt(0).toUpperCase() + line.slice(1)}.
+      {c.design?.showRenewalLine !== false &&
+        renewals.map((line) => (
+          <span key={line} className="text-fg/85" style={{ fontSize: "0.79rem", lineHeight: 1.5 }}>
+            {line.charAt(0).toUpperCase() + line.slice(1)}.
+          </span>
+        ))}
+      {c.design?.showTaxNote !== false && (
+        <span className="text-muted" style={{ fontSize: "0.73rem", lineHeight: 1.5 }}>
+          Tax is calculated at your country&rsquo;s rate and shown on your receipt.
         </span>
-      ))}
-      <span className="text-muted" style={{ fontSize: "0.73rem", lineHeight: 1.5 }}>
-        Tax is calculated at your country&rsquo;s rate and shown on your receipt.
-      </span>
+      )}
     </div>
   );
 }

@@ -3,13 +3,21 @@ import { readFileSync } from "node:fs";
 import { checkoutSkin, withSkin, DEFAULT_SKIN } from "@/lib/checkout-skin";
 
 describe("which checkout a visitor gets", () => {
-  it("is the shipped one unless the redesign is asked for by name", () => {
-    // The whole safety of putting an unapproved checkout on the live site rests
-    // on this: anything that is not the exact opt-in is the checkout the store
-    // is already selling on.
-    for (const raw of [undefined, "", "v1", "V3", "new", "true", "1", "v2x", "xv2"]) {
-      expect(checkoutSkin(raw)).toBe("v1");
+  it("is the redesign unless something else is asked for by name", () => {
+    // Nothing but an exact, known name changes the answer — a typo must land
+    // on a working checkout rather than on neither.
+    for (const raw of [undefined, "", "V3", "new", "true", "1", "v2x", "xv2", "old"]) {
+      expect(checkoutSkin(raw)).toBe("v2");
     }
+  });
+
+  it("keeps the old checkout reachable by name", () => {
+    // The way back. If the redesign goes wrong on a live sale the fix is a
+    // link, not a deploy — so this staying true matters more now that it is
+    // the fallback rather than the default.
+    expect(checkoutSkin("v1")).toBe("v1");
+    expect(checkoutSkin("V1")).toBe("v1");
+    expect(checkoutSkin([" v1 "])).toBe("v1");
   });
 
   it("takes v2, however it was typed", () => {
@@ -20,16 +28,18 @@ describe("which checkout a visitor gets", () => {
     expect(checkoutSkin(["v2", "v1"])).toBe("v2");
   });
 
-  it("ships defaulting to the old checkout", () => {
-    // The line somebody flips on approval. Asserted so that flipping it is a
-    // deliberate act with a failing test attached, not a silent launch.
-    expect(DEFAULT_SKIN).toBe("v1");
+  it("ships defaulting to the redesign", () => {
+    // Flipped on approval, 17 Aug 2026. Asserted in both directions over its
+    // life so that changing which checkout a buyer meets is always a deliberate
+    // act with a failing test attached, never a silent launch.
+    expect(DEFAULT_SKIN).toBe("v2");
   });
 
   it("carries the choice across a link without doubling the question mark", () => {
-    expect(withSkin("/checkout?product=a", "v2")).toBe("/checkout?product=a&skin=v2");
-    expect(withSkin("/library", "v2")).toBe("/library?skin=v2");
-    expect(withSkin("/library", "v1")).toBe("/library");
+    expect(withSkin("/checkout?product=a", "v1")).toBe("/checkout?product=a&skin=v1");
+    expect(withSkin("/library", "v1")).toBe("/library?skin=v1");
+    // The default needs no saying.
+    expect(withSkin("/library", "v2")).toBe("/library");
   });
 });
 

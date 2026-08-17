@@ -6,6 +6,7 @@ import type { StripePaymentElementOptions } from "@stripe/stripe-js";
 import { money } from "@/lib/money";
 import { priceLabel, priceTerms, savingAgainst, type OfferPrice } from "@/lib/offer-prices";
 import { OrderBump } from "@/components/checkout/order-bump";
+import type { CheckoutDesign } from "@/lib/checkout-design";
 import {
   COUNTRIES,
   MIN_CHARGE_CENTS_CLIENT,
@@ -86,6 +87,15 @@ export type CheckoutSlotValue = {
   notePaymentInfo: () => void;
   /** The published terms, where the store has named one. See TrustBlock. */
   termsUrl?: string;
+
+  /**
+   * What the store chose to show. See lib/checkout-design.
+   *
+   * Absent everywhere but the redesign, and every reader defaults to showing —
+   * so a slot dropped on a sales page, or the checkout that shipped, behaves
+   * exactly as it did before this existed.
+   */
+  design?: CheckoutDesign;
 
   /**
    * Ask for the country ourselves after all.
@@ -589,6 +599,10 @@ export function CouponSlot(p: {
   // panel that collapses over an applied discount looks like it removed it.
   const [open, setOpen] = useState(false);
   if (!c) return null;
+  // Switched off by the store. Not merely hidden — a code already applied
+  // stays applied and stays visible, because taking a discount off a total
+  // somebody has seen is worse than showing a control that is going away.
+  if (c.design?.showDiscountCode === false && !c.coupon) return null;
   const showing = open || Boolean(c.coupon) || Boolean(c.couponError);
 
   /* Folded away until asked for.
@@ -967,14 +981,23 @@ function TrustBlock() {
     },
   ];
 
+  // The badges and the payment-methods line are the store's to hide. The
+  // policy line below them is NOT, and it is why this block cannot simply be
+  // dropped from a layout: naming the terms and the withdrawal right at the
+  // point of payment is a disclosure obligation, not decoration.
+  const showRow = c?.design?.showTrustRow !== false;
+
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-4">
       {/* Stripe is on automatic payment methods, so what a buyer is offered
           depends on where they are — UPI in India, iDEAL in the Netherlands.
           Saying so beats listing marks that might be wrong for them. */}
+      {showRow && (
       <p className="text-center text-xs text-muted" style={FINE}>
         Card, or whatever Stripe offers where you are — UPI, wallets, bank transfer.
       </p>
+      )}
+      {showRow && (
       <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
         {items.map((it) => (
           <li key={it.label} className="flex items-center gap-1.5">
@@ -985,6 +1008,7 @@ function TrustBlock() {
           </li>
         ))}
       </ul>
+      )}
       {/* The policies as published, the same two the footer links to.
           These used to point at the in-app pages while the footer pointed at
           greaterinside.com, which is two different sets of terms for one

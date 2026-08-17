@@ -40,13 +40,19 @@ export async function pushOwnershipStateToApps(ownershipIds: string[]): Promise<
     if (!user?.email) continue;
 
     let entitlementKey: string | null = null;
+    // What the offer grants inside the app. Read here as well as at purchase,
+    // because this is the replay path: an app that was down, or one that has
+    // just learned to read channels, is caught up from what the offer says
+    // NOW — which is the only reason a backfill is worth having.
+    let channels: string[] = [];
     if (row.offer_id) {
       const { data: offer } = await db
         .from("offers")
-        .select("grant_entitlement_key")
+        .select("grant_entitlement_key, grant_channels")
         .eq("id", row.offer_id as string)
         .maybeSingle();
       entitlementKey = (offer?.grant_entitlement_key as string) ?? null;
+      channels = (offer?.grant_channels as string[] | null) ?? [];
     }
 
     // The customer id was hardcoded null here, which was harmless while this
@@ -70,6 +76,7 @@ export async function pushOwnershipStateToApps(ownershipIds: string[]): Promise<
       email: user.email as string,
       fullName: (user.username as string | null) ?? null,
       entitlementKey,
+      channels,
       status: row.status as OwnershipStatus,
       stripeCustomerId: (order?.stripe_customer_id as string) ?? null,
       stripeSubscriptionId: (row.stripe_subscription_id as string) ?? null,

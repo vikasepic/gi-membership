@@ -37,6 +37,10 @@ const RUNNERS: Record<JobKind, Runner> = {
       appId: String(p.appId),
       email: String(p.email),
       entitlementKey: (p.entitlementKey as string) ?? null,
+      // Replayed from the payload the failed attempt was queued with, so a
+      // retry grants exactly what the original push was going to — not what
+      // the offer happens to say by the time the app comes back up.
+      channels: Array.isArray(p.channels) ? (p.channels as string[]) : null,
       status: p.status as "active" | "trialing" | "canceled" | "past_due",
       stripeCustomerId: (p.stripeCustomerId as string) ?? null,
       stripeSubscriptionId: (p.stripeSubscriptionId as string) ?? null,

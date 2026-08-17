@@ -15,14 +15,15 @@ import type { CheckoutSkin } from "@/lib/checkout-skin";
  * because these cross a process boundary as plain strings and a var() would
  * arrive as text Stripe cannot resolve.
  */
-export function stripeAppearance(skin: CheckoutSkin = "v1"): Appearance {
+export function stripeAppearance(skin: CheckoutSkin = "v1", primary?: string): Appearance {
   if (skin !== "v2") {
     return { theme: "stripe", variables: { colorPrimary: "#c8653d" } };
   }
+  const accent = primary?.trim() || "#c05f3c";
   return {
     theme: "stripe",
     variables: {
-      colorPrimary: "#c05f3c",
+      colorPrimary: accent,
       colorBackground: "#ffffff",
       colorText: "#1d2b3a",
       colorTextSecondary: "#6b6259",
@@ -39,7 +40,7 @@ export function stripeAppearance(skin: CheckoutSkin = "v1"): Appearance {
         padding: "11px 12px",
       },
       ".Input:focus": {
-        border: "1px solid #c05f3c",
+        border: `1px solid ${accent}`,
         boxShadow: "0 0 0 3px rgba(192,95,60,.14)",
       },
       ".Label": {
@@ -56,9 +57,9 @@ export function stripeAppearance(skin: CheckoutSkin = "v1"): Appearance {
         color: "#6b6259",
       },
       ".Tab--selected": {
-        border: "1.5px solid #c05f3c",
+        border: `1.5px solid ${accent}`,
         backgroundColor: "#fdf4f0",
-        color: "#c05f3c",
+        color: accent,
       },
       ".Tab:hover": { color: "#1d2b3a" },
     },

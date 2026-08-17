@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { normalizeChannels } from "@/lib/app-channels";
 import { pricesField } from "@/lib/prices-field";
 import { parseOtoSections } from "@/lib/oto-sections";
 import { OTO_TEMPLATES } from "@/lib/oto-template";
@@ -24,6 +25,10 @@ const schema = z
     grantProductId: z.preprocess(emptyToNull, uuidish.nullable()),
     grantAppId: z.preprocess(emptyToNull, uuidish.nullable()),
     grantEntitlementKey: z.preprocess(emptyToNull, z.string().nullable()),
+    // Only channels we know. A tickbox cannot send anything else, but this is
+    // a form post — and the CHECK in 0058 would refuse an unknown value with a
+    // database error rather than a message anybody can act on.
+    grantChannels: z.preprocess(normalizeChannels, z.array(z.string())),
     // The ways to pay, posted as one JSON string the way every other list in
     // this admin is. Every rule here is a rule the database also states as a
     // CHECK — a save that gets past this and fails there arrives as a bare
@@ -92,7 +97,17 @@ export type SaveState = { error?: string; saved?: boolean };
 
 export async function saveOffer(_prev: SaveState, formData: FormData): Promise<SaveState> {
   await requireAdmin();
-  const parsed = schema.safeParse(Object.fromEntries(formData));
+  // getAll for the channels, fromEntries for everything else.
+  //
+  // Object.fromEntries keeps only the LAST value of a repeated key, and a
+  // checkbox list is the one control that posts its name more than once — so
+  // ticking Instagram AND LinkedIn would have quietly saved LinkedIn alone,
+  // and the offer would have granted half of what the admin ticked with
+  // nothing anywhere saying so.
+  const parsed = schema.safeParse({
+    ...Object.fromEntries(formData),
+    grantChannels: formData.getAll("grantChannels"),
+  });
   if (!parsed.success) {
     // Prefix each problem with the field it came from. A bare "Invalid input"
     // on a form this long tells the admin nothing about where to look.
@@ -110,6 +125,7 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     grantProductId: v.grantProductId,
     grantAppId: v.grantAppId,
     grantEntitlementKey: v.grantEntitlementKey,
+    grantChannels: v.grantChannels,
     prices: v.prices,
     currency: v.currency,
     headline: v.headline,

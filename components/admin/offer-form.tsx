@@ -12,6 +12,7 @@ import type { Offer } from "@/lib/types";
 import type { OfferPrice } from "@/lib/offer-prices";
 import type { ProductOption, AppOption, OfferOption } from "@/lib/admin";
 import { money } from "@/lib/money";
+import { APP_CHANNELS } from "@/lib/app-channels";
 import { sectionsToForm } from "@/lib/oto-sections";
 
 /** Layouts that still read the fields below. Ten sections and Custom do not. */
@@ -200,6 +201,33 @@ export function OfferForm({
         </div>
         <Field label="Entitlement key" hint="what the app grants, e.g. content-engine">
           <input name="grantEntitlementKey" defaultValue={offer?.grantEntitlementKey ?? ""} className={input} />
+        </Field>
+
+        {/* Which channels, inside the app.
+            The entitlement key above says WHICH app and at what level; this
+            says what of it. One offer can sell Instagram alone, LinkedIn
+            alone, or both, without a second app or a second key — and until
+            this existed every offer granting Content Engine granted the same
+            thing, so "the Instagram plan" was a thing the store said and the
+            app had no way to know. */}
+        <Field
+          label="Channels in the app"
+          hint="what this unlocks once they are inside. Ticking none grants the app at whatever its own default is — say which, rather than leaving it to the app to guess."
+        >
+          <div className="flex flex-wrap gap-4">
+            {APP_CHANNELS.map((c) => (
+              <label key={c.value} className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="grantChannels"
+                  value={c.value}
+                  defaultChecked={(offer?.grantChannels ?? []).includes(c.value)}
+                  className="size-[18px] cursor-pointer accent-[var(--primary)]"
+                />
+                {c.label}
+              </label>
+            ))}
+          </div>
         </Field>
       </Section>
 

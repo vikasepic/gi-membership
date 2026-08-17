@@ -11,9 +11,15 @@ import type { ReactElement } from "react";
  * list off every checkout.
  *
  * The page is an async server component, so it is CALLED rather than rendered:
- * awaiting it gives the element tree, and the props of the `CheckoutPanel` in
+ * awaiting it gives the element tree, and the props of the selling panel in
  * that tree are what this asserts. Rendering would drag in `CheckoutForm` and
  * Stripe for a question about one prop.
+ *
+ * Asserted against BOTH panels — the redesign's stage, which is what a buyer
+ * meets, and the one that shipped, still reachable at `?skin=v1`. The join
+ * this exists to protect is `bullets={product.checkoutBullets}`, and there are
+ * two of them now: a checkout can only be wired up wrong in one place at a
+ * time, and this is the test that would have stayed green through it.
  */
 
 const PRODUCT = {
@@ -57,9 +63,11 @@ vi.mock("@/lib/courses", () => ({ productDisplay: async () => new Map() }));
 vi.mock("@/lib/leads", () => ({ rememberLead: async () => {} }));
 vi.mock("@/lib/settings", () => ({ getSettingsOrDefaults: async () => ({ replyTime: "one working day" }) }));
 vi.mock("@/lib/legal", () => ({ legalFrom: () => ({ refundWindowDays: 14 }) }));
+vi.mock("@/lib/pages", () => ({ getPageSections: async () => [] }));
 
 const { default: CheckoutPage } = await import("@/app/(store)/checkout/page");
 const { CheckoutPanel } = await import("@/components/checkout/checkout-panel");
+const { CheckoutStage } = await import("@/components/checkout/v2/stage");
 
 /** The first element in the tree rendered by `type`, with its props. */
 function find(node: unknown, type: unknown): Record<string, unknown> | null {
@@ -77,8 +85,19 @@ function find(node: unknown, type: unknown): Record<string, unknown> | null {
 }
 
 describe("what the checkout page hands the panel", () => {
-  it("passes the seller's own lines, not the standard ones", async () => {
+  it("passes the seller's own lines to the checkout a buyer actually gets", async () => {
     const tree = await CheckoutPage({ searchParams: Promise.resolve({ product: PRODUCT.slug }) });
+    const props = find(tree, CheckoutStage);
+    expect(props).toBeTruthy();
+    expect(props!.bullets).toEqual(PRODUCT.checkoutBullets);
+  });
+
+  it("still passes them to the checkout that shipped", async () => {
+    // Reachable at ?skin=v1, which is the way back if the redesign goes wrong
+    // on a live sale — so it has to keep working, not merely keep compiling.
+    const tree = await CheckoutPage({
+      searchParams: Promise.resolve({ product: PRODUCT.slug, skin: "v1" }),
+    });
     const props = find(tree, CheckoutPanel);
     expect(props).toBeTruthy();
     expect(props!.bullets).toEqual(PRODUCT.checkoutBullets);

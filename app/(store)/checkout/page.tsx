@@ -15,6 +15,7 @@ import { NOINDEX } from "@/lib/seo";
 import { CheckoutPanel } from "@/components/checkout/checkout-panel";
 import { legalFrom } from "@/lib/legal";
 import { getSettingsOrDefaults } from "@/lib/settings";
+import { checkoutDesignVars } from "@/lib/checkout-design";
 import { getPageSections } from "@/lib/pages";
 import { getStoreId } from "@/lib/store";
 import { usableCheckoutLayout } from "@/lib/checkout-layout";
@@ -160,6 +161,9 @@ export default async function CheckoutPage({
   // Never the throwing read: a settings row that cannot be parsed must cost this
   // page its logo, not its ability to take a payment.
   const settings = await getSettingsOrDefaults();
+  // Three colours and a set of switches — everything the store can change
+  // about this page. See lib/checkout-design.
+  const design = settings.checkoutDesign;
   const legal = legalFrom(settings);
 
   // The checkout the store laid out, if it laid one out and if it can still
@@ -204,6 +208,7 @@ export default async function CheckoutPage({
       // different sets of terms for the same purchase.
       termsUrl={settings.termsUrl || undefined}
       skin={skin}
+      design={design}
     />
   );
 
@@ -214,7 +219,7 @@ export default async function CheckoutPage({
     const single = ways.length === 1 ? ways[0] : null;
     const one = ways.length <= 1;
     return (
-      <div className="checkout-v2 min-h-dvh bg-bg">
+      <div className="checkout-v2 min-h-dvh bg-bg" style={checkoutDesignVars(design)}>
         {/* Half and half, both hugging the seam — the arrangement Stripe's own
             checkout uses, and for the reason it uses it: two columns of equal
             width with their content pinned to the middle read as one object
@@ -224,6 +229,7 @@ export default async function CheckoutPage({
             room that grows on a big screen grows on the OUTSIDE, evenly. */}
         <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-2">
         <CheckoutStage
+          design={design}
           backHref={`/p/${product.slug}`}
           backLabel="Back"
           eyebrow={one ? "One-time purchase" : `${ways.length} ways to pay`}

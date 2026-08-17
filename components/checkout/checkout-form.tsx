@@ -17,6 +17,7 @@ import { CheckoutSlots, DefaultCheckoutLayout, type CheckoutSlotValue } from "@/
 import { CheckoutV2Layout } from "@/components/checkout/v2/layout";
 import { stripeAppearance } from "@/components/checkout/v2/appearance";
 import type { CheckoutSkin } from "@/lib/checkout-skin";
+import type { CheckoutDesign } from "@/lib/checkout-design";
 import type { Block } from "@/lib/blocks";
 import {
   COUNTRY_REQUIRED,
@@ -40,6 +41,7 @@ export function CheckoutForm({
   layout,
   termsUrl,
   skin = "v1",
+  design,
 }: {
   product: CheckoutProduct;
   bump: BumpSummary | null;
@@ -64,6 +66,8 @@ export function CheckoutForm({
   defaultCountry?: string | null;
   /** Which arrangement. See lib/checkout-skin.ts — v1 unless asked for. */
   skin?: CheckoutSkin;
+  /** What the store switched off, and in what colour. */
+  design?: CheckoutDesign;
 }) {
   const stripePromise = useMemo(() => loadStripe(publishableKey), [publishableKey]);
   return (
@@ -74,7 +78,7 @@ export function CheckoutForm({
         amount: product.priceCents,
         currency: product.currency,
         setupFutureUsage: "off_session",
-        appearance: stripeAppearance(skin),
+        appearance: stripeAppearance(skin, design?.buttonColor),
       }}
     >
       <Inner
@@ -87,6 +91,7 @@ export function CheckoutForm({
         layout={layout ?? null}
         termsUrl={termsUrl}
         skin={skin}
+        design={design}
       />
     </Elements>
   );
@@ -102,6 +107,7 @@ function Inner({
   layout,
   termsUrl,
   skin = "v1",
+  design,
 }: {
   product: CheckoutProduct;
   bump: BumpSummary | null;
@@ -114,6 +120,7 @@ function Inner({
   layout: Block[] | null;
   termsUrl?: string;
   skin?: CheckoutSkin;
+  design?: CheckoutDesign;
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -451,6 +458,7 @@ function Inner({
     notePaymentInfo,
     termsUrl,
     askCountry,
+    design,
   };
 
   return (

@@ -91,6 +91,15 @@ export type Offer = {
   grantProductId: string | null;
   grantAppId: string | null;
   grantEntitlementKey: string | null;
+  /**
+   * Which channels inside the granted app this offer unlocks.
+   *
+   * Empty on anything that does not grant an app — a product or a course has
+   * no channels — and empty is also what an app-granting offer looks like
+   * before anybody has chosen, which the editor treats as "not decided yet"
+   * rather than as "none". Sent to the app on every provision call.
+   */
+  grantChannels: string[];
   billingType: BillingType;
   interval: Interval | null;
   intervalCount: number | null;

@@ -89,6 +89,20 @@ export async function notifyAppEntitlement(args: {
    */
   fullName?: string | null;
   entitlementKey: string | null;
+  /**
+   * Which channels inside the app to unlock — ["instagram"], ["linkedin"], or
+   * both. Comes off the offer that was bought.
+   *
+   * Sent BESIDE entitlementKey, never instead of it. An app that has not been
+   * taught to read this keeps working exactly as before on the key alone,
+   * which is what makes this safe to ship before the other side changes:
+   * nothing breaks, the new field is simply ignored until it is not.
+   *
+   * Omitted from the body entirely when there is nothing to say, so an offer
+   * that grants a course does not send an empty array to an app that would
+   * then have to decide what an empty array means.
+   */
+  channels?: string[] | null;
   status: "active" | "trialing" | "canceled" | "past_due";
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
@@ -120,6 +134,7 @@ export async function notifyAppEntitlement(args: {
         email: args.email,
         fullName: args.fullName ?? null,
         entitlementKey: args.entitlementKey,
+        ...(args.channels && args.channels.length > 0 ? { channels: args.channels } : {}),
         status: args.status,
         hasAccess: args.status !== "canceled",
         stripeCustomerId: args.stripeCustomerId,
