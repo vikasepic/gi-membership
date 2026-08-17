@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getProductBySlug, getOffer } from "@/lib/store";
 import { ownedProductIdsForViewer, accessHrefForProduct } from "@/lib/library";
-import { productDisplay, type CourseType } from "@/lib/courses";
+import { productDisplay } from "@/lib/courses";
 import { publicCoverUrl } from "@/lib/media";
 import { money } from "@/lib/money";
 import { TrackView } from "@/components/track-view";
@@ -16,13 +16,6 @@ import { SalesPage } from "@/components/page/sales-page";
 import { pageMetadata, absoluteUrl } from "@/lib/page-metadata";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import type { Metadata } from "next";
-
-const TYPE_LABEL: Record<CourseType, string> = {
-  video: "Video",
-  audio: "Audio",
-  pdf: "Guide",
-  text: "Reading",
-};
 
 /**
  * This page's own title, description and share card.
@@ -74,9 +67,9 @@ export default async function ProductPage({
 
   const owned = (await ownedProductIdsForViewer()).has(product.id);
   const accessHref = owned ? await accessHrefForProduct(product.id) : "/library";
-  // Badge comes from the course this product grants.
+  // The attached course, for its cover. The type badge that used to come from
+  // here is gone — see the details column.
   const display = (await productDisplay([product.id])).get(product.id) ?? null;
-  const badgeType = display?.type ?? null;
   // The product's own image wins; otherwise it inherits its course's.
   const coverUrl = publicCoverUrl(product.coverPath ?? display?.coverPath ?? null);
 
@@ -188,7 +181,6 @@ export default async function ProductPage({
 
         {/* Details */}
         <div className="rise flex flex-col gap-5 md:col-span-5" style={{ animationDelay: "100ms" }}>
-          {badgeType && <span className="kicker text-primary">{TYPE_LABEL[badgeType]}</span>}
           <h1 className="text-3xl leading-tight md:text-4xl">{product.title}</h1>
           {product.tagline && <p className="text-lg text-muted">{product.tagline}</p>}
 

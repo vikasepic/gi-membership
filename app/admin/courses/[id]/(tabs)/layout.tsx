@@ -33,13 +33,31 @@ export default async function CourseTabsLayout({
         </Link>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl">{course.title}</h1>
-          <span
-            className={`rounded-full border px-2 py-0.5 text-xs ${
-              live ? "border-navy/25 bg-navy/10 text-navy" : "border-border bg-surface-2 text-muted"
+          {/* The state, and a way to change it.
+              It was a grey pill, which is the same colour as the furniture —
+              and "draft" is the state that surprises people, so saying it
+              quietly is how a course sits unpublished for a week. Same two
+              colours the product and offer headers use, so the three read
+              alike.
+
+              A link, not a label. The control is on the Details tab, and
+              somebody who has just noticed the word "Draft" is somebody
+              looking for it — this takes them straight to the field rather
+              than leaving them to hunt through the sections. */}
+          <Link
+            href={`/admin/courses/${id}/details#status`}
+            title={
+              live
+                ? "Students with access can open this course. Click to change."
+                : "Hidden from students — nobody can open it, even if they own the product that grants it. Click to change."
+            }
+            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-opacity hover:opacity-80 ${
+              live ? "bg-[#3f9b6d]/12 text-[#2f7553]" : "bg-primary/12 text-primary"
             }`}
           >
+            <span aria-hidden className={`size-1.5 rounded-full ${live ? "bg-[#3f9b6d]" : "bg-primary"}`} />
             {live ? "Published" : "Draft"}
-          </span>
+          </Link>
           <Link
             href={`/admin/courses/${id}/preview`}
             className="ml-auto rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-fg"

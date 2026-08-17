@@ -17,6 +17,7 @@ const base = {
   currency: "usd",
   interval: null as string | null,
   trialDays: null as number | null,
+  name: "Offer name",
   headline: "Offer headline",
   description: "Offer description",
   bumpHeadline: null as string | null,

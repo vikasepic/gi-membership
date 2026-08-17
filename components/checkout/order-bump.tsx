@@ -193,8 +193,16 @@ export function OrderBump({
           )}
 
           {view.bullets.length > 0 && (
+            /* One per line, always.
+               It was two columns from `@lg` up, and a grid fills row-wise — so
+               reading down the left-hand column gave bullets 1, 3, 5 while the
+               eye expected 1, 2, 3. With bullets of uneven length the two
+               columns also ended at different heights, which read as two
+               separate lists rather than one. A bump is skimmed in about two
+               seconds; a list whose order has to be worked out is a list nobody
+               finishes. */
             <ul
-              className={`grid list-none grid-cols-1 gap-x-4 gap-y-1 p-0 @lg:grid-cols-2 ${
+              className={`flex list-none flex-col gap-1 p-0 ${
                 compact ? "text-[0.78rem]" : "text-[0.89rem]"
               }`}
             >

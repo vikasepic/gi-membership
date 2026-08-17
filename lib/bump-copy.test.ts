@@ -17,6 +17,7 @@ const offer = {
   currency: "usd",
   interval: null,
   trialDays: null,
+  name: "Shared name",
   headline: "Shared headline",
   description: "Shared description",
   bumpHeadline: null as string | null,

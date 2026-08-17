@@ -35,6 +35,9 @@ export function CourseForm({ course }: { course?: Course }) {
   // already has a slug people may have linked to, so we never auto-touch that.
   const [slugEdited, setSlugEdited] = useState(Boolean(course));
   const [clientErr, setClientErr] = useState<Record<string, string>>({});
+  // Held in state rather than left uncontrolled, so the hint under it can say
+  // what the CHOSEN state means rather than what the saved one did.
+  const [status, setStatus] = useState<"draft" | "published">(course?.status ?? "draft");
 
   // A field's own client error wins; otherwise fall back to whatever the server
   // returned. Editing a field clears its client error to "", so `||` (not `??`)
@@ -71,6 +74,33 @@ export function CourseForm({ course }: { course?: Course }) {
       {course && <input type="hidden" name="id" value={course.id} />}
 
       <Section title="About this course" hint="What students see before and inside it.">
+        {/* First, and its own row.
+            It used to sit under "Format & vocabulary" beside the Type select,
+            which is where nobody looked — publishing is not vocabulary, and
+            people concluded the course was stuck on Draft because the control
+            was two sections below the thing telling them so. `id` so the badge
+            in the header can link straight here. */}
+        <Field
+          label="Status"
+          required
+          hint={
+            status === "published"
+              ? "Students with access can open it."
+              : "Hidden from students — nobody can open it, even if they own the product that grants it."
+          }
+        >
+          <select
+            id="status"
+            name="status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as typeof status)}
+            className={inputClass}
+          >
+            <option value="draft">Draft — hidden from students</option>
+            <option value="published">Published</option>
+          </select>
+        </Field>
+
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <Field label="Title" required error={err("title")}>
             <input
@@ -111,12 +141,6 @@ export function CourseForm({ course }: { course?: Course }) {
               <option value="audio">Audio</option>
               <option value="pdf">PDF / Guide</option>
               <option value="text">Text / Reading</option>
-            </select>
-          </Field>
-          <Field label="Status" required>
-            <select name="status" defaultValue={course?.status ?? "draft"} className={inputClass}>
-              <option value="draft">Draft — hidden from students</option>
-              <option value="published">Published</option>
             </select>
           </Field>
         </div>

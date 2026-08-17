@@ -37,6 +37,15 @@ export const bumpInk = readableInk;
 export { luminance, contrastRatio, tint };
 
 type OfferLike = {
+  /**
+   * What the thing is CALLED, as opposed to how it is sold.
+   *
+   * The headline is a pitch — "Yes I want! 150 Digital Product Ideas Your
+   * Clients Are Waiting to Buy" — and belongs on the bump card. A line in an
+   * order summary is a record of what is being bought, and marketing copy in
+   * that slot reads as though the shop does not know what it just sold you.
+   */
+  name: string;
   billingType: "one_time" | "recurring";
   priceCents: number;
   compareAtCents: number | null;
@@ -121,7 +130,16 @@ export function needsAnswer(optionCount: number, choice: BumpChoice | null): boo
 export type BumpView = {
   banner: string | null;
   saveBadge: string | null;
+  /**
+   * The pitch, for the bump card itself.
+   *
+   * Not for an order line — see `name`. `order_items.description` has always
+   * recorded the name, so the receipt and the welcome email were already right;
+   * it was only the live summary that quoted the advert back.
+   */
   headline: string;
+  /** What it is called. What an order line, and a receipt, should say. */
+  name: string;
   description: string | null;
   bullets: string[];
   note: string | null;
@@ -163,6 +181,7 @@ export function buildBumpView(offer: OfferLike): BumpView {
     // Bump-specific copy where it exists, else the offer's own — so an offer
     // that never set it reads exactly as it did before.
     headline: offer.bumpHeadline?.trim() || offer.headline,
+    name: offer.name,
     description: offer.bumpDescription?.trim() || offer.description,
     bullets: (offer.bumpBullets ?? []).map((b) => b.trim()).filter(Boolean),
     note: offer.bumpNote?.trim() || null,

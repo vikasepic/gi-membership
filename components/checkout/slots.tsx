@@ -396,7 +396,13 @@ export function OrderSummarySlot(p: {
           {c.chosenBump && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted" style={label}>
-                {c.chosenBump.headline}
+                {/* The name, not the pitch. An order line is a record of what
+                    is being bought, and "Yes I want! …" in that slot reads as
+                    though the shop does not know what it just sold you. The
+                    receipt and the welcome email already used the name —
+                    order_items records it — so this was the one place quoting
+                    the advert back. */}
+                {c.chosenBump.name}
               </span>
               <span style={value}>{money(c.chosenBump.chargeNowCents, c.product.currency)}</span>
             </div>
@@ -622,7 +628,8 @@ export function DueTodaySlot(p: {
           className="text-sm text-muted"
           style={{ ...SMALL, ...set({ color: p.termsColor, fontSize: p.termsSize ?? undefined }) }}
         >
-          {c.chosenBump.headline}: {c.chosenBump.termsLabel}.
+          {/* Also the name: this is a factual statement about billing. */}
+          {c.chosenBump.name}: {c.chosenBump.termsLabel}.
         </p>
       )}
     </div>

@@ -49,12 +49,14 @@ export function ProductCard({ item, index = 0 }: { item: CatalogItem; index?: nu
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
           />
         )}
-        <span
-          className="kicker absolute left-4 top-4 rounded-full px-2.5 py-1"
-          style={{ color: meta.accent, background: "color-mix(in srgb, var(--surface) 78%, transparent)" }}
-        >
-          {meta.label}
-        </span>
+        {/* No type badge.
+            It read the COURSE's format and printed it on the PRODUCT, and the
+            two are not the same thing: a product can bundle several courses, or
+            grant an app, and then the label is simply wrong — "READING" sat on
+            a card for an interactive tool. Even where it was right it answered
+            a question nobody asks while deciding to buy.
+
+            The wash behind the cover stays. That is a colour, not a claim. */}
       </div>
       <div className="flex flex-1 flex-col gap-2 p-5">
         <h3 className="text-lg leading-snug">{item.title}</h3>

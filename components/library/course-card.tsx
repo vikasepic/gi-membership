@@ -51,15 +51,9 @@ export function LibraryCourseCard({
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
           />
         )}
-        <span
-          className="kicker absolute left-4 top-4 rounded-full px-2.5 py-1"
-          style={{
-            color: meta.accent,
-            background: "color-mix(in srgb, var(--surface) 78%, transparent)",
-          }}
-        >
-          {meta.label}
-        </span>
+        {/* No type badge here either. The wash below stays — a colour, not a
+            claim, and what keeps a card with no artwork from reading as a
+            blank box. */}
       </div>
       <div className="flex flex-1 flex-col gap-2 p-5">
         <h3 className="text-lg leading-snug">{title}</h3>
