@@ -110,7 +110,11 @@ export default async function OfferCheckoutPage({
 
   if (skin === "v2") {
     return (
-      <div className="checkout-v2 grid min-h-dvh grid-cols-1 bg-bg lg:grid-cols-[minmax(22rem,34fr)_minmax(0,66fr)]">
+      <div className="checkout-v2 min-h-dvh bg-bg">
+        {/* Capped and centred rather than bled to both edges. Full width it was
+            a navy stripe on the left of a field of cream, and the two halves
+            read as one thing pushed aside by another. */}
+        <div className="mx-auto grid min-h-dvh w-full max-w-[82rem] grid-cols-1 lg:grid-cols-[minmax(20rem,38fr)_minmax(0,62fr)]">
         <CheckoutStage
           backHref="/library"
           backLabel="Back"
@@ -131,8 +135,9 @@ export default async function OfferCheckoutPage({
           priceLabel={ways.length === 1 ? money(ways[0].priceCents, offer.currency) : null}
           priceCaption={ways.length === 1 ? (priceTerms(ways[0], offer.currency) ?? null) : null}
         />
-        <div className="mx-auto flex w-full max-w-[38rem] flex-col gap-6 px-5 py-8 md:px-8 lg:py-12">
-          {form}
+        <div className="mx-auto flex w-full max-w-[36rem] flex-col gap-6 px-5 py-8 md:px-8 lg:py-12">
+            {form}
+          </div>
         </div>
       </div>
     );
