@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 /**
- * "An update lands in 30 seconds — save now."
+ * "An update lands in 60 seconds — save now."
  *
  * Deliberately NOT a centred modal, and that is the whole design.
  *
@@ -18,9 +18,9 @@ import { useEffect, useState } from "react";
  * common answer, and a notice you cannot put down is one people learn to work
  * around rather than read.
  *
- * The countdown runs to an absolute instant rather than counting 30 down from
- * whenever the browser heard about it. A tab that learns late shows 18 seconds
- * and is telling the truth; one that counted from 30 would promise time that
+ * The countdown runs to an absolute instant rather than counting 60 down from
+ * whenever the browser heard about it. A tab that learns late shows 41 seconds
+ * and is telling the truth; one that counted from 60 would promise time that
  * does not exist.
  */
 
@@ -71,12 +71,23 @@ export function DeployNoticeBar({
     >
       <div
         className={`pointer-events-auto flex w-full max-w-2xl flex-wrap items-center gap-x-5 gap-y-3 rounded-2xl border px-5 py-4 shadow-[0_18px_50px_-20px_rgba(0,0,0,0.45)] ${
-          going
-            ? "border-border bg-surface"
-            : // Terracotta, the same colour every other "this needs you" state
-              // in the admin uses. Not red: nothing has gone wrong.
-              "border-primary/45 bg-primary/8"
+          going ? "border-border" : "border-primary/45"
         }`}
+        // Opaque, and that is the point.
+        //
+        // It was `bg-primary/8` — an eight per cent tint over nothing, so the
+        // page read straight through it and the warning was unreadable on top
+        // of a busy editor. A colour that carries a message cannot be ninety
+        // per cent whatever happens to be underneath.
+        //
+        // Mixed against the surface rather than layered with alpha: the mix is
+        // opaque by construction, so it stays legible over a hero image, a navy
+        // band, or a table of numbers.
+        style={{
+          background: going
+            ? "var(--surface)"
+            : "color-mix(in srgb, var(--primary) 10%, var(--surface))",
+        }}
       >
         {!going && (
           <span

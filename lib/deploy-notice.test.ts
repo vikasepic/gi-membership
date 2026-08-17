@@ -93,3 +93,20 @@ afterAll(async () => {
   if (!canRun) return;
   await createServiceClient().from("deploy_notices").delete().eq("source", "vitest");
 });
+
+describe("the bar is readable over whatever is underneath it", () => {
+  const bar = readFileSync("components/admin/deploy-notice.tsx", "utf8");
+
+  it("is opaque, not a tint over nothing", () => {
+    // It was `bg-primary/8` — eight per cent terracotta with no ground, so a
+    // sales page read straight through the warning. A colour carrying a
+    // message cannot be ninety per cent whatever happens to be behind it.
+    // Against the CLASS LIST, not the comment that names the old value — a
+    // test that reads its own explanation passes for the wrong reason.
+    const classes = bar.match(/className=\{`[^`]*`\}/g)?.join(" ") ?? "";
+    expect(classes).not.toContain("bg-primary/8");
+    // Mixed against the surface rather than layered with alpha: opaque by
+    // construction, so it holds over a hero image or a navy band.
+    expect(bar).toContain("color-mix(in srgb, var(--primary) 10%, var(--surface))");
+  });
+});

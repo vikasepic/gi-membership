@@ -143,7 +143,18 @@ export function TemplateLibrary({
             {/* Three across where there is room. Two made every tile 460px
                 wide in a 1024px modal, which is a lot of scrolling for a shelf
                 whose job is "show me what there is". */}
-            <div className="grid content-start gap-3 overflow-y-auto p-4 sm:grid-cols-2 xl:grid-cols-3">
+            {/* `auto-rows-max` is load-bearing, not tidying.
+                Each card carries `overflow-hidden`, which makes its
+                `min-height: auto` resolve to ZERO — so the grid was free to
+                shrink every row below its content, and with a fixed-height
+                scroller it did exactly that: seventeen rows of 200px content
+                squeezed into 32px each, and the whole library rendered as
+                coloured strips with the titles crushed out of existence.
+
+                Sizing the rows to their content is the direct statement of what
+                a scrolling grid means. The container then overflows and
+                scrolls, which is what `overflow-y-auto` was there for. */}
+            <div className="grid auto-rows-max content-start gap-3 overflow-y-auto p-4 sm:grid-cols-2 xl:grid-cols-3">
               {showing.map((t) => (
                 <div
                   key={t.id}

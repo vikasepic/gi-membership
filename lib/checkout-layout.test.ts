@@ -217,3 +217,21 @@ describe("the discount field is folded away until asked for", () => {
     expect(offer).toContain("couponOpen");
   });
 });
+
+describe("the design library scrolls instead of squashing", () => {
+  const src = readFileSync("components/admin/template-library.tsx", "utf8");
+
+  it("sizes its rows to their content", () => {
+    // Each card carries `overflow-hidden`, which makes its `min-height: auto`
+    // resolve to ZERO — so a grid with a fixed-height scroller was free to
+    // shrink every row below its content, and did: 200px tiles squeezed to
+    // 32px, titles crushed out of existence, and forty designs rendered as
+    // coloured strips. Measured, not guessed: the preview box was always 200px
+    // and the CARD around it was 32.
+    expect(src).toContain("auto-rows-max");
+  });
+
+  it("still caps the tile so a long design does not own the shelf", () => {
+    expect(src).toContain("height={200}");
+  });
+});
