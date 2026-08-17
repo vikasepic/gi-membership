@@ -431,7 +431,13 @@ function PriceCards({ title }: { title?: string }) {
   );
 }
 
-export function OrderBumpSlot(p: { title?: string; titleColor?: string | null; titleSize?: number | null }) {
+export function OrderBumpSlot(p: {
+  title?: string;
+  titleColor?: string | null;
+  titleSize?: number | null;
+  /** The indoor-voice card — see OrderBump. */
+  quiet?: boolean;
+}) {
   const c = useCheckout();
   // No bump on this product, or one the buyer already owns. Draws nothing —
   // which is why this block is not among the fixed ones.
@@ -452,6 +458,7 @@ export function OrderBumpSlot(p: { title?: string; titleColor?: string | null; t
         options={c.bumpOptions.length > 1 ? c.bumpOptions : null}
         choice={c.bumpChoice}
         onChoose={c.setBumpChoice}
+        quiet={p.quiet}
       />
     </div>
   );

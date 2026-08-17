@@ -214,7 +214,7 @@ export default async function CheckoutPage({
     const single = ways.length === 1 ? ways[0] : null;
     const one = ways.length <= 1;
     return (
-      <div className="checkout-v2 grid min-h-dvh grid-cols-1 bg-bg lg:grid-cols-[minmax(0,27rem)_minmax(0,1fr)]">
+      <div className="checkout-v2 grid min-h-dvh grid-cols-1 bg-bg lg:grid-cols-[minmax(22rem,34fr)_minmax(0,66fr)]">
         <CheckoutStage
           backHref={`/p/${product.slug}`}
           backLabel="Back"
@@ -226,7 +226,7 @@ export default async function CheckoutPage({
           priceLabel={one ? money(single?.priceCents ?? product.priceCents, product.currency) : null}
           priceCaption={one ? "one-time · instant access" : null}
         />
-        <div className="mx-auto flex w-full max-w-[36rem] flex-col gap-6 px-5 py-8 md:px-8 lg:mx-0 lg:py-12 lg:pl-10">
+        <div className="mx-auto flex w-full max-w-[38rem] flex-col gap-6 px-5 py-8 md:px-8 lg:py-12">
           {form}
         </div>
       </div>

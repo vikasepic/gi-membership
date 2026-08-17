@@ -37,8 +37,14 @@ export function CheckoutStage({
   priceCaption: string | null;
 }) {
   return (
-    <div className="checkout-v2-stage flex flex-col gap-6 bg-[#1d2b3a] px-6 py-8 text-[#f3ede6] md:px-8 lg:px-10 lg:py-12">
-      <div className="flex items-center justify-between gap-4">
+    /* The panel bleeds to the window edge; its CONTENT does not.
+       Capped and pushed toward the divider, so on a wide monitor the two halves
+       read as a pair rather than as a column of text stranded against a wall of
+       navy. The back row stays at the top where a back control belongs; the
+       rest is centred in whatever height is left, because a product with no
+       checkout bullets would otherwise leave two thirds of this half empty. */
+    <div className="checkout-v2-stage flex flex-col bg-[#1d2b3a] px-6 py-8 text-[#f3ede6] md:px-8 lg:px-10 lg:py-12">
+      <div className="ml-auto flex w-full max-w-[26rem] items-center justify-between gap-4">
         <Link
           href={backHref}
           className="text-xs font-semibold uppercase tracking-[0.12em] text-[#f3ede6]/85 transition-opacity hover:opacity-100"
@@ -59,6 +65,7 @@ export function CheckoutStage({
         </span>
       </div>
 
+      <div className="ml-auto flex w-full max-w-[26rem] flex-1 flex-col justify-center gap-6 py-8 lg:py-10">
       {eyebrow && (
         <span
           className="self-start rounded-full border border-[#c05f3c]/50 bg-[#c05f3c]/20 px-3 py-1.5 font-semibold uppercase tracking-[0.13em] text-[#e8a183]"
@@ -139,6 +146,7 @@ export function CheckoutStage({
           </ul>
         </>
       )}
+      </div>
     </div>
   );
 }

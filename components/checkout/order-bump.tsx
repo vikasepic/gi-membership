@@ -41,6 +41,7 @@ export function OrderBump({
   onChoose,
   /** Tighter spacing for the admin preview pane. */
   compact = false,
+  quiet = false,
 }: {
   view: BumpView;
   /**
@@ -68,6 +69,19 @@ export function OrderBump({
   choice: BumpChoice | null;
   onChoose: (next: BumpChoice) => void;
   compact?: boolean;
+  /**
+   * The same card, said in an indoor voice.
+   *
+   * A solid accent bar and a two-pixel border earn attention on a page of plain
+   * white boxes, which is the checkout this shipped on. On the redesign every
+   * section is already a card, so the loudest thing on the page became an
+   * add-on nobody asked for — and an offer that shouts over the thing being
+   * bought reads as a page trying to sell you something else.
+   *
+   * Nothing is hidden: the banner and the saving still appear, as a label and a
+   * badge inside the card rather than a bar across the top of it.
+   */
+  quiet?: boolean;
 }) {
   const id = useId();
   const descId = `${id}-desc`;
@@ -91,13 +105,38 @@ export function OrderBump({
       // @container, not viewport breakpoints: this sits in a ~270px order
       // summary on a wide screen and a full-width column on a phone, so `sm:`
       // would widen the layout exactly where there is least room.
-      className="@container overflow-hidden rounded-2xl border-2 bg-surface transition-shadow duration-200"
+      className={`@container overflow-hidden rounded-2xl transition-shadow duration-200 ${
+        quiet ? "border border-dashed" : "border-2 bg-surface"
+      }`}
       style={{
-        borderColor: accent,
+        borderColor: quiet ? tint(accent, 0.55) : accent,
+        background: quiet ? tint(accent, 0.06) : undefined,
         boxShadow: checked ? `0 0 0 4px ${tint(accent, 0.18)}` : undefined,
       }}
     >
-      {view.banner && (
+      {/* The banner, as a line inside the card rather than a bar across it. */}
+      {quiet && (view.banner || view.saveBadge) && (
+        <div className={`flex items-center justify-between gap-3 ${compact ? "px-3 pt-3" : "px-4 pt-4"}`}>
+          {view.banner && (
+            <span
+              className="font-display font-semibold uppercase tracking-[0.1em]"
+              style={{ color: accent, fontSize: "0.68rem" }}
+            >
+              {view.banner}
+            </span>
+          )}
+          {view.saveBadge && (
+            <span
+              className="whitespace-nowrap rounded-full px-2.5 py-0.5 font-display font-semibold text-white"
+              style={{ background: accent, fontSize: "0.64rem" }}
+            >
+              {view.saveBadge}
+            </span>
+          )}
+        </div>
+      )}
+
+      {!quiet && view.banner && (
         <div
           className={`flex items-center justify-between gap-3 ${compact ? "px-3 py-1.5" : "px-4 py-2.5"}`}
           style={{ background: accent, color: ink }}

@@ -66,7 +66,7 @@ export function CheckoutV2Layout() {
 
       {/* The add-on, between the card and the total: after the decision to pay
           is made, and still above the figure it changes. */}
-      <OrderBumpSlot />
+      <OrderBumpSlot quiet />
 
       <div className={card}>
         <OrderSummarySlot showTax={false} />
