@@ -93,5 +93,14 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   // Run on pages, not static assets or the webhook (which needs a raw body).
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|api/webhooks).*)"],
+  //
+  // `.well-known` is excluded because Apple Pay lives or dies on it: Stripe
+  // verifies the domain by fetching
+  // /.well-known/apple-developer-merchantid-domain-association, and that fetch
+  // carries no cookies and wants the file back and nothing else. Running the
+  // session refresh and the visitor cookie over it can only add ways for a
+  // static blob to come back as something other than itself.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|api/webhooks|\\.well-known).*)",
+  ],
 };
