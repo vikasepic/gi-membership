@@ -115,3 +115,28 @@ describe("the library card drops the badge as well", () => {
     expect(src).toContain("meta.wash");
   });
 });
+
+describe("pressing Account when signed out", () => {
+  const src = readFileSync("app/(store)/account/page.tsx", "utf8");
+
+  it("goes to the login rather than a page about the login", () => {
+    // It was a page saying "log in to reach your account" above a button that
+    // went to the login — a step that asks somebody to read a sentence and
+    // press a thing to be told what they already asked for. Pressing Account
+    // IS the request.
+    expect(src).toContain('redirect("/login?next=/account")');
+    expect(src).not.toContain("Log in to reach your library");
+  });
+
+  it("brings them back to the account, not the library", () => {
+    // They pressed Account. The login validates `next` starts with a slash, so
+    // it cannot be pointed off-site.
+    const login = readFileSync("app/(store)/login/page.tsx", "utf8");
+    expect(login).toContain('next?.startsWith("/")');
+  });
+
+  it("matches what the library already did", () => {
+    const lib = readFileSync("app/(store)/library/page.tsx", "utf8");
+    expect(lib).toContain('redirect("/login")');
+  });
+});

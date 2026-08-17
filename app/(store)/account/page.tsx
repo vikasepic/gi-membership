@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { logout, openBillingPortal } from "./actions";
 import { purchaseDocsForUser, subscriptionInvoicesForUser } from "@/lib/receipts";
@@ -26,18 +27,16 @@ export default async function AccountPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return (
-      <div className="mx-auto flex max-w-sm flex-col gap-5 py-10">
-        <h1 className="text-2xl">Your account</h1>
-        <p className="text-muted">Log in to reach your library and purchases.</p>
-        <Link href="/login"
-          className="w-fit rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover">
-          Log in
-        </Link>
-      </div>
-    );
-  }
+  // Straight to the login, the way the library already does it.
+  //
+  // This was a page saying "log in to reach your account" above a button that
+  // went to the login — a step that asked somebody to read a sentence and press
+  // a thing to be told what they had already asked for. Pressing Account IS the
+  // request.
+  //
+  // `next` so they land back here rather than on the library: they pressed
+  // Account, and the login already refuses anything that is not a path of ours.
+  if (!user) redirect("/login?next=/account");
 
   const [purchases, invoices, profile, legal] = await Promise.all([
     purchaseDocsForUser(user.id),
