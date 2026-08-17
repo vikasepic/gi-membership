@@ -221,7 +221,7 @@ export default async function CheckoutPage({
           eyebrow={one ? "One-time purchase" : `${ways.length} ways to pay`}
           title={product.title}
           sub={product.tagline ?? null}
-          coverUrl={coverUrl}
+          imageUrl={coverUrl}
           bullets={product.checkoutBullets ?? []}
           priceLabel={one ? money(single?.priceCents ?? product.priceCents, product.currency) : null}
           priceCaption={one ? "one-time · instant access" : null}

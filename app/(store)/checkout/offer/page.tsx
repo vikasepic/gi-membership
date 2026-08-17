@@ -56,12 +56,20 @@ export default async function OfferCheckoutPage({
         }. Cancel anytime.`
       : null;
 
-  // An offer has no artwork of its own — it grants something, and that thing
-  // does. Without this the panel is a headline on an empty half of the screen,
-  // which is worse than the single column it replaced.
-  const coverUrl = offer.grantProductId
-    ? publicCoverUrl((await productDisplay([offer.grantProductId])).get(offer.grantProductId)?.coverPath ?? null)
-    : null;
+  // What this offer looks like: its own image where one has been set, else the
+  // artwork of whatever it grants.
+  //
+  // Its own first, because an offer that grants an APP has no product cover to
+  // borrow — which is most of them — and that is the case that left the panel
+  // as a headline on an empty half of the screen. The image_url field has been
+  // on offers all along with nothing reading it.
+  const coverUrl =
+    offer.imageUrl ||
+    (offer.grantProductId
+      ? publicCoverUrl(
+          (await productDisplay([offer.grantProductId])).get(offer.grantProductId)?.coverPath ?? null,
+        )
+      : null);
 
   // Never the throwing read: a settings row that cannot be parsed must cost this
   // page its logo, not its ability to take a payment.
@@ -115,7 +123,7 @@ export default async function OfferCheckoutPage({
           }
           title={offer.headline ?? offer.name}
           sub={offer.description}
-          coverUrl={coverUrl}
+          imageUrl={coverUrl}
           bullets={offer.bullets ?? []}
           // Only where there is one way to pay. With several, the plan cards
           // on the other half are the price and a headline figure beside them
