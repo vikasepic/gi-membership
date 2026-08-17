@@ -1,4 +1,5 @@
 import { AdminSidebar } from "@/components/admin/sidebar";
+import { DeployWatch } from "@/components/admin/deploy-watch";
 import { NOINDEX } from "@/lib/seo";
 import { navCounts } from "@/lib/admin-nav";
 import { stripeMode } from "@/lib/stripe";
@@ -32,6 +33,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <main className="w-full min-w-0 flex-1 px-5 py-7 md:px-8">
         <div className="mx-auto w-full max-w-6xl">{children}</div>
       </main>
+      {/* Every admin page, not only the editors.
+          Somebody halfway through writing a sales page is the person this is
+          for, but so is somebody on Orders about to press a button — and the
+          bar has to be in the shell for either to see it. */}
+      <DeployWatch />
     </div>
   );
 }
