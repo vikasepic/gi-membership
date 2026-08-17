@@ -40,6 +40,18 @@ export type CheckoutProduct = {
 // be imported here. Display only — the server enforces the real floor.
 export const MIN_CHARGE_CENTS_CLIENT = 50;
 
+/**
+ * What a buyer is told when we could not work out where they are.
+ *
+ * Here rather than in lib/tax.ts, which is server-only, because the page has to
+ * RECOGNISE it and not just show it: the redesign lets Stripe's card form
+ * collect the country, and somebody paying by wallet never fills that form in.
+ * Seeing this come back is how the page knows to ask for the country itself
+ * rather than leaving them at a dead end. lib/tax.ts imports it from here so
+ * there is one string, not two that drift.
+ */
+export const COUNTRY_REQUIRED = "Please select your country so we can calculate tax.";
+
 // Buyer country drives the VAT rate. Common markets first, then the rest of the
 // EU/UK where digital-services VAT applies at the buyer's rate.
 export const COUNTRIES = [

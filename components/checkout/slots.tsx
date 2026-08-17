@@ -1,9 +1,10 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode, type RefObject } from "react";
+import { createContext, useContext, useMemo, useState, type ReactNode, type RefObject } from "react";
 import { PaymentElement } from "@stripe/react-stripe-js";
+import type { StripePaymentElementOptions } from "@stripe/stripe-js";
 import { money } from "@/lib/money";
-import { priceLabel, priceTerms, type OfferPrice } from "@/lib/offer-prices";
+import { priceLabel, priceTerms, savingAgainst, type OfferPrice } from "@/lib/offer-prices";
 import { OrderBump } from "@/components/checkout/order-bump";
 import {
   COUNTRIES,
@@ -49,6 +50,8 @@ export type CheckoutSlotValue = {
   prices: OfferPrice[];
   pricePick: number | null;
   setPricePick: (i: number) => void;
+  /** Where to send somebody who pressed Pay without choosing one. */
+  priceRef?: RefObject<HTMLFieldSetElement | null>;
 
   bump: BumpSummary | null;
   bumpAlt: BumpSummary | null;
@@ -58,6 +61,16 @@ export type CheckoutSlotValue = {
   bumpRef: RefObject<HTMLDivElement | null>;
   chosenBump: BumpSummary | null;
   bumpUnanswered: boolean;
+  /**
+   * More than one way to buy, and none of them picked yet.
+   *
+   * The same rule the bump has, for the same reason. Nothing is preselected
+   * when there is a real choice — choosing FOR somebody is how a person ends up
+   * subscribed when they meant to buy once — but the button was quoting the
+   * first price anyway, so "Pay $49" was reachable with no radio ticked and the
+   * server duly charged the option at the top of the list.
+   */
+  priceUnanswered?: boolean;
 
   coupon: { label: string; discountCents: number; clamped?: boolean } | null;
   couponInput: string;
@@ -73,6 +86,17 @@ export type CheckoutSlotValue = {
   notePaymentInfo: () => void;
   /** The published terms, where the store has named one. See TrustBlock. */
   termsUrl?: string;
+
+  /**
+   * Ask for the country ourselves after all.
+   *
+   * False on the redesign, where Stripe's own card form collects it. True once
+   * the server has said it still does not know — which is what happens when
+   * somebody pays by wallet and never touches that form. A layout that hides
+   * the field must honour this or the buyer is stuck on an error they have no
+   * control to answer.
+   */
+  askCountry?: boolean;
 
   /**
    * Drawn in the builder, not on a real checkout.
@@ -134,6 +158,15 @@ export function BuyerDetailsSlot(p: {
   inputBorder?: string | null;
   inputColor?: string | null;
   radius?: number | null;
+  /**
+   * Somebody else is asking for the country — don't ask twice.
+   *
+   * True only where the country is genuinely still collected: the redesign
+   * lets Stripe's own card form ask for it, and reads it back out of the
+   * element (see CardFieldsSlot). Two country selects on one page is a form
+   * where the buyer picks one and the tax is computed from the other.
+   */
+  hideCountry?: boolean;
 }) {
   const c = useCheckout();
   if (!c) return null;
@@ -144,7 +177,9 @@ export function BuyerDetailsSlot(p: {
     color: p.inputColor,
     borderRadius: p.radius ?? undefined,
   });
-  const countryField = (
+  // Hidden because somebody else is asking — unless they asked and got no
+  // answer, which is what askCountry means.
+  const countryField = p.hideCountry && !c.askCountry ? null : (
     <select
       required
       value={c.country}
@@ -267,11 +302,22 @@ export function BuyerDetailsSlot(p: {
  * IS a choice: picking one FOR somebody is how a person ends up subscribed
  * when they meant to buy once.
  */
-export function PriceChoiceSlot(p: { title?: string; titleColor?: string | null; titleSize?: number | null }) {
+export function PriceChoiceSlot(p: {
+  title?: string;
+  titleColor?: string | null;
+  titleSize?: number | null;
+  /**
+   * "cards" gives each way to pay a full row with the figure at the size a
+   * decision deserves, and states what the longer term saves. Same radios, same
+   * state, same posted index — only the room they get differs.
+   */
+  variant?: "rows" | "cards";
+}) {
   const c = useCheckout();
   if (!c || c.prices.length < 2) return null;
+  if (p.variant === "cards") return <PriceCards title={p.title} />;
   return (
-    <fieldset className="flex flex-col gap-2">
+    <fieldset className="flex flex-col gap-2" ref={c.priceRef}>
       {p.title?.trim() && (
         <legend className="kicker mb-1 text-muted" style={set({ color: p.titleColor, fontSize: p.titleSize ?? undefined })}>
           {p.title}
@@ -302,6 +348,80 @@ export function PriceChoiceSlot(p: { title?: string; titleColor?: string | null;
               </span>
               {priceTerms(price, c.product.currency) && (
                 <span className="text-[0.76rem] text-muted">{priceTerms(price, c.product.currency)}</span>
+              )}
+            </span>
+          </label>
+        );
+      })}
+    </fieldset>
+  );
+}
+
+/**
+ * The same choice, given the room a subscription decision needs.
+ *
+ * The saving is DERIVED from the prices beside it — savingAgainst compares
+ * cost per day and refuses unless the longer term genuinely costs less — so
+ * this cannot advertise a discount the store does not give. Nothing is
+ * preselected, for the reason stated above: picking a recurring plan for
+ * somebody is how a person ends up subscribed when they meant to buy once.
+ */
+function PriceCards({ title }: { title?: string }) {
+  const c = useCheckout()!;
+  // The cheapest per day is the honest baseline to measure the others against.
+  const baseline = c.prices.reduce<OfferPrice | null>(
+    (best, p) => (best === null || p.priceCents < best.priceCents ? p : best),
+    null,
+  );
+
+  return (
+    <fieldset className="flex flex-col gap-2.5" ref={c.priceRef}>
+      {title?.trim() && <legend className="kicker mb-1.5 text-muted">{title}</legend>}
+      {c.prices.map((price, i) => {
+        const on = c.pricePick === i;
+        const saving = baseline && baseline.id !== price.id ? savingAgainst(baseline, price) : null;
+        const terms = priceTerms(price, c.product.currency);
+        return (
+          <label
+            key={price.id}
+            className={`flex cursor-pointer items-start gap-3.5 rounded-2xl border px-4 py-4 transition-colors ${
+              on ? "border-primary bg-primary/[0.07]" : "border-border bg-surface hover:border-primary/60"
+            }`}
+            style={on ? { borderWidth: 1.5 } : undefined}
+          >
+            <input
+              type="radio"
+              name="way-to-buy"
+              checked={on}
+              onChange={() => c.setPricePick(i)}
+              className="mt-0.5 size-[18px] shrink-0 cursor-pointer accent-[var(--primary)]"
+            />
+            <span className="flex min-w-0 flex-1 flex-col gap-1">
+              <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                <span
+                  className="font-display font-bold tabular-nums text-fg"
+                  style={{ fontSize: "1.2rem", lineHeight: 1.15 }}
+                >
+                  {priceLabel(price, c.product.currency)}
+                </span>
+                {price.label.trim() && (
+                  <span className="text-muted" style={{ fontSize: "0.78rem" }}>
+                    {price.label.trim()}
+                  </span>
+                )}
+                {saving && (
+                  <span
+                    className="rounded-full bg-primary px-2 py-0.5 font-bold uppercase tracking-[0.08em] text-primary-fg"
+                    style={{ fontSize: "0.62rem" }}
+                  >
+                    {saving}
+                  </span>
+                )}
+              </span>
+              {terms && (
+                <span className="text-muted" style={{ fontSize: "0.83rem", lineHeight: 1.5 }}>
+                  {terms}
+                </span>
               )}
             </span>
           </label>
@@ -353,6 +473,18 @@ export function OrderSummarySlot(p: {
   const label = set({ color: p.labelColor, fontSize: p.textSize ?? undefined });
   const value = set({ color: p.valueColor, fontSize: p.textSize ?? undefined });
 
+  // What they chose, not the headline.
+  //
+  // This line used to be `product.priceCents` unconditionally, which is right
+  // for the products that have one price and wrong for every one that does
+  // not: pick the monthly on a product listed at $27 and the summary said $27
+  // while the total beside it said $29. A summary that disagrees with the
+  // total is worse than no summary — it is the number somebody quotes back
+  // when they dispute the charge.
+  const chosenPrice = c.pricePick === null ? null : (c.prices[c.pricePick] ?? null);
+  const lineCents = chosenPrice?.priceCents ?? c.product.priceCents;
+  const lineTerms = chosenPrice ? priceTerms(chosenPrice, c.product.currency) : null;
+
   return (
     <div className="flex flex-col gap-4">
       {p.title?.trim() && (
@@ -373,12 +505,21 @@ export function OrderSummarySlot(p: {
                   className="size-9 shrink-0 rounded-md object-cover"
                 />
               )}
-              <span className="truncate text-muted" style={label}>
-                {c.product.title}
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-muted" style={label}>
+                  {c.product.title}
+                </span>
+                {/* Which way, where there was a choice. "The Field Guide" twice
+                    over on two lines at two prices is not a summary. */}
+                {lineTerms && (
+                  <span className="truncate text-muted" style={{ ...FINE, ...label }}>
+                    {lineTerms}
+                  </span>
+                )}
               </span>
             </span>
             <span className="shrink-0" style={value}>
-              {money(c.product.priceCents, c.product.currency)}
+              {money(lineCents, c.product.currency)}
             </span>
           </div>
 
@@ -540,8 +681,69 @@ export function CardFieldsSlot(p: {
   heading?: string;
   headingColor?: string | null;
   headingSize?: number | null;
+  /**
+   * Let Stripe's own form ask for the billing country, and read it back.
+   *
+   * The country is not cosmetic here: VAT on a digital sale is charged at the
+   * buyer's rate, so createCheckoutIntent refuses to make a PaymentIntent
+   * without one. Stripe's Payment Element reports the country it collected on
+   * its change event, which is what makes it possible to drop our own select
+   * and still calculate tax before the charge.
+   *
+   * Wallets are the gap, and it is a real one: pay by Google Pay and there is
+   * no country in this element until the sheet closes. The form keeps its own
+   * fallback for exactly that — see checkout-form.tsx.
+   */
+  collectCountry?: boolean;
+  /** Tabs across the top rather than a stacked accordion. */
+  tabs?: boolean;
 }) {
   const c = useCheckout();
+  // Rebuilt only when the shape actually changes. Stripe re-renders the element
+  // on every new options object, and an object literal in the render body is a
+  // new one each keystroke — which made the card fields flicker as you typed.
+  const options = useMemo<StripePaymentElementOptions>(
+    () => ({
+      layout: p.tabs
+        ? { type: "tabs" }
+        : {
+            // Open, always. Left to itself the Element renders its methods as a
+            // collapsed accordion, so a buyer who has already decided to pay
+            // meets one more thing to click before there is anywhere to type a
+            // card. On a page whose whole job is taking a card, the card fields
+            // are not an option to be chosen — they are the page.
+            type: "accordion",
+            defaultCollapsed: false,
+            // "if_multiple", not "always": a radio beside the only way to pay
+            // is a choice with one option, which reads as something missing.
+            radios: "if_multiple",
+            spacedAccordionItems: false,
+          },
+      // Google Pay, Apple Pay and Link, where the buyer's browser and this
+      // Stripe account both offer them. "auto" is Stripe deciding per visitor,
+      // which is the only answer that can be right on a page served worldwide.
+      wallets: { applePay: "auto", googlePay: "auto", link: "auto" },
+      ...(p.collectCountry
+        ? {
+            fields: {
+              billingDetails: {
+                // Country and postcode only. The rest is address Stripe does
+                // not need for a digital sale and we have no reason to hold.
+                address: {
+                  country: "auto",
+                  postalCode: "auto",
+                  line1: "never",
+                  line2: "never",
+                  city: "never",
+                  state: "never",
+                },
+              },
+            },
+          }
+        : {}),
+    }),
+    [p.tabs, p.collectCountry],
+  );
   if (!c) return null;
   return (
     <fieldset className="flex flex-col gap-3">
@@ -573,22 +775,18 @@ export function CardFieldsSlot(p: {
            press pay. The gap between "began entering a card" and "completed a
            purchase" is the most useful signal on the page. */
         <PaymentElement
-          onChange={c.notePaymentInfo}
-          options={{
-            // Open, always. Left to itself the Element renders its methods as a
-            // collapsed accordion, so a buyer who has already decided to pay
-            // meets one more thing to click before there is anywhere to type a
-            // card. On a page whose whole job is taking a card, the card fields
-            // are not an option to be chosen — they are the page.
-            layout: {
-              type: "accordion",
-              defaultCollapsed: false,
-              // "if_multiple", not "always": a radio beside the only way to pay
-              // is a choice with one option, which reads as something missing.
-              radios: "if_multiple",
-              spacedAccordionItems: false,
-            },
+          onChange={(e) => {
+            c.notePaymentInfo();
+            // The country Stripe collected, handed straight to the form that
+            // needs it for tax. Only ever set from a real two-letter answer:
+            // switching to a wallet clears this object, and clearing a country
+            // we already have would fail the charge at the last step.
+            const picked = e.value?.billingDetails?.address?.country;
+            if (p.collectCountry && typeof picked === "string" && picked.length === 2) {
+              c.setCountry(picked.toUpperCase());
+            }
           }}
+          options={options}
         />
       )}
     </fieldset>
@@ -655,6 +853,10 @@ export function PayButtonSlot(p: {
   // on it is the kind of surprise that becomes a dispute.
   const isTrial = c.totalNow === 0;
   const words = isTrial ? p.trialLabel || "Start free trial" : p.label || "Pay";
+  // Held while ANY choice on the page is still open — the add-on or the way to
+  // buy. Both change what is about to be charged, and a button that can be
+  // pressed before they are answered is a button that charges a guess.
+  const held = c.bumpUnanswered || Boolean(c.priceUnanswered);
 
   return (
     <div className="flex flex-col gap-4">
@@ -675,7 +877,7 @@ export function PayButtonSlot(p: {
       <button
         type="submit"
         disabled={c.busy || !c.canPay}
-        aria-disabled={c.bumpUnanswered || undefined}
+        aria-disabled={held || undefined}
         style={set({
           background: p.bg,
           color: p.color,
@@ -686,7 +888,7 @@ export function PayButtonSlot(p: {
         })}
         className={`group relative flex items-center justify-center gap-2.5 overflow-hidden rounded-full bg-primary px-6 py-4 font-medium text-primary-fg transition-[transform,background-color,box-shadow,opacity,filter] duration-200 hover:bg-primary-hover hover:shadow-[0_14px_30px_-12px_color-mix(in_srgb,var(--primary)_70%,transparent)] active:scale-[0.99] disabled:pointer-events-none disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:scale-100 ${
           p.fullWidth === false ? "" : "w-full"
-        } ${c.bumpUnanswered ? "opacity-55 blur-[0.7px] hover:bg-primary hover:shadow-none" : ""}`}
+        } ${held ? "opacity-55 blur-[0.7px] hover:bg-primary hover:shadow-none" : ""}`}
       >
         {c.busy ? (
           <>
@@ -881,6 +1083,7 @@ export function previewCheckoutSlots(): CheckoutSlotValue {
     bumpRef: { current: null },
     chosenBump: null,
     bumpUnanswered: false,
+    priceUnanswered: false,
     coupon: null,
     couponInput: "",
     setCouponInput: noop,

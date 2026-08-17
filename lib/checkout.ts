@@ -20,6 +20,7 @@ import {
   normalizeCountry,
   recordTaxTransaction,
 } from "@/lib/tax";
+import { COUNTRY_REQUIRED } from "@/components/checkout/checkout-types";
 import { stripe, stripeMode } from "@/lib/stripe";
 import { otoSigningSecret } from "@/lib/env";
 import { ensureUserProfile } from "@/lib/users";
@@ -370,7 +371,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   // exactly as before) when tax is disabled or no country is known.
   const country = normalizeCountry(input.country);
   if (needsTaxLocation(TAX_ENABLED, country)) {
-    return { ok: false, error: "Please select your country so we can calculate tax." };
+    return { ok: false, error: COUNTRY_REQUIRED };
   }
   // Coupon is re-resolved here from the code alone, never taken as an amount
   // from the browser. The client's preview is for display; this is the number

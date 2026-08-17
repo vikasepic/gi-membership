@@ -1,0 +1,123 @@
+// @vitest-environment jsdom
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import type { OfferPrice } from "@/lib/offer-prices";
+
+/**
+ * The offer checkout, on the redesign.
+ *
+ * This is the half that was rewired: the offer form used to be its own page of
+ * JSX with its own summary, its own coupon panel and its own pay button, and it
+ * now publishes what it knows so the SAME arrangement the product checkout uses
+ * can render it. What has to be proved is that the rewire did not lose
+ * anything a subscription checkout is not allowed to lose — the account it
+ * attaches to, the plan being bought, what is due today, and what happens after
+ * the trial — and that asking for nothing still gets the checkout that ships.
+ *
+ * Stripe is replaced throughout: the real Elements needs a publishable key and
+ * a network, and none of what is asserted here depends on it.
+ */
+
+vi.mock("@stripe/stripe-js", () => ({ loadStripe: () => Promise.resolve(null) }));
+vi.mock("@stripe/react-stripe-js", () => ({
+  Elements: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  PaymentElement: () => <div data-testid="payment-element" />,
+  useStripe: () => ({}),
+  useElements: () => ({ submit: async () => ({}), update: async () => {} }),
+}));
+vi.mock("@/app/(store)/checkout/offer/actions", () => ({
+  startOffer: async () => ({ ok: false, error: "not in a test" }),
+  previewOfferCouponAction: async () => ({ ok: false, error: "no" }),
+}));
+
+const { OfferCheckoutForm } = await import("@/components/checkout/offer-checkout-form");
+
+const price = (over: Partial<OfferPrice>): OfferPrice => ({
+  id: "p",
+  label: "",
+  billingType: "recurring",
+  interval: "month",
+  intervalCount: 1,
+  trialDays: 7,
+  priceCents: 2900,
+  compareAtCents: null,
+  archived: false,
+  ...over,
+});
+
+const prices = [price({ id: "mo" }), price({ id: "yr", interval: "year", priceCents: 19900 })];
+
+const offer = {
+  id: "o1",
+  headline: "Build funnels that actually convert",
+  description: "Pages, checkouts and follow-up in one place.",
+  chargeNowCents: 0,
+  recurringNote: "Then $29/month after your 7-day trial. Cancel anytime.",
+  acceptLabel: "Start my trial",
+  currency: "usd",
+};
+
+let host: HTMLDivElement | null = null;
+function render(node: React.ReactElement): HTMLElement {
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  act(() => {
+    createRoot(host!).render(node);
+  });
+  return host;
+}
+afterEach(() => {
+  host?.remove();
+  host = null;
+});
+
+describe("an offer bought on the redesign", () => {
+  it("keeps everything a subscription checkout may not lose", () => {
+    const el = render(
+      <OfferCheckoutForm
+        offer={offer}
+        email="member@example.com"
+        publishableKey="pk_test"
+        prices={prices}
+        chosen={1}
+        skin="v2"
+      />,
+    );
+    const text = el.textContent ?? "";
+
+    // Whose subscription this becomes.
+    expect(text).toContain("member@example.com");
+    // Which plan, chosen on the way here and still changeable.
+    expect(el.querySelectorAll('input[name="way-to-buy"]').length).toBe(2);
+    expect((el.querySelectorAll('input[name="way-to-buy"]')[1] as HTMLInputElement).checked).toBe(true);
+    // Nothing today…
+    expect(text).toContain("Due today");
+    // …and what happens after, which is the line that stops a dispute.
+    expect(text).toMatch(/7 days free, then \$199 every year/i);
+    // Somewhere to put a card, and something to press.
+    expect(el.querySelector('[data-testid="payment-element"]')).not.toBeNull();
+    expect(el.querySelector("button[type=submit]")).not.toBeNull();
+    // The discount code is still reachable.
+    expect(text).toContain("Have a discount code?");
+  });
+
+  it("prices the yearly against the monthly without being told the answer", () => {
+    const el = render(
+      <OfferCheckoutForm offer={offer} email="m@e.com" publishableKey="pk" prices={prices} chosen={1} skin="v2" />,
+    );
+    // $199/year against $29/month, per day. Derived, so a price change moves it.
+    expect(el.textContent).toMatch(/save 4[0-9]%/i);
+  });
+
+  it("is the checkout that ships unless the redesign was asked for", () => {
+    // The offer page takes real money today. Anything but an explicit v2 has to
+    // render exactly what it rendered before this existed.
+    const el = render(
+      <OfferCheckoutForm offer={offer} email="m@e.com" publishableKey="pk" prices={prices} chosen={1} />,
+    );
+    expect(el.textContent).toContain("Order summary");
+    expect(el.textContent).toContain("Start my trial");
+    expect(el.textContent).not.toContain("Choose your plan");
+  });
+});

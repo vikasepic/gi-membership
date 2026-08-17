@@ -23,6 +23,9 @@ export function needsTaxLocation(taxEnabled: boolean, country: string | null): b
   return taxEnabled && !country;
 }
 
+// The one message, defined where the browser can also read it.
+export { COUNTRY_REQUIRED } from "@/components/checkout/checkout-types";
+
 // Prices are entered tax-EXCLUSIVE in admin, so tax is added on top.
 export function orderTotalCents(priceCents: number, taxCents: number): number {
   return priceCents + Math.max(0, taxCents);

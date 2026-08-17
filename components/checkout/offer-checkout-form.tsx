@@ -19,6 +19,10 @@ import { money } from "@/lib/money";
 import { priceLabel, priceTerms, chargeNowCents, type OfferPrice } from "@/lib/offer-prices";
 import { MIN_CHARGE_CENTS_CLIENT } from "@/components/checkout/checkout-types";
 import { previewOfferCouponAction } from "@/app/(store)/checkout/offer/actions";
+import { CheckoutSlots, type CheckoutSlotValue } from "@/components/checkout/slots";
+import { CheckoutV2Layout } from "@/components/checkout/v2/layout";
+import { stripeAppearance } from "@/components/checkout/v2/appearance";
+import type { CheckoutSkin } from "@/lib/checkout-skin";
 
 export function OfferCheckoutForm({
   offer,
@@ -26,6 +30,8 @@ export function OfferCheckoutForm({
   publishableKey,
   prices = [],
   chosen = -1,
+  skin = "v1",
+  termsUrl,
 }: {
   offer: OfferSummary;
   email: string;
@@ -34,6 +40,9 @@ export function OfferCheckoutForm({
   prices?: OfferPrice[];
   /** Preselected from the sales page. -1 when they arrived without choosing. */
   chosen?: number;
+  /** Which arrangement. See lib/checkout-skin.ts — v1 unless asked for. */
+  skin?: CheckoutSkin;
+  termsUrl?: string;
 }) {
   const stripePromise = useMemo(() => loadStripe(publishableKey), [publishableKey]);
   return (
@@ -46,10 +55,10 @@ export function OfferCheckoutForm({
         // and mode:"setup" already means "save this card for later".
         mode: "setup",
         currency: offer.currency,
-        appearance: { theme: "stripe", variables: { colorPrimary: "#c8653d" } },
+        appearance: stripeAppearance(skin),
       }}
     >
-      <Inner offer={offer} email={email} prices={prices} chosen={chosen} />
+      <Inner offer={offer} email={email} prices={prices} chosen={chosen} skin={skin} termsUrl={termsUrl} />
     </Elements>
   );
 }
@@ -59,11 +68,15 @@ function Inner({
   email,
   prices,
   chosen,
+  skin,
+  termsUrl,
 }: {
   offer: OfferSummary;
   email: string;
   prices: OfferPrice[];
   chosen: number;
+  skin: CheckoutSkin;
+  termsUrl?: string;
 }) {
   // Preselected from the sales page, and still changeable — somebody who
   // picked the yearly two pages ago should not have to pick it again, and
@@ -146,6 +159,82 @@ function Inner({
     // Only reached if confirmation didn't redirect (i.e. something failed).
     if (setupError) setError(setupError.message ?? "Could not save your card");
     setBusy(false);
+  }
+
+  /**
+   * The offer checkout, described in the same terms as the product one.
+   *
+   * The money above is untouched — same startOffer, same SetupIntent, same
+   * confirmSetup. This only publishes what the form already knows so the
+   * redesign's pieces can read it, which is what lets ONE arrangement serve
+   * both halves of the store instead of two that drift.
+   *
+   * The fields an offer has no answer for are honestly empty: there is no
+   * bump here, no name to type and no email to collect, and every slot that
+   * asks for those draws nothing when they are absent.
+   */
+  const slots: CheckoutSlotValue = {
+    product: {
+      slug: "",
+      title: offer.headline,
+      tagline: offer.description,
+      // The list price of what they picked. What is taken TODAY is totalNow,
+      // which on a trial is nothing — the two are different numbers and the
+      // summary shows both.
+      priceCents: picked ? picked.priceCents : offer.chargeNowCents,
+      currency: offer.currency,
+      coverUrl: null,
+      prices,
+    },
+    signedInEmail: email,
+    fullName: "",
+    setFullName: () => {},
+    email,
+    setEmail: () => {},
+    emailHint: null,
+    acceptEmailHint: () => {},
+    // Subscriptions carry Stripe's own automatic_tax, which reads the address
+    // off the payment method — so this checkout has never had to ask, and the
+    // redesign showing the country inside Stripe's box changes nothing here.
+    country: "",
+    setCountry: () => {},
+    captureEmail: () => {},
+    prices,
+    pricePick: pick >= 0 ? pick : null,
+    setPricePick: setPick,
+    bump: null,
+    bumpAlt: null,
+    bumpOptions: [],
+    bumpChoice: "none",
+    setBumpChoice: () => {},
+    bumpRef: { current: null },
+    chosenBump: null,
+    bumpUnanswered: false,
+    coupon,
+    couponInput,
+    setCouponInput: (v: string) => {
+      setCouponInput(v);
+      setCouponError(null);
+    },
+    couponBusy,
+    couponError,
+    applyCoupon: () => void applyCoupon(),
+    totalNow: dueNow,
+    busy,
+    error,
+    canPay: Boolean(stripe),
+    notePaymentInfo: () => {},
+    termsUrl,
+  };
+
+  if (skin === "v2") {
+    return (
+      <CheckoutSlots value={slots}>
+        <form onSubmit={onSubmit} className="flex flex-col gap-7">
+          <CheckoutV2Layout />
+        </form>
+      </CheckoutSlots>
+    );
   }
 
   return (

@@ -18,6 +18,9 @@ import { getSettingsOrDefaults } from "@/lib/settings";
 import { getPageSections } from "@/lib/pages";
 import { getStoreId } from "@/lib/store";
 import { usableCheckoutLayout } from "@/lib/checkout-layout";
+import { checkoutSkin } from "@/lib/checkout-skin";
+import { CheckoutStage } from "@/components/checkout/v2/stage";
+import { money } from "@/lib/money";
 import type { Block } from "@/lib/blocks";
 
 export const metadata = NOINDEX;
@@ -65,9 +68,10 @@ async function checkoutLayout(): Promise<Block[] | null> {
 export default async function CheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ product?: string }>;
+  searchParams: Promise<{ product?: string; skin?: string }>;
 }) {
-  const { product: slug } = await searchParams;
+  const { product: slug, skin: wantSkin } = await searchParams;
+  const skin = checkoutSkin(wantSkin);
   if (!slug) notFound();
   const product = await getProductBySlug(slug);
   if (!product || product.status !== "published") notFound();
@@ -171,6 +175,64 @@ export default async function CheckoutPage({
   // actually takes the card. On a laptop that pushed the card fields into a
   // column narrower than the copy beside them. Two-fifths and three-fifths: the
   // panel still holds its picture, and the form gets the space.
+  const ways = livePrices(product.prices);
+
+  const form = (
+    <CheckoutForm
+      product={{
+        slug: product.slug,
+        title: product.title,
+        tagline: product.tagline ?? null,
+        priceCents: product.priceCents,
+        currency: product.currency,
+        // Own image wins, else the attached course's — same precedence the
+        // storefront card uses, so the panel beside this shows the image they
+        // clicked on to get here.
+        coverUrl,
+        // Every way to buy it. The form posts the INDEX of the one chosen and
+        // createCheckoutIntent rebuilds this same list to resolve it.
+        prices: ways,
+      }}
+      bump={bump}
+      bumpAlt={bumpAlt}
+      bumpOptions={bumpOptions}
+      publishableKey={stripePublishableKey()}
+      signedInEmail={user?.email ?? null}
+      defaultCountry={defaultCountry}
+      layout={layout}
+      // The published terms, so this page and the footer cannot name two
+      // different sets of terms for the same purchase.
+      termsUrl={settings.termsUrl || undefined}
+      skin={skin}
+    />
+  );
+
+  if (skin === "v2") {
+    // One price to show, or none. With several ways to buy, a single headline
+    // figure on the dark half contradicts the plan cards on the light one —
+    // and the figure a buyer reads first is the one they think they agreed to.
+    const single = ways.length === 1 ? ways[0] : null;
+    const one = ways.length <= 1;
+    return (
+      <div className="checkout-v2 grid min-h-dvh grid-cols-1 bg-bg lg:grid-cols-[minmax(0,27rem)_minmax(0,1fr)]">
+        <CheckoutStage
+          backHref={`/p/${product.slug}`}
+          backLabel="Back"
+          eyebrow={one ? "One-time purchase" : `${ways.length} ways to pay`}
+          title={product.title}
+          sub={product.tagline ?? null}
+          coverUrl={coverUrl}
+          bullets={product.checkoutBullets ?? []}
+          priceLabel={one ? money(single?.priceCents ?? product.priceCents, product.currency) : null}
+          priceCaption={one ? "one-time · instant access" : null}
+        />
+        <div className="mx-auto flex w-full max-w-[36rem] flex-col gap-6 px-5 py-8 md:px-8 lg:mx-0 lg:py-12 lg:pl-10">
+          {form}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <CheckoutPanel
@@ -197,32 +259,7 @@ export default async function CheckoutPage({
             to be the biggest word on a checkout is how the actual heading stops
             being read. */}
         <h2 className="font-display text-sm uppercase tracking-[0.12em] text-muted">Checkout</h2>
-        <CheckoutForm
-        product={{
-          slug: product.slug,
-          title: product.title,
-          tagline: product.tagline ?? null,
-          priceCents: product.priceCents,
-          currency: product.currency,
-          // Own image wins, else the attached course's — same precedence the
-          // storefront card uses, so the panel beside this shows the image they
-          // clicked on to get here.
-          coverUrl,
-          // Every way to buy it. The form posts the INDEX of the one chosen and
-          // createCheckoutIntent rebuilds this same list to resolve it.
-          prices: livePrices(product.prices),
-        }}
-          bump={bump}
-          bumpAlt={bumpAlt}
-          bumpOptions={bumpOptions}
-          publishableKey={stripePublishableKey()}
-          signedInEmail={user?.email ?? null}
-          defaultCountry={defaultCountry}
-          layout={layout}
-          // The published terms, so this page and the footer cannot name two
-          // different sets of terms for the same purchase.
-          termsUrl={settings.termsUrl || undefined}
-        />
+        {form}
       </div>
     </div>
   );

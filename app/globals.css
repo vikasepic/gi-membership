@@ -339,3 +339,39 @@ h1, h2, h3, h4 {
    same element with entirely different intentions. */
 .insp-section > summary > span:first-child { display: inline-block; transition: transform .15s ease; }
 .insp-section[open] > summary > span:first-child { transform: rotate(90deg); }
+
+/* The checkout redesign, behind ?skin=v2.
+
+   A palette, not a stylesheet. Every piece of the checkout is already painted
+   from these semantic tokens, so redefining them on one wrapper re-skins the
+   whole form — including the parts that take money — without a second copy of
+   any component to keep in step. The custom properties resolve where they are
+   used, not where they are declared, so `bg-surface` inside this element picks
+   up the value below and the same class outside it does not.
+
+   Warmer and quieter than the store's own: a deeper terracotta so the pay
+   button is the only loud thing on the page, and a cream ground the white
+   cards can sit on and still read as raised. */
+.checkout-v2 {
+  --bg: #fbf7f3;
+  --surface: #ffffff;
+  --surface-2: #f3eee8;
+  --fg: #1d2b3a;
+  --muted: #6b6259;
+  --border: #e4dcd3;
+  --primary: #c05f3c;
+  --primary-hover: #a44e2e;
+  --primary-fg: #ffffff;
+  --navy: #1d2b3a;
+}
+
+/* The dark half. Its own block rather than a second wrapper class, because the
+   ink on it is the only thing that changes and everything inside is otherwise
+   the same component tree. */
+.checkout-v2-stage {
+  --bg: #1d2b3a;
+  --surface: #1d2b3a;
+  --fg: #f3ede6;
+  --muted: #8fa0b4;
+  --border: rgba(243, 237, 230, 0.16);
+}

@@ -4,7 +4,9 @@ import { getOffer } from "@/lib/store";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { ownershipFor } from "@/lib/checkout";
 import { isOfferEligible, immediateChargeCents } from "@/lib/offers";
-import { livePrices } from "@/lib/offer-prices";
+import { livePrices, priceTerms } from "@/lib/offer-prices";
+import { checkoutSkin } from "@/lib/checkout-skin";
+import { CheckoutStage } from "@/components/checkout/v2/stage";
 import { stripePublishableKey } from "@/lib/env";
 import { OfferCheckoutForm } from "@/components/checkout/offer-checkout-form";
 
@@ -26,9 +28,10 @@ export const metadata = NOINDEX;
 export default async function OfferCheckoutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ offer?: string; price?: string }>;
+  searchParams: Promise<{ offer?: string; price?: string; skin?: string }>;
 }) {
-  const { offer: offerId, price: wantPrice } = await searchParams;
+  const { offer: offerId, price: wantPrice, skin: wantSkin } = await searchParams;
+  const skin = checkoutSkin(wantSkin);
   if (!offerId) notFound();
 
   const supabase = await createClient();
@@ -72,6 +75,61 @@ export default async function OfferCheckoutPage({
   // actually takes the card. On a laptop that pushed the card fields into a
   // column narrower than the copy beside them. Two-fifths and three-fifths: the
   // panel still holds its picture, and the form gets the space.
+  const ways = livePrices(offer.prices);
+  const form = (
+    <OfferCheckoutForm
+      offer={{
+        id: offer.id,
+        headline: offer.headline ?? offer.name,
+        description: offer.description,
+        chargeNowCents: immediateChargeCents(offer),
+        recurringNote,
+        acceptLabel: offer.acceptLabel ?? "Confirm",
+        currency: offer.currency,
+      }}
+      // Every way to pay, and the one they picked on the way here. The
+      // choice travels; it does not decide. What is charged is resolved on
+      // the server from this same list, so an id it does not recognise
+      // preselects nothing rather than buying something unexpected.
+      prices={ways}
+      chosen={ways.findIndex((p) => p.id === wantPrice)}
+      email={user.email}
+      publishableKey={stripePublishableKey()}
+      skin={skin}
+      termsUrl={settings.termsUrl || undefined}
+    />
+  );
+
+  if (skin === "v2") {
+    return (
+      <div className="checkout-v2 grid min-h-dvh grid-cols-1 bg-bg lg:grid-cols-[minmax(0,27rem)_minmax(0,1fr)]">
+        <CheckoutStage
+          backHref="/library"
+          backLabel="Back"
+          // The terms as a label, never a claim. An offer with no trial says
+          // how it renews instead of saying nothing.
+          eyebrow={
+            offer.trialDays
+              ? `${offer.name} · ${offer.trialDays}-day free trial`
+              : offer.name
+          }
+          title={offer.headline ?? offer.name}
+          sub={offer.description}
+          coverUrl={coverUrl}
+          bullets={offer.bullets ?? []}
+          // Only where there is one way to pay. With several, the plan cards
+          // on the other half are the price and a headline figure beside them
+          // is a second answer to the same question.
+          priceLabel={ways.length === 1 ? money(ways[0].priceCents, offer.currency) : null}
+          priceCaption={ways.length === 1 ? (priceTerms(ways[0], offer.currency) ?? null) : null}
+        />
+        <div className="mx-auto flex w-full max-w-[36rem] flex-col gap-6 px-5 py-8 md:px-8 lg:mx-0 lg:py-12 lg:pl-10">
+          {form}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <CheckoutPanel
@@ -94,27 +152,7 @@ export default async function OfferCheckoutPage({
             to be the biggest word on a checkout is how the actual heading stops
             being read. */}
         <h2 className="font-display text-sm uppercase tracking-[0.12em] text-muted">Checkout</h2>
-        <OfferCheckoutForm
-          offer={{
-          id: offer.id,
-          headline: offer.headline ?? offer.name,
-          description: offer.description,
-          chargeNowCents: immediateChargeCents(offer),
-          recurringNote,
-          acceptLabel: offer.acceptLabel ?? "Confirm",
-          currency: offer.currency,
-        }}
-          // Every way to pay, and the one they picked on the way here. The
-          // choice travels; it does not decide. What is charged is resolved on
-          // the server from this same list, so an id it does not recognise
-          // preselects nothing rather than buying something unexpected.
-          prices={livePrices(offer.prices)}
-          chosen={livePrices(offer.prices).findIndex(
-            (p) => p.id === wantPrice,
-          )}
-          email={user.email}
-          publishableKey={stripePublishableKey()}
-        />
+        {form}
       </div>
     </div>
   );

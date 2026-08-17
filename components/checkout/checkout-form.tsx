@@ -14,10 +14,12 @@ import { suggestEmail } from "@/lib/email-hint";
 import { Blocks } from "@/components/page/blocks";
 import { bandTheme } from "@/lib/page-sections";
 import { CheckoutSlots, DefaultCheckoutLayout, type CheckoutSlotValue } from "@/components/checkout/slots";
+import { CheckoutV2Layout } from "@/components/checkout/v2/layout";
+import { stripeAppearance } from "@/components/checkout/v2/appearance";
+import type { CheckoutSkin } from "@/lib/checkout-skin";
 import type { Block } from "@/lib/blocks";
 import {
-  COUNTRIES,
-  MIN_CHARGE_CENTS_CLIENT,
+  COUNTRY_REQUIRED,
   type BumpSummary,
   type CheckoutProduct,
 } from "@/components/checkout/checkout-types";
@@ -37,6 +39,7 @@ export function CheckoutForm({
   defaultCountry,
   layout,
   termsUrl,
+  skin = "v1",
 }: {
   product: CheckoutProduct;
   bump: BumpSummary | null;
@@ -59,6 +62,8 @@ export function CheckoutForm({
   // payment, since we already know who they are.
   signedInEmail?: string | null;
   defaultCountry?: string | null;
+  /** Which arrangement. See lib/checkout-skin.ts — v1 unless asked for. */
+  skin?: CheckoutSkin;
 }) {
   const stripePromise = useMemo(() => loadStripe(publishableKey), [publishableKey]);
   return (
@@ -69,7 +74,7 @@ export function CheckoutForm({
         amount: product.priceCents,
         currency: product.currency,
         setupFutureUsage: "off_session",
-        appearance: { theme: "stripe", variables: { colorPrimary: "#c8653d" } },
+        appearance: stripeAppearance(skin),
       }}
     >
       <Inner
@@ -81,6 +86,7 @@ export function CheckoutForm({
         defaultCountry={defaultCountry ?? ""}
         layout={layout ?? null}
         termsUrl={termsUrl}
+        skin={skin}
       />
     </Elements>
   );
@@ -95,6 +101,7 @@ function Inner({
   defaultCountry,
   layout,
   termsUrl,
+  skin = "v1",
 }: {
   product: CheckoutProduct;
   bump: BumpSummary | null;
@@ -106,12 +113,16 @@ function Inner({
   defaultCountry: string;
   layout: Block[] | null;
   termsUrl?: string;
+  skin?: CheckoutSkin;
 }) {
   const stripe = useStripe();
   const elements = useElements();
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [country, setCountry] = useState(defaultCountry);
+  // The redesign hides our country select and lets Stripe ask. This turns it
+  // back on for the one case Stripe cannot answer — see onSubmit.
+  const [askCountry, setAskCountry] = useState(false);
   // Which of the bump's prices was taken, if any.
   //
   // Every way to buy the bump. A ticked price list wins; the old two-offer
@@ -200,6 +211,10 @@ function Inner({
     (product.prices?.length ?? 0) > 1 ? null : 0,
   );
   const chosenPrice = product.prices?.[pricePick ?? 0] ?? null;
+  // More than one way to buy and none of them ticked. Same rule as the bump:
+  // the page must not take money for the option that happens to be first.
+  const priceUnanswered = (product.prices?.length ?? 0) > 1 && pricePick === null;
+  const priceRef = useRef<HTMLFieldSetElement>(null);
 
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState<AppliedDiscount | null>(null);
@@ -221,6 +236,36 @@ function Inner({
   // bump or a coupon changes it.
   const totalNowRef = useRef(totalNow);
   totalNowRef.current = totalNow;
+
+  /**
+   * Keep Stripe's idea of the total in step with the page's.
+   *
+   * `Elements` was created with the product's headline price and never told
+   * about anything after it — so ticking a bump, applying a coupon or choosing
+   * the monthly changed the figure on the button and left Stripe holding the
+   * old one. That figure is not decoration: it is what the Google Pay and Apple
+   * Pay sheets show, and it decides which methods Stripe offers at all. A
+   * wallet quoting a price the buyer did not agree to is the worst version of
+   * this bug, because it is the one that completes.
+   *
+   * Mode moves with it. Nothing due today means the server is making a
+   * SetupIntent — a $0 PaymentIntent is not a thing Stripe will create — and an
+   * Elements left in payment mode is a wallet offering to charge for a free
+   * trial.
+   */
+  useEffect(() => {
+    if (!elements) return;
+    if (totalNow <= 0) {
+      void elements.update({ mode: "setup", currency: product.currency, setupFutureUsage: "off_session" });
+      return;
+    }
+    void elements.update({
+      mode: "payment",
+      amount: totalNow,
+      currency: product.currency,
+      setupFutureUsage: "off_session",
+    });
+  }, [elements, totalNow, product.currency]);
 
   async function applyCoupon() {
     const code = couponInput.trim();
@@ -288,6 +333,12 @@ function Inner({
     // Asked before the card is touched. Stripe validating the card first and
     // THEN being told to pick an add-on is two rounds of correction for one
     // form, and the second one arrives after the slow part.
+    if (priceUnanswered) {
+      setError("Choose how you want to pay to continue.");
+      priceRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+      priceRef.current?.querySelector<HTMLInputElement>('input[type="radio"]')?.focus();
+      return;
+    }
     if (bumpUnanswered) {
       setError("Choose one of the options above to continue — including “No thanks”.");
       bumpRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -310,6 +361,11 @@ function Inner({
 
     // A signed-in member sends no credentials; the server takes them from the
     // session, so nothing here can buy in someone else's name.
+    // Stripe collects the country inside its own form on the redesign — but a
+    // wallet completes without that form ever being filled in, so this is the
+    // last chance to fall back to what we already knew about this buyer.
+    const billingCountry = country || defaultCountry || "";
+
     const res = await startCheckout({
       productSlug: product.slug,
       ...(signedInEmail ? {} : { email, fullName }),
@@ -324,9 +380,13 @@ function Inner({
       // and charging them full price for something labelled free would be
       // the deception this whole feature exists to avoid.
       bumpTrialShown: (chosenBump?.chargeNowCents ?? null) === 0,
-      country,
+      country: billingCountry,
     });
     if (!res.ok) {
+      // We could not work out where they are, and the field that would have
+      // asked is hidden because Stripe's own form was doing it. Show ours —
+      // a buyer who cannot answer the question is a buyer who cannot pay.
+      if (res.error === COUNTRY_REQUIRED) setAskCountry(true);
       setError(res.error);
       setBusy(false);
       return;
@@ -373,6 +433,8 @@ function Inner({
     bumpRef,
     chosenBump,
     bumpUnanswered,
+    priceUnanswered,
+    priceRef,
     coupon,
     couponInput,
     setCouponInput: (v: string) => {
@@ -388,6 +450,7 @@ function Inner({
     canPay: Boolean(stripe),
     notePaymentInfo,
     termsUrl,
+    askCountry,
   };
 
   return (
@@ -403,7 +466,12 @@ function Inner({
        lib/checkout-layout.ts. */
     <CheckoutSlots value={slots}>
       <form onSubmit={onSubmit} className="flex flex-col gap-7">
-        {layout && layout.length > 0 ? (
+        {/* The redesign wins over a store-built layout, because asking for it
+            is an explicit "show me the new one" and a saved arrangement of the
+            old pieces is not an answer to that. */}
+        {skin === "v2" ? (
+          <CheckoutV2Layout />
+        ) : layout && layout.length > 0 ? (
           <Blocks blocks={layout} theme={bandTheme("paper")} />
         ) : (
           <DefaultCheckoutLayout />
