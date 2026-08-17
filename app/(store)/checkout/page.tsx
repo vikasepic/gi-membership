@@ -215,10 +215,14 @@ export default async function CheckoutPage({
     const one = ways.length <= 1;
     return (
       <div className="checkout-v2 min-h-dvh bg-bg">
-        {/* Capped and centred rather than bled to both edges. Full width it was
-            a navy stripe on the left of a field of cream, and the two halves
-            read as one thing pushed aside by another. */}
-        <div className="mx-auto grid min-h-dvh w-full max-w-[82rem] grid-cols-1 lg:grid-cols-[minmax(20rem,38fr)_minmax(0,62fr)]">
+        {/* Half and half, both hugging the seam — the arrangement Stripe's own
+            checkout uses, and for the reason it uses it: two columns of equal
+            width with their content pinned to the middle read as one object
+            with a fold down it. Every other split leaves the eye travelling
+            across empty ground to get from what you are buying to where you
+            pay for it, and the wider the monitor the further that trip. The
+            room that grows on a big screen grows on the OUTSIDE, evenly. */}
+        <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-2">
         <CheckoutStage
           backHref={`/p/${product.slug}`}
           backLabel="Back"
@@ -230,7 +234,7 @@ export default async function CheckoutPage({
           priceLabel={one ? money(single?.priceCents ?? product.priceCents, product.currency) : null}
           priceCaption={one ? "one-time · instant access" : null}
         />
-        <div className="mx-auto flex w-full max-w-[36rem] flex-col gap-6 px-5 py-8 md:px-8 lg:py-12">
+        <div className="mx-auto flex w-full max-w-[30rem] flex-col gap-6 px-5 py-8 md:px-8 lg:mx-0 lg:mr-auto lg:py-12 lg:pl-10 lg:pr-0">
             {form}
           </div>
         </div>

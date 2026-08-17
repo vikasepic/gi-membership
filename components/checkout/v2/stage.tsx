@@ -137,8 +137,8 @@ export function CheckoutStage({
   const hasDetails = Boolean(imageUrl || sub || bullets.length > 0);
 
   return (
-    <div className="checkout-v2-stage flex flex-col gap-6 bg-[#1d2b3a] px-6 py-8 text-[#f3ede6] md:px-8 lg:px-10 lg:py-12">
-      <div className="ml-auto flex w-full max-w-[24rem] items-center justify-between gap-4 lg:mx-auto">
+    <div className="checkout-v2-stage flex flex-col gap-6 bg-[#1d2b3a] px-6 py-8 text-[#f3ede6] md:px-8 lg:py-12 lg:pl-0 lg:pr-10">
+      <div className="ml-auto flex w-full max-w-[30rem] items-center justify-between gap-4">
         <Link
           href={backHref}
           className="font-semibold uppercase tracking-[0.12em] text-[#f3ede6]/85 transition-opacity hover:opacity-100"
@@ -159,7 +159,7 @@ export function CheckoutStage({
       {hasDetails ? (
         <StageBody summary={summary} details={details} moreLabel={"What’s included"} />
       ) : (
-        <div className="ml-auto flex w-full max-w-[24rem] flex-col gap-5 lg:mx-auto">{summary}</div>
+        <div className="ml-auto flex w-full max-w-[30rem] flex-col gap-5">{summary}</div>
       )}
     </div>
   );

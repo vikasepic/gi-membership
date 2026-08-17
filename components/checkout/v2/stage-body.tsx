@@ -36,7 +36,7 @@ export function StageBody({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="ml-auto flex w-full max-w-[24rem] flex-col gap-5 lg:mx-auto">
+    <div className="ml-auto flex w-full max-w-[30rem] flex-col gap-5">
       {summary}
 
       <div className={`${open ? "contents" : "hidden"} lg:contents`}>{details}</div>
