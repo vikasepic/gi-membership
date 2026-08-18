@@ -102,12 +102,29 @@ describe("the cases that make a coupon useless if missed", () => {
   });
 });
 
-describe("the preview endpoint is not a code oracle", () => {
-  it("requires a signed-in member", () => {
-    // An open endpoint that reports which codes are valid is a way to guess at
-    // them a few thousand times an hour.
-    const preview = actions.slice(actions.indexOf("export async function previewOfferCouponAction"));
-    expect(preview).toContain("supabase.auth.getUser()");
-    expect(preview).toContain("Please log in first.");
+describe("the two coupon previews agree about who may ask", () => {
+  const productActions = readFileSync("app/(store)/checkout/actions.ts", "utf8");
+  const offerPreview = actions.slice(actions.indexOf("export async function previewOfferCouponAction"));
+  const productPreview = productActions.slice(
+    productActions.indexOf("export async function previewCoupon"),
+  );
+
+  it("neither asks anybody to log in", () => {
+    // The offer one used to, on the reasoning that an open endpoint reporting
+    // which codes are valid can be guessed at a few thousand times an hour.
+    // True — but the product checkout's preview has always been open, and the
+    // offer checkout is public now too, so the wall stopped no attacker and
+    // only stopped buyers: anyone willing to enumerate codes is willing to make
+    // an account first.
+    //
+    // Asserted as a PAIR so the two cannot quietly diverge again. If this ever
+    // needs closing it needs closing on both, and rate limiting is the answer
+    // rather than a session.
+    for (const [name, src] of [
+      ["offer", offerPreview],
+      ["product", productPreview],
+    ] as const) {
+      expect(src, `${name} preview does not demand a session`).not.toContain("Please log in first.");
+    }
   });
 });

@@ -77,7 +77,7 @@ describe("an offer bought on the redesign", () => {
     const el = render(
       <OfferCheckoutForm
         offer={offer}
-        email="member@example.com"
+        signedInEmail="member@example.com"
         publishableKey="pk_test"
         prices={prices}
         chosen={1}
@@ -104,17 +104,36 @@ describe("an offer bought on the redesign", () => {
 
   it("prices the yearly against the monthly without being told the answer", () => {
     const el = render(
-      <OfferCheckoutForm offer={offer} email="m@e.com" publishableKey="pk" prices={prices} chosen={1} skin="v2" />,
+      <OfferCheckoutForm offer={offer} signedInEmail="m@e.com" publishableKey="pk" prices={prices} chosen={1} skin="v2" />,
     );
     // $199/year against $29/month, per day. Derived, so a price change moves it.
     expect(el.textContent).toMatch(/save 4[0-9]%/i);
+  });
+
+  it("lets a stranger buy it", () => {
+    // The whole point of the change. This checkout used to redirect anyone
+    // without a session to /login, which put a wall in front of every public
+    // offer sales page — an ad click landing on a price and a demand for an
+    // account before it would take the money.
+    const el = render(
+      <OfferCheckoutForm offer={offer} signedInEmail={null} publishableKey="pk" prices={prices} chosen={1} skin="v2" />,
+    );
+    const text = el.textContent ?? "";
+    // Asked who they are…
+    expect(el.querySelector('input[aria-label="Full name"]')).not.toBeNull();
+    expect(el.querySelector('input[aria-label="Email"]')).not.toBeNull();
+    // …and no account row, because there is no account yet.
+    expect(text).not.toContain("Your account");
+    // Still a complete checkout.
+    expect(el.querySelector('[data-testid="payment-element"]')).not.toBeNull();
+    expect(el.querySelector("button[type=submit]")).not.toBeNull();
   });
 
   it("is the checkout that ships unless the redesign was asked for", () => {
     // The offer page takes real money today. Anything but an explicit v2 has to
     // render exactly what it rendered before this existed.
     const el = render(
-      <OfferCheckoutForm offer={offer} email="m@e.com" publishableKey="pk" prices={prices} chosen={1} />,
+      <OfferCheckoutForm offer={offer} signedInEmail="m@e.com" publishableKey="pk" prices={prices} chosen={1} />,
     );
     expect(el.textContent).toContain("Order summary");
     expect(el.textContent).toContain("Start my trial");

@@ -35,20 +35,31 @@ export default async function OfferCheckoutPage({
   const skin = checkoutSkin(wantSkin);
   if (!offerId) notFound();
 
+  // Anybody may buy this.
+  //
+  // It used to redirect to /login, because this checkout was built for the
+  // library upsell — a member being offered an add-on. Offers have public sales
+  // pages now, so that redirect met every cold click with a demand for an
+  // account before it would take their money.
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user?.email) redirect(`/login?next=${encodeURIComponent(`/checkout/offer?offer=${offerId}`)}`);
 
   const listed = await getOffer(offerId);
   if (!listed || !listed.active) notFound();
-  // Signed in by the redirect above, so we know exactly what they have had.
-  const offer = await offerAsSoldTo(user.email, listed);
+  // Resolved for whoever is here. A member we know is shown the terms that will
+  // actually apply; a stranger we cannot know yet is shown the trial, and
+  // fulfilment refuses rather than charging them if the address they type turns
+  // out to have used it already. Same rule the product checkout follows.
+  const offer = await offerAsSoldTo(user?.email ?? null, listed);
 
-  // Someone who already has it should never see a payment form for it.
-  const owned = await ownershipFor(user.id);
-  if (!isOfferEligible(offer, owned)) redirect("/library?offer=already_owned");
+  // Someone who already has it should never see a payment form for it. Nothing
+  // to check for a stranger — they own nothing yet.
+  if (user?.id) {
+    const owned = await ownershipFor(user.id);
+    if (!isOfferEligible(offer, owned)) redirect("/library?offer=already_owned");
+  }
 
   const recurringNote =
     offer.billingType === "recurring"
@@ -105,7 +116,7 @@ export default async function OfferCheckoutPage({
       // preselects nothing rather than buying something unexpected.
       prices={ways}
       chosen={ways.findIndex((p) => p.id === wantPrice)}
-      email={user.email}
+      signedInEmail={user?.email ?? null}
       publishableKey={stripePublishableKey()}
       skin={skin}
       design={design}

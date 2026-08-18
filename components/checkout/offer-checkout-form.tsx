@@ -16,6 +16,7 @@ export type OfferSummary = {
 };
 
 import { money } from "@/lib/money";
+import { suggestEmail } from "@/lib/email-hint";
 import { priceLabel, priceTerms, chargeNowCents, type OfferPrice } from "@/lib/offer-prices";
 import { MIN_CHARGE_CENTS_CLIENT } from "@/components/checkout/checkout-types";
 import { previewOfferCouponAction } from "@/app/(store)/checkout/offer/actions";
@@ -27,7 +28,7 @@ import type { CheckoutDesign } from "@/lib/checkout-design";
 
 export function OfferCheckoutForm({
   offer,
-  email,
+  signedInEmail,
   publishableKey,
   prices = [],
   chosen = -1,
@@ -36,7 +37,8 @@ export function OfferCheckoutForm({
   design,
 }: {
   offer: OfferSummary;
-  email: string;
+  /** Null for a stranger — the form then asks who they are. */
+  signedInEmail: string | null;
   publishableKey: string;
   /** Every way to pay. One or none means there is nothing to choose. */
   prices?: OfferPrice[];
@@ -61,14 +63,14 @@ export function OfferCheckoutForm({
         appearance: stripeAppearance(skin, design?.buttonColor),
       }}
     >
-      <Inner offer={offer} email={email} prices={prices} chosen={chosen} skin={skin} termsUrl={termsUrl} design={design} />
+      <Inner offer={offer} signedInEmail={signedInEmail} prices={prices} chosen={chosen} skin={skin} termsUrl={termsUrl} design={design} />
     </Elements>
   );
 }
 
 function Inner({
   offer,
-  email,
+  signedInEmail,
   prices,
   chosen,
   skin,
@@ -76,7 +78,7 @@ function Inner({
   design,
 }: {
   offer: OfferSummary;
-  email: string;
+  signedInEmail: string | null;
   prices: OfferPrice[];
   chosen: number;
   skin: CheckoutSkin;
@@ -92,6 +94,12 @@ function Inner({
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Asked for only when there is nobody signed in. A member's address comes
+  // from the session and is never taken from this form.
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [emailHint, setEmailHint] = useState<string | null>(null);
 
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState<
@@ -149,6 +157,10 @@ function Inner({
       pick >= 0 ? pick : undefined,
       // The code, never the amount. The server prices it again.
       coupon ? couponInput.trim() : null,
+      // Read by the server ONLY when no session exists. A signed-in member's
+      // identity comes from the session, so nothing typed here can buy in
+      // somebody else's name.
+      signedInEmail ? undefined : { email: email.trim(), fullName: fullName.trim() },
     );
     if (!res.ok) {
       setError(res.error);
@@ -191,19 +203,22 @@ function Inner({
       coverUrl: null,
       prices,
     },
-    signedInEmail: email,
-    fullName: "",
-    setFullName: () => {},
-    email,
-    setEmail: () => {},
-    emailHint: null,
-    acceptEmailHint: () => {},
+    signedInEmail,
+    fullName,
+    setFullName,
+    email: signedInEmail ?? email,
+    setEmail,
+    emailHint,
+    acceptEmailHint: () => {
+      setEmail(emailHint ?? "");
+      setEmailHint(null);
+    },
     // Subscriptions carry Stripe's own automatic_tax, which reads the address
     // off the payment method — so this checkout has never had to ask, and the
     // redesign showing the country inside Stripe's box changes nothing here.
     country: "",
     setCountry: () => {},
-    captureEmail: () => {},
+    captureEmail: () => setEmailHint(suggestEmail(email.trim().toLowerCase())),
     prices,
     pricePick: pick >= 0 ? pick : null,
     setPricePick: setPick,
@@ -247,12 +262,14 @@ function Inner({
     <form onSubmit={onSubmit} className="flex flex-col gap-6">
       {/* Signed in already — shown so they can see which account this attaches
           to, but not editable: the session decides, not the form. */}
-      <div className="flex flex-col gap-2">
-        <span className="kicker text-muted">Your account</span>
-        <div className="rounded-xl border border-border bg-surface-2 px-3.5 py-3 text-sm text-muted">
-          {email}
+      {signedInEmail && (
+        <div className="flex flex-col gap-2">
+          <span className="kicker text-muted">Your account</span>
+          <div className="rounded-xl border border-border bg-surface-2 px-3.5 py-3 text-sm text-muted">
+            {signedInEmail}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Above the payment methods, because what you are buying is a question
           that comes before how you would like to pay for it — and a choice

@@ -75,6 +75,7 @@ export async function previewOfferCoupon(args: {
 }
 
 export async function startOfferCheckout(args: {
+  /** Resolved by the action layer — a member, or an account just created. */
   userId: string;
   email: string;
   offerId: string;

@@ -226,15 +226,30 @@ async function visitorFor(
   return (data?.id as string) ?? null;
 }
 
-export async function createCheckoutIntent(input: CheckoutInput): Promise<CheckoutResult> {
+/**
+ * Who is buying — found, or created on the spot.
+ *
+ * Both checkouts need this and both used to do it their own way: the product
+ * checkout created accounts inline, and the offer checkout refused anybody who
+ * did not already have one. That refusal is what put a login wall in front of
+ * every public offer sales page.
+ *
+ * One implementation, so "an account with this email exists" and "no password
+ * is set at checkout" are decided once. A buyer signing up here never invents a
+ * password: asking for one mid-purchase adds two fields to the highest-friction
+ * screen in the store, and they overwhelmingly forget it before they return.
+ * They sign in with a link, and can set a password later from /reset.
+ */
+export async function resolveBuyer(input: {
+  existingUserId?: string | null;
+  email?: string;
+  fullName?: string;
+}): Promise<
+  | { ok: true; userId: string; email: string }
+  | { ok: false; error: string; code?: "account_exists" }
+> {
   const db = createServiceClient();
   const storeId = await getStoreId();
-
-  const product = await getProductBySlug(input.productSlug);
-  if (!product || product.status !== "published") return { ok: false, error: "Product not available" };
-
-  let userId: string;
-  let email: string;
 
   if (input.existingUserId) {
     // Already signed in: no account to create, and nothing to ask them for.
@@ -243,55 +258,74 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
     // account doesn't exist while looking at their own email on screen.
     const profile = await ensureUserProfile(input.existingUserId);
     if (!profile) return { ok: false, error: "Account not found — please log in again." };
-    userId = profile.id;
-    email = profile.email;
+    return { ok: true, userId: profile.id, email: profile.email };
+  }
 
-    // Don't let a member pay twice for something they already have.
+  if (!input.email || !input.fullName) {
+    return { ok: false, error: "Enter your name and email to continue." };
+  }
+  const email = normEmail(input.email);
+
+  // Signup at checkout — auto-confirmed; they are paying, so the address is
+  // already proven by the card.
+  const created = await db.auth.admin.createUser({
+    email,
+    email_confirm: true,
+    user_metadata: { full_name: input.fullName },
+  });
+  if (created.error || !created.data.user) {
+    const msg = created.error?.message ?? "Could not create account";
+    if (/already|exists|registered/i.test(msg)) {
+      return { ok: false, error: "An account with this email exists — please log in.", code: "account_exists" };
+    }
+    return { ok: false, error: msg };
+  }
+  const userId = created.data.user.id;
+
+  // `username` is the display-name column — no uniqueness constraint, and it
+  // has always been "whatever we should call this person".
+  const { error: profileErr } = await db.from("users").insert({
+    id: userId,
+    store_id: storeId,
+    email,
+    username: input.fullName,
+  });
+  if (profileErr) return { ok: false, error: `profile: ${profileErr.message}` };
+
+  // They may already subscribe to a connected app directly. Claim anything an
+  // app reported for this email before anything else reads their ownership.
+  await applyPendingEntitlements(userId, email);
+
+  return { ok: true, userId, email };
+}
+
+export async function createCheckoutIntent(input: CheckoutInput): Promise<CheckoutResult> {
+  const db = createServiceClient();
+  const storeId = await getStoreId();
+
+  const product = await getProductBySlug(input.productSlug);
+  if (!product || product.status !== "published") return { ok: false, error: "Product not available" };
+
+  // Who is buying, and an account for them if they are new.
+  //
+  // Shared with the offer checkout — see resolveBuyer. Two checkouts each
+  // creating accounts their own way is two places to get "an account already
+  // exists" wrong, and only one of them would ever get fixed.
+  const buyer = await resolveBuyer({
+    existingUserId: input.existingUserId,
+    email: input.email,
+    fullName: input.fullName,
+  });
+  if (!buyer.ok) return buyer;
+  const { userId, email } = buyer;
+
+  // Don't let a member pay twice for something they already have. Product
+  // specific, so it stays here rather than travelling with the buyer.
+  if (input.existingUserId) {
     const already = await ownershipFor(userId);
     if (already.productIds.has(product.id)) {
       return { ok: false, error: "You already own this.", code: "already_owned" };
     }
-  } else {
-    if (!input.email || !input.fullName) {
-      return { ok: false, error: "Enter your name and email to continue." };
-    }
-    email = normEmail(input.email);
-    // Signup at checkout — create the auth account (auto-confirmed; they're
-    // paying, so the email is already proven by the card).
-    //
-    // No password is set. Asking a buyer to invent one mid-purchase adds two
-    // fields to the highest-friction screen in the store, and they overwhelmingly
-    // forget it before they ever return. They sign in with a link instead, and
-    // can set a password later from /reset if they want one.
-    const created = await db.auth.admin.createUser({
-      email,
-      email_confirm: true,
-      user_metadata: { full_name: input.fullName },
-    });
-    if (created.error || !created.data.user) {
-      const msg = created.error?.message ?? "Could not create account";
-      if (/already|exists|registered/i.test(msg)) {
-        return { ok: false, error: "An account with this email exists — please log in.", code: "account_exists" };
-      }
-      return { ok: false, error: msg };
-    }
-    userId = created.data.user.id;
-
-    // `username` is the display-name column — it carries no uniqueness
-    // constraint and has always been "whatever we should call this person".
-    // The buyer's real name now fills it rather than a handle they invented.
-    const { error: profileErr } = await db.from("users").insert({
-      id: userId,
-      store_id: storeId,
-      email,
-      username: input.fullName,
-    });
-    if (profileErr) return { ok: false, error: `profile: ${profileErr.message}` };
-
-    // They may already subscribe to a connected app directly. Claim anything an
-    // app reported for this email BEFORE bump eligibility is computed below, or
-    // we would offer them what they already pay for.
-    await applyPendingEntitlements(userId, email);
   }
 
   // Resolve the bump. shouldShowOffer is the same gate the checkout page uses

@@ -68,3 +68,71 @@ export async function mintPostPurchaseLogin(
   if (error || !data?.properties?.hashed_token) return null;
   return data.properties.hashed_token;
 }
+
+
+/**
+ * The same thing, for an offer bought by somebody who had no account.
+ *
+ * The product version keys on a PaymentIntent and an order row. An offer takes
+ * nothing today — it saves a card and bills later — so it has a SetupIntent and
+ * no order at all; what it produces is an `ownership` row. Different objects,
+ * identical reasoning, so the checks are identical too:
+ *
+ *   the client secret proves WHICH BROWSER is asking,
+ *   the status proves the card was actually saved,
+ *   and the claim proves this is the first time anyone has asked.
+ *
+ * Neither of the first two alone is enough to hand out a session, and without
+ * the third the return URL is a login link for anybody who ever sees it.
+ */
+export async function mintOfferLogin(
+  setupIntentId: string,
+  clientSecret: string | null,
+): Promise<string | null> {
+  if (!setupIntentId || !clientSecret) return null;
+
+  let si;
+  try {
+    si = await stripe().setupIntents.retrieve(setupIntentId);
+  } catch {
+    return null;
+  }
+  if (si.client_secret !== clientSecret || si.status !== "succeeded") return null;
+
+  const userId = si.metadata?.userId;
+  const offerId = si.metadata?.offerId;
+  if (!userId || !offerId) return null;
+
+  const db = createServiceClient();
+  const { data: user } = await db.from("users").select("email").eq("id", userId).maybeSingle();
+  if (!user?.email) return null;
+
+  // The grant this purchase produced. Absent means completeOfferCheckout has
+  // not run or did not grant — either way there is nothing bought here to sign
+  // anybody in for.
+  const { data: own } = await db
+    .from("ownership")
+    .select("id, session_granted_at")
+    .eq("user_id", userId)
+    .eq("offer_id", offerId)
+    .maybeSingle();
+  if (!own?.id || own.session_granted_at) return null;
+
+  // Claim BEFORE minting, and only if still unclaimed, so two requests arriving
+  // together cannot both mint. The .is() filter is the compare half of a
+  // compare-and-set; without it both would update and both would proceed.
+  const { data: claimed } = await db
+    .from("ownership")
+    .update({ session_granted_at: new Date().toISOString() })
+    .eq("id", own.id)
+    .is("session_granted_at", null)
+    .select("id");
+  if (!claimed || claimed.length === 0) return null;
+
+  const { data, error } = await db.auth.admin.generateLink({
+    type: "magiclink",
+    email: user.email as string,
+  });
+  if (error || !data?.properties?.hashed_token) return null;
+  return data.properties.hashed_token;
+}
