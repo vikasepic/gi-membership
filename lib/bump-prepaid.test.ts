@@ -1,0 +1,76 @@
+import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+
+/**
+ * A one-time bump is paid for with the product, not after it.
+ *
+ * It used to be a second, off-session charge on the saved card once the first
+ * had settled. Two things wrong with that, one of them fatal:
+ *
+ *   Stripe refuses an off-session card payment on a card issued in India
+ *   without an RBI e-mandate — "You must provide a mandate for off-session card
+ *   payments made with cards issued in India". So the product was charged, the
+ *   add-on was not, and the buyer got what they paid for minus the thing they
+ *   had ticked. That is a real order on this store, and the failure was only
+ *   visible because the queue caught it.
+ *
+ *   And the page had already said "Total today $11.50" while the payment
+ *   authorised $0.50. The figure somebody agreed to and the figure their card
+ *   saw were never the same number.
+ *
+ * One on-session charge for the amount on the button. No mandate is needed for
+ * a payment the cardholder is present for.
+ */
+
+const checkout = readFileSync("lib/checkout.ts", "utf8");
+const retry = readFileSync("lib/retry.ts", "utf8");
+
+describe("what the card is asked for", () => {
+  it("includes a one-time bump", () => {
+    expect(checkout).toContain("const bumpNowCents =");
+    expect(checkout).toContain("priceCents: payableCents + bumpNowCents,");
+  });
+
+  it("leaves a recurring bump out of it", () => {
+    // A trial takes nothing today, so there is nothing to fold in, and its
+    // subscription bills on its own terms.
+    expect(checkout).toMatch(/bumpOffer\.billingType === "one_time" \? immediateChargeCents\(bumpOffer\) : 0/);
+  });
+
+  it("records an order that adds up to what was charged", () => {
+    expect(checkout).toContain("subtotal_cents: listCents + bumpNowCents,");
+  });
+});
+
+describe("fulfilment of something already paid for", () => {
+  const fulfil = checkout.slice(
+    checkout.indexOf("export async function fulfilBump"),
+    checkout.indexOf("// Idempotently finalize a paid order"),
+  );
+
+  it("takes no second payment", () => {
+    // Charging here as well would bill the buyer twice for one tickbox.
+    expect(fulfil).toContain("args.prepaid");
+    expect(fulfil).toMatch(/args\.prepaid[\s\S]{0,200}: await fulfilOffer\(/);
+  });
+
+  it("still grants it and still writes the line", () => {
+    // The money is settled; the access and the bookkeeping are not.
+    expect(fulfil).toContain("grantOfferOwnership(");
+    expect(fulfil).toContain('kind: "bump"');
+  });
+
+  it("is told so by the intent, not by guessing", () => {
+    // Written by us into metadata, read by us — nothing the browser sends can
+    // turn a charge into a free grant.
+    expect(checkout).toContain('bumpPrepaid: bumpNowCents > 0 ? "true" : ""');
+    expect(checkout).toContain('prepaid: pi.metadata.bumpPrepaid === "true"');
+  });
+
+  it("survives the retry queue without becoming a charge", () => {
+    // The failed-bump job replays fulfilBump. A replay that dropped the flag
+    // would charge for something already paid for.
+    expect(checkout).toMatch(/jobPayload: \{[\s\S]{0,400}prepaid: pi\.metadata\.bumpPrepaid === "true"/);
+    expect(retry).toContain("prepaid: p.prepaid === true");
+  });
+});

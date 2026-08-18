@@ -67,6 +67,10 @@ const RUNNERS: Record<JobKind, Runner> = {
       stripeCustomerId: String(p.stripeCustomerId),
       offerId: String(p.offerId),
       paymentMethodId: String(p.paymentMethodId),
+      // Replayed as it was queued: a bump whose money was already taken with
+      // the order must not be charged by the retry that grants it.
+      prepaid: p.prepaid === true,
+      paidByIntentId: (p.paidByIntentId as string) ?? null,
     });
   },
   crm_event: async (p) => {

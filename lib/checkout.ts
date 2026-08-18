@@ -525,8 +525,30 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
     return { ok: true, clientSecret: si.client_secret, mode: "setup" };
   }
 
+  // A one-time bump is charged HERE, with the product, not afterwards.
+  //
+  // It used to be a second, off-session charge on the saved card once the
+  // first had settled. Two things wrong with that, one of them fatal:
+  //
+  //   Stripe refuses an off-session card payment on a card issued in India
+  //   without an RBI e-mandate. So the product was charged, the add-on was
+  //   not, and the buyer got what they paid for minus the thing they ticked.
+  //
+  //   And the page had already said "Total today $11.50" while the payment
+  //   authorised $0.50 — the figure somebody agreed to and the figure their
+  //   card saw were never the same number.
+  //
+  // One charge, on-session, for the amount on the button. No mandate is
+  // needed for a payment the cardholder is present for, and it is the same
+  // total either way.
+  //
+  // A RECURRING bump is untouched: it takes nothing today, so there is
+  // nothing to fold in, and its subscription bills on its own terms.
+  const bumpNowCents =
+    bumpOffer && bumpOffer.billingType === "one_time" ? immediateChargeCents(bumpOffer) : 0;
+
   const tax = await calculateTax({
-    priceCents: payableCents,
+    priceCents: payableCents + bumpNowCents,
     currency: product.currency,
     country,
     reference: `${product.slug}-${userId}`,
@@ -562,6 +584,9 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       couponCode: coupon?.code ?? "",
       discountCents: String(coupon?.discountCents ?? 0),
       bumpOfferId: bumpOffer?.id ?? "",
+      // Already paid for in THIS intent, so fulfilment grants it without
+      // charging again. Written by us, read by us.
+      bumpPrepaid: bumpNowCents > 0 ? "true" : "",
       taxCalculationId: tax.calculationId ?? "",
       newAccount,
     },
@@ -578,7 +603,9 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       email,
       status: "pending",
       currency: product.currency,
-      subtotal_cents: listCents,
+      // What was bought, add-on included — the order has to add up to what was
+      // charged, and the charge now covers both.
+      subtotal_cents: listCents + bumpNowCents,
       total_cents: tax.totalCents,
       coupon_code: coupon?.code ?? null,
       discount_cents: coupon?.discountCents ?? 0,
@@ -766,6 +793,16 @@ export async function fulfilBump(args: {
   stripeCustomerId: string;
   offerId: string;
   paymentMethodId: string;
+  /**
+   * Its money is already in the order's own payment.
+   *
+   * A one-time bump is charged with the product, on-session, so fulfilment
+   * grants it and records the line and charges nothing. Charging here as well
+   * would bill the buyer twice for one tickbox.
+   */
+  prepaid?: boolean;
+  /** The payment that covered it, for the order line. */
+  paidByIntentId?: string | null;
 }): Promise<void> {
   const db = createServiceClient();
   const offer = await getOffer(args.offerId);
@@ -775,11 +812,16 @@ export async function fulfilBump(args: {
   // nothing here for a retry to fix.
   if (!offer?.active) return;
 
-  const result = await fulfilOffer({
-    order: { id: args.orderId, stripeCustomerId: args.stripeCustomerId },
-    offer,
-    paymentMethodId: args.paymentMethodId,
-  });
+  // Prepaid takes no money and creates no subscription: a one-time bump paid
+  // for in the order's own PaymentIntent is already settled, and the only work
+  // left is granting it and writing the line.
+  const result = args.prepaid
+    ? { paymentIntentId: args.paidByIntentId ?? undefined, subscriptionId: undefined }
+    : await fulfilOffer({
+        order: { id: args.orderId, stripeCustomerId: args.stripeCustomerId },
+        offer,
+        paymentMethodId: args.paymentMethodId,
+      });
 
   await grantOfferOwnership(args.storeId, args.userId, offer, "bump", result.subscriptionId ?? null, {
     email: args.email,
@@ -993,6 +1035,8 @@ export async function finalizeOrder(intentId: string): Promise<void> {
         stripeCustomerId: order.stripe_customer_id as string,
         offerId: bumpOfferId,
         paymentMethodId,
+        prepaid: pi.metadata.bumpPrepaid === "true",
+        paidByIntentId: pi.id,
       });
     } catch (e) {
       // Queued, not lost. The sweep replays it every few minutes and the charge
@@ -1016,6 +1060,8 @@ export async function finalizeOrder(intentId: string): Promise<void> {
           stripeCustomerId: order.stripe_customer_id,
           offerId: bumpOfferId,
           paymentMethodId,
+          prepaid: pi.metadata.bumpPrepaid === "true",
+          paidByIntentId: pi.id,
         },
       });
     }
