@@ -1317,7 +1317,6 @@ export async function resolveOtoForOrder(intentId: string): Promise<string | nul
     ? await stripe().setupIntents.retrieve(intentId)
     : await stripe().paymentIntents.retrieve(intentId);
   const pi = intent as unknown as { metadata: Record<string, string> };
-  if (pi.metadata.bumpOfferId) return null; // bump already taken → no OTO
   const productId = pi.metadata.productId;
   const userId = pi.metadata.userId;
   if (!productId || !userId) return null;
@@ -1329,7 +1328,30 @@ export async function resolveOtoForOrder(intentId: string): Promise<string | nul
     .maybeSingle();
   if (!prod?.upsell_offer_id) return null; // empty slot → skip
 
-  // Same gate as the checkout bump: withdrawn, or already held, means no offer.
+  // Whether they took the bump decides NOTHING here. Ownership does.
+  //
+  // This used to return null the moment the order carried a bump at all —
+  // "bump already taken → no OTO" — which is right for exactly one of the four
+  // cases and wrong for the rest:
+  //
+  //   bump declined, different offer  → show it        (was shown)
+  //   bump declined, SAME offer       → show it, a second chance at the thing
+  //                                     they just said no to   (was shown)
+  //   bump taken,    different offer  → show it: a completely unrelated
+  //                                     product, suppressed for no reason
+  //                                     (was HIDDEN — the whole cost of this)
+  //   bump taken,    SAME offer       → hide it, they own it now (was hidden)
+  //
+  // The only case that must be hidden is the last one, and the ownership gate
+  // below already hides it: finalizeOrder grants the bump before this runs, and
+  // ownershipFor counts everything that is not cancelled — so a bump taken on a
+  // free trial registers too, which is the case a naive "is it active" check
+  // would have missed and sold twice.
+  //
+  // So the rule is ownership and nothing else. An explicit "is the upsell the
+  // same id as the bump" test would be worse: it would also kill the second
+  // chance in row two, and it would hide a bug in ownership rather than expose
+  // one.
   const offer = await getOffer(prod.upsell_offer_id as string);
   const owned = await ownershipFor(userId);
   if (!offer || !shouldShowOffer(offer, owned)) return null;
