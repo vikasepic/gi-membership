@@ -4,6 +4,7 @@ import Script from "next/script";
 import { useEffect, useState } from "react";
 import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
 import { GA4_NAME, META_BOTH_SIDES, META_CUSTOM, type EventName } from "@/lib/analytics/events";
+import type { PixelMatch } from "@/lib/pixel-match";
 
 // The browser half of tracking.
 //
@@ -11,6 +12,13 @@ import { GA4_NAME, META_BOTH_SIDES, META_CUSTOM, type EventName } from "@/lib/an
 // either vendor. A pixel that loads first and "respects consent" afterwards has
 // already told Facebook the page was opened, which is the thing consent was
 // asked about.
+//
+// Advanced matching rides on the init call: `fbq('init', id, {em, fn, ln,
+// external_id})` attaches those to EVERY browser event from then on, which is
+// why a PageView can carry an email at all. All four arrive already hashed —
+// see lib/pixel-match — so no address is ever an argument to a third-party
+// script, and `external_id` is the same value the server sends so the two
+// sides describe one person rather than two.
 //
 // The server half sends the same money events again with the same event_id.
 // Meta deduplicates on that, so both sides raise match quality without
@@ -126,7 +134,7 @@ export function adsConversion(
   });
 }
 
-export function Analytics({ ids }: { ids: Ids }) {
+export function Analytics({ ids, match }: { ids: Ids; match?: PixelMatch | null }) {
   const [allowed, setAllowed] = useState(false);
 
   useEffect(() => {
@@ -160,7 +168,7 @@ n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
 n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
 t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
 document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('init','${ids.metaPixelId}');fbq('track','PageView');`}
+fbq('init','${ids.metaPixelId}'${match ? `,${JSON.stringify(match)}` : ""});fbq('track','PageView');`}
         </Script>
       )}
 

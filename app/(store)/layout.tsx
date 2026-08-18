@@ -3,6 +3,7 @@ import { AppShell } from "@/components/app-shell";
 import { AttributionTracker } from "@/components/attribution-tracker";
 import { Analytics } from "@/components/analytics";
 import { publicAnalyticsIds } from "@/lib/env";
+import { pixelMatch } from "@/lib/pixel-match";
 import { ConsentBanner } from "@/components/consent-banner";
 import { StoreBrand } from "@/components/store-brand";
 import { getSettingsOrDefaults } from "@/lib/settings";
@@ -39,6 +40,10 @@ export default async function StoreLayout({ children }: { children: React.ReactN
   // page then renders in the fonts it was built with, which is what it did
   // before any of this existed.
   const fonts = await listFonts().catch(() => []);
+  // Who is reading, hashed, for the pixel's advanced matching. Null without
+  // consent, and never allowed to break the page: a measurement lookup that
+  // fails must cost a match rate, not a store.
+  const match = await pixelMatch().catch(() => null);
   return (
     <>
       <CodeSnippets snippets={settings.codeSnippets} place="head" onCheckout={onCheckout} />
@@ -49,7 +54,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
         publicBase={process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}
       />
       <AttributionTracker />
-      <Analytics ids={publicAnalyticsIds()} />
+      <Analytics ids={publicAnalyticsIds()} match={match} />
       <AppShell settings={settings}>{children}</AppShell>
       <ConsentBanner />
       <CodeSnippets snippets={settings.codeSnippets} place="bodyEnd" onCheckout={onCheckout} />
