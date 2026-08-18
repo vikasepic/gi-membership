@@ -12,7 +12,7 @@ import type { Offer } from "@/lib/types";
 import type { OfferPrice } from "@/lib/offer-prices";
 import type { ProductOption, AppOption, OfferOption } from "@/lib/admin";
 import { money } from "@/lib/money";
-import { APP_CHANNELS } from "@/lib/app-channels";
+import { channelLabel } from "@/lib/app-channels";
 import { sectionsToForm } from "@/lib/oto-sections";
 
 /** Layouts that still read the fields below. Ten sections and Custom do not. */
@@ -49,6 +49,11 @@ export function OfferForm({
   const hasTrial = prices.some((p) => (p.trialDays ?? 0) > 0);
   const [dirty, setDirty] = useState(false);
   const [active, setActive] = useState(offer ? offer.active : true);
+  // Which app is being granted, so the channel tickboxes can follow it. An
+  // app's channels are its own; nothing else on this form knows them.
+  const [grantAppId, setGrantAppId] = useState(offer?.grantAppId ?? "");
+  const grantedApp = apps.find((a) => a.id === grantAppId);
+  const appChannels = grantedApp?.channels ?? [];
   const [clientErr, setClientErr] = useState<Record<string, string>>({});
   const [attempt, setAttempt] = useState(0);
 
@@ -191,7 +196,12 @@ export function OfferForm({
             </select>
           </Field>
           <Field label="App" hint="if grant = subscription">
-            <select name="grantAppId" defaultValue={offer?.grantAppId ?? ""} className={input}>
+            <select
+              name="grantAppId"
+              value={grantAppId}
+              onChange={(e) => setGrantAppId(e.target.value)}
+              className={input}
+            >
               <option value="">— none —</option>
               {apps.map((a) => (
                 <option key={a.id} value={a.id}>{a.name}</option>
@@ -206,29 +216,34 @@ export function OfferForm({
         {/* Which channels, inside the app.
             The entitlement key above says WHICH app and at what level; this
             says what of it. One offer can sell Instagram alone, LinkedIn
-            alone, or both, without a second app or a second key — and until
-            this existed every offer granting Content Engine granted the same
-            thing, so "the Instagram plan" was a thing the store said and the
-            app had no way to know. */}
-        <Field
-          label="Channels in the app"
-          hint="what this unlocks once they are inside. Ticking none grants the app at whatever its own default is — say which, rather than leaving it to the app to guess."
-        >
-          <div className="flex flex-wrap gap-4">
-            {APP_CHANNELS.map((c) => (
-              <label key={c.value} className="flex cursor-pointer items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  name="grantChannels"
-                  value={c.value}
-                  defaultChecked={(offer?.grantChannels ?? []).includes(c.value)}
-                  className="size-[18px] cursor-pointer accent-[var(--primary)]"
-                />
-                {c.label}
-              </label>
-            ))}
-          </div>
-        </Field>
+            alone, or both, without a second app or a second key.
+
+            Only for an app that HAS channels. It used to show for every app
+            that could be granted, because the first connected app had them —
+            so the Funnel App offer carried an Instagram tickbox, and ticking
+            it sent a channel to an app with no such idea. The app declares
+            what it understands; nothing here invents it. */}
+        {appChannels.length > 0 && (
+          <Field
+            label={`Channels in ${grantedApp?.name ?? "the app"}`}
+            hint="what this unlocks once they are inside. Ticking none grants it at whatever the app's own default is — say which, rather than leaving it to the app to guess."
+          >
+            <div className="flex flex-wrap gap-4">
+              {appChannels.map((value) => (
+                <label key={value} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="grantChannels"
+                    value={value}
+                    defaultChecked={(offer?.grantChannels ?? []).includes(value)}
+                    className="size-[18px] cursor-pointer accent-[var(--primary)]"
+                  />
+                  {channelLabel(value)}
+                </label>
+              ))}
+            </div>
+          </Field>
+        )}
       </Section>
 
       {/* Billing. */}

@@ -115,9 +115,15 @@ describe("the editor", () => {
     expect(action).toContain('formData.getAll("grantChannels")');
   });
 
-  it("offers every channel the code knows about", () => {
+  it("offers the channels the GRANTED APP has, not every one the code knows", () => {
+    // This used to render APP_CHANNELS directly, so every offer granting any
+    // app got an Instagram tickbox — including the Funnel App, which has no
+    // channels at all. See 0061 and lib/app-channels-ownership.test.ts.
     const form = readFileSync("components/admin/offer-form.tsx", "utf8");
-    expect(form).toContain("APP_CHANNELS.map");
+    expect(form).toContain("grantedApp?.channels ?? []");
+    expect(form).not.toContain("APP_CHANNELS.map");
+    // The vocabulary itself is still worth more than one value; a set of one
+    // is not a choice.
     expect(APP_CHANNELS.length).toBeGreaterThan(1);
   });
 });

@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { normalizeChannels } from "@/lib/app-channels";
+import { appChannels } from "@/lib/apps";
 import { pricesField } from "@/lib/prices-field";
 import { parseOtoSections } from "@/lib/oto-sections";
 import { OTO_TEMPLATES } from "@/lib/oto-template";
@@ -118,6 +119,17 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     };
   }
   const v = parsed.data;
+
+  // An offer may only sell what its app says it has.
+  //
+  // The tickboxes are already the app's own, but a form posts whatever it
+  // posts — and a saved offer that grants an app "instagram" when the app has
+  // no channels sends a field the app cannot read. Dropping rather than
+  // refusing: the admin ticked nothing wrong, the list simply changed under an
+  // open tab, and failing a whole save over it would be theatre.
+  const declared = v.grantAppId ? await appChannels(v.grantAppId) : [];
+  v.grantChannels = v.grantChannels.filter((c) => declared.includes(c));
+
   const input: OfferInput = {
     key: v.key,
     name: v.name,

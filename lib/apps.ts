@@ -19,11 +19,32 @@ export type AppRow = {
   handoffEndpoint: string;
   sharedSecret: string;
   entitlementMapping: Record<string, string>;
+  /**
+   * What this app can grant inside itself, e.g. ["instagram","linkedin"].
+   *
+   * Empty means the app has no such division, and an offer granting it may not
+   * sell one — see 0061. The app is the only thing that knows; the store used
+   * to assume every connected app had channels because the first one did.
+   */
+  channels: string[];
   active: boolean;
 };
 
-const APP_COLUMNS =
-  "id, key, name, base_url, provision_endpoint, handoff_endpoint, shared_secret, entitlement_mapping, active";
+export const APP_COLUMNS =
+  "id, key, name, base_url, provision_endpoint, handoff_endpoint, shared_secret, entitlement_mapping, channels, active";
+
+/**
+ * What one app declares it can grant inside itself.
+ *
+ * The app is the authority. Nothing else in the store may decide that an app
+ * has channels — 0058 assumed every connected app did, because the first one
+ * did, and the Funnel App spent a week carrying an Instagram tickbox.
+ */
+export async function appChannels(appId: string): Promise<string[]> {
+  const db = createServiceClient();
+  const { data } = await db.from("apps").select("channels").eq("id", appId).maybeSingle();
+  return (data?.channels as string[]) ?? [];
+}
 
 export async function listApps(): Promise<AppRow[]> {
   const db = createServiceClient();

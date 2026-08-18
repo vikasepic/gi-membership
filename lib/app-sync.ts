@@ -1,7 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
-import { getAppById, notifyAppEntitlement, type AppRow } from "@/lib/apps";
+import { getAppById, notifyAppEntitlement, type AppRow, APP_COLUMNS } from "@/lib/apps";
 import type { OwnershipStatus } from "@/lib/subscription-sync";
 import { tagLifecycle } from "@/lib/ac-tags";
 
@@ -92,7 +92,11 @@ export async function appForSecret(presented: string | null): Promise<AppRow | n
   const db = createServiceClient();
   const { data } = await db
     .from("apps")
-    .select("id, key, name, base_url, provision_endpoint, handoff_endpoint, shared_secret, entitlement_mapping, active")
+    // The shared list, not a copy of it. This WAS a copy, and it went stale
+    // the moment apps grew a column — the select still worked, but the row it
+    // returned was fed to getAppById, which reads the real list, so the two
+    // disagreed about what an app is.
+    .select(APP_COLUMNS)
     .eq("store_id", await getStoreId())
     .eq("active", true);
 

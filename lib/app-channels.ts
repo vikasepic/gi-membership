@@ -1,4 +1,12 @@
 /**
+ * The channel values the database will accept, and what to call each one.
+ *
+ * WHICH of these a given offer may sell is not decided here — it is decided by
+ * the app the offer grants, which declares its own set in `apps.channels`.
+ * Content Engine has both; the Funnel App has none, and an offer granting it
+ * carries none. This list is only the vocabulary the two CHECK constraints
+ * share (0058 on offers, 0061 on apps).
+ *
  * The channels a connected app can grant, and the only values an offer may
  * hold.
  *
@@ -28,6 +36,11 @@ export function normalizeChannels(raw: unknown): AppChannel[] {
     (Array.isArray(raw) ? raw : raw == null ? [] : [raw]).map((v) => String(v).trim().toLowerCase()),
   );
   return APP_CHANNELS.filter((c) => asked.has(c.value)).map((c) => c.value);
+}
+
+/** What to call one, for a label beside a tickbox. Unknown values print as-is. */
+export function channelLabel(value: string): string {
+  return APP_CHANNELS.find((c) => c.value === value)?.label ?? value;
 }
 
 /** "Instagram and LinkedIn" — for a summary line an admin reads. */

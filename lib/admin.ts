@@ -243,7 +243,13 @@ export type OfferInput = {
 };
 
 export type ProductOption = { id: string; title: string };
-export type AppOption = { id: string; key: string; name: string };
+export type AppOption = {
+  id: string;
+  key: string;
+  name: string;
+  /** What this app can grant inside itself. Empty means it has no channels. */
+  channels: string[];
+};
 
 export async function listOffers(): Promise<Offer[]> {
   const db = createServiceClient();
@@ -278,7 +284,7 @@ export async function listAppOptions(): Promise<AppOption[]> {
   const db = createServiceClient();
   const { data, error } = await db
     .from("apps")
-    .select("id, key, name")
+    .select("id, key, name, channels")
     .eq("store_id", await getStoreId())
     .order("created_at", { ascending: true });
   if (error) throw new Error(`listAppOptions: ${error.message}`);
