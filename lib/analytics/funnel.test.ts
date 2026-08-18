@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { GA4_NAME, META_BOTH_SIDES, NO_VALUE } from "@/lib/analytics/events";
+import { GA4_NAME, META_BOTH_SIDES, META_CUSTOM, NO_VALUE } from "@/lib/analytics/events";
 
 // Where each step of the funnel is reported, and where a button goes.
 
@@ -93,24 +93,24 @@ describe("the add-on decisions are reported", () => {
   it("sends them to Meta as custom events", () => {
     // fbq('track') only accepts Meta's own vocabulary; anything else is dropped
     // with a console warning nobody reads, and the event never arrives.
-    const custom = events.slice(events.indexOf("export const META_CUSTOM"));
-    for (const e of ["BumpSelected", "BumpDeclined", "UpsellSelected", "UpsellDeclined"]) {
-      expect(custom.slice(0, 500), e).toContain(e);
+    // The list itself, not a window of the source: a comment added above an
+    // entry is not a behaviour change, and a test that fails for one is a test
+    // people learn to edit rather than read.
+    for (const e of ["BumpSelected", "BumpDeclined", "UpsellSelected", "UpsellDeclined"] as const) {
+      expect(META_CUSTOM, e).toContain(e);
     }
   });
 
   it("does not report a decline as revenue", () => {
-    const noValue = events.slice(events.indexOf("export const NO_VALUE"));
-    expect(noValue.slice(0, 400)).toContain("BumpDeclined");
-    expect(noValue.slice(0, 400)).toContain("UpsellDeclined");
+    expect(NO_VALUE).toContain("BumpDeclined");
+    expect(NO_VALUE).toContain("UpsellDeclined");
   });
 
   it("does not reuse AddToCart for Meta, which would inflate it", () => {
     // AddToCart already fires when a buy button is pressed. Reporting a ticked
     // bump under the same name would pad that number with people who never
     // reached a checkout — and then optimise delivery against it.
-    const both = events.slice(events.indexOf("export const META_BOTH_SIDES"), events.indexOf("export const SERVER_ONLY"));
-    expect(both).not.toContain("BumpSelected");
+    expect(META_BOTH_SIDES).not.toContain("BumpSelected");
   });
 
   it("fires from the bump, on the choice rather than on submit", () => {

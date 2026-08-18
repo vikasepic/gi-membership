@@ -45,6 +45,7 @@ export async function startOffer(
     offerId,
     priceChoice,
     couponCode,
+    isNewAccount: resolved.isNew,
   });
   if (!res.ok) return res;
   return { ok: true, clientSecret: res.clientSecret };

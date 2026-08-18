@@ -50,10 +50,12 @@ describe("who the card belongs to", () => {
 
   it("creates the account through the same code the product checkout uses", () => {
     // Two checkouts each creating accounts their own way is two places to get
-    // "an account already exists" wrong, and only one would ever get fixed.
+    // it wrong, and only one would ever get fixed. Both now continue with an
+    // existing account rather than refusing — see abandoned-signup.test.ts for
+    // why that is only safe alongside the sign-in guard.
     expect(actions).toContain("resolveBuyer");
     expect(checkout).toContain("export async function resolveBuyer");
-    expect(checkout).toContain('code: "account_exists"');
+    expect(checkout).toContain("isNew: false");
   });
 });
 

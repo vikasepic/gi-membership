@@ -199,15 +199,20 @@ function Inner({
     const value = email.trim().toLowerCase();
     setEmailHint(suggestEmail(value));
     if (!value || !value.includes("@")) return;
-    // No Lead event here.
+    // Reported under its own name, not as a Lead.
     //
-    // Typing an address into a checkout is not a lead — it is the middle of a
-    // purchase. Firing one on every blur put three Leads in front of one buyer
-    // who was about to send a Purchase anyway, and taught the ad platform to
+    // A lead is somebody who asked to hear from you. This is somebody halfway
+    // through paying, and calling it a lead put three of them in front of one
+    // buyer who was about to send a Purchase — teaching the ad platform to
     // optimise for people who reach the email field rather than for people who
-    // pay. The abandoned-cart capture below still runs; that is what the
-    // address is genuinely useful for.
-    capturedEmail.current = value;
+    // reach the end.
+    //
+    // Once per address, not once per blur: the name arriving later re-buffers
+    // the contact, and it must not re-report the same person.
+    if (capturedEmail.current !== value) {
+      capturedEmail.current = value;
+      track("CheckoutEmailEntered", { content_ids: [product.slug] }, eventIdFor("CheckoutEmailEntered", value));
+    }
     const name = fullName.trim();
     const key = `${value}|${name}`;
     if (bufferedLead.current === key) return;

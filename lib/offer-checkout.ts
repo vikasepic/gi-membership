@@ -83,6 +83,8 @@ export async function startOfferCheckout(args: {
   priceChoice?: number;
   /** The code they typed. Re-checked here; never trusted for an amount. */
   couponCode?: string | null;
+  /** Whether this checkout created the account. Decides the sign-in on return. */
+  isNewAccount?: boolean;
 }): Promise<StartResult> {
   const offer = await getOffer(args.offerId);
   if (!offer || !offer.active) return { ok: false, error: "That offer isn’t available any more." };
@@ -142,6 +144,9 @@ export async function startOfferCheckout(args: {
       // the browser could have influenced at preview time; the code is re-priced
       // on the way back against whatever the coupon is worth then.
       couponCode: coupon?.code ?? "",
+      // Whether THIS checkout created the account. Read on the way back to
+      // decide whether a session may be handed out — see mintOfferLogin.
+      newAccount: args.isNewAccount ? "true" : "false",
     },
   });
   if (!si.client_secret) return { ok: false, error: "Could not start checkout." };

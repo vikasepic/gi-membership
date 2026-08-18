@@ -13,6 +13,16 @@ export const EVENTS = [
   /** A buy button pressed on a sales page — intent, before any form. */
   "AddToCart",
   "Lead",
+  /**
+   * An address typed into a checkout.
+   *
+   * NOT a Lead. A lead is somebody who asked to hear from you; this is
+   * somebody halfway through paying, and reporting it as a lead taught the ad
+   * platform to optimise for people who reach the email field rather than for
+   * people who reach the end. Reported under its own name so the number means
+   * what it says and can be used as the intent signal it actually is.
+   */
+  "CheckoutEmailEntered",
   "CompleteRegistration",
   "InitiateCheckout",
   "AddPaymentInfo",
@@ -55,6 +65,9 @@ export const GA4_NAME: Record<EventName, string> = {
   ViewContent: "view_item",
   AddToCart: "add_to_cart",
   Lead: "generate_lead",
+  // GA4 has no standard event for this and inventing a `generate_lead` here
+  // would put it in the same report as a real one.
+  CheckoutEmailEntered: "checkout_email_entered",
   CompleteRegistration: "sign_up",
   InitiateCheckout: "begin_checkout",
   AddPaymentInfo: "add_payment_info",
@@ -92,6 +105,16 @@ export const META_BOTH_SIDES: EventName[] = [
   "InitiateCheckout",
   "AddPaymentInfo",
   "Lead",
+  /**
+   * An address typed into a checkout.
+   *
+   * NOT a Lead. A lead is somebody who asked to hear from you; this is
+   * somebody halfway through paying, and reporting it as a lead taught the ad
+   * platform to optimise for people who reach the email field rather than for
+   * people who reach the end. Reported under its own name so the number means
+   * what it says and can be used as the intent signal it actually is.
+   */
+  "CheckoutEmailEntered",
   "CompleteRegistration",
 ];
 
@@ -109,6 +132,9 @@ export const SERVER_ONLY: EventName[] = ["Subscribe"];
 export const META_CUSTOM: EventName[] = [
   "LessonStarted",
   "LessonCompleted",
+  // Meta has no standard name for it, which is the point — the standard name
+  // it was borrowing said something untrue.
+  "CheckoutEmailEntered",
   // Meta has AddToCart, but these are not it. AddToCart is already sent when a
   // buy button is pressed, and reporting a ticked bump under the same name
   // would inflate that number with people who never reached a checkout — and
@@ -124,6 +150,19 @@ export const NO_VALUE: EventName[] = [
   "PageView",
   "ViewContent",
   "Lead",
+  // Somebody typing an address has bought nothing. A value here would be
+  // revenue that has not happened, on the event that happens most often.
+  "CheckoutEmailEntered",
+  /**
+   * An address typed into a checkout.
+   *
+   * NOT a Lead. A lead is somebody who asked to hear from you; this is
+   * somebody halfway through paying, and reporting it as a lead taught the ad
+   * platform to optimise for people who reach the email field rather than for
+   * people who reach the end. Reported under its own name so the number means
+   * what it says and can be used as the intent signal it actually is.
+   */
+  "CheckoutEmailEntered",
   "CompleteRegistration",
   "LessonStarted",
   "LessonCompleted",

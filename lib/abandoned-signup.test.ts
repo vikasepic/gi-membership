@@ -2,74 +2,108 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 
 /**
- * Trying again after a payment that did not go through.
+ * Buying with an address that already has an account.
  *
- * The account is created before the card is charged, so a decline, a closed
- * tab or a Stripe error leaves a real account behind that owns nothing. Coming
- * back and typing the same address then met "an account with this email exists
- * — please log in" — and there was nothing to log into: no password was ever
- * set and nothing was ever bought. A dead end at the moment of paying, caused
- * entirely by their own first attempt failing.
+ * Nobody is turned away at the payment step. The account is created BEFORE the
+ * card is charged, so a decline or a closed tab leaves one behind owning
+ * nothing — and "an account with this email exists, please log in" then sent
+ * that buyer to a login for an account with no password and nothing in it. A
+ * dead end caused by their own first attempt failing, at the worst possible
+ * moment. Buying twice is allowed too; that is bookkeeping, not a reason to
+ * stop somebody paying.
  *
- * The fix has to be narrow in one specific way, which is what this pins: an
- * account that owns something is a real customer, and a stranger typing their
- * address must not be able to continue as them.
+ * What must NOT follow is a session. Letting anybody pay under any address is
+ * only safe while paying under an address is not a way into the account behind
+ * it — otherwise $19 buys somebody else's library. That is the whole point of
+ * this file.
  */
 
 const checkout = readFileSync("lib/checkout.ts", "utf8");
-const resume = checkout.slice(
-  checkout.indexOf("async function resumeAbandonedSignup"),
-  checkout.indexOf("export async function createCheckoutIntent"),
-);
+const post = readFileSync("lib/post-purchase.ts", "utf8");
+const offer = readFileSync("lib/offer-checkout.ts", "utf8");
+const actions = readFileSync("app/(store)/checkout/offer/actions.ts", "utf8");
 
-describe("resuming an abandoned signup", () => {
-  it("is only reached when the address already exists", () => {
-    expect(checkout).toMatch(/already\|exists\|registered[\s\S]{0,1400}resumeAbandonedSignup/);
+describe("nobody is stopped from paying", () => {
+  it("continues with the existing account rather than refusing", () => {
+    expect(checkout).toContain("const existing = await userIdForEmail(email);");
+    expect(checkout).toMatch(/return \{ ok: true, userId: existing, email, isNew: false \};/);
   });
 
-  it("refuses an account that owns anything", () => {
-    // Cancelled does not count as owning — somebody whose subscription lapsed
-    // and who never bought anything else is still an abandoned shell.
-    expect(resume).toContain('.from("ownership")');
-    expect(resume).toContain('.neq("status", "canceled")');
-    expect(resume).toMatch(/if \(\(owns \?\? 0\) > 0\) return null;/);
-  });
-
-  it("refuses an account that has ever paid", () => {
-    // Ownership can be revoked by hand; a paid order cannot be unpaid. Both
-    // are checked because either one alone leaves a real customer reachable.
-    expect(resume).toContain('.eq("status", "paid")');
-    expect(resume).toMatch(/if \(\(paid \?\? 0\) > 0\) return null;/);
-  });
-
-  it("only ever returns an id, never a way in", () => {
-    // It resolves who the buyer is for THIS purchase. It does not sign anybody
-    // in, and it does not hand back a session or a token.
-    expect(resume).not.toContain("generateLink");
-    expect(resume).not.toContain("verifyOtp");
-    expect(resume).not.toContain("createUser");
-  });
-
-  it("still refuses when the account is a real one", () => {
-    // The message survives for the case it was written for.
-    expect(checkout).toContain('code: "account_exists"');
-    expect(checkout).toContain("An account with this email exists — please log in.");
+  it("no longer tells anybody to go and log in", () => {
+    // The message and its code are gone, not merely unreachable — a checkout
+    // that can refuse at the payment step is a checkout that eventually will.
+    expect(checkout).not.toContain("An account with this email exists");
+    expect(checkout).not.toContain("account_exists");
   });
 });
 
-describe("what the checkout no longer reports", () => {
-  const form = readFileSync("components/checkout/checkout-form.tsx", "utf8");
+describe("paying is not a way in", () => {
+  it("says whether this checkout created the account", () => {
+    expect(checkout).toContain("const newAccount = buyer.isNew ? \"true\" : \"false\";");
+  });
 
-  it("fires no Lead event", () => {
-    // Typing an address into a checkout is the middle of a purchase, not a
-    // lead. Firing on every blur put three Leads in front of one buyer who was
-    // about to send a Purchase, and taught the ad platform to optimise for
-    // people who reach the email field rather than for people who pay.
+  it("carries it on both kinds of intent", () => {
+    // Written by us, read by us — the same way the price id travels, and for
+    // the same reason: nothing the browser says can change it.
+    expect(checkout.match(/newAccount,/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    expect(offer).toContain('newAccount: args.isNewAccount ? "true" : "false"');
+    expect(actions).toContain("isNewAccount: resolved.isNew");
+  });
+
+  it("refuses a session for an account that already existed", () => {
+    // Both paths sign a first-time buyer in. Neither may sign in somebody who
+    // simply typed an address that already had an account.
+    for (const [name, src] of [
+      ["product", post.slice(post.indexOf("export async function mintPostPurchaseLogin"), post.indexOf("export async function mintOfferLogin"))],
+      ["offer", post.slice(post.indexOf("export async function mintOfferLogin"))],
+    ] as const) {
+      expect(src, `${name} sign-in checks newAccount`).toMatch(
+        /metadata\?\.newAccount !== "true"\) return null;/,
+      );
+    }
+  });
+
+  it("checks it before minting anything", () => {
+    // After would be a link already generated for an account that must not
+    // have one.
+    const mint = post.slice(post.indexOf("export async function mintOfferLogin"));
+    expect(mint.indexOf('newAccount !== "true"')).toBeLessThan(mint.indexOf("generateLink"));
+  });
+});
+
+describe("what the checkout reports when an address is typed", () => {
+  const form = readFileSync("components/checkout/checkout-form.tsx", "utf8");
+  const events = readFileSync("lib/analytics/events.ts", "utf8");
+
+  it("is not called a Lead", () => {
+    // A lead is somebody who asked to hear from you. This is somebody halfway
+    // through paying, and the borrowed name taught the ad platform to optimise
+    // for people who reach the email field rather than for people who pay.
     expect(form).not.toContain('track("Lead"');
   });
 
+  it("says what it actually is", () => {
+    expect(form).toContain('track("CheckoutEmailEntered"');
+    expect(events).toContain('"CheckoutEmailEntered"');
+  });
+
+  it("goes to Meta under its own name, not a borrowed standard one", () => {
+    // fbq('track') only accepts Meta's vocabulary; a custom name has to go
+    // through trackCustom or it is dropped with a warning nobody reads.
+    const custom = events.slice(events.indexOf("export const META_CUSTOM"));
+    expect(custom).toContain("CheckoutEmailEntered");
+  });
+
+  it("carries no money, because nothing has been bought", () => {
+    const noValue = events.slice(events.indexOf("export const NO_VALUE"));
+    expect(noValue).toContain("CheckoutEmailEntered");
+  });
+
+  it("fires once per address, not once per blur", () => {
+    expect(form).toContain("if (capturedEmail.current !== value) {");
+  });
+
   it("still buffers the address for the abandoned-cart email", () => {
-    // That is what the address is genuinely useful for, and it is untouched.
     expect(form).toContain("captureAbandonedCart(");
   });
 });

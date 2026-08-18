@@ -149,7 +149,7 @@ export type CheckoutResult =
    * about a client secret, so the client is told rather than left to guess.
    */
   | { ok: true; clientSecret: string; mode: "payment" | "setup" }
-  | { ok: false; error: string; code?: "account_exists" | "already_owned" | "bump_unavailable" | "bump_trial_used" };
+  | { ok: false; error: string; code?: "already_owned" | "bump_unavailable" | "bump_trial_used" };
 
 const normEmail = (e: string) => e.trim().toLowerCase();
 
@@ -245,8 +245,8 @@ export async function resolveBuyer(input: {
   email?: string;
   fullName?: string;
 }): Promise<
-  | { ok: true; userId: string; email: string }
-  | { ok: false; error: string; code?: "account_exists" }
+  | { ok: true; userId: string; email: string; isNew: boolean }
+  | { ok: false; error: string }
 > {
   const db = createServiceClient();
   const storeId = await getStoreId();
@@ -258,7 +258,7 @@ export async function resolveBuyer(input: {
     // account doesn't exist while looking at their own email on screen.
     const profile = await ensureUserProfile(input.existingUserId);
     if (!profile) return { ok: false, error: "Account not found — please log in again." };
-    return { ok: true, userId: profile.id, email: profile.email };
+    return { ok: true, userId: profile.id, email: profile.email, isNew: false };
   }
 
   if (!input.email || !input.fullName) {
@@ -277,23 +277,27 @@ export async function resolveBuyer(input: {
     const msg = created.error?.message ?? "Could not create account";
     if (!/already|exists|registered/i.test(msg)) return { ok: false, error: msg };
 
-    // An account with this address already exists. Whose?
+    // An account with this address already exists — so use it.
     //
-    // Almost always theirs, from a minute ago: the account is created before
-    // the card is charged, so a declined card, a closed tab or a Stripe error
-    // leaves a real account behind that owns nothing. Coming back and trying
-    // again then met "an account with this email exists — please log in", and
-    // there is nothing to log into — no password was ever set, and they had
-    // bought nothing. A dead end at the moment of paying, caused entirely by
-    // their first attempt failing.
+    // Nobody is turned away at the payment step any more. The account is
+    // created BEFORE the card is charged, so a decline or a closed tab leaves
+    // one behind owning nothing, and "an account with this email exists,
+    // please log in" sent that buyer to a login for an account with no
+    // password and nothing in it. A dead end caused by their own first attempt
+    // failing, at the worst possible moment.
     //
-    // So: an account holding NOTHING is treated as that abandoned attempt and
-    // carried on with. An account that holds something is a real customer, and
-    // that still refuses — buying under somebody else's address must not
-    // attach the purchase to them.
-    const existing = await resumeAbandonedSignup(email);
-    if (existing) return { ok: true, userId: existing, email };
-    return { ok: false, error: "An account with this email exists — please log in.", code: "account_exists" };
+    // Buying twice is now allowed too, and is a bookkeeping question rather
+    // than something to stop somebody paying over. Nothing is emailed on
+    // account creation alone, so an account nobody completed a purchase on
+    // stays invisible to the person it belongs to.
+    //
+    // What does NOT follow is a session. See the sign-in guard below: a
+    // purchase made against an address whose account already existed must
+    // never hand out a login for it, or paying $19 under somebody else's
+    // address would be a way into their library.
+    const existing = await userIdForEmail(email);
+    if (existing) return { ok: true, userId: existing, email, isNew: false };
+    return { ok: false, error: "Could not create account" };
   }
   const userId = created.data.user.id;
 
@@ -311,47 +315,14 @@ export async function resolveBuyer(input: {
   // app reported for this email before anything else reads their ownership.
   await applyPendingEntitlements(userId, email);
 
-  return { ok: true, userId, email };
+  return { ok: true, userId, email, isNew: true };
 }
 
-/**
- * The user id behind an address, but only if that account has nothing.
- *
- * "Nothing" is the whole test: no ownership and no paid order. Such an account
- * can only have come from a checkout that created it and then failed before
- * taking any money, so continuing as them loses nobody anything and un-sticks
- * a buyer who would otherwise be told to log in to an account with no password
- * and no purchases.
- *
- * Anything owned, or anything paid, and this returns null — that is a real
- * customer, and a stranger typing their address must not be able to attach a
- * purchase to them or to reach what they own.
- */
-async function resumeAbandonedSignup(email: string): Promise<string | null> {
+/** The account behind an address, whatever state it is in. */
+async function userIdForEmail(email: string): Promise<string | null> {
   const db = createServiceClient();
-  const { data: profile } = await db
-    .from("users")
-    .select("id")
-    .eq("email", email)
-    .maybeSingle();
-  if (!profile?.id) return null;
-  const userId = profile.id as string;
-
-  const { count: owns } = await db
-    .from("ownership")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .neq("status", "canceled");
-  if ((owns ?? 0) > 0) return null;
-
-  const { count: paid } = await db
-    .from("orders")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("status", "paid");
-  if ((paid ?? 0) > 0) return null;
-
-  return userId;
+  const { data } = await db.from("users").select("id").eq("email", email).maybeSingle();
+  return (data?.id as string) ?? null;
 }
 
 export async function createCheckoutIntent(input: CheckoutInput): Promise<CheckoutResult> {
@@ -373,6 +344,10 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   });
   if (!buyer.ok) return buyer;
   const { userId, email } = buyer;
+  // Whether THIS checkout created the account, carried on the intent so the
+  // return trip can decide whether it may hand out a session. Written by us,
+  // read by us — the same way the price id travels.
+  const newAccount = buyer.isNew ? "true" : "false";
 
   // Don't let a member pay twice for something they already have. Product
   // specific, so it stays here rather than travelling with the buyer.
@@ -517,6 +492,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
         couponCode: coupon?.code ?? "",
         bumpOfferId: bumpOffer?.id ?? "",
         country: country ?? "",
+        newAccount,
       },
     });
     if (!si.client_secret) return { ok: false, error: "No client secret" };
@@ -587,6 +563,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       discountCents: String(coupon?.discountCents ?? 0),
       bumpOfferId: bumpOffer?.id ?? "",
       taxCalculationId: tax.calculationId ?? "",
+      newAccount,
     },
   });
 

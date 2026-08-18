@@ -40,6 +40,15 @@ export async function mintPostPurchaseLogin(
   // Both halves matter: the secret proves which browser, the status proves the
   // money moved. Neither alone is enough to hand out a session.
   if (pi.client_secret !== clientSecret || pi.status !== "succeeded") return null;
+  // Only for an account this checkout created.
+  //
+  // Anybody may now buy with an address that already has an account — that is
+  // deliberate, so a failed first attempt cannot lock somebody out of paying.
+  // Handing back a SESSION for it would be something else entirely: paying $19
+  // under a customer's address would be a way into their library. So a purchase
+  // against an existing account completes, sends its receipt, and signs nobody
+  // in.
+  if (pi.metadata?.newAccount !== "true") return null;
 
   const db = createServiceClient();
   const { data: order } = await db
@@ -98,6 +107,10 @@ export async function mintOfferLogin(
     return null;
   }
   if (si.client_secret !== clientSecret || si.status !== "succeeded") return null;
+  // Only for an account this checkout created — same reasoning as the product
+  // path. Buying with an address that already has an account is allowed; being
+  // logged into that account for having paid is not.
+  if (si.metadata?.newAccount !== "true") return null;
 
   const userId = si.metadata?.userId;
   const offerId = si.metadata?.offerId;
