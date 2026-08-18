@@ -116,11 +116,18 @@ describe("the redesigned checkout", () => {
 
   it("asks Stripe for the billing country instead of asking twice", () => {
     const el = render(slots());
-    // Ours is gone…
+    // Ours is gone, because Stripe's own box collects it — a card asks for a
+    // country and a postcode by default, which is exactly what tax needs.
     expect(el.querySelector('select[aria-label="Billing country"]')).toBeNull();
-    // …because theirs is collecting it.
-    const options = captured.options as { fields?: { billingDetails?: { address?: { country?: string } } } };
-    expect(options.fields?.billingDetails?.address?.country).toBe("auto");
+  });
+
+  it("never opts out of a field it does not then supply", () => {
+    // Stripe's contract for "never" is that YOU provide the value at
+    // confirmPayment. Opting out of line1/city/state without supplying them
+    // threw an IntegrationError, the promise rejected, and the pay button sat
+    // on "Processing…" forever with the card never charged.
+    const options = captured.options as { fields?: unknown };
+    expect(JSON.stringify(options.fields ?? {})).not.toContain("never");
   });
 
   it("brings our country field back when Stripe could not supply one", () => {

@@ -122,20 +122,27 @@ describe("buffering the abandoned-cart lead", () => {
     expect(leads()).toHaveLength(2);
   });
 
-  it("fires the Lead pixel once per address, not once per capture", () => {
-    // The buffer re-sends when the name changes; the pixel may not. Two Lead
-    // events for one person would overstate the funnel in Meta and GA4.
+  it("fires no Lead event at all", () => {
+    // Typing an address into a checkout is not a lead, it is the middle of a
+    // purchase. This used to fire on every blur, so one buyer who was about to
+    // send a Purchase produced three Leads first — and taught the ad platform
+    // to optimise for people who reach the email field rather than for people
+    // who pay.
+    //
+    // The buffering below is unaffected: that is what the address is genuinely
+    // useful for, and it is the reason this file exists.
     fill("Email", "jane@example.com");
     fill("Full name", "Jane Doe");
     fill("Full name", "Jane D");
     expect(leads()).toHaveLength(3);
-    expect(pixels()).toHaveLength(1);
+    expect(pixels()).toHaveLength(0);
   });
 
-  it("fires again for a genuinely different address", () => {
+  it("buffers a genuinely different address without reporting one", () => {
     fill("Email", "jane@example.com");
     fill("Email", "joan@example.com");
-    expect(pixels()).toHaveLength(2);
+    expect(leads()).toHaveLength(2);
+    expect(pixels()).toHaveLength(0);
   });
 
   it("buffers nothing for something that is not an address yet", () => {
@@ -147,13 +154,13 @@ describe("buffering the abandoned-cart lead", () => {
     expect(pixels()).toHaveLength(0);
   });
 
-  it("normalizes the address the same way for the buffer and the pixel", () => {
-    // Two casings of one address are one lead. Not normalizing here would let
-    // the same person through twice, once per way they typed it.
+  it("normalizes the address before buffering it", () => {
+    // Two casings of one address are one contact. Not normalizing here would
+    // let the same person through twice, once per way they typed it.
     fill("Email", "  Jane@Example.COM ");
     expect(leads()[0]?.[1]).toBe("jane@example.com");
     fill("Email", "jane@example.com");
     expect(leads()).toHaveLength(1);
-    expect(pixels()).toHaveLength(1);
+    expect(pixels()).toHaveLength(0);
   });
 });

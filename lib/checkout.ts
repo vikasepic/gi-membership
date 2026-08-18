@@ -275,10 +275,25 @@ export async function resolveBuyer(input: {
   });
   if (created.error || !created.data.user) {
     const msg = created.error?.message ?? "Could not create account";
-    if (/already|exists|registered/i.test(msg)) {
-      return { ok: false, error: "An account with this email exists — please log in.", code: "account_exists" };
-    }
-    return { ok: false, error: msg };
+    if (!/already|exists|registered/i.test(msg)) return { ok: false, error: msg };
+
+    // An account with this address already exists. Whose?
+    //
+    // Almost always theirs, from a minute ago: the account is created before
+    // the card is charged, so a declined card, a closed tab or a Stripe error
+    // leaves a real account behind that owns nothing. Coming back and trying
+    // again then met "an account with this email exists — please log in", and
+    // there is nothing to log into — no password was ever set, and they had
+    // bought nothing. A dead end at the moment of paying, caused entirely by
+    // their first attempt failing.
+    //
+    // So: an account holding NOTHING is treated as that abandoned attempt and
+    // carried on with. An account that holds something is a real customer, and
+    // that still refuses — buying under somebody else's address must not
+    // attach the purchase to them.
+    const existing = await resumeAbandonedSignup(email);
+    if (existing) return { ok: true, userId: existing, email };
+    return { ok: false, error: "An account with this email exists — please log in.", code: "account_exists" };
   }
   const userId = created.data.user.id;
 
@@ -297,6 +312,46 @@ export async function resolveBuyer(input: {
   await applyPendingEntitlements(userId, email);
 
   return { ok: true, userId, email };
+}
+
+/**
+ * The user id behind an address, but only if that account has nothing.
+ *
+ * "Nothing" is the whole test: no ownership and no paid order. Such an account
+ * can only have come from a checkout that created it and then failed before
+ * taking any money, so continuing as them loses nobody anything and un-sticks
+ * a buyer who would otherwise be told to log in to an account with no password
+ * and no purchases.
+ *
+ * Anything owned, or anything paid, and this returns null — that is a real
+ * customer, and a stranger typing their address must not be able to attach a
+ * purchase to them or to reach what they own.
+ */
+async function resumeAbandonedSignup(email: string): Promise<string | null> {
+  const db = createServiceClient();
+  const { data: profile } = await db
+    .from("users")
+    .select("id")
+    .eq("email", email)
+    .maybeSingle();
+  if (!profile?.id) return null;
+  const userId = profile.id as string;
+
+  const { count: owns } = await db
+    .from("ownership")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .neq("status", "canceled");
+  if ((owns ?? 0) > 0) return null;
+
+  const { count: paid } = await db
+    .from("orders")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("status", "paid");
+  if ((paid ?? 0) > 0) return null;
+
+  return userId;
 }
 
 export async function createCheckoutIntent(input: CheckoutInput): Promise<CheckoutResult> {

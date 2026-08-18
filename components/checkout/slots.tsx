@@ -659,8 +659,17 @@ export function CouponSlot(p: {
           autoCapitalize="characters"
           spellCheck={false}
           autoFocus={open}
-          className="min-w-0 flex-1 bg-transparent px-3.5 py-3 text-sm uppercase outline-none placeholder:normal-case placeholder:text-muted"
-          style={set({ color: p.inputColor })}
+          className="min-w-0 flex-1 bg-transparent px-3.5 py-3 text-sm uppercase placeholder:normal-case placeholder:text-muted"
+          // Inline, because the global `input:focus-visible` rule is 0-1-1 and
+          // beats Tailwind's `outline-none` at 0-1-0 — so focusing this drew a
+          // second, square-cornered outline inside the rounded pill that
+          // already surrounds the field and its button. Two borders for one
+          // control, which is what it looked like.
+          //
+          // Nothing is lost by removing it: the wrapper carries
+          // `focus-within:border-primary`, so keyboard focus is still shown —
+          // once, on the control rather than inside it.
+          style={{ ...set({ color: p.inputColor }), outline: "none" }}
         />
         <button
           type="button"
@@ -744,24 +753,18 @@ export function CardFieldsSlot(p: {
       // Stripe account both offer them. "auto" is Stripe deciding per visitor,
       // which is the only answer that can be right on a page served worldwide.
       wallets: { applePay: "auto", googlePay: "auto", link: "auto" },
-      ...(p.collectCountry
-        ? {
-            fields: {
-              billingDetails: {
-                // Country and postcode only. The rest is address Stripe does
-                // not need for a digital sale and we have no reason to hold.
-                address: {
-                  country: "auto",
-                  postalCode: "auto",
-                  line1: "never",
-                  line2: "never",
-                  city: "never",
-                  state: "never",
-                },
-              },
-            },
-          }
-        : {}),
+      // No `fields` override, and that is the fix rather than an omission.
+      //
+      // It used to set line1, line2, city and state to "never" to keep the box
+      // to a country and a postcode. Stripe's contract for "never" is that YOU
+      // then supply the value at confirmPayment — opt out of collecting it and
+      // you have taken on providing it. We did not, so confirmPayment threw
+      // an IntegrationError, the promise rejected, and the button sat on
+      // "Processing…" forever with the card never charged.
+      //
+      // Stripe's default for a card is already a country and a postcode, which
+      // is exactly what was wanted — the override bought nothing and cost every
+      // payment on the page.
     }),
     [p.tabs, p.collectCountry],
   );

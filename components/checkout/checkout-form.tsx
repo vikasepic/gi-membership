@@ -199,14 +199,15 @@ function Inner({
     const value = email.trim().toLowerCase();
     setEmailHint(suggestEmail(value));
     if (!value || !value.includes("@")) return;
-    if (capturedEmail.current !== value) {
-      capturedEmail.current = value;
-      // An address on a checkout is a lead whether or not they go on to buy —
-      // and it is the last thing many of them do.
-      // The address goes to our server, which hashes it, and never to the
-      // pixel in the clear — see `track`'s fourth argument.
-      track("Lead", { content_ids: [product.slug] }, eventIdFor("Lead", value), { email: value });
-    }
+    // No Lead event here.
+    //
+    // Typing an address into a checkout is not a lead — it is the middle of a
+    // purchase. Firing one on every blur put three Leads in front of one buyer
+    // who was about to send a Purchase anyway, and taught the ad platform to
+    // optimise for people who reach the email field rather than for people who
+    // pay. The abandoned-cart capture below still runs; that is what the
+    // address is genuinely useful for.
+    capturedEmail.current = value;
     const name = fullName.trim();
     const key = `${value}|${name}`;
     if (bufferedLead.current === key) return;
