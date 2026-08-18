@@ -23,6 +23,21 @@ export function RichText({
   onChange?: (html: string) => void;
 }) {
   const [html, setHtml] = useState(value ?? "");
+  /**
+   * Editing the markup directly.
+   *
+   * TipTap is not a text box with buttons — it holds a document that conforms
+   * to a schema, and anything the schema cannot express is discarded when it
+   * parses. Paste a table, a <span> with a colour, an underline, a <sub>, and
+   * the editor drops it before it is ever saved. The server's allowlist permits
+   * all of those, so what looked like a sanitiser refusing markup was the
+   * editor refusing to hold it.
+   *
+   * So: a way to write the markup itself. Nothing here relaxes what is stored —
+   * sanitizeBodyHtml still runs on save, and a <script> is still refused. It
+   * only stops the editor being the narrowest thing in the chain.
+   */
+  const [source, setSource] = useState(false);
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -45,6 +60,28 @@ export function RichText({
   });
 
   if (!editor) return null;
+
+  /**
+   * Back to the visual editor, with a warning it deserves.
+   *
+   * Returning re-parses the markup through TipTap's schema, which drops
+   * whatever it cannot model — so someone who has just hand-written a table
+   * would watch it disappear on a click they thought was a view toggle. Asked
+   * rather than done, and only when there is something at stake.
+   */
+  const toVisual = () => {
+    const risky = /<(table|span|u|sub|sup|mark|small|figure|section|article|div)\b|style=/i.test(html);
+    if (
+      risky &&
+      !window.confirm(
+        "The visual editor cannot show everything you have written — tables, spans, inline styles and a few others are dropped when it reads the markup back.\n\nSwitch anyway?",
+      )
+    ) {
+      return;
+    }
+    editor.commands.setContent(html, { emitUpdate: false });
+    setSource(false);
+  };
 
   const Btn = ({ on, active, children }: { on: () => void; active: boolean; children: React.ReactNode }) => (
     <button
@@ -75,8 +112,26 @@ export function RichText({
         >
           Link
         </Btn>
+        {/* Pushed to the far end: it is a change of surface, not another
+            formatting button, and sitting it beside Bold invites a click from
+            somebody who wanted bold text. */}
+        <Btn on={() => (source ? toVisual() : setSource(true))} active={source}>
+          {source ? "Visual" : "HTML"}
+        </Btn>
       </div>
-      <EditorContent editor={editor} />
+      {source ? (
+        <textarea
+          value={html}
+          onChange={(e) => {
+            setHtml(e.target.value);
+            onChange?.(e.target.value);
+          }}
+          spellCheck={false}
+          className="rich min-h-48 w-full rounded-xl border border-border bg-surface px-3.5 py-3 font-mono text-xs outline-none focus:border-primary"
+        />
+      ) : (
+        <EditorContent editor={editor} />
+      )}
       {name && <input type="hidden" name={name} value={html} />}
     </div>
   );
