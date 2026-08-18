@@ -78,8 +78,11 @@ describe("buildMetaEvent", () => {
     expect(JSON.stringify(payload)).not.toContain("Buyer@Example.COM");
   });
 
-  it("passes the click id through for attribution", () => {
-    expect(payload.data[0].user_data.fbc).toBe("fb123");
+  it("sends the click id in the format Meta accepts, not the bare fbclid", () => {
+    // fbc is `fb.<subdomain>.<click-time-ms>.<fbclid>`. This used to send the
+    // raw fbclid, which Meta discards — so every paid-click conversion lost its
+    // attribution while the payload looked for all the world like it carried it.
+    expect(payload.data[0].user_data.fbc).toMatch(/^fb\.1\.\d+\.fb123$/);
   });
 
   it("reports value in major units, not cents", () => {

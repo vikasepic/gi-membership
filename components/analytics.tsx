@@ -3,7 +3,7 @@
 import Script from "next/script";
 import { useEffect, useState } from "react";
 import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
-import { GA4_NAME, META_CUSTOM, type EventName } from "@/lib/analytics/events";
+import { GA4_NAME, META_BOTH_SIDES, META_CUSTOM, type EventName } from "@/lib/analytics/events";
 
 // The browser half of tracking.
 //
@@ -36,6 +36,15 @@ export function track(
   name: EventName,
   params: Record<string, unknown> = {},
   eventId?: string,
+  /**
+   * Sent to OUR server and to nobody else.
+   *
+   * The buyer's address raises Meta's match rate a great deal, and it must
+   * reach Meta hashed. Putting it in `params` would hand it to the pixel in
+   * the clear — advanced matching sends whatever it is given — so it travels
+   * on the relay instead, where the server hashes it before it leaves.
+   */
+  serverOnly?: { email?: string | null },
 ): void {
   if (typeof window === "undefined") return;
   // Meta: the event id is what pairs this with the server's copy. A course
@@ -45,6 +54,52 @@ export function track(
   // GA4: only the events that carry no money. Revenue is the server's job, and
   // a purchase reported from here as well would be counted twice.
   if (!isCommerce(name)) window.gtag?.("event", GA4_NAME[name], params);
+  // And the server's copy of the same event, through our own domain.
+  if (eventId && META_BOTH_SIDES.includes(name) && !isCommerce(name))
+    relay(name, params, eventId, serverOnly?.email ?? undefined);
+}
+
+/**
+ * Ask the server to report this event too.
+ *
+ * The line above sends it to Meta from the browser; this sends the same
+ * event_id from the server, so Meta collapses the pair. The point is the
+ * traffic where the line above never runs — a blocked pixel, a tracking
+ * protection list, an iOS setting — where this is the only copy that arrives.
+ *
+ * A request to our own origin, which is what makes it survive: connect.
+ * facebook.net is on every blocklist there is and /api/track/event is on none
+ * of them.
+ *
+ * keepalive, because two of these fire on a page the buyer is about to leave —
+ * a checkout that redirects to Stripe, a buy button that navigates. Without it
+ * the browser cancels the request on unload and the event is lost exactly when
+ * it matters. Failures are swallowed: nothing here may interrupt a purchase.
+ */
+function relay(
+  name: EventName,
+  params: Record<string, unknown>,
+  eventId: string,
+  email?: string,
+): void {
+  try {
+    void fetch("/api/track/event", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify({
+        event: name,
+        eventId,
+        valueCents: typeof params.value === "number" ? Math.round(params.value * 100) : 0,
+        currency: typeof params.currency === "string" ? params.currency : undefined,
+        contentIds: Array.isArray(params.content_ids) ? params.content_ids : undefined,
+        contentName: typeof params.content_name === "string" ? params.content_name : undefined,
+        email: email || undefined,
+      }),
+    }).catch(() => {});
+  } catch {
+    // Never let a measurement call throw into a checkout.
+  }
 }
 
 const isCommerce = (name: EventName) =>

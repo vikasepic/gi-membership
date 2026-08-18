@@ -127,6 +127,16 @@ export type CheckoutInput = {
   anonId?: string | null; // attribution visitor cookie, read by the action layer
   country?: string | null; // ISO-2, required when Stripe Tax is enabled
   trackingConsent?: boolean; // GDPR opt-in, read from the cookie by the action layer
+  /**
+   * The buyer's own request, for ad-platform match quality.
+   *
+   * Captured by the action layer because this is the only moment the request
+   * belongs to the buyer — finalizeOrder also runs from Stripe's webhook, where
+   * the address on the request is Stripe's. Null without tracking consent.
+   */
+  clientIp?: string | null;
+  userAgent?: string | null;
+  sourceUrl?: string | null;
 };
 
 export type CheckoutResult =
@@ -439,6 +449,9 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       tax_cents: 0,
       buyer_country: country,
       tracking_consent: input.trackingConsent === true,
+      client_ip: input.clientIp ?? null,
+      client_user_agent: input.userAgent ?? null,
+      source_url: input.sourceUrl ?? null,
       stripe_customer_id: customerId,
       stripe_setup_intent_id: si.id,
       visitor_id: visitor,
@@ -507,6 +520,9 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       buyer_country: country,
       stripe_tax_calculation_id: tax.calculationId,
       tracking_consent: input.trackingConsent === true,
+      client_ip: input.clientIp ?? null,
+      client_user_agent: input.userAgent ?? null,
+      source_url: input.sourceUrl ?? null,
       stripe_customer_id: customerId,
       stripe_payment_intent_id: pi.id,
       visitor_id: visitorId,
@@ -733,7 +749,7 @@ export async function fulfilBump(args: {
 export async function finalizeOrder(intentId: string): Promise<void> {
   const db = createServiceClient();
   const COLUMNS =
-    "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents, stripe_setup_intent_id, currency";
+    "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents, stripe_setup_intent_id, currency, buyer_country, client_ip, client_user_agent, source_url";
 
   // Either kind of intent. A one-off product order points at a PaymentIntent; a
   // recurring one points at a SetupIntent, because a trial charges nothing
@@ -1084,16 +1100,49 @@ export async function finalizeOrder(intentId: string): Promise<void> {
   // double-count a conversion.
   try {
     const { data: visitor } = order.visitor_id
-      ? await db.from("visitors").select("click_ids").eq("id", order.visitor_id).maybeSingle()
+      ? await db
+          .from("visitors")
+          .select("click_ids, first_seen_at")
+          .eq("id", order.visitor_id)
+          .maybeSingle()
       : { data: null };
+
+    // What was bought, so the server copy names a product too. The browser
+    // copy has always carried this; on ad-blocked traffic, where the server
+    // copy is the only one that arrives, it named nothing.
+    const { data: items } = await db
+      .from("order_items")
+      .select("description, product_id")
+      .eq("order_id", order.id as string);
+    const { data: buyer } = await db
+      .from("users")
+      .select("username")
+      .eq("id", order.user_id as string)
+      .maybeSingle();
+
+    // Everything below is shared by both events on this order.
+    const who = {
+      email: order.email as string,
+      userId: order.user_id as string,
+      fullName: (buyer?.username as string | null) ?? null,
+      country: (order.buyer_country as string | null) ?? null,
+      clientIp: (order.client_ip as string | null) ?? null,
+      userAgent: (order.client_user_agent as string | null) ?? null,
+      sourceUrl: (order.source_url as string | null) ?? null,
+      clickIds: (visitor?.click_ids as Record<string, string>) ?? {},
+      clickTimeMs: visitor?.first_seen_at ? new Date(visitor.first_seen_at as string).getTime() : null,
+      contentIds: (items ?? []).map((i) => (i.product_id as string) ?? "").filter(Boolean),
+      contentName: (items ?? [])[0]?.description as string | undefined,
+      numItems: (items ?? []).length || undefined,
+    };
+
     await trackPurchase({
+      ...who,
       eventId: eventIdFor("Purchase", order.id as string),
       eventName: "Purchase",
-      email: order.email as string,
       valueCents: pi.amount,
       currency: pi.currency,
       orderId: order.id as string,
-      clickIds: (visitor?.click_ids as Record<string, string>) ?? {},
       occurredAt: Math.floor(Date.now() / 1000),
     });
 
@@ -1104,13 +1153,12 @@ export async function finalizeOrder(intentId: string): Promise<void> {
     const trialCents = await trialWorthFor(order.id as string);
     if (trialCents > 0) {
       await trackServerEvent({
+        ...who,
         eventId: eventIdFor("StartTrial", order.id as string),
         eventName: "StartTrial",
-        email: order.email as string,
         valueCents: trialCents,
         currency: pi.currency,
         orderId: order.id as string,
-        clickIds: (visitor?.click_ids as Record<string, string>) ?? {},
         occurredAt: Math.floor(Date.now() / 1000),
       });
     }

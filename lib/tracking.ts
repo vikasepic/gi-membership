@@ -1,6 +1,8 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { GA4_NAME, NO_VALUE, type EventName } from "@/lib/analytics/events";
+import { compact, countryHash, fbcFrom, fbpFrom, hashed, nameParts } from "@/lib/tracking-fields";
+import { recordError } from "@/lib/errors";
 
 // Server-side ad tracking. Events are sent from the server (not the browser) so
 // ad blockers and ITP cannot silence conversions, and so the day-7 trial
@@ -18,15 +20,46 @@ export type PurchaseEvent = {
   currency: string;
   orderId: string;
   clickIds: Record<string, string>;
-  clientIp?: string;
-  userAgent?: string;
-  sourceUrl?: string;
+  clientIp?: string | null;
+  userAgent?: string | null;
+  sourceUrl?: string | null;
   occurredAt: number; // unix seconds
+
+  /**
+   * Who they are, for the fields Meta matches on beyond the address.
+   *
+   * All optional and all dropped when absent. Every one of them raises match
+   * quality on its own, and none of them is worth inventing: a guessed last
+   * name matches nobody, which is worse than sending no last name at all.
+   */
+  userId?: string | null; // -> external_id
+  fullName?: string | null; // -> fn / ln
+  country?: string | null; // ISO-2 -> country
+  /** When the ad click happened, for building fbc where no cookie survived. */
+  clickTimeMs?: number | null;
+
+  /** What was bought, so a deduped event still carries a product. */
+  contentIds?: string[];
+  contentName?: string | null;
+  contentType?: string;
+  numItems?: number;
 };
 
 export type TrackingEnv = {
   META_PIXEL_ID?: string;
   META_CAPI_TOKEN?: string;
+  /**
+   * Meta's Test Events code.
+   *
+   * Without it a server event cannot be seen in Events Manager's Test Events
+   * tab at all — browser events show up there on their own, server events only
+   * when the payload names the code. So "check the two sides line up" was not a
+   * thing anybody could do, which is why the fields below went years unnoticed.
+   *
+   * Meant to be set temporarily and removed. Left set, every event is flagged
+   * as a test and is NOT counted for optimisation or reporting.
+   */
+  META_TEST_EVENT_CODE?: string;
   GA4_MEASUREMENT_ID?: string;
   GA4_API_SECRET?: string;
 };
@@ -76,7 +109,34 @@ export const trackingProblems = () => trackingMisconfigured(trackingEnv());
 
 const major = (cents: number) => Math.round(cents) / 100;
 
-export function buildMetaEvent(e: PurchaseEvent) {
+export function buildMetaEvent(e: PurchaseEvent, testEventCode?: string) {
+  const { fn, ln } = nameParts(e.fullName);
+
+  // Hashed where Meta hashes, in the clear where Meta issued the value itself.
+  // An `fbp` or an IP that has been hashed is an identifier Meta cannot match
+  // against anything, which looks identical to sending it correctly.
+  const user_data = compact({
+    em: e.email ? [hashEmail(e.email)] : undefined,
+    fn: fn ? [fn] : undefined,
+    ln: ln ? [ln] : undefined,
+    country: countryHash(e.country) ? [countryHash(e.country)!] : undefined,
+    external_id: hashed(e.userId) ? [hashed(e.userId)!] : undefined,
+    fbc: fbcFrom(e.clickIds, e.clickTimeMs ?? undefined),
+    fbp: fbpFrom(e.clickIds),
+    client_ip_address: e.clientIp ?? undefined,
+    client_user_agent: e.userAgent ?? undefined,
+  });
+
+  // What was bought. The browser copy has carried this all along and the
+  // server copy did not — so on the traffic where the browser is blocked, the
+  // surviving event named no product and could drive nothing that needs one.
+  const content = compact({
+    content_ids: e.contentIds?.length ? e.contentIds : undefined,
+    content_type: e.contentIds?.length ? (e.contentType ?? "product") : undefined,
+    content_name: e.contentName ?? undefined,
+    num_items: e.numItems ?? undefined,
+  });
+
   return {
     data: [
       {
@@ -84,24 +144,23 @@ export function buildMetaEvent(e: PurchaseEvent) {
         event_time: e.occurredAt,
         event_id: e.eventId, // dedupes against the browser pixel
         action_source: "website" as const,
-        event_source_url: e.sourceUrl,
-        user_data: {
-          em: [hashEmail(e.email)],
-          fbc: e.clickIds.fbclid,
-          client_ip_address: e.clientIp,
-          client_user_agent: e.userAgent,
-        },
+        ...compact({ event_source_url: e.sourceUrl ?? undefined }),
+        user_data,
         // A value on an event that has none invents revenue, and invented
         // revenue is what an algorithm then optimises towards.
-        custom_data: NO_VALUE.includes(e.eventName)
-          ? { order_id: e.orderId }
-          : {
-              value: major(e.valueCents),
-              currency: e.currency.toUpperCase(),
-              order_id: e.orderId,
-            },
+        // One shape, with the money dropped rather than a second shape without
+        // it: a union here means every reader has to narrow before it can look
+        // at `value`, for a field that is simply absent on some events.
+        custom_data: compact({
+          order_id: e.orderId,
+          value: NO_VALUE.includes(e.eventName) ? undefined : major(e.valueCents),
+          currency: NO_VALUE.includes(e.eventName) ? undefined : e.currency.toUpperCase(),
+          ...content,
+        }),
       },
     ],
+    // Only present while somebody is watching Test Events.
+    ...(testEventCode ? { test_event_code: testEventCode } : {}),
   };
 }
 
@@ -129,6 +188,7 @@ function trackingEnv(): TrackingEnv {
   return {
     META_PIXEL_ID: process.env.META_PIXEL_ID,
     META_CAPI_TOKEN: process.env.META_CAPI_TOKEN,
+    META_TEST_EVENT_CODE: process.env.META_TEST_EVENT_CODE,
     GA4_MEASUREMENT_ID: process.env.GA4_MEASUREMENT_ID,
     GA4_API_SECRET: process.env.GA4_API_SECRET,
   };
@@ -143,25 +203,58 @@ function trackingEnv(): TrackingEnv {
  * hashing, click ids, dedup — applies to every event, and having a second
  * function for the rest is how half of them end up not sending click ids.
  */
-export async function trackServerEvent(e: PurchaseEvent): Promise<void> {
-  return trackPurchase(e);
+export async function trackServerEvent(
+  e: PurchaseEvent,
+  opts?: { only?: ("meta" | "ga4")[] },
+): Promise<void> {
+  return trackPurchase(e, opts);
 }
 
-export async function trackPurchase(e: PurchaseEvent): Promise<void> {
+export async function trackPurchase(
+  e: PurchaseEvent,
+  /**
+   * Which platforms to send to.
+   *
+   * Meta deduplicates on event_id and GA4 does not. So an event the browser
+   * already reports to GA4 — every upper-funnel one — must go to Meta ALONE
+   * from the server, or the same InitiateCheckout is counted twice and every
+   * funnel rate built on it is wrong by however much traffic runs a blocker.
+   *
+   * Unset means both, which is right for the money events: those are sent to
+   * GA4 from the server only, and the browser never reports them.
+   */
+  opts?: { only?: ("meta" | "ga4")[] },
+): Promise<void> {
   const env = trackingEnv();
-  const providers = enabledProviders(env);
+  const allowed = opts?.only;
+  const providers = enabledProviders(env).filter((p) => !allowed || allowed.includes(p));
   if (providers.length === 0) return;
 
   const sends: Promise<unknown>[] = [];
 
   if (providers.includes("meta")) {
     sends.push(
-      fetch(`https://graph.facebook.com/v21.0/${env.META_PIXEL_ID}/events`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...buildMetaEvent(e), access_token: env.META_CAPI_TOKEN }),
-        signal: AbortSignal.timeout(5000),
-      }),
+      (async () => {
+        const res = await fetch(`https://graph.facebook.com/v21.0/${env.META_PIXEL_ID}/events`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            ...buildMetaEvent(e, env.META_TEST_EVENT_CODE),
+            access_token: env.META_CAPI_TOKEN,
+          }),
+          signal: AbortSignal.timeout(5000),
+        });
+        // Read the refusal.
+        //
+        // A 400 from Meta was being thrown away: fetch resolves for any status,
+        // so a rejected payload counted as a successful send. A malformed field
+        // could be discarded for months and the only evidence would be a
+        // conversion count that felt low. Now it lands on the errors page.
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          throw new Error(`meta ${res.status}: ${body.slice(0, 500)}`);
+        }
+      })(),
     );
   }
 
@@ -181,8 +274,17 @@ export async function trackPurchase(e: PurchaseEvent): Promise<void> {
 
   const results = await Promise.allSettled(sends);
   for (const r of results) {
-    if (r.status === "rejected") {
-      console.error("[tracking] send failed:", r.reason);
-    }
+    if (r.status !== "rejected") continue;
+    // Logged AND recorded. The console line is the fastest place to look
+    // during an incident; the errors page is the only place anybody would
+    // notice weeks later. Not retried: an ad platform refusing an event is
+    // almost always the payload rather than the moment, and replaying a
+    // malformed event on a schedule just refuses it again on a schedule.
+    console.error("[tracking] send failed:", r.reason);
+    await recordError({
+      source: "tracking",
+      message: `Could not report ${e.eventName}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`,
+      context: { eventName: e.eventName, eventId: e.eventId, orderId: e.orderId },
+    }).catch(() => {});
   }
 }

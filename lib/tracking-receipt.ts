@@ -94,8 +94,8 @@ export async function reportTrialConverted(
   if (!own?.offer_id) return;
 
   const [{ data: offer }, { data: user }] = await Promise.all([
-    db.from("offers").select("price_cents, currency").eq("id", own.offer_id as string).maybeSingle(),
-    db.from("users").select("email").eq("id", userId).maybeSingle(),
+    db.from("offers").select("price_cents, currency, name").eq("id", own.offer_id as string).maybeSingle(),
+    db.from("users").select("email, username").eq("id", userId).maybeSingle(),
   ]);
   if (!offer || !user?.email) return;
 
@@ -104,24 +104,39 @@ export async function reportTrialConverted(
   // attached it — which is the whole reason the order stores visitor_id.
   const { data: order } = await db
     .from("orders")
-    .select("visitor_id")
+    .select("visitor_id, buyer_country, client_ip, client_user_agent, source_url")
     .eq("user_id", userId)
     .not("visitor_id", "is", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   const { data: visitor } = order?.visitor_id
-    ? await db.from("visitors").select("click_ids").eq("id", order.visitor_id as string).maybeSingle()
+    ? await db
+        .from("visitors")
+        .select("click_ids, first_seen_at")
+        .eq("id", order.visitor_id as string)
+        .maybeSingle()
     : { data: null };
 
   await trackServerEvent({
     eventId: eventIdFor("Subscribe", stripeSubscriptionId),
     eventName: "Subscribe",
     email: user.email as string,
+    userId,
+    fullName: (user.username as string | null) ?? null,
+    country: (order?.buyer_country as string | null) ?? null,
+    // The request that bought the trial a week ago. There is no browser here at
+    // all — this fires from a Stripe webhook on day seven — so the IP and agent
+    // stored on that order are the only true ones this event can carry.
+    clientIp: (order?.client_ip as string | null) ?? null,
+    userAgent: (order?.client_user_agent as string | null) ?? null,
+    sourceUrl: (order?.source_url as string | null) ?? null,
     valueCents: offer.price_cents as number,
     currency: (offer.currency as string) ?? "usd",
     orderId: stripeSubscriptionId,
     clickIds: (visitor?.click_ids as Record<string, string>) ?? {},
+    clickTimeMs: visitor?.first_seen_at ? new Date(visitor.first_seen_at as string).getTime() : null,
+    contentName: (offer.name as string) ?? null,
     occurredAt: Math.floor(Date.now() / 1000),
   });
 }

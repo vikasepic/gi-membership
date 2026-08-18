@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createCheckoutIntent, finalizeOrder, orderIdForIntent, type CheckoutResult } from "@/lib/checkout";
 import { sendPostPurchaseIfDue } from "@/lib/post-purchase-send";
 import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
@@ -80,7 +80,29 @@ export async function startCheckout(input: unknown): Promise<CheckoutResult> {
   const jar = await cookies();
   const anonId = jar.get("gi_anon")?.value ?? null;
   const trackingConsent = mayTrack(parseConsent(jar.get(CONSENT_COOKIE)?.value));
-  return createCheckoutIntent({ ...parsed.data, existingUserId, anonId, trackingConsent });
+
+  // The buyer's own request, captured here and nowhere else.
+  //
+  // finalizeOrder is reached two ways — from the thank-you page, which IS the
+  // buyer, and from Stripe's webhook, where the only address available belongs
+  // to Stripe. Reading these at send time would have half of every store's
+  // conversions attributed to a data centre in Ireland, which is worse than
+  // sending nothing: a confident wrong answer.
+  //
+  // Only with consent. Without it these stay null and the event goes without
+  // them, which is the same rule the visitors table follows.
+  const h = await headers();
+  const client = trackingConsent
+    ? {
+        // x-forwarded-for is a list; the first entry is the client and the rest
+        // are the proxies it came through.
+        clientIp: h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || null,
+        userAgent: h.get("user-agent"),
+        sourceUrl: h.get("referer"),
+      }
+    : {};
+
+  return createCheckoutIntent({ ...parsed.data, existingUserId, anonId, trackingConsent, ...client });
 }
 
 // Called by the thank-you page after Stripe redirects back. Idempotent — the

@@ -172,6 +172,7 @@ function Inner({
       "AddPaymentInfo",
       { value: totalNowRef.current / 100, currency: product.currency.toUpperCase() },
       eventIdFor("AddPaymentInfo"),
+      { email: signedInEmail ?? (email.trim().toLowerCase() || null) },
     );
   }
 
@@ -189,6 +190,7 @@ function Inner({
         content_ids: [product.slug],
       },
       eventIdFor("InitiateCheckout"),
+      { email: signedInEmail ?? null },
     );
   }, [product.slug, product.priceCents, product.currency]);
   const [emailHint, setEmailHint] = useState<string | null>(null);
@@ -201,7 +203,9 @@ function Inner({
       capturedEmail.current = value;
       // An address on a checkout is a lead whether or not they go on to buy —
       // and it is the last thing many of them do.
-      track("Lead", { content_ids: [product.slug] }, eventIdFor("Lead", value));
+      // The address goes to our server, which hashes it, and never to the
+      // pixel in the clear — see `track`'s fourth argument.
+      track("Lead", { content_ids: [product.slug] }, eventIdFor("Lead", value), { email: value });
     }
     const name = fullName.trim();
     const key = `${value}|${name}`;
