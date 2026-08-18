@@ -4,6 +4,7 @@ import { tagContact } from "@/lib/activecampaign";
 import { notifyAppEntitlement } from "@/lib/apps";
 import { sendCrmEvent, type CrmEvent } from "@/lib/crm";
 import { fulfilBump } from "@/lib/checkout";
+import { trackPurchase, type PurchaseEvent } from "@/lib/tracking";
 import { messageOf, nextAttemptAt, MAX_ATTEMPTS, type JobKind } from "@/lib/errors";
 
 // Replaying failed side effects.
@@ -75,6 +76,13 @@ const RUNNERS: Record<JobKind, Runner> = {
   },
   crm_event: async (p) => {
     await sendCrmEvent(p as unknown as CrmEvent);
+  },
+  // A conversion whose one send timed out. Safe twice: Meta deduplicates on
+  // the event id, which is derived from the order, so a replay landing beside
+  // a copy the browser already sent is one sale either way.
+  tracking_event: async (p) => {
+    const only = (p.only as ("meta" | "ga4")[] | null) ?? undefined;
+    await trackPurchase(p.event as unknown as PurchaseEvent, { ...(only ? { only } : {}), rethrow: true });
   },
 };
 

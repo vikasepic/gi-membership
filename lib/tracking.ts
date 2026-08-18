@@ -205,7 +205,7 @@ function trackingEnv(): TrackingEnv {
  */
 export async function trackServerEvent(
   e: PurchaseEvent,
-  opts?: { only?: ("meta" | "ga4")[] },
+  opts?: { only?: ("meta" | "ga4")[]; rethrow?: boolean },
 ): Promise<void> {
   return trackPurchase(e, opts);
 }
@@ -223,7 +223,17 @@ export async function trackPurchase(
    * Unset means both, which is right for the money events: those are sent to
    * GA4 from the server only, and the browser never reports them.
    */
-  opts?: { only?: ("meta" | "ga4")[] },
+  opts?: {
+    only?: ("meta" | "ga4")[];
+    /**
+     * Report failure by throwing instead of by queueing.
+     *
+     * For the retry runner. Without it a replay that failed again would record
+     * a SECOND job carrying the same event, and the queue would grow a new row
+     * every sweep instead of counting attempts against the one already there.
+     */
+    rethrow?: boolean;
+  },
 ): Promise<void> {
   const env = trackingEnv();
   const allowed = opts?.only;
@@ -275,16 +285,51 @@ export async function trackPurchase(
   const results = await Promise.allSettled(sends);
   for (const r of results) {
     if (r.status !== "rejected") continue;
+    const message = r.reason instanceof Error ? r.reason.message : String(r.reason);
     // Logged AND recorded. The console line is the fastest place to look
     // during an incident; the errors page is the only place anybody would
-    // notice weeks later. Not retried: an ad platform refusing an event is
-    // almost always the payload rather than the moment, and replaying a
-    // malformed event on a schedule just refuses it again on a schedule.
+    // notice weeks later.
     console.error("[tracking] send failed:", r.reason);
+    // Retried only when the MOMENT was the problem.
+    //
+    // A refusal is almost always the payload, and replaying a malformed event
+    // on a schedule just refuses it again on a schedule. A timeout or a 5xx is
+    // the opposite: the same payload would have been accepted a minute later,
+    // and this was the one and only attempt at reporting a completed sale. So
+    // it goes back in the queue — Meta accepts an event up to seven days after
+    // it happened, and the event id is the order's, so a replay that overlaps
+    // a copy the browser already sent is deduplicated rather than doubled.
+    // The sweep owns the bookkeeping for a replay: throwing is how a runner
+    // reports failure, and recording here as well would fork the job.
+    if (opts?.rethrow) throw r.reason instanceof Error ? r.reason : new Error(message);
+    const retryable = transient(message);
     await recordError({
       source: "tracking",
-      message: `Could not report ${e.eventName}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`,
+      message: `Could not report ${e.eventName}: ${message}`,
       context: { eventName: e.eventName, eventId: e.eventId, orderId: e.orderId },
+      ...(retryable
+        ? {
+            jobKind: "tracking_event" as const,
+            // The event verbatim, plus which platform was being sent to — a
+            // replay of both when only Meta timed out would double-count in
+            // GA4, which does not deduplicate.
+            jobPayload: { event: e as unknown as Record<string, unknown>, only: allowed ?? null },
+          }
+        : {}),
     }).catch(() => {});
   }
+}
+
+/**
+ * Was it the moment rather than the payload?
+ *
+ * A timeout aborts before any status exists. A 5xx is the platform having a
+ * bad minute. Everything else — a 400 naming a bad field, a 401 on a rotated
+ * token — will fail identically on every replay.
+ */
+function transient(message: string): boolean {
+  if (/timeout|aborted|ETIMEDOUT|ECONNRESET|ENOTFOUND|EAI_AGAIN|fetch failed/i.test(message)) {
+    return true;
+  }
+  return /\b(?:meta |ga4 )?5\d\d\b/.test(message);
 }
