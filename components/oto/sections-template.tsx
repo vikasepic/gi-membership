@@ -56,7 +56,10 @@ export async function SectionsOto({
           // somebody has already got their card out.
           prices: livePrices(offer.prices),
           currency: offer.currency,
-          buyHref: `/checkout/offer?offer=${offer.id}`,
+          // Deliberately no checkout link on this page: the card is on file,
+          // and every buy control here charges it rather than asking again.
+          buyHref: null,
+          otoToken: view.token,
           byOffer: await offersForRows(rows),
           // The upsell is the one page with somewhere to decline TO, so it is
           // the one page that hands the block a decline. The same destination

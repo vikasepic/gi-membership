@@ -48,6 +48,7 @@ export type PageMoney = {
   prices?: OfferPrice[];
   /** Where the Ways to pay button goes, with the chosen price appended. */
   buyHref?: string | null;
+  otoToken?: string | null;
   /** Where declining goes. Only the upsell has anywhere — see BlockMoney. */
   declineHref?: string | null;
   declineLabel?: string | null;

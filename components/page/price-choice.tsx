@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { money } from "@/lib/money";
 import { readableInk, tint } from "@/lib/color";
+import { acceptOtoAction } from "@/app/(store)/checkout/oto/actions";
 import {
   chargeNowCents,
   priceLabel,
@@ -79,6 +80,7 @@ export function PriceChoice({
   declineHref,
   declineLabel,
   onChoose,
+  otoToken,
   chosen,
   band,
   s,
@@ -102,6 +104,16 @@ export function PriceChoice({
   declineLabel?: string | null;
   /** On the checkout, where choosing is the whole point and there is no link. */
   onChoose?: (index: number) => void;
+  /**
+   * The one-click token, on an upsell.
+   *
+   * An upsell is the one page where the card is already on file — that is the
+   * entire proposition. Given a token, the button stops being a LINK to a
+   * checkout and becomes a submit that charges the saved card, because sending
+   * somebody who has just paid back to a form asking for the card again is the
+   * one thing a one-click upsell must not do.
+   */
+  otoToken?: string | null;
   /** Preselected — from the link that brought them here. */
   chosen?: number | null;
   band: { fg: string; muted: string; rule: string; accent: string; panel: string };
@@ -216,10 +228,28 @@ export function PriceChoice({
         })}
       </div>
 
-      {/* A link when there is somewhere to go, a button when the choosing IS
-          the action. Never a link that looks disabled — an anchor with no href
-          is a thing screen readers walk straight past. */}
-      {href && !waiting ? (
+      {/* One click, where the card is already on file. The chosen price rides
+          as its INDEX into the list the server rebuilds, never as an id and
+          never as an amount — the same contract the built-in upsell uses. */}
+      {otoToken ? (
+        <form action={acceptOtoAction} className="w-full">
+          <input type="hidden" name="token" value={otoToken} />
+          <input type="hidden" name="choice" value={picked ?? ""} />
+          <button
+            type="submit"
+            disabled={waiting}
+            className="w-full px-5 py-3 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+            style={{
+              background: buttonBg,
+              color: buttonFg,
+              borderRadius: s.buttonRadius,
+              fontSize: px(s.buttonSize),
+            }}
+          >
+            {waiting ? "Choose one above" : acceptLabel}
+          </button>
+        </form>
+      ) : href && !waiting ? (
         <a
           href={price ? `${href}${href.includes("?") ? "&" : "?"}price=${price.id}` : href}
           className="w-full px-5 py-3 text-center text-sm font-medium transition-opacity hover:opacity-90"

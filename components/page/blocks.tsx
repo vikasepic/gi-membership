@@ -103,6 +103,15 @@ export type BlockMoney = {
   /** Where the Ways to pay button goes; the chosen price is appended to it. */
   buyHref?: string | null;
   /**
+   * The one-click token, when this page IS an upsell.
+   *
+   * Present only there. A buy control given one charges the card already on
+   * file instead of linking to a checkout — which is the whole proposition of
+   * an upsell, and what a `prices` block dropped on one was quietly undoing by
+   * sending the buyer back to a form for the card they had just used.
+   */
+  otoToken?: string | null;
+  /**
    * Where declining goes, and what it is called.
    *
    * Present only on a page that HAS somewhere to decline to — the upsell,
@@ -495,7 +504,10 @@ function Inner({
             heading={str(p.heading)}
             note={str(p.note)}
             acceptLabel={str(p.acceptLabel, "Get instant access")}
-            href={href}
+            // On an upsell the token wins and the link is not used at all —
+            // there is no checkout to send anybody to.
+            href={money?.otoToken ? null : href}
+            otoToken={money?.otoToken ?? null}
             declineHref={money?.declineHref ?? null}
             declineLabel={money?.declineLabel ?? null}
             band={{ fg: c.fg, muted: theme.muted, rule: theme.rule, accent: c.accent, panel: theme.panel }}
