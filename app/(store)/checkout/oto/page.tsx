@@ -12,6 +12,9 @@ import { getPageSections } from "@/lib/pages";
 import type { OtoView } from "@/components/oto/shell";
 import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";
+import { TrackPurchase } from "@/components/track-purchase";
+import { purchaseForOrder } from "@/lib/tracking-receipt";
+import { googleAdsPurchaseLabel } from "@/lib/env";
 
 export const metadata = NOINDEX;
 
@@ -63,15 +66,45 @@ export default async function OtoPage({
         : null,
   };
 
+  // The purchase is reported HERE, not on thank-you.
+  //
+  // Everyone who is shown an upsell reaches thank-you through it, and every
+  // route out of this page — accept, decline, the countdown expiring, closing
+  // the tab — arrives there with no payment_intent to read a receipt from. So
+  // the browser's copy of Purchase never fired for any of them. Reporting it
+  // on the page they land on after paying covers all four, including the tab
+  // they close, and the shared event id keeps it one sale rather than two.
+  const receipt = await purchaseForOrder(verified.payload.orderId);
+  const purchase = receipt ? (
+    <TrackPurchase
+      orderId={receipt.orderId}
+      valueCents={receipt.valueCents}
+      currency={receipt.currency}
+      trialCents={receipt.trialCents}
+      email={receipt.email}
+      adsLabel={googleAdsPurchaseLabel()}
+    />
+  ) : null;
+
   // The sections layout reads its content from the database, which a
   // component map cannot supply — so it is resolved here rather than
   // pretending every template has the same shape.
   if ((offer.otoTemplate) === "sections") {
     const rows = await getPageSections("offer", offer.id);
     // Whatever this page points at, in one query — see the product page.
-    return <SectionsOto view={view} rows={rows} globals={await resolveGlobals(rows)} />;
+    return (
+      <>
+        {purchase}
+        <SectionsOto view={view} rows={rows} globals={await resolveGlobals(rows)} />
+      </>
+    );
   }
 
   const Template = otoComponentFor({ template: offer.otoTemplate, offerKey: offer.key });
-  return <Template view={view} />;
+  return (
+    <>
+      {purchase}
+      <Template view={view} />
+    </>
+  );
 }

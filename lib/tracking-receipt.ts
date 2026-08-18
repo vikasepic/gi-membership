@@ -21,12 +21,31 @@ export type TrackingReceipt = {
 };
 
 export async function purchaseForTracking(paymentIntentId: string): Promise<TrackingReceipt | null> {
+  return receiptFor("stripe_payment_intent_id", paymentIntentId);
+}
+
+/**
+ * The same receipt, found by the order itself.
+ *
+ * The upsell page needs this. A buyer who is shown one never reaches the
+ * thank-you page carrying a payment_intent — /checkout/complete sends them to
+ * /checkout/oto, and every way out of that page lands on /checkout/thank-you
+ * with an `oto` result and nothing else. So the browser's copy of Purchase
+ * never fired for anybody who was offered an upsell, which on this store is
+ * everybody buying the product that has one. Only the server copy arrived, so
+ * every ad-blocked buyer in that flow was invisible.
+ */
+export async function purchaseForOrder(orderId: string): Promise<TrackingReceipt | null> {
+  return receiptFor("id", orderId);
+}
+
+async function receiptFor(column: string, value: string): Promise<TrackingReceipt | null> {
   try {
     const db = createServiceClient();
     const { data: order } = await db
       .from("orders")
       .select("id, total_cents, currency, email, status")
-      .eq("stripe_payment_intent_id", paymentIntentId)
+      .eq(column, value)
       .maybeSingle();
     if (!order || order.status === "refunded") return null;
 

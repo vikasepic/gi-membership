@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { readableInk } from "@/lib/color";
+import { buyAnchor, scrollToBuy } from "@/lib/buy-anchor";
 
 /**
  * The bar that follows the page down.
@@ -45,16 +46,8 @@ export function StickyBarBlock({
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    // Named first, then the choice, then the first thing that buys. The last
-    // of those is what makes a blank field work on a page that has no Ways to
-    // pay block on it — which is most pages, and the call to action is the
-    // thing a bar like this has always meant.
-    const target = () =>
-      (scrollTo.trim() ? document.getElementById(scrollTo.trim()) : null) ??
-      document.querySelector<HTMLElement>("[data-ways-to-pay]") ??
-      document.querySelector<HTMLElement>("[data-buy]");
     const check = () => {
-      const el = target();
+      const el = buyAnchor(scrollTo);
       if (!el) {
         // Nothing to point at — better to show nothing than a button that
         // does nothing when pressed.
@@ -90,24 +83,7 @@ export function StickyBarBlock({
         </span>
         <button
           type="button"
-          onClick={() => {
-            const el =
-              (scrollTo.trim() ? document.getElementById(scrollTo.trim()) : null) ??
-              document.querySelector<HTMLElement>("[data-ways-to-pay]") ??
-              document.querySelector<HTMLElement>("[data-buy]");
-            // No `behavior` on purpose: unset means "whatever the stylesheet
-            // says", which is smooth for everybody and instant for anyone who
-            // has asked their system for less motion. Naming "smooth" here
-            // would override that preference from JavaScript, where the media
-            // query cannot reach it.
-            el?.scrollIntoView({ block: "center" });
-            // Focus the first radio once it is in view, so the keyboard and a
-            // screen reader arrive where the eye does.
-            window.setTimeout(
-              () => el?.querySelector<HTMLInputElement>('input[type="radio"]')?.focus(),
-              600,
-            );
-          }}
+          onClick={() => scrollToBuy(scrollTo)}
           className="shrink-0 px-5 py-2.5 text-sm font-medium transition-opacity hover:opacity-90"
           style={{
             background: fill,

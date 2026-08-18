@@ -44,23 +44,51 @@ export async function ownsProduct(userId: string, productId: string): Promise<bo
 
 export async function listOwnedApps(
   userId: string,
-): Promise<{ id: string; name: string; status: string }[]> {
+): Promise<{ id: string; name: string; status: string; host: string | null; channels: string[] }[]> {
   const db = createServiceClient();
   const { data: owns } = await db
     .from("ownership")
-    .select("app_id, status")
+    .select("app_id, status, offer_id")
     .eq("user_id", userId)
     .not("app_id", "is", null);
   const rows = owns ?? [];
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.app_id as string);
-  const { data: apps } = await db.from("apps").select("id, name").in("id", ids);
-  const nameById = new Map((apps ?? []).map((a) => [a.id as string, a.name as string]));
-  return rows.map((r) => ({
-    id: r.app_id as string,
-    name: nameById.get(r.app_id as string) ?? "App",
-    status: r.status as string,
-  }));
+  const { data: apps } = await db.from("apps").select("id, name, base_url").in("id", ids);
+  const byId = new Map((apps ?? []).map((a) => [a.id as string, a]));
+
+  // What was actually bought, per app. A member on the Instagram plan and a
+  // member on both see the same card otherwise, and "which channels do I
+  // have" is the one thing about a connected app the store knows and the
+  // member cannot check anywhere else.
+  const offerIds = rows.map((r) => r.offer_id as string | null).filter(Boolean) as string[];
+  const { data: offers } = offerIds.length
+    ? await db.from("offers").select("id, grant_channels").in("id", offerIds)
+    : { data: [] };
+  const channelsByOffer = new Map(
+    (offers ?? []).map((o) => [o.id as string, (o.grant_channels as string[]) ?? []]),
+  );
+
+  return rows.map((r) => {
+    const app = byId.get(r.app_id as string);
+    return {
+      id: r.app_id as string,
+      name: (app?.name as string) ?? "App",
+      status: r.status as string,
+      host: hostOf(app?.base_url as string | undefined),
+      channels: channelsByOffer.get(r.offer_id as string) ?? [],
+    };
+  });
+}
+
+/** "contentengine.app" — where the button actually goes, without the scheme. */
+function hostOf(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).host.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
 }
 
 export async function subscribedToApp(userId: string, appId: string): Promise<boolean> {

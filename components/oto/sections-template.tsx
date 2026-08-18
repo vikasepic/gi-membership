@@ -34,6 +34,11 @@ export async function SectionsOto({
   // what this renders cannot drift apart.
   const hasStickyBlock = hasStickyBarBlock(rows);
 
+  // What the page is showing to choose between. The bar can buy only when
+  // there is one of them.
+  const options = livePrices(offer.prices);
+  const optionCount = options.length > 1 ? options.length : alt ? 2 : 1;
+
   return (
     <div className="pb-28">
       <SalesPage
@@ -95,6 +100,7 @@ export async function SectionsOto({
           .join(" · ")}
         subLine={view.recurringNote ? `${view.recurringNote}. Cancel any time.` : null}
         expiresAt={view.expiresAt}
+        optionCount={optionCount}
       />
       )}
     </div>

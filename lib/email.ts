@@ -72,44 +72,111 @@ export function buildReceiptEmail(args: {
   email: string;
   orderId: string;
   lines: { description: string; amountCents: number }[];
+  /** Before discount and tax. Falls back to the sum of the lines. */
+  subtotalCents?: number;
+  /** What a coupon took off, and which one. */
+  discountCents?: number;
+  couponCode?: string | null;
   totalCents: number;
   taxCents: number;
   currency: string;
+  /** When it was paid. Defaults to now, which is when this is built. */
+  paidAt?: Date;
+  siteUrl?: string;
 }): BuiltEmail {
-  const rows = args.lines
+  const cur = args.currency;
+  const site = args.siteUrl ?? "https://grow.greaterinside.com";
+  const subtotal = args.subtotalCents ?? args.lines.reduce((n, l) => n + l.amountCents, 0);
+  const discount = args.discountCents ?? 0;
+  const paid = args.paidAt ?? new Date();
+  const date = new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(paid);
+  // The full uuid is what support asks for, but it is not what a buyer reads.
+  // The short form is shown; the full one is spelled out at the bottom.
+  const shortId = args.orderId.slice(0, 8).toUpperCase();
+
+  const lineRows = args.lines
     .map(
       (l) =>
-        `<tr><td style="padding:8px 0;color:#0b0b0d;">${l.description}</td>
-         <td style="padding:8px 0;text-align:right;color:#0b0b0d;">${money(l.amountCents, args.currency)}</td></tr>`,
+        `<tr>
+           <td style="padding:14px 0;border-bottom:1px solid #f0ede5;color:#0b0b0d;font-size:15px;line-height:1.4;">${l.description}</td>
+           <td style="padding:14px 0;border-bottom:1px solid #f0ede5;text-align:right;color:#0b0b0d;font-size:15px;white-space:nowrap;">${money(l.amountCents, cur)}</td>
+         </tr>`,
     )
     .join("");
-  const taxRow =
-    args.taxCents > 0
-      ? `<tr><td style="padding:8px 0;color:#5b5b63;">Tax</td>
-         <td style="padding:8px 0;text-align:right;color:#5b5b63;">${money(args.taxCents, args.currency)}</td></tr>`
-      : "";
+
+  // Only the rows that are true. A "Discount $0.00" line on an order with no
+  // coupon is noise, and a "Tax $0.00" line invites the question of why not.
+  const sub = (label: string, value: string, tone = "#5b5b63") =>
+    `<tr>
+       <td style="padding:6px 0;color:${tone};font-size:14px;">${label}</td>
+       <td style="padding:6px 0;text-align:right;color:${tone};font-size:14px;white-space:nowrap;">${value}</td>
+     </tr>`;
+
+  const summaryRows = [
+    discount > 0 || args.taxCents > 0 ? sub("Subtotal", money(subtotal, cur)) : "",
+    discount > 0
+      ? sub(
+          args.couponCode ? `Discount (${args.couponCode})` : "Discount",
+          `−${money(discount, cur)}`,
+          "#4a7c59",
+        )
+      : "",
+    args.taxCents > 0 ? sub("Tax", money(args.taxCents, cur)) : "",
+  ].join("");
 
   return {
-    subject: `Your receipt from Greater Inside`,
+    subject: `Your receipt from Greater Inside · ${money(args.totalCents, cur)}`,
     html: shell(`
-      <h1 style="font-size:22px;margin:0 0 12px;color:#0b0b0d;">Receipt</h1>
-      <table style="width:100%;border-collapse:collapse;margin:0 0 16px;font-size:14px;">
-        ${rows}
-        ${taxRow}
-        <tr><td style="padding:12px 0 0;border-top:1px solid #e4e1d9;font-weight:600;">Total</td>
-            <td style="padding:12px 0 0;border-top:1px solid #e4e1d9;text-align:right;font-weight:600;">
-              ${money(args.totalCents, args.currency)}</td></tr>
+      <p style="margin:0 0 4px;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#8a8a93;">Receipt</p>
+      <h1 style="font-size:26px;margin:0 0 6px;color:#0b0b0d;line-height:1.2;">Thanks for your order.</h1>
+      <p style="color:#5b5b63;font-size:14px;line-height:1.6;margin:0 0 28px;">
+        ${date} &middot; Order ${shortId}
+      </p>
+
+      <table style="width:100%;border-collapse:collapse;margin:0 0 4px;">
+        ${lineRows}
       </table>
-      <p style="color:#5b5b63;font-size:12px;margin:0;">Order ${args.orderId}</p>
+
+      <table style="width:100%;border-collapse:collapse;margin:10px 0 0;">
+        ${summaryRows}
+        <tr>
+          <td style="padding:14px 0 0;border-top:2px solid #0b0b0d;font-weight:600;font-size:17px;color:#0b0b0d;">Total paid</td>
+          <td style="padding:14px 0 0;border-top:2px solid #0b0b0d;text-align:right;font-weight:600;font-size:17px;color:#0b0b0d;white-space:nowrap;">${money(args.totalCents, cur)}</td>
+        </tr>
+      </table>
+
+      <div style="margin:32px 0 0;padding:20px;background:#faf8f4;border-radius:12px;">
+        <p style="margin:0 0 14px;color:#0b0b0d;font-size:15px;line-height:1.5;">
+          Everything you bought is waiting in your library.
+        </p>
+        ${btn(`${site}/library`, "Open your library")}
+      </div>
+
+      <p style="color:#8a8a93;font-size:12px;line-height:1.6;margin:28px 0 0;">
+        Order reference ${args.orderId}<br />
+        Charged to ${args.email}. Questions about this order? Reply to this email.
+      </p>
     `),
     text: `Receipt from Greater Inside
 
-${args.lines.map((l) => `${l.description}  ${money(l.amountCents, args.currency)}`).join("\n")}${
-      args.taxCents > 0 ? `\nTax  ${money(args.taxCents, args.currency)}` : ""
-    }
-Total  ${money(args.totalCents, args.currency)}
+${date} · Order ${shortId}
 
-Order ${args.orderId}`,
+${args.lines.map((l) => `${l.description}  ${money(l.amountCents, cur)}`).join("\n")}
+${discount > 0 || args.taxCents > 0 ? `\nSubtotal  ${money(subtotal, cur)}` : ""}${
+      discount > 0
+        ? `\nDiscount${args.couponCode ? ` (${args.couponCode})` : ""}  -${money(discount, cur)}`
+        : ""
+    }${args.taxCents > 0 ? `\nTax  ${money(args.taxCents, cur)}` : ""}
+Total paid  ${money(args.totalCents, cur)}
+
+Everything you bought is in your library: ${site}/library
+
+Order reference ${args.orderId}
+Charged to ${args.email}. Questions about this order? Reply to this email.`,
   };
 }
 

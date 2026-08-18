@@ -857,7 +857,7 @@ export async function fulfilBump(args: {
 export async function finalizeOrder(intentId: string): Promise<void> {
   const db = createServiceClient();
   const COLUMNS =
-    "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents, stripe_setup_intent_id, currency, buyer_country, client_ip, client_user_agent, source_url";
+    "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents, stripe_setup_intent_id, currency, buyer_country, client_ip, client_user_agent, source_url, subtotal_cents, discount_cents, coupon_code";
 
   // Either kind of intent. A one-off product order points at a PaymentIntent; a
   // recurring one points at a SetupIntent, because a trial charges nothing
@@ -1112,9 +1112,16 @@ export async function finalizeOrder(intentId: string): Promise<void> {
         email: to,
         orderId: order.id as string,
         lines,
+        // The order already knows what a coupon took off and what it was
+        // called. The receipt said neither, so a buyer who used a code saw a
+        // total that did not match the prices printed above it.
+        subtotalCents: (order.subtotal_cents as number) ?? undefined,
+        discountCents: (order.discount_cents as number) ?? 0,
+        couponCode: (order.coupon_code as string | null) ?? null,
         totalCents: pi.amount,
         taxCents: (order.tax_cents as number) ?? 0,
         currency: pi.currency,
+        siteUrl: site,
       }),
     );
   } catch (e) {
@@ -1211,42 +1218,8 @@ export async function finalizeOrder(intentId: string): Promise<void> {
   // finalizeOrder is idempotent, so a webhook + thank-you double-call cannot
   // double-count a conversion.
   try {
-    const { data: visitor } = order.visitor_id
-      ? await db
-          .from("visitors")
-          .select("click_ids, first_seen_at")
-          .eq("id", order.visitor_id)
-          .maybeSingle()
-      : { data: null };
-
-    // What was bought, so the server copy names a product too. The browser
-    // copy has always carried this; on ad-blocked traffic, where the server
-    // copy is the only one that arrives, it named nothing.
-    const { data: items } = await db
-      .from("order_items")
-      .select("description, product_id")
-      .eq("order_id", order.id as string);
-    const { data: buyer } = await db
-      .from("users")
-      .select("username")
-      .eq("id", order.user_id as string)
-      .maybeSingle();
-
-    // Everything below is shared by both events on this order.
-    const who = {
-      email: order.email as string,
-      userId: order.user_id as string,
-      fullName: (buyer?.username as string | null) ?? null,
-      country: (order.buyer_country as string | null) ?? null,
-      clientIp: (order.client_ip as string | null) ?? null,
-      userAgent: (order.client_user_agent as string | null) ?? null,
-      sourceUrl: (order.source_url as string | null) ?? null,
-      clickIds: (visitor?.click_ids as Record<string, string>) ?? {},
-      clickTimeMs: visitor?.first_seen_at ? new Date(visitor.first_seen_at as string).getTime() : null,
-      contentIds: (items ?? []).map((i) => (i.product_id as string) ?? "").filter(Boolean),
-      contentName: (items ?? [])[0]?.description as string | undefined,
-      numItems: (items ?? []).length || undefined,
-    };
+    const who = await buyerContextFor(order.id as string);
+    if (!who) return;
 
     await trackPurchase({
       ...who,
@@ -1277,6 +1250,62 @@ export async function finalizeOrder(intentId: string): Promise<void> {
   } catch (e) {
     console.error("[finalizeOrder] tracking failed (order is still complete):", e);
   }
+}
+
+/**
+ * Who a buyer is, for the ad platforms, read from the order they placed.
+ *
+ * Shared by the purchase and by an accepted upsell, which charges separately
+ * and would otherwise have had to build its own — and a second version of this
+ * is a second answer to "what does Meta know about this person", drifting one
+ * field at a time.
+ */
+export async function buyerContextFor(orderId: string) {
+  const db = createServiceClient();
+  const { data: order } = await db
+    .from("orders")
+    .select(
+      "id, email, user_id, visitor_id, buyer_country, client_ip, client_user_agent, source_url",
+    )
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return null;
+
+  const { data: visitor } = order.visitor_id
+    ? await db
+        .from("visitors")
+        .select("click_ids, first_seen_at")
+        .eq("id", order.visitor_id)
+        .maybeSingle()
+    : { data: null };
+
+  // What was bought, so the server copy names a product too. The browser copy
+  // has always carried this; on ad-blocked traffic, where the server copy is
+  // the only one that arrives, it named nothing.
+  const { data: items } = await db
+    .from("order_items")
+    .select("description, product_id")
+    .eq("order_id", order.id as string);
+  const { data: buyer } = await db
+    .from("users")
+    .select("username")
+    .eq("id", order.user_id as string)
+    .maybeSingle();
+
+  return {
+    email: order.email as string,
+    userId: order.user_id as string,
+    fullName: (buyer?.username as string | null) ?? null,
+    country: (order.buyer_country as string | null) ?? null,
+    clientIp: (order.client_ip as string | null) ?? null,
+    userAgent: (order.client_user_agent as string | null) ?? null,
+    sourceUrl: (order.source_url as string | null) ?? null,
+    clickIds: (visitor?.click_ids as Record<string, string>) ?? {},
+    clickTimeMs: visitor?.first_seen_at ? new Date(visitor.first_seen_at as string).getTime() : null,
+    contentIds: (items ?? []).map((i) => (i.product_id as string) ?? "").filter(Boolean),
+    contentName: (items ?? [])[0]?.description as string | undefined,
+    numItems: (items ?? []).length || undefined,
+  };
 }
 
 export async function grantOfferOwnership(
@@ -1483,6 +1512,60 @@ export async function savedPaymentMethodFor(customerId: string): Promise<string 
   }
 }
 
+/**
+ * Report a sale made against a card already on file.
+ *
+ * Two of them: the one-click upsell, and an offer accepted from the library
+ * afterwards. Neither was reported anywhere — a separate charge, a separate
+ * line on the order, and no event on either side. So every accepted upsell was
+ * revenue the ad platforms never saw, and the campaigns bidding on this funnel
+ * were optimising against the front-end price alone.
+ *
+ * Keyed on the charge's OWN id rather than the order's, so it does not collide
+ * with the purchase already reported under the order — Meta deduplicates on
+ * event_id, and sharing one would have thrown the second away instead of
+ * adding it up.
+ *
+ * Never throws. The thing being reported is bought, charged and granted by the
+ * time this runs, and tracking may not undo that.
+ */
+async function trackOfferSale(
+  orderId: string,
+  offer: Offer,
+  result: { subscriptionId?: string; paymentIntentId?: string },
+): Promise<void> {
+  try {
+    const db = createServiceClient();
+    const { data: order } = await db
+      .from("orders")
+      .select("currency, tracking_consent")
+      .eq("id", orderId)
+      .maybeSingle();
+    // Consent was captured at checkout and applies to the whole order. Without
+    // it, nothing leaves this server.
+    if (!order || order.tracking_consent !== true) return;
+
+    const who = await buyerContextFor(orderId);
+    if (!who) return;
+
+    // A trial takes nothing today. Reporting $0 as a purchase says the sale was
+    // worthless; reporting the price as revenue says money moved when none did.
+    const nowCents = immediateChargeCents(offer);
+    const key = result.paymentIntentId ?? result.subscriptionId ?? orderId;
+    await trackServerEvent({
+      ...who,
+      eventId: eventIdFor(nowCents > 0 ? "Purchase" : "StartTrial", key),
+      eventName: nowCents > 0 ? "Purchase" : "StartTrial",
+      valueCents: nowCents > 0 ? nowCents : offer.priceCents,
+      currency: (order.currency as string) ?? offer.currency,
+      orderId,
+      occurredAt: Math.floor(Date.now() / 1000),
+    });
+  } catch (e) {
+    console.error("[trackOfferSale] failed (the sale is still complete):", e);
+  }
+}
+
 // Accept a standing offer from the library (buyer who declined the OTO). Uses
 // the card on file. Eligibility is re-checked, so it can't grant something
 // already owned.
@@ -1542,6 +1625,9 @@ export async function acceptStandingOffer(
     stripe_subscription_id: result.subscriptionId ?? null,
     stripe_payment_intent_id: result.paymentIntentId ?? null,
   });
+
+  await trackOfferSale(order.id as string, offer, result);
+
   return { ok: true };
 }
 
@@ -1643,6 +1729,7 @@ export async function acceptOto(
     stripe_subscription_id: result.subscriptionId ?? null,
     stripe_payment_intent_id: result.paymentIntentId ?? null,
   });
+  await trackOfferSale(order.id as string, offer, result);
   return { ok: true };
 }
 

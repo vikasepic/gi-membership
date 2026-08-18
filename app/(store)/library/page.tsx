@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getStandingOffer, listOwnedApps, hasSavedCard, ownedProductIdsForViewer } from "@/lib/library";
 import { coursesForUser } from "@/lib/courses";
+import { channelsLabel } from "@/lib/app-channels";
 import { publicCoverUrl } from "@/lib/media";
 import { LibraryCourseCard } from "@/components/library/course-card";
 import { immediateChargeCents } from "@/lib/offers";
@@ -121,43 +122,66 @@ export default async function LibraryPage({
             <h2 className="text-xl">Your apps</h2>
             <span className="kicker text-muted">Included with your subscription</span>
           </div>
-          <div className="flex flex-col gap-3">
-            {apps.map((a) => (
-              <div
-                key={a.id}
-                /* Stacks on mobile: side-by-side crushed the app name against
-                   the button on a narrow screen, and a wrapped word next to a
-                   full-width button is worse than two clean rows. */
-                className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="flex flex-col gap-1">
-                  <span className="font-medium">{a.name}</span>
-                  <span className="flex items-center gap-2 text-sm text-muted">
+          {/* The same grid the courses use. An app IS a thing they bought, and
+              a full-width bar under a wall of cards read as an afterthought —
+              a name, a dot, and a button, saying less than the smallest course
+              card above it. */}
+          <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr))]">
+            {apps.map((a) => {
+              const tone =
+                a.status === "past_due"
+                  ? { dot: "var(--primary)", label: "Payment failed — update your card" }
+                  : a.status === "trialing"
+                    ? { dot: "var(--navy)", label: "On trial" }
+                    : a.status === "active"
+                      ? { dot: "var(--navy)", label: "Active" }
+                      : { dot: "var(--muted)", label: a.status };
+              return (
+                <div
+                  key={a.id}
+                  className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5"
+                >
+                  {/* A mark rather than a logo: there is no logo column, and a
+                      letter in the app's own colour is a real identity a
+                      member can pick out of a grid — not a placeholder box
+                      pretending an image is coming. */}
+                  <div className="flex items-start gap-3">
                     <span
                       aria-hidden
-                      className="h-1.5 w-1.5 rounded-full"
-                      style={{
-                        background:
-                          a.status === "past_due" ? "var(--primary)" : "var(--navy)",
-                      }}
-                    />
-                    {a.status === "trialing"
-                      ? "On trial"
-                      : a.status === "past_due"
-                        ? "Payment failed — update your card"
-                        : a.status === "active"
-                          ? "Active"
-                          : a.status}
-                  </span>
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg font-semibold text-white"
+                      style={{ background: "var(--navy)" }}
+                    >
+                      {a.name.trim().charAt(0).toUpperCase()}
+                    </span>
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <span className="truncate font-medium">{a.name}</span>
+                      {a.host && <span className="truncate text-xs text-muted">{a.host}</span>}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 text-sm">
+                    <span className="flex items-center gap-2 text-muted">
+                      <span
+                        aria-hidden
+                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ background: tone.dot }}
+                      />
+                      {tone.label}
+                    </span>
+                    {a.channels.length > 0 && (
+                      <span className="text-muted">{channelsLabel(a.channels)}</span>
+                    )}
+                  </div>
+
+                  <form action={openAppAction} className="mt-auto">
+                    <button className="w-full rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover">
+                      Open the app &rarr;
+                    </button>
+                    <input type="hidden" name="appId" value={a.id} />
+                  </form>
                 </div>
-                <form action={openAppAction} className="sm:shrink-0">
-                  <button className="w-full rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover sm:w-auto">
-                    Open the app &rarr;
-                  </button>
-                  <input type="hidden" name="appId" value={a.id} />
-                </form>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}
