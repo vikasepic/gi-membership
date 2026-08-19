@@ -28,6 +28,19 @@ import { NOINDEX } from "@/lib/seo";
 
 export const metadata = NOINDEX;
 
+/**
+ * The ground a piece of offer artwork sits on.
+ *
+ * These pictures are product mockups on a transparent field, not photographs.
+ * `object-cover` cropped them and stranded them in flat grey — a screenshot
+ * dropped into a box. Contained on a wash of the store's own colour, the
+ * mockup floats and the panel is part of the card.
+ */
+const WASH = {
+  backgroundImage:
+    "radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--navy) 8%, var(--surface)), var(--surface-2))",
+} as const;
+
 export default async function LibraryPage({
   searchParams,
 }: {
@@ -122,10 +135,9 @@ export default async function LibraryPage({
             <h2 className="text-xl">Your apps</h2>
             <span className="kicker text-muted">Included with your subscription</span>
           </div>
-          {/* The same grid the courses use. An app IS a thing they bought, and
-              a full-width bar under a wall of cards read as an afterthought —
-              a name, a dot, and a button, saying less than the smallest course
-              card above it. */}
+          {/* The same grid and the same card shape as the courses above. An
+              app is a thing they bought; a full-width bar under a wall of
+              cards read as an afterthought. */}
           <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr))]">
             {apps.map((a) => {
               const tone =
@@ -139,59 +151,59 @@ export default async function LibraryPage({
               return (
                 <div
                   key={a.id}
-                  className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5"
+                  className="flex flex-col overflow-hidden rounded-2xl border border-border bg-surface"
                 >
-                  {/* A mark rather than a logo: there is no logo column, and a
-                      letter in the app's own colour is a real identity a
-                      member can pick out of a grid — not a placeholder box
-                      pretending an image is coming. */}
-                  <div className="flex items-start gap-3">
-                    {/* The picture the offer was sold with, falling back to a
-                        letter. A mark drawn from the name is what you use when
-                        there is nothing better; where the offer carries an
-                        image there is. */}
+                  {/* The offer's artwork is a wide banner with its name set
+                      into it — not an icon. Squeezed into a 44px square beside
+                      the title it was unreadable and the title said the same
+                      thing twice. Given the band the courses use, it is legible
+                      and it is the thing you recognise the card by. */}
+                  <div className="relative aspect-[16/10] w-full overflow-hidden" style={WASH}>
                     {a.imageUrl ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img
                         src={a.imageUrl}
                         alt=""
-                        className="h-11 w-11 shrink-0 rounded-xl border border-border object-cover"
+                        loading="lazy"
+                        decoding="async"
+                        className="absolute inset-0 h-full w-full object-contain p-4"
                       />
                     ) : (
+                      // A letter on the same ground. What you draw when there
+                      // is nothing better — never instead of something better.
                       <span
                         aria-hidden
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg font-semibold text-white"
-                        style={{ background: "var(--navy)" }}
+                        className="absolute inset-0 grid place-items-center font-display text-5xl font-semibold text-navy/30"
                       >
                         {a.name.trim().charAt(0).toUpperCase()}
                       </span>
                     )}
-                    <div className="flex min-w-0 flex-col gap-0.5">
-                      <span className="truncate font-medium">{a.name}</span>
+                  </div>
+
+                  <div className="flex flex-1 flex-col gap-2 p-5">
+                    <h3 className="text-lg leading-snug">{a.name}</h3>
+                    <div className="flex flex-1 flex-col gap-1 text-sm">
+                      <span className="flex items-center gap-2 text-muted">
+                        <span
+                          aria-hidden
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ background: tone.dot }}
+                        />
+                        {tone.label}
+                      </span>
+                      {a.channels.length > 0 && (
+                        <span className="text-muted">{channelsLabel(a.channels)}</span>
+                      )}
                       {a.host && <span className="truncate text-xs text-muted">{a.host}</span>}
                     </div>
-                  </div>
 
-                  <div className="flex flex-col gap-1.5 text-sm">
-                    <span className="flex items-center gap-2 text-muted">
-                      <span
-                        aria-hidden
-                        className="h-1.5 w-1.5 shrink-0 rounded-full"
-                        style={{ background: tone.dot }}
-                      />
-                      {tone.label}
-                    </span>
-                    {a.channels.length > 0 && (
-                      <span className="text-muted">{channelsLabel(a.channels)}</span>
-                    )}
+                    <form action={openAppAction} className="mt-2 border-t border-border pt-3">
+                      <button className="text-sm font-medium text-primary hover:underline">
+                        Open the app &rarr;
+                      </button>
+                      <input type="hidden" name="appId" value={a.id} />
+                    </form>
                   </div>
-
-                  <form action={openAppAction} className="mt-auto">
-                    <button className="w-full rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover">
-                      Open the app &rarr;
-                    </button>
-                    <input type="hidden" name="appId" value={a.id} />
-                  </form>
                 </div>
               );
             })}
@@ -202,27 +214,38 @@ export default async function LibraryPage({
       {/* Standing offer for buyers who declined — one-click on the saved card. */}
       {standing && (
         <section
-          className="flex flex-col gap-4 rounded-3xl border border-border bg-surface p-7"
+          className="grid overflow-hidden rounded-3xl border border-border bg-surface md:grid-cols-2"
           style={{
             backgroundImage:
               "radial-gradient(90% 60% at 100% 0%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 60%)",
           }}
         >
-          <span className="kicker text-primary">Still available</span>
-          {/* The offer's own picture. It is set on the offer, shown on its
-              upsell page, and was the one place a member met the thing without
-              it. */}
+          {/* Full bleed, beside the words rather than above them.
+              It was a fixed-height box with a border inside a padded card, so
+              a wide banner sat pillarboxed in white with its own frame around
+              it — a screenshot pasted into a card rather than part of one.
+              Given half the card and its own aspect ratio, it fills the space
+              it is in and the card reads as one thing. */}
           {standing.imageUrl && (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={standing.imageUrl}
-              alt=""
-              className="h-40 w-full rounded-2xl border border-border object-cover sm:h-48"
-            />
+            <div
+              className="relative order-first aspect-[16/10] w-full overflow-hidden md:order-last md:aspect-auto md:h-full"
+              style={WASH}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={standing.imageUrl}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                className="absolute inset-0 h-full w-full object-contain p-6"
+              />
+            </div>
           )}
+          <div className="flex flex-col gap-4 p-7">
+          <span className="kicker text-primary">Still available</span>
           <h2 className="text-xl">{standing.headline}</h2>
           {standing.description && <p className="text-sm text-muted">{standing.description}</p>}
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-3">
             <span className="font-display text-2xl">
               {money(immediateChargeCents(standing), standing.currency)} now
             </span>
@@ -236,9 +259,9 @@ export default async function LibraryPage({
                 this goes to checkout to collect one, rather than offering a
                 button whose only possible outcome is an error. */}
             {cardOnFile ? (
-              <form action={acceptStandingOfferAction} className="ml-auto">
+              <form action={acceptStandingOfferAction} className="w-full sm:ml-auto sm:w-auto">
                 <input type="hidden" name="offerId" value={standing.id} />
-                <button className="rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover">
+                <button className="w-full rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover">
                   {standing.acceptLabel}
                 </button>
               </form>
@@ -248,11 +271,12 @@ export default async function LibraryPage({
                 valueCents={standing.priceCents}
                 currency={standing.currency}
                 contentId={standing.key}
-                className="ml-auto rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover"
+                className="w-full rounded-full bg-primary px-6 py-3 text-center font-medium text-primary-fg transition-colors hover:bg-primary-hover sm:ml-auto sm:w-auto"
               >
                 {standing.acceptLabel}
               </BuyLink>
             )}
+          </div>
           </div>
         </section>
       )}

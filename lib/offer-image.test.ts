@@ -79,4 +79,20 @@ describe("showing it", () => {
   it("puts it on the standing offer, the one place a member met it bare", () => {
     expect(library).toContain("{standing.imageUrl && (");
   });
+
+  it("shows the artwork rather than a crop of it", () => {
+    // These are product mockups on a transparent field, not photographs.
+    // object-cover cropped them and stranded them in flat grey — a screenshot
+    // dropped into a box. Contained on a wash, the mockup floats and the panel
+    // is part of the card.
+    expect(library).toContain("object-contain p-");
+    // In a class, not in the prose explaining why it is gone.
+    const classes = [...library.matchAll(/className="([^"]*)"/g)].map((m) => m[1]).join(" ");
+    expect(classes).not.toContain("object-cover");
+    expect(library).toContain("const WASH");
+  });
+
+  it("uses one ground for both, not two that drift", () => {
+    expect(library.match(/style=\{WASH\}/g)!.length).toBe(2);
+  });
 });
