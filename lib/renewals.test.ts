@@ -111,6 +111,21 @@ describe("the webhook", () => {
 describe("the backfill", () => {
   const fn = renewals.slice(renewals.indexOf("export async function backfillRenewals"));
 
+  it("asks about OUR subscriptions rather than the account's invoices", () => {
+    // The first version listed the account's invoices and filtered. This
+    // Stripe account is shared with Beam, Flux, Ledger and the rest, so it
+    // scanned 500 invoices belonging to other apps without reaching one of
+    // ours — and read another app's customers to do it.
+    expect(fn).toContain('.select("stripe_subscription_id")');
+    expect(fn).toContain("stripe().invoices.list({ subscription: sub");
+    expect(fn).not.toMatch(/invoices\.list\(\{ status: "paid", limit/);
+  });
+
+  it("asks about each subscription once", () => {
+    // One subscription appears on several lines once its renewals are booked.
+    expect(fn).toContain("new Set(");
+  });
+
   it("sends no receipts", () => {
     // An email about a charge from three months ago is not a receipt, it is a
     // support ticket.
@@ -131,10 +146,11 @@ describe("the backfill", () => {
     expect(fn).not.toContain(".insert(");
   });
 
-  it("does not stop at the first invoice it cannot record", () => {
-    // The rest are still revenue nobody has booked.
-    expect(fn).toContain("catch (e)");
+  it("does not stop at the first thing it cannot record", () => {
+    // Neither a bad invoice nor a subscription Stripe has forgotten. The rest
+    // are still revenue nobody has booked.
     expect(fn).toMatch(/note\(`error:/);
+    expect(fn).toMatch(/note\(`subscription \$\{sub\}/);
   });
 
   it("says why it skipped, counted by reason", () => {

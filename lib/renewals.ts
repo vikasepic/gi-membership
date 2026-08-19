@@ -256,8 +256,16 @@ async function originOrderFor(subscriptionId: string): Promise<Origin | null> {
  * Every renewal Stripe has already collected, written into the books.
  *
  * The handler only sees what arrives from now on, and this store has been
- * taking subscriptions since before it existed — so without this the first
+ * selling subscriptions since before it existed — so without this the first
  * months of recurring revenue stay in Stripe alone.
+ *
+ * Walks OUR subscriptions and asks Stripe for each one's invoices, rather than
+ * listing the account's invoices and filtering. The first version did the
+ * latter and scanned 500 invoices belonging to Beam, Flux, Ledger and the
+ * other apps on this shared Stripe account without reaching a single one of
+ * ours — 142 of them were not even subscription invoices. Asking per
+ * subscription is exact, is a fraction of the calls, and does not read another
+ * app's customers at all.
  *
  * Deliberately quiet. No receipts: an email about a charge from three months
  * ago is not a receipt, it is a support ticket. And no conversion event beyond
@@ -267,39 +275,60 @@ async function originOrderFor(subscriptionId: string): Promise<Origin | null> {
  * Safe to run twice: every write goes through recordRenewal, and the unique
  * index on the invoice id is what makes the second run a no-op.
  */
-export async function backfillRenewals(opts?: { limit?: number }): Promise<{
+export async function backfillRenewals(): Promise<{
+  subscriptions: number;
   scanned: number;
   recorded: number;
   skipped: Record<string, number>;
   totalCents: number;
 }> {
   const { stripe } = await import("@/lib/stripe");
-  const limit = opts?.limit ?? 500;
+  const db = createServiceClient();
   const freshAfter = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
 
-  const out = { scanned: 0, recorded: 0, skipped: {} as Record<string, number>, totalCents: 0 };
+  // Ours, from our own records. Deduplicated: one subscription can appear on
+  // several lines once its renewals are booked.
+  const { data: lines } = await db
+    .from("order_items")
+    .select("stripe_subscription_id")
+    .not("stripe_subscription_id", "is", null);
+  const subs = [...new Set((lines ?? []).map((l) => l.stripe_subscription_id as string))];
+
+  const out = {
+    subscriptions: subs.length,
+    scanned: 0,
+    recorded: 0,
+    skipped: {} as Record<string, number>,
+    totalCents: 0,
+  };
   const note = (reason: string) => {
     out.skipped[reason] = (out.skipped[reason] ?? 0) + 1;
   };
 
-  for await (const invoice of stripe().invoices.list({ status: "paid", limit: 100 })) {
-    if (out.scanned >= limit) break;
-    out.scanned += 1;
+  for (const sub of subs) {
     try {
-      const res = await recordRenewal(invoice, {
-        receipt: false,
-        track: (invoice.created ?? 0) >= freshAfter,
-      });
-      if (res.recorded) {
-        out.recorded += 1;
-        out.totalCents += res.amountCents;
-      } else {
-        note(res.reason);
+      for await (const invoice of stripe().invoices.list({ subscription: sub, status: "paid", limit: 100 })) {
+        out.scanned += 1;
+        try {
+          const res = await recordRenewal(invoice, {
+            receipt: false,
+            track: (invoice.created ?? 0) >= freshAfter,
+          });
+          if (res.recorded) {
+            out.recorded += 1;
+            out.totalCents += res.amountCents;
+          } else {
+            note(res.reason);
+          }
+        } catch (e) {
+          // One unrecordable invoice must not end the sweep — the rest are
+          // still revenue nobody has booked.
+          note(`error: ${e instanceof Error ? e.message : String(e)}`.slice(0, 120));
+        }
       }
     } catch (e) {
-      // One unrecordable invoice must not end the sweep — the rest are still
-      // revenue nobody has booked.
-      note(`error: ${e instanceof Error ? e.message : String(e)}`.slice(0, 120));
+      // A subscription Stripe no longer knows, most likely. Counted, not fatal.
+      note(`subscription ${sub}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 120));
     }
   }
   return out;
