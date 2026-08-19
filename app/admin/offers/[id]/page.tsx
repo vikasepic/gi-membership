@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { signPreviewToken } from "@/lib/preview-token";
 import { notFound } from "next/navigation";
 import { OfferForm } from "@/components/admin/offer-form";
 import { getOfferById, listProductOptions, listAppOptions, listOfferOptions, priceUsage } from "@/lib/admin";
@@ -107,7 +108,7 @@ export default async function EditOfferPage({
               so there is no public URL to open — this is the preview that
               renders it with the same code the buyer gets. */}
           <a
-            href={`/oto-preview/${offer.id}`}
+            href={`/oto-preview/${offer.id}?t=${encodeURIComponent(signPreviewToken("oto"))}`}
             target="_blank"
             rel="noopener noreferrer"
             className="w-fit rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-fg"

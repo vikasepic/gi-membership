@@ -21,9 +21,12 @@ import type { Settings } from "@/lib/settings-schema";
 export function CheckoutDesignForm({
   settings,
   previewSlug,
+  previewToken,
 }: {
   settings: Settings;
   previewSlug: string | null;
+  /** Proof the admin asked for this, since the frame carries no cookie. */
+  previewToken: string;
 }) {
   const [state, action] = useActionState(saveSettingsGroup, {} as Awaited<ReturnType<typeof saveSettingsGroup>>);
   const errors = state?.group === "checkout" ? (state.errors ?? {}) : {};
@@ -31,7 +34,11 @@ export function CheckoutDesignForm({
   // Re-fetched on every save, so the frame is never showing the colours from
   // before you pressed it. The saved-at stamp is the whole cache key.
   const src = previewSlug
-    ? `/checkout-preview?product=${encodeURIComponent(previewSlug)}${state?.saved ? `&t=${state.saved}` : ""}`
+    ? `/checkout-preview?product=${encodeURIComponent(previewSlug)}` +
+      `&t=${encodeURIComponent(previewToken)}` +
+      // Cache-bust on save, so the frame is never showing the colours from
+      // before you pressed it.
+      (state?.saved ? `&v=${state.saved}` : "")
     : null;
 
   return (

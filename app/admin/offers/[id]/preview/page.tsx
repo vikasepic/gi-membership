@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { signPreviewToken } from "@/lib/preview-token";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getOffer } from "@/lib/store";
@@ -101,7 +102,7 @@ export default async function OtoPreviewPage({
           // Remount on change so the frame re-lays out rather than keeping the
           // previous width's render.
           key={`${chosen}-${deviceKey}`}
-          src={`/oto-preview/${offer.id}?template=${chosen}`}
+          src={`/oto-preview/${offer.id}?template=${chosen}&t=${encodeURIComponent(signPreviewToken("oto"))}`}
           title={`${offer.name} — ${chosen} on ${d.label}`}
           className={`border-0 bg-bg ${
             deviceKey === "desktop"

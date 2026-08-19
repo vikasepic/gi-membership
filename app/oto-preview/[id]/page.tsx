@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireAdmin } from "@/lib/admin-guard";
+import { verifyPreviewToken } from "@/lib/preview-token";
 import { getOffer } from "@/lib/store";
 import { previewUpsellAlt } from "@/lib/checkout";
 import { immediateChargeCents } from "@/lib/offers";
@@ -23,8 +23,14 @@ export const dynamic = "force-dynamic";
 // parent layout, only a different path can. Out here it gets the root layout
 // alone: html, body, fonts, theme.
 //
-// Still admin-only: requireAdmin() runs before anything renders, and the route
-// being outside /admin changes the layout, never the authorisation.
+// Still admin-only, but proved by a signed token in the URL rather than by the
+// session. A cookie set SameSite=Lax is not sent when a document is loaded
+// into an iframe, so requireAdmin() here saw no session however signed-in the
+// admin was — it redirected the frame to /login and on to the store root,
+// which refuses framing outright, and the panel showed a broken document. The
+// page that holds the frame has the session and mints the token.
+//
+// notFound rather than redirect: a redirect inside a frame is what broke this.
 //
 // A CSS-scaled desktop render is not a mobile preview: media queries still
 // resolve against the real viewport, so every breakpoint lies. An iframe has
@@ -34,11 +40,11 @@ export default async function OtoPreviewFrame({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ template?: string }>;
+  searchParams: Promise<{ template?: string; t?: string }>;
 }) {
-  await requireAdmin();
   const { id } = await params;
-  const { template } = await searchParams;
+  const { template, t } = await searchParams;
+  if (!verifyPreviewToken(t, "oto")) notFound();
 
   const offer = await getOffer(id);
   if (!offer) notFound();

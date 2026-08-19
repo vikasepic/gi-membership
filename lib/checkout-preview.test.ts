@@ -37,10 +37,22 @@ describe("the preview URL", () => {
     expect(config.indexOf('source: "/:path*"')).toBeLessThan(config.indexOf('source: "/checkout-preview"'));
   });
 
-  it("is admin-only", () => {
-    // Otherwise it is a public checkout clone that anybody may frame — the
-    // exact thing the DENY header exists to prevent.
-    expect(preview).toContain("await requireAdmin()");
+  it("is admin-only, proved by something a frame can actually carry", () => {
+    // requireAdmin() was the gate and it could never pass: a SameSite=Lax
+    // cookie is not sent when a document is loaded into an iframe, so the
+    // framed request had no session, redirected to /login and on to the store
+    // root — which refuses framing outright. The panel showed a broken
+    // document while the server answered 200 the whole time.
+    expect(preview).toContain('verifyPreviewToken(t, "checkout")');
+    // The CALL, not the comment explaining why it is gone.
+    expect(preview).not.toContain("await requireAdmin()");
+  });
+
+  it("refuses by rendering, not by navigating", () => {
+    // A redirect inside a frame is the thing that broke it. A 404 in place is
+    // something an admin can see and act on.
+    expect(preview).toContain("notFound()");
+    expect(preview).not.toContain("redirect(");
   });
 
   it("is not indexable", () => {
@@ -64,6 +76,49 @@ describe("what the preview renders", () => {
 
   it("still busts its own cache on save", () => {
     // Otherwise the frame shows the colours from before you pressed Save.
-    expect(form).toContain("state?.saved ? `&t=${state.saved}`");
+    // `v`, not `t` — `t` is the token now, and reusing it would have made the
+    // cache-buster overwrite the authorisation.
+    expect(form).toContain("`&v=${state.saved}`");
+  });
+
+  it("carries the token the frame cannot prove for itself", () => {
+    expect(form).toContain("previewToken");
+  });
+});
+
+describe("the preview token", () => {
+  const token = readFileSync("lib/preview-token.ts", "utf8");
+
+  it("is minted where a session exists, not inside the frame", () => {
+    const page = readFileSync("app/admin/checkout/page.tsx", "utf8");
+    expect(page).toContain("await requireAdmin()");
+    expect(page).toContain('signPreviewToken("checkout")');
+  });
+
+  it("expires", () => {
+    // A URL copied out of devtools has to stop working.
+    expect(token).toContain("exp > Math.floor(now / 1000)");
+    expect(token).toContain("TTL_SECONDS");
+  });
+
+  it("is scoped to one kind of preview", () => {
+    // They all grant little, but "little" is not "the same little".
+    expect(token).toContain("payload.kind === kind");
+  });
+
+  it("compares lengths before comparing bytes", () => {
+    // timingSafeEqual throws on a length mismatch rather than returning false,
+    // and a thrown comparison is a 500 on a preview.
+    expect(token).toContain("a.length !== b.length || !timingSafeEqual(a, b)");
+  });
+
+  it("fixes the other two panels that had the same gate", () => {
+    // Same cookie, same frame, same broken document.
+    const oto = readFileSync("app/oto-preview/[id]/page.tsx", "utf8");
+    const course = readFileSync("app/course-preview/[id]/page.tsx", "utf8");
+    for (const [src, kind] of [[oto, "oto"], [course, "course"]] as const) {
+      expect(src).toContain(`verifyPreviewToken(t, "${kind}")`);
+      expect(src).not.toContain("await requireAdmin()");
+    }
   });
 });

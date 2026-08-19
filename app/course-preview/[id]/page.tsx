@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireAdmin } from "@/lib/admin-guard";
+import { verifyPreviewToken } from "@/lib/preview-token";
 import { getCourse } from "@/lib/courses";
 import { listCurriculum, getCourseItem } from "@/lib/curriculum";
 import { flattenPlayable, neighbours } from "@/lib/curriculum-student";
@@ -15,8 +15,12 @@ export const dynamic = "force-dynamic";
  * The learner's view of a course, for an admin who does not own it.
  *
  * Outside /admin because a route group cannot escape the admin layout, and this
- * has to render bare inside an iframe. requireAdmin() is the gate — being off
- * the admin path changes where it sits, not who may see it.
+ * has to render bare inside an iframe.
+ *
+ * Gated by a signed token in the URL rather than the session: a SameSite=Lax
+ * cookie is not sent when a document is loaded into a frame, so requireAdmin()
+ * here saw no session however signed-in the admin was and bounced the frame to
+ * /login. The page holding the frame has the session and mints the token.
  *
  * Progress and drafts come from the query string, so a preview can show a
  * learner part-way through without touching anyone's real progress. Nothing
@@ -27,11 +31,11 @@ export default async function CoursePreview({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ item?: string; progress?: string; drafts?: string }>;
+  searchParams: Promise<{ item?: string; progress?: string; drafts?: string; t?: string }>;
 }) {
-  await requireAdmin();
   const { id } = await params;
-  const { item: itemId, progress = "fresh", drafts } = await searchParams;
+  const { item: itemId, progress = "fresh", drafts, t } = await searchParams;
+  if (!verifyPreviewToken(t, "course")) notFound();
 
   const course = await getCourse(id);
   if (!course) notFound();

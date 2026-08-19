@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { signPreviewToken } from "@/lib/preview-token";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getCourse } from "@/lib/courses";
@@ -53,7 +54,9 @@ export default async function CoursePreviewPage({
     return `/admin/courses/${id}/preview?${q}`;
   };
 
-  const frameSrc = `/course-preview/${id}?progress=${progress}${drafts ? "&drafts=1" : ""}`;
+  const frameSrc =
+    `/course-preview/${id}?progress=${progress}${drafts ? "&drafts=1" : ""}` +
+    `&t=${encodeURIComponent(signPreviewToken("course"))}`;
 
   return (
     <div className="mx-[calc(50%-50vw+var(--admin-nav)/2)] flex h-[calc(100vh-4rem)] w-[calc(100vw-var(--admin-nav))] flex-col px-5 md:px-6">

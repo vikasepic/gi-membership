@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { getSettings } from "@/lib/settings";
 import { listPublishedProducts } from "@/lib/store";
 import { CheckoutDesignForm } from "@/components/admin/checkout-design-form";
+import { signPreviewToken } from "@/lib/preview-token";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,13 @@ export default async function CheckoutDesignPage() {
         <span className="text-sm text-muted">one design, every product</span>
       </div>
 
-      <CheckoutDesignForm settings={settings} previewSlug={sample} />
+      {/* Minted here, where requireAdmin has already run and a session
+          exists. The frame cannot prove anything for itself. */}
+      <CheckoutDesignForm
+        settings={settings}
+        previewSlug={sample}
+        previewToken={signPreviewToken("checkout")}
+      />
     </div>
   );
 }

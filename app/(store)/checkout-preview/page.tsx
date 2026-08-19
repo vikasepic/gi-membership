@@ -1,4 +1,5 @@
-import { requireAdmin } from "@/lib/admin-guard";
+import { notFound } from "next/navigation";
+import { verifyPreviewToken } from "@/lib/preview-token";
 import CheckoutPage from "@/app/(store)/checkout/page";
 import { NOINDEX } from "@/lib/seo";
 
@@ -28,14 +29,22 @@ export const dynamic = "force-dynamic";
  * submit, so the page can be rendered as often as anybody likes without
  * writing an order.
  *
- * In this frame the admin is signed in, so the checkout shows its known-buyer
- * form rather than the one a stranger meets: no "Where should we send it?"
- * step, and their own address already filled. Colours, toggles and layout —
- * everything this editor changes — render identically either way.
+ * Authorised by a signed token in the URL, not by the session. A cookie set
+ * SameSite=Lax is sent on top-level navigations only, and loading a document
+ * into an iframe is not one — so requireAdmin() here saw no session however
+ * signed-in the admin was, redirected the frame to /login and then to the
+ * store root, which refuses to be framed at all. The panel showed a broken
+ * document and the server answered 200 throughout. See lib/preview-token.ts.
+ *
+ * The frame is signed out, so this renders the checkout a stranger meets —
+ * which is the more useful preview anyway, and the one most buyers see.
  */
 export default async function CheckoutPreviewPage(props: {
-  searchParams: Promise<{ product?: string; skin?: string }>;
+  searchParams: Promise<{ product?: string; skin?: string; t?: string }>;
 }) {
-  await requireAdmin();
+  const { t } = await props.searchParams;
+  // notFound, not redirect: a redirect inside a frame is what broke this, and
+  // a 404 rendered in place is something an admin can actually see.
+  if (!verifyPreviewToken(t, "checkout")) notFound();
   return <CheckoutPage {...props} />;
 }
