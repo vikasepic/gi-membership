@@ -31,7 +31,7 @@ export function CheckoutDesignForm({
   // Re-fetched on every save, so the frame is never showing the colours from
   // before you pressed it. The saved-at stamp is the whole cache key.
   const src = previewSlug
-    ? `/checkout?product=${encodeURIComponent(previewSlug)}${state?.saved ? `&t=${state.saved}` : ""}`
+    ? `/checkout-preview?product=${encodeURIComponent(previewSlug)}${state?.saved ? `&t=${state.saved}` : ""}`
     : null;
 
   return (

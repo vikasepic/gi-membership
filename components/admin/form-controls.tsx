@@ -19,10 +19,19 @@ export function Field({
 }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-sm font-medium">
-        {label}
-        {required && <span className="text-primary"> *</span>}
-        {hint && <span className="ml-2 font-normal text-muted">{hint}</span>}
+      {/* Wrap as a unit, not as one run of words.
+          The hint used to be `ml-2` inside the same line box, so in a narrow
+          column — three colour pickers side by side — the label broke across
+          lines and the hint threaded through the gap, reading as one mangled
+          sentence per column. A flex row with a baseline and a gap puts the
+          hint on its own line the moment there is no room beside the label,
+          which is what it should have done all along. */}
+      <span className="flex flex-wrap items-baseline gap-x-2 text-sm font-medium">
+        <span>
+          {label}
+          {required && <span className="text-primary"> *</span>}
+        </span>
+        {hint && <span className="font-normal text-muted">{hint}</span>}
       </span>
       {children}
       {error && <span className="text-sm text-primary">{error}</span>}

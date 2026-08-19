@@ -71,6 +71,20 @@ const nextConfig: NextConfig = {
           { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
         ],
       },
+      // And the checkout design editor, which frames the real checkout so what
+      // an admin approves is what a buyer meets. /checkout itself stays DENY —
+      // a transparent frame over a pay button is the textbook clickjack, and
+      // relaxing the header that stops it to fix a preview would trade the
+      // thing it protects for a convenience. This route is the same page at an
+      // admin-only URL.
+      {
+        source: "/checkout-preview",
+        headers: [
+          ...base,
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+        ],
+      },
       // Same reasoning for the course preview: a phone view is only truthful
       // when the frame has its own viewport. Admin-only, and framed by this
       // site alone.
