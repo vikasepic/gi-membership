@@ -146,13 +146,26 @@ export default async function LibraryPage({
                       member can pick out of a grid — not a placeholder box
                       pretending an image is coming. */}
                   <div className="flex items-start gap-3">
-                    <span
-                      aria-hidden
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg font-semibold text-white"
-                      style={{ background: "var(--navy)" }}
-                    >
-                      {a.name.trim().charAt(0).toUpperCase()}
-                    </span>
+                    {/* The picture the offer was sold with, falling back to a
+                        letter. A mark drawn from the name is what you use when
+                        there is nothing better; where the offer carries an
+                        image there is. */}
+                    {a.imageUrl ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={a.imageUrl}
+                        alt=""
+                        className="h-11 w-11 shrink-0 rounded-xl border border-border object-cover"
+                      />
+                    ) : (
+                      <span
+                        aria-hidden
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg font-semibold text-white"
+                        style={{ background: "var(--navy)" }}
+                      >
+                        {a.name.trim().charAt(0).toUpperCase()}
+                      </span>
+                    )}
                     <div className="flex min-w-0 flex-col gap-0.5">
                       <span className="truncate font-medium">{a.name}</span>
                       {a.host && <span className="truncate text-xs text-muted">{a.host}</span>}
@@ -196,6 +209,17 @@ export default async function LibraryPage({
           }}
         >
           <span className="kicker text-primary">Still available</span>
+          {/* The offer's own picture. It is set on the offer, shown on its
+              upsell page, and was the one place a member met the thing without
+              it. */}
+          {standing.imageUrl && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={standing.imageUrl}
+              alt=""
+              className="h-40 w-full rounded-2xl border border-border object-cover sm:h-48"
+            />
+          )}
           <h2 className="text-xl">{standing.headline}</h2>
           {standing.description && <p className="text-sm text-muted">{standing.description}</p>}
           <div className="flex flex-wrap items-center gap-4">

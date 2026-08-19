@@ -44,7 +44,16 @@ export async function ownsProduct(userId: string, productId: string): Promise<bo
 
 export async function listOwnedApps(
   userId: string,
-): Promise<{ id: string; name: string; status: string; host: string | null; channels: string[] }[]> {
+): Promise<
+  {
+    id: string;
+    name: string;
+    status: string;
+    host: string | null;
+    channels: string[];
+    imageUrl: string | null;
+  }[]
+> {
   const db = createServiceClient();
   const { data: owns } = await db
     .from("ownership")
@@ -63,10 +72,15 @@ export async function listOwnedApps(
   // member cannot check anywhere else.
   const offerIds = rows.map((r) => r.offer_id as string | null).filter(Boolean) as string[];
   const { data: offers } = offerIds.length
-    ? await db.from("offers").select("id, grant_channels").in("id", offerIds)
+    ? await db.from("offers").select("id, grant_channels, image_url").in("id", offerIds)
     : { data: [] };
   const channelsByOffer = new Map(
     (offers ?? []).map((o) => [o.id as string, (o.grant_channels as string[]) ?? []]),
+  );
+  // The picture the offer was sold with. An app has no cover of its own, and a
+  // letter in a box is what you draw when there is nothing better — there is.
+  const imageByOffer = new Map(
+    (offers ?? []).map((o) => [o.id as string, (o.image_url as string | null) ?? null]),
   );
 
   return rows.map((r) => {
@@ -77,6 +91,7 @@ export async function listOwnedApps(
       status: r.status as string,
       host: hostOf(app?.base_url as string | undefined),
       channels: channelsByOffer.get(r.offer_id as string) ?? [],
+      imageUrl: imageByOffer.get(r.offer_id as string) ?? null,
     };
   });
 }

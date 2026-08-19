@@ -13,6 +13,7 @@ import type { OfferPrice } from "@/lib/offer-prices";
 import type { ProductOption, AppOption, OfferOption } from "@/lib/admin";
 import { money } from "@/lib/money";
 import { channelLabel } from "@/lib/app-channels";
+import { ImageField } from "@/components/admin/image-field";
 import { sectionsToForm } from "@/lib/oto-sections";
 
 /** Layouts that still read the fields below. Ten sections and Custom do not. */
@@ -293,9 +294,17 @@ export function OfferForm({
             <input name="declineLabel" defaultValue={offer?.declineLabel ?? "No thanks"} className={input} />
           </Field>
         </div>
-        <Field label="Image URL" hint="optional">
-          <input name="imageUrl" defaultValue={offer?.imageUrl ?? ""} className={input} />
-        </Field>
+        {/* The offer's own picture, chosen from the library rather than typed.
+            It was a text box labelled "Image URL": an admin had to go and find
+            an address, and nothing showed whether what they pasted resolved to
+            anything — which is why two of the three offers have no image. */}
+        <ImageField
+          name="imageUrl"
+          label="Image"
+          hint="shown on the upsell page, in the offers list, and on the offer's card in a member's library"
+          value={offer?.imageUrl ?? ""}
+          stores="url"
+        />
         <Field
           label="Upsell page layout"
           hint="Only used when this offer is set as a product's upsell. Custom renders a coded page registered for this offer's key — it falls back to Visual if none exists yet."

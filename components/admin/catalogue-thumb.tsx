@@ -12,8 +12,23 @@ import { publicCoverUrl } from "@/lib/media-url";
  * 16:10 the storefront uses: at this size the shape carries no information and
  * a row of squares lines up, which is what makes a column scannable.
  */
-export function CatalogueThumb({ coverPath, alt = "" }: { coverPath: string | null; alt?: string }) {
-  const url = publicCoverUrl(coverPath);
+export function CatalogueThumb({
+  coverPath,
+  imageUrl = null,
+  alt = "",
+}: {
+  coverPath: string | null;
+  /**
+   * A picture of its own, for a row with no product behind it.
+   *
+   * An offer granting an app has no cover to borrow, so every app offer showed
+   * an empty square — which read as "no image available" when the offer has a
+   * perfectly good one of its own.
+   */
+  imageUrl?: string | null;
+  alt?: string;
+}) {
+  const url = publicCoverUrl(coverPath) ?? imageUrl;
   if (!url) {
     return (
       <span

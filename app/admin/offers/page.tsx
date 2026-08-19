@@ -62,7 +62,7 @@ export default async function AdminOffersPage() {
               <tr key={o.id} className="border-b border-border last:border-0">
                 <td className="px-4 py-3">
                   <span className="flex items-center gap-2.5">
-                    <CatalogueThumb coverPath={coverFor(o.grantProductId)} />
+                    <CatalogueThumb coverPath={coverFor(o.grantProductId)} imageUrl={o.imageUrl} />
                     <span className="flex min-w-0 flex-col">
                       <span>{o.name}</span>
                       {!o.active && <span className="text-xs text-primary">inactive</span>}
