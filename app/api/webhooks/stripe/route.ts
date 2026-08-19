@@ -1,5 +1,6 @@
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
+import { recordRenewal } from "@/lib/renewals";
 import { finalizeOrder } from "@/lib/checkout";
 import { sendPaymentFailedEmail, sendTrialEndingEmail } from "@/lib/subscription-emails";
 import {
@@ -76,6 +77,22 @@ export async function POST(req: Request) {
       } catch (e) {
         console.error("[stripe webhook] trial-ending email failed:", e);
       }
+      break;
+    }
+
+    // Money that arrives after the checkout: a trial converting on day 7, and
+    // every renewal after it. Until this existed a subscription produced
+    // exactly one order — the $0 one made at the checkout — and every real
+    // charge for the life of it reached Stripe and nothing else. No order, no
+    // receipt, and no conversion event, so Meta was told a trial started and
+    // never told it converted.
+    case "invoice.payment_succeeded": {
+      const invoice = event.data.object as Stripe.Invoice;
+      const res = await recordRenewal(invoice);
+      // Loud on purpose. This is the one webhook that arrives every month for
+      // the life of every subscription, so a reason that turns out to be wrong
+      // is a reason worth being able to grep for.
+      if (!res.recorded) console.log(`[stripe webhook] invoice ${invoice.id} not recorded: ${res.reason}`);
       break;
     }
 
