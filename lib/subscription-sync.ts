@@ -142,8 +142,62 @@ export async function revokeOwnershipForPaymentIntent(
     .eq("stripe_payment_intent_id", paymentIntentId)
     .maybeSingle();
   if (orderErr) throw new Error(`revokeOwnership order: ${orderErr.message}`);
-  if (!order) return { revoked: 0 };
-  return revokeOwnershipForOrder(order.id as string);
+  if (order) return revokeOwnershipForOrder(order.id as string);
+
+  // Not the order's own charge, then. An upsell accepted on the thank-you page
+  // is charged on its OWN PaymentIntent and recorded on the order ITEM, so
+  // refunding just the upsell matched no order at all and revoked nothing —
+  // the buyer got their money back and kept the thing.
+  //
+  // Only that line is withdrawn. The order it hangs off was a separate,
+  // unrefunded payment, and taking the product away because somebody changed
+  // their mind about the add-on would be a worse bug than the one being fixed.
+  return revokeOwnershipForItem(paymentIntentId);
+}
+
+/**
+ * Revoke what ONE order line bought, for a charge of its own that was refunded.
+ *
+ * The bump and the upsell both write their Stripe payment intent here. A bump
+ * shares the order's intent now, so in practice this is the upsell — but it is
+ * keyed on the column rather than on the kind, because the next thing charged
+ * separately will land here too.
+ */
+export async function revokeOwnershipForItem(
+  paymentIntentId: string,
+): Promise<{ revoked: number }> {
+  const db = createServiceClient();
+  const { data: item } = await db
+    .from("order_items")
+    .select("id, order_id, offer_id, product_id, stripe_subscription_id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle();
+  if (!item) return { revoked: 0 };
+
+  const { data: order } = await db
+    .from("orders")
+    .select("user_id")
+    .eq("id", item.order_id as string)
+    .maybeSingle();
+  if (!order?.user_id) return { revoked: 0 };
+
+  const offerId = item.offer_id as string | null;
+  const productId = item.product_id as string | null;
+  if (!offerId && !productId) return { revoked: 0 };
+
+  const query = db
+    .from("ownership")
+    .update({ status: "canceled" })
+    .eq("user_id", order.user_id as string);
+  const { data } = await (offerId
+    ? query.eq("offer_id", offerId)
+    : query.eq("product_id", productId as string)
+  ).select("id");
+
+  // The app has to hear about it, or the customer keeps what they were
+  // refunded for — the same reason the order-level revoke pushes.
+  await pushOwnershipStateToApps((data ?? []).map((r) => r.id as string));
+  return { revoked: data?.length ?? 0 };
 }
 
 // Same revocation keyed on the order itself. An order that charged nothing — a

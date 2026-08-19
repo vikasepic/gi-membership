@@ -1,6 +1,8 @@
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { recordRenewal } from "@/lib/renewals";
+import { reportReversal, handleDispute, disputeWon } from "@/lib/reversals";
+import { orderForPaymentIntent } from "@/lib/orders";
 import { finalizeOrder } from "@/lib/checkout";
 import { sendPaymentFailedEmail, sendTrialEndingEmail } from "@/lib/subscription-emails";
 import {
@@ -96,14 +98,51 @@ export async function POST(req: Request) {
       break;
     }
 
-    // A refund takes back what the order granted.
+    // A refund takes back what the order granted — and says so.
+    //
+    // It used to only revoke. The sale stayed in Meta and GA4 as revenue for
+    // good, so the reported figure drifted from the money in the bank and the
+    // platforms kept optimising towards whatever produced a sale that was
+    // handed straight back.
     case "charge.refunded": {
       const charge = event.data.object as Stripe.Charge;
       const piId =
         typeof charge.payment_intent === "string"
           ? charge.payment_intent
           : charge.payment_intent?.id;
-      if (piId) await revokeOwnershipForPaymentIntent(piId);
+      if (!piId) break;
+      await revokeOwnershipForPaymentIntent(piId);
+
+      const order = await orderForPaymentIntent(piId);
+      if (order) {
+        await reportReversal({
+          orderId: order.id,
+          // What was actually given back. A partial refund is not the whole
+          // order, and reporting the order total would subtract more revenue
+          // than ever left.
+          amountCents: charge.amount_refunded ?? 0,
+          currency: charge.currency ?? order.currency,
+          kind: "Refund",
+          stripeId: charge.id,
+        });
+      }
+      break;
+    }
+
+    // The bank reversing a payment over our head.
+    //
+    // Nothing handled this at all: somebody disputed a charge, won by default
+    // because no evidence was filed, and kept their access. The funds go the
+    // moment a dispute opens, so access goes with them — and the store finds
+    // out, because a dispute has a deadline and one nobody answers is lost.
+    case "charge.dispute.created": {
+      await handleDispute(event.data.object as Stripe.Dispute, revokeOwnershipForPaymentIntent);
+      break;
+    }
+
+    case "charge.dispute.closed": {
+      const dispute = event.data.object as Stripe.Dispute;
+      if (dispute.status === "won") await disputeWon(dispute);
       break;
     }
 

@@ -50,6 +50,23 @@ export const EVENTS = [
   "BumpDeclined",
   "UpsellSelected",
   "UpsellDeclined",
+  /**
+   * Money given back, and money taken back.
+   *
+   * A refund revoked access and told nobody. So the sale stayed in Meta and
+   * GA4 as revenue for good — and on this store more than half the paid
+   * orders have been refunded, which is a reported figure with no relationship
+   * to the money in the bank. Worse than the number being wrong: the platforms
+   * keep optimising towards whatever produced a sale that was handed straight
+   * back.
+   *
+   * Two names rather than one, because they are two different facts about a
+   * customer. A refund is usually the store's decision and often amicable; a
+   * chargeback is the bank reversing a payment over the store's head, and it
+   * is the one worth being able to build an exclusion audience from.
+   */
+  "Refund",
+  "Chargeback",
 ] as const;
 
 export type EventName = (typeof EVENTS)[number];
@@ -87,6 +104,10 @@ export const GA4_NAME: Record<EventName, string> = {
   BumpDeclined: "remove_from_cart",
   UpsellSelected: "add_to_cart",
   UpsellDeclined: "remove_from_cart",
+  // GA4 has exactly this event and its reports subtract it from revenue on
+  // their own, given the same transaction_id the purchase carried.
+  Refund: "refund",
+  Chargeback: "refund",
 };
 
 /**
@@ -119,7 +140,13 @@ export const META_BOTH_SIDES: EventName[] = [
 ];
 
 /** Events only the server can know about — no browser is present. */
-export const SERVER_ONLY: EventName[] = ["Subscribe"];
+export const SERVER_ONLY: EventName[] = [
+  "Subscribe",
+  // Both arrive as a Stripe webhook, days or months after anybody was looking
+  // at a page.
+  "Refund",
+  "Chargeback",
+];
 
 /**
  * Events Meta has no standard name for.
@@ -143,6 +170,11 @@ export const META_CUSTOM: EventName[] = [
   "BumpDeclined",
   "UpsellSelected",
   "UpsellDeclined",
+  // Meta has no standard event for money going back. fbq only accepts its own
+  // vocabulary, so borrowing "Purchase" would ADD the refund to revenue — the
+  // exact opposite of what it means.
+  "Refund",
+  "Chargeback",
 ];
 
 /** Events with no money on them; sending a value would invent revenue. */

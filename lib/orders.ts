@@ -142,3 +142,16 @@ export async function refundOrder(orderId: string): Promise<RefundResult> {
   await revokeOwnershipForOrder(orderId);
   return { ok: true };
 }
+
+/** The order a Stripe charge belongs to, for a webhook that has only the intent. */
+export async function orderForPaymentIntent(
+  paymentIntentId: string,
+): Promise<{ id: string; currency: string } | null> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("orders")
+    .select("id, currency")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle();
+  return data ? { id: data.id as string, currency: (data.currency as string) ?? "usd" } : null;
+}
