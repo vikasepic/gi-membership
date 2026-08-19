@@ -22,6 +22,14 @@ export type OrderRow = {
   taxCents: number | null;
   buyerCountry: string | null;
   stripePaymentIntentId: string | null;
+  /**
+   * False for an order made against a Stripe test key.
+   *
+   * A test purchase is otherwise a real paid row nobody can tell from a real
+   * one — which is how two of them ended up counting towards revenue and
+   * holding subscription ids Stripe will never renew.
+   */
+  livemode: boolean;
   createdAt: string;
   items: OrderItemRow[];
 };
@@ -34,7 +42,7 @@ export async function listOrders(limit = 100): Promise<OrderRow[]> {
   const { data: orders, error } = await db
     .from("orders")
     .select(
-      "id, email, status, currency, total_cents, tax_cents, buyer_country, stripe_payment_intent_id, created_at",
+      "id, email, status, currency, total_cents, tax_cents, buyer_country, stripe_payment_intent_id, livemode, created_at",
     )
     .eq("store_id", storeId)
     .order("created_at", { ascending: false })
@@ -71,6 +79,7 @@ export async function listOrders(limit = 100): Promise<OrderRow[]> {
     taxCents: (o.tax_cents as number) ?? null,
     buyerCountry: (o.buyer_country as string) ?? null,
     stripePaymentIntentId: (o.stripe_payment_intent_id as string) ?? null,
+    livemode: (o.livemode as boolean) !== false,
     createdAt: o.created_at as string,
     items: byOrder.get(o.id as string) ?? [],
   }));

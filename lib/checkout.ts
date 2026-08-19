@@ -499,6 +499,10 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
 
     const visitor = await visitorFor(db, storeId, input.anonId);
     const { error: orderErr } = await db.from("orders").insert({
+      // Which Stripe mode this was made in. Without it a test purchase is a
+      // real paid row nobody can tell from a real one — which is exactly how
+      // two of them ended up counting towards revenue.
+      livemode: stripeMode() === "live",
       store_id: storeId,
       user_id: userId,
       email,
@@ -598,6 +602,10 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   const { data: order, error: orderErr } = await db
     .from("orders")
     .insert({
+      // Which Stripe mode this was made in. Without it a test purchase is a
+      // real paid row nobody can tell from a real one — which is exactly how
+      // two of them ended up counting towards revenue.
+      livemode: stripeMode() === "live",
       store_id: storeId,
       user_id: userId,
       email,

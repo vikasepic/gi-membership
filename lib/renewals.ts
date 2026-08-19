@@ -86,6 +86,9 @@ export async function recordRenewal(
       tax_cents: taxCents,
       stripe_customer_id: origin.stripeCustomerId,
       stripe_invoice_id: invoice.id,
+      // Straight from the invoice — Stripe stamps every object with its own
+      // mode, which is a better answer than the key we happen to be holding.
+      livemode: invoice.livemode !== false,
       // Carried so the renewal is attributable to the campaign that won the
       // original sale — a conversion with no match data is a conversion Meta
       // can count but not learn from.

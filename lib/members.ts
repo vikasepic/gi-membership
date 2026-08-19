@@ -41,7 +41,7 @@ export async function listMembers(): Promise<MemberRow[]> {
   if (ids.length === 0) return [];
 
   const [{ data: orders }, { data: owns }, { data: apps }] = await Promise.all([
-    db.from("orders").select("user_id, total_cents, status").in("user_id", ids),
+    db.from("orders").select("user_id, total_cents, status, livemode").in("user_id", ids),
     db.from("ownership").select("user_id, product_id, app_id, status, stripe_subscription_id").in("user_id", ids),
     db.from("apps").select("id, name"),
   ]);
@@ -61,7 +61,11 @@ export async function listMembers(): Promise<MemberRow[]> {
       orders: paid.length,
       refundedOrders: (orders ?? []).filter((o) => o.user_id === uid && o.status === "refunded")
         .length,
-      spentCents: paid.reduce((n, o) => n + ((o.total_cents as number) ?? 0), 0),
+      // Test orders are real rows for money that never moved, so they are not
+      // spend. Left in the count of purchases, because they did happen.
+      spentCents: paid
+        .filter((o) => (o as { livemode?: boolean }).livemode !== false)
+        .reduce((n, o) => n + ((o.total_cents as number) ?? 0), 0),
       courses: mine.filter((o) => o.product_id).length,
       subscriptions: mine
         .filter((o) => o.app_id)

@@ -21,6 +21,7 @@ const order = (over: Partial<OrderRow> = {}): OrderRow => ({
   taxCents: null,
   buyerCountry: "IN",
   stripePaymentIntentId: "pi_abc123",
+  livemode: true,
   createdAt: daysAgo(1),
   items: [{ kind: "product", description: "The Guide", amountCents: 499, stripeSubscriptionId: null }],
   ...over,

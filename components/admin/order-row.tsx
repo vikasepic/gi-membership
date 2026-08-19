@@ -70,9 +70,23 @@ export function OrderRowView({ order }: { order: Order }) {
           >
             {order.status}
           </span>
+          {/* A test purchase is a real paid row for money that never moved.
+              Without saying so, it reads as revenue — which is how two of them
+              were counted, and how their subscription ids sat waiting for a
+              renewal Stripe will never send. */}
+          {!order.livemode && (
+            <span
+              className="ml-1.5 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900"
+              title="Made against a Stripe test key — no money moved"
+            >
+              test
+            </span>
+          )}
         </td>
         <td className="px-3 py-2.5 text-right text-sm font-medium tabular-nums">
-          {money(order.totalCents, order.currency)}
+          <span className={order.livemode ? "" : "text-muted line-through"}>
+            {money(order.totalCents, order.currency)}
+          </span>
         </td>
         <td className="pr-3 text-right text-xs text-muted">{open ? "⌄" : "›"}</td>
       </tr>

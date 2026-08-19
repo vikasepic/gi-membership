@@ -4,7 +4,7 @@ import { getStoreId, getOffer } from "@/lib/store";
 import { isOfferEligible, immediateChargeCents, offerAtPrice } from "@/lib/offers";
 import { livePrices, priceForChoice } from "@/lib/offer-prices";
 import { ownershipFor, fulfilOffer, grantOfferOwnership, customerForUser } from "@/lib/checkout";
-import { stripe } from "@/lib/stripe";
+import { stripe, stripeMode } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
 import { ensureUserProfile } from "@/lib/users";
 import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
@@ -232,6 +232,10 @@ export async function completeOfferCheckout(
   const { data: order, error: orderErr } = await db
     .from("orders")
     .insert({
+      // Which Stripe mode this was made in. Without it a test purchase is a
+      // real paid row nobody can tell from a real one — which is exactly how
+      // two of them ended up counting towards revenue.
+      livemode: stripeMode() === "live",
       store_id: storeId,
       user_id: userId,
       email,
