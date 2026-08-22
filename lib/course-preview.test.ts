@@ -32,8 +32,31 @@ describe("the course preview does not weaken the learner gates", () => {
   it("gates the preview route on admin, not on nothing", () => {
     // It sits outside /admin so it can render bare in an iframe, which means
     // the middleware's admin gate does not cover it.
+    //
+    // Assert the CALL, not the word: the doc comment above this route explains
+    // at length why requireAdmin() cannot work in a frame, so `toContain
+    // ("requireAdmin")` kept passing on the prose after the gate had been
+    // replaced. A guard test that a comment can satisfy is not a guard test.
     const s = read("app/course-preview/[id]/page.tsx");
-    expect(s).toContain("requireAdmin");
+    expect(s).toContain('verifyPreviewToken(t, "course")');
+    expect(s, "the gate must stop the render").toContain("notFound()");
+    expect(s, "requireAdmin cannot see a session in a frame").not.toContain("await requireAdmin()");
+  });
+
+  it("carries the preview token on every link it builds", () => {
+    // This route verifies `t` and notFound()s without it, and every link it
+    // renders navigates back into itself — the resume button, each lesson row,
+    // prev/next, and the back link all come from its own two href builders.
+    // So a builder that drops the token turns the whole preview into "That
+    // page doesn't exist" on the first click, which is exactly what shipped
+    // when the gate moved from requireAdmin() to a token and the links were
+    // left alone.
+    const s = read("app/course-preview/[id]/page.tsx");
+    const links = [...s.matchAll(/`\/course-preview\/[^`]*`/g)].map((m) => m[0]);
+    expect(links.length, "no self-links found — has the shape changed?").toBeGreaterThan(0);
+    for (const l of links) {
+      expect(l, `this link drops the token: ${l}`).toMatch(/[?&]t=|searchParams|URLSearchParams/);
+    }
   });
 
   it("never writes progress from a preview", () => {

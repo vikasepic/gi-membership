@@ -43,6 +43,22 @@ export default async function CoursePreview({
   const withDrafts = drafts === "1";
   const nodes = await listCurriculum(id, { includeDrafts: withDrafts });
 
+  // Every link on this page points back at this page, which refuses to render
+  // without `t`. One builder for all of them, because three hand-written query
+  // strings is three chances to forget the token — and a link that forgets it
+  // does not degrade, it becomes "That page doesn't exist" on the first click.
+  //
+  // The token travels as-is rather than being re-minted: re-minting would give
+  // a copied URL a fresh hour every time it was followed, and the one-hour
+  // life is the point of it.
+  const self = (lessonId?: string) =>
+    `/course-preview/${id}?${new URLSearchParams({
+      ...(lessonId ? { item: lessonId } : {}),
+      progress,
+      ...(withDrafts ? { drafts: "1" } : {}),
+      t,
+    })}`;
+
   // Progress is simulated, never read. "part" completes the first half of the
   // reading order, which is what puts the resume button and a half-filled bar
   // on screen — the states an empty course never shows you.
@@ -68,13 +84,8 @@ export default async function CoursePreview({
           next={next}
           completed={doneIds.has(item.id)}
           assetUrl={(i) => `/api/media/item/${item.id}/${i}`}
-          lessonHref={(lid) =>
-            `/course-preview/${id}?item=${lid}&progress=${progress}${withDrafts ? "&drafts=1" : ""}`
-          }
-          backHref={{
-            href: `/course-preview/${id}?progress=${progress}${withDrafts ? "&drafts=1" : ""}`,
-            label: course.title,
-          }}
+          lessonHref={(lid) => self(lid)}
+          backHref={{ href: self(), label: course.title }}
           interactive={false}
         />
       </div>
@@ -87,9 +98,7 @@ export default async function CoursePreview({
         course={course}
         nodes={nodes}
         doneIds={doneIds}
-        lessonHref={(lid) =>
-          `/course-preview/${id}?item=${lid}&progress=${progress}${withDrafts ? "&drafts=1" : ""}`
-        }
+        lessonHref={(lid) => self(lid)}
         backHref={null}
         markDrafts={withDrafts}
       />

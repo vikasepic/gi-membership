@@ -42,8 +42,17 @@ export function signPreviewToken(kind: string, now = Date.now()): string {
   return `${body}.${sign(body, otoSigningSecret())}`;
 }
 
-/** True only for an unexpired token minted for this exact kind of preview. */
-export function verifyPreviewToken(token: string | undefined, kind: string, now = Date.now()): boolean {
+/**
+ * True only for an unexpired token minted for this exact kind of preview.
+ *
+ * Narrows `token` to a string, because a verified preview has to put the same
+ * token back into every link it renders — the page is its own destination.
+ */
+export function verifyPreviewToken(
+  token: string | undefined,
+  kind: string,
+  now = Date.now(),
+): token is string {
   if (!token) return false;
   const parts = token.split(".");
   if (parts.length !== 2) return false;
