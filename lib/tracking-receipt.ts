@@ -39,6 +39,49 @@ export async function purchaseForOrder(orderId: string): Promise<TrackingReceipt
   return receiptFor("id", orderId);
 }
 
+/**
+ * The custom event this order's funnel reports under, if it has one.
+ *
+ * One pixel serves several funnels on this ad account, so a single Purchase
+ * cannot be attributed to a campaign. The ads team names an event per funnel
+ * and reads that; the name lives on the product row so renaming it is a form
+ * rather than a deploy.
+ *
+ * Found through `order_items`, because an order has no product of its own —
+ * it is a basket, and the base line is the one that says which funnel this
+ * was. A renewal order has no product line at all and correctly gets nothing:
+ * it is not a funnel sale and reporting it as one would tell the ad account a
+ * campaign made a sale seven days after it stopped running.
+ */
+export async function adEventForOrder(
+  orderId: string,
+): Promise<{ name: string; contentName: string } | null> {
+  try {
+    const db = createServiceClient();
+    const { data: item } = await db
+      .from("order_items")
+      .select("product_id")
+      .eq("order_id", orderId)
+      .eq("kind", "product")
+      .not("product_id", "is", null)
+      .maybeSingle();
+    if (!item?.product_id) return null;
+
+    const { data: product } = await db
+      .from("products")
+      .select("ad_event_name, title")
+      .eq("id", item.product_id as string)
+      .maybeSingle();
+    const name = (product?.ad_event_name as string | null)?.trim();
+    if (!name) return null;
+    return { name, contentName: (product?.title as string) ?? name };
+  } catch {
+    // Same rule as the receipt: tracking never breaks the page somebody lands
+    // on after paying.
+    return null;
+  }
+}
+
 async function receiptFor(column: string, value: string): Promise<TrackingReceipt | null> {
   try {
     const db = createServiceClient();

@@ -40,6 +40,50 @@ export type Ids = {
 };
 
 /** Fire an event at whichever browser pixels are loaded. */
+/**
+ * Events fired before the pixel existed.
+ *
+ * `TrackView` reports on mount — a React effect, at hydration. The pixel is a
+ * `next/script` with `afterInteractive`, which by definition runs after that.
+ * So `window.fbq` was undefined at the moment the event fired, the optional
+ * call no-opped, and TrackView's `sent` ref meant it was never tried again.
+ *
+ * Found on production 22 Aug 2026 with consent already granted and the pixel
+ * warm: the product page reported a PageView and nothing else, and its
+ * ViewContent — the only upper-funnel signal an ad campaign gets from a
+ * landing page — had never fired once. The checkout's events were fine only
+ * because they fire later, once a form is ready.
+ *
+ * Holding them here rather than loading the pixel earlier: nothing may reach
+ * Meta before someone has agreed to it, so the buffer is the half that can
+ * wait. It is dropped, not delivered, if they decline.
+ */
+type PixelCall = () => void;
+const pending: PixelCall[] = [];
+/** Enough for any real page. A cap, so a refusal cannot grow a list forever. */
+const PENDING_LIMIT = 50;
+
+function whenPixelReady(send: PixelCall): void {
+  if (window.fbq) send();
+  else if (pending.length < PENDING_LIMIT) pending.push(send);
+}
+
+/** Called when the pixel script has defined `fbq`, and on consent granted. */
+export function flushPendingPixelCalls(): void {
+  if (typeof window === "undefined" || !window.fbq) return;
+  while (pending.length) pending.shift()?.();
+}
+
+/** Called when consent is refused: what was held is discarded, never sent. */
+export function dropPendingPixelCalls(): void {
+  pending.length = 0;
+}
+
+/** Test seam — how many events are waiting on the pixel. */
+export function pendingPixelCallCount(): number {
+  return pending.length;
+}
+
 export function track(
   name: EventName,
   params: Record<string, unknown> = {},
@@ -58,13 +102,37 @@ export function track(
   // Meta: the event id is what pairs this with the server's copy. A course
   // event is not in Meta's vocabulary, so it has to be sent as a custom one.
   const verb = META_CUSTOM.includes(name) ? "trackCustom" : "track";
-  window.fbq?.(verb, name, params, eventId ? { eventID: eventId } : undefined);
+  whenPixelReady(() =>
+    window.fbq?.(verb, name, params, eventId ? { eventID: eventId } : undefined),
+  );
   // GA4: only the events that carry no money. Revenue is the server's job, and
   // a purchase reported from here as well would be counted twice.
   if (!isCommerce(name)) window.gtag?.("event", GA4_NAME[name], params);
   // And the server's copy of the same event, through our own domain.
   if (eventId && META_BOTH_SIDES.includes(name) && !isCommerce(name))
     relay(name, params, eventId, serverOnly?.email ?? undefined);
+}
+
+/**
+ * A named custom event, for one funnel only.
+ *
+ * The ad account runs several funnels through one pixel, so a single Purchase
+ * cannot tell them apart in reporting. The ads team names an event per funnel
+ * and reads that instead. The NAME is theirs to choose and lives on the
+ * product row, never in this file — a name compiled into the code is a deploy
+ * every time somebody in an ad account changes their mind.
+ *
+ * Separate from `track` on purpose: `track` takes an `EventName` from a fixed
+ * union, which is what stops a typo becoming a silent second event. This one
+ * takes a free string because it has to, so it is the only door that is open
+ * and it is deliberately narrow — always trackCustom, browser only, no GA4,
+ * no relay, and never a substitute for Purchase.
+ */
+export function trackNamedCustom(name: string, params: Record<string, unknown>): void {
+  if (typeof window === "undefined") return;
+  const clean = name.trim();
+  if (!clean) return;
+  whenPixelReady(() => window.fbq?.("trackCustom", clean, params));
 }
 
 /**
@@ -154,7 +222,13 @@ export function Analytics({ ids, match }: { ids: Ids; match?: PixelMatch | null 
     // load on that click rather than on the next navigation — otherwise the
     // page they consented on is the one page never measured.
     window.addEventListener("gi:consent-granted", read);
-    return () => window.removeEventListener("gi:consent-granted", read);
+    // And a refusal throws away whatever was waiting on a pixel. Buffering an
+    // event is not permission to send it later.
+    window.addEventListener("gi:consent-denied", dropPendingPixelCalls);
+    return () => {
+      window.removeEventListener("gi:consent-granted", read);
+      window.removeEventListener("gi:consent-denied", dropPendingPixelCalls);
+    };
   }, []);
 
   if (!allowed) return null;
@@ -162,7 +236,10 @@ export function Analytics({ ids, match }: { ids: Ids; match?: PixelMatch | null 
   return (
     <>
       {ids.metaPixelId && (
-        <Script id="meta-pixel" strategy="afterInteractive">
+        // onReady rather than onLoad: for an inline script Next fires onReady
+        // after it has executed, which is the instant `fbq` starts existing.
+        // Anything reported during hydration is waiting for exactly this.
+        <Script id="meta-pixel" strategy="afterInteractive" onReady={flushPendingPixelCalls}>
           {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
 n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
 n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;

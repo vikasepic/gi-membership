@@ -32,6 +32,7 @@ export const PRODUCT_FIELD_TABS: FieldTabs = {
   upsellOfferId: "funnel",
   activecampaignTagId: "marketing",
   activecampaignAbandonedTagId: "marketing",
+  adEventName: "marketing",
 };
 
 export const OFFER_FIELD_TABS: FieldTabs = {

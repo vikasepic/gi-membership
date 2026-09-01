@@ -191,8 +191,18 @@ export function OfferForm({
           <Field label="Product" hint="if grant = product">
             <select name="grantProductId" defaultValue={offer?.grantProductId ?? ""} className={input}>
               <option value="">— none —</option>
+              {/* The status is part of the name here on purpose. An active
+                  offer granting a DRAFT product still delivers — the library
+                  reads the course's status, not the product's — but /p/<slug>
+                  is a 404 for everyone, so linking to it from an ad or an
+                  email sends buyers nowhere. Nothing else in the admin says
+                  so, and the bump on the live Product Validator funnel grants
+                  exactly such a product. */}
               {products.map((p) => (
-                <option key={p.id} value={p.id}>{p.title}</option>
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                  {p.status === "draft" ? " — draft, /p/ link 404s" : ""}
+                </option>
               ))}
             </select>
           </Field>

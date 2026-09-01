@@ -96,6 +96,19 @@ export const productSchema = z.object({
       .nullable()
       .default(null),
   ),
+  // The ads team's own name for this funnel's sale event. Free text because
+  // it is their vocabulary, not ours — but bounded, because Meta drops a
+  // custom event over 40 characters without saying so, and a rejected event
+  // is indistinguishable from a broken one from inside an ad account.
+  adEventName: z.preprocess(
+    emptyToNull,
+    z
+      .string()
+      .trim()
+      .max(40, "Meta ignores a custom event name longer than 40 characters")
+      .nullable()
+      .default(null),
+  ),
   activecampaignTagId: z.preprocess(
     emptyToNull,
     z
@@ -126,6 +139,7 @@ export type ParsedProduct = {
   activecampaignTagId: string | null;
   activecampaignAbandonedTagId: string | null;
   checkoutNote: string | null;
+  adEventName: string | null;
 };
 
 export type ParseResult =
@@ -175,6 +189,7 @@ export function parseProductForm(raw: Record<string, unknown>): ParseResult {
       activecampaignTagId: v.activecampaignTagId,
       activecampaignAbandonedTagId: v.activecampaignAbandonedTagId,
       checkoutNote: v.checkoutNote,
+      adEventName: v.adEventName,
     },
   };
 }

@@ -43,6 +43,8 @@ export type Product = {
   activecampaignTagId: string | null;
   /** Applied when checkout for this product starts; removed when it is paid. */
   activecampaignAbandonedTagId: string | null;
+  /** Meta custom event fired on this funnel's upsell page. Ads team's name. */
+  adEventName?: string | null;
   status: ProductStatus;
   bumpOfferId: string | null;
   upsellOfferId: string | null;

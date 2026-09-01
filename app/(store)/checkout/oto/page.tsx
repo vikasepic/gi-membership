@@ -13,7 +13,7 @@ import type { OtoView } from "@/components/oto/shell";
 import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";
 import { TrackPurchase } from "@/components/track-purchase";
-import { purchaseForOrder } from "@/lib/tracking-receipt";
+import { purchaseForOrder, adEventForOrder } from "@/lib/tracking-receipt";
 import { googleAdsPurchaseLabel } from "@/lib/env";
 
 export const metadata = NOINDEX;
@@ -75,6 +75,9 @@ export default async function OtoPage({
   // on the page they land on after paying covers all four, including the tab
   // they close, and the shared event id keeps it one sale rather than two.
   const receipt = await purchaseForOrder(verified.payload.orderId);
+  // This funnel's own named event, for an ad account running several funnels
+  // through one pixel. Null for a product that has not been given a name.
+  const adEvent = await adEventForOrder(verified.payload.orderId);
   const purchase = receipt ? (
     <TrackPurchase
       orderId={receipt.orderId}
@@ -83,6 +86,7 @@ export default async function OtoPage({
       trialCents={receipt.trialCents}
       email={receipt.email}
       adsLabel={googleAdsPurchaseLabel()}
+      customEvent={adEvent}
     />
   ) : null;
 

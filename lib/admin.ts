@@ -67,6 +67,7 @@ export type ProductInput = {
   upsellPriceIds?: string[];
   activecampaignTagId: string | null;
   activecampaignAbandonedTagId: string | null;
+  adEventName?: string | null;
   checkoutNote?: string | null;
   checkoutBullets?: string[];
 };
@@ -149,6 +150,7 @@ function toRow(input: ProductInput, storeId: string) {
     // remember to trim.
     activecampaign_tag_id: input.activecampaignTagId?.trim() || null,
     activecampaign_abandoned_tag_id: input.activecampaignAbandonedTagId?.trim() || null,
+    ad_event_name: input.adEventName?.trim() || null,
     checkout_note: input.checkoutNote?.trim() || null,
     // Blank lines dropped rather than stored: an empty bullet renders as a tick
     // beside nothing, which reads as a missing promise.
@@ -242,7 +244,7 @@ export type OfferInput = {
   active: boolean;
 };
 
-export type ProductOption = { id: string; title: string };
+export type ProductOption = { id: string; title: string; status: "draft" | "published" };
 export type AppOption = {
   id: string;
   key: string;
@@ -273,7 +275,7 @@ export async function listProductOptions(): Promise<ProductOption[]> {
   const db = createServiceClient();
   const { data, error } = await db
     .from("products")
-    .select("id, title")
+    .select("id, title, status")
     .eq("store_id", await getStoreId())
     .order("created_at", { ascending: true });
   if (error) throw new Error(`listProductOptions: ${error.message}`);

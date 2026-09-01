@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { track, adsConversion } from "@/components/analytics";
+import { track, adsConversion, trackNamedCustom } from "@/components/analytics";
 import { eventIdFor } from "@/lib/analytics/events";
 
 /**
@@ -25,6 +25,7 @@ export function TrackPurchase({
   trialCents,
   email,
   adsLabel,
+  customEvent,
 }: {
   orderId: string;
   /** What was actually charged today. */
@@ -34,6 +35,12 @@ export function TrackPurchase({
   trialCents?: number | null;
   email?: string | null;
   adsLabel?: string | null;
+  /**
+   * This funnel's own event name, from the product row. One pixel serves
+   * several funnels, so the ads team reports on a named event per funnel
+   * rather than trying to split one Purchase between campaigns.
+   */
+  customEvent?: { name: string; contentName: string } | null;
 }) {
   const sent = useRef(false);
   useEffect(() => {
@@ -57,10 +64,24 @@ export function TrackPurchase({
       );
     }
 
+    // This funnel's own event, beside the standard Purchase rather than
+    // instead of it — Meta's own optimisation runs on Purchase, and a custom
+    // event cannot replace it. Same money, read back from the order, so the
+    // two can never disagree about what the sale was worth.
+    if (customEvent) {
+      trackNamedCustom(customEvent.name, {
+        content_name: customEvent.contentName,
+        content_type: "product",
+        currency: currency.toUpperCase(),
+        value: valueCents / 100,
+        order_id: orderId,
+      });
+    }
+
     if (adsLabel) {
       adsConversion(adsLabel, { valueCents, currency, orderId, email });
     }
-  }, [orderId, valueCents, currency, trialCents, email, adsLabel]);
+  }, [orderId, valueCents, currency, trialCents, email, adsLabel, customEvent]);
 
   return null;
 }

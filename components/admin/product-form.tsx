@@ -566,6 +566,24 @@ export function ProductForm({
       </TabPanel>
 
       <TabPanel tab="marketing">
+      <Group
+        label="Ad reporting"
+        hint="One pixel serves every funnel on the ad account, so a single Purchase cannot tell them apart. Name a event for this funnel and the ads team can report on it alone."
+      >
+        <Field
+          label="Meta custom event name"
+          hint="Fired on the upsell page — the page every buyer reaches, whether they take the upsell, decline it, or close the tab. Carries the real order value. Leave blank to send nothing. Your ads team chooses the name; it must match theirs exactly."
+          error={err("adEventName")}
+        >
+          <input
+            name="adEventName"
+            defaultValue={product?.adEventName ?? ""}
+            maxLength={40}
+            placeholder="e.g. Product Validator Sale"
+            className={inputClass}
+          />
+        </Field>
+      </Group>
       <Group label="ActiveCampaign"
         hint="Buyers of this product are added to ActiveCampaign (or updated if they're already there) and given this tag."
       >

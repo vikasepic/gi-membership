@@ -22,6 +22,10 @@ export function ConsentBanner() {
     setVisible(false);
     // Let the attribution capture run now if it was just permitted.
     if (state === "granted") window.dispatchEvent(new Event("gi:consent-granted"));
+    // And say so out loud when it was refused. Anything reported during
+    // hydration is held until a pixel exists; a refusal has to throw that away
+    // rather than leave it waiting for one.
+    else window.dispatchEvent(new Event("gi:consent-denied"));
   }
 
   if (!visible) return null;
