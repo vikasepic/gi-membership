@@ -39,7 +39,6 @@ export type Ids = {
   googleAdsId?: string | null;
 };
 
-/** Fire an event at whichever browser pixels are loaded. */
 /**
  * Events fired before the pixel existed.
  *
@@ -58,6 +57,16 @@ export type Ids = {
  * Meta before someone has agreed to it, so the buffer is the half that can
  * wait. It is dropped, not delivered, if they decline.
  */
+/**
+ * Announced by the pixel snippet itself, as its final statement.
+ *
+ * Not `onReady`: that is Next asking the script whether it has run, and for an
+ * inline script here it never answered. This is the script saying so, from
+ * inside, one line after `fbq` starts existing — so it cannot be early, and it
+ * cannot be missed.
+ */
+export const PIXEL_READY_EVENT = "gi:pixel-ready";
+
 type PixelCall = () => void;
 const pending: PixelCall[] = [];
 /** Enough for any real page. A cap, so a refusal cannot grow a list forever. */
@@ -84,6 +93,7 @@ export function pendingPixelCallCount(): number {
   return pending.length;
 }
 
+/** Fire an event at whichever browser pixels are loaded. */
 export function track(
   name: EventName,
   params: Record<string, unknown> = {},
@@ -225,9 +235,13 @@ export function Analytics({ ids, match }: { ids: Ids; match?: PixelMatch | null 
     // And a refusal throws away whatever was waiting on a pixel. Buffering an
     // event is not permission to send it later.
     window.addEventListener("gi:consent-denied", dropPendingPixelCalls);
+    // Registered HERE, before `allowed` flips and the script is allowed to
+    // mount, so the listener is always in place before the snippet can shout.
+    window.addEventListener(PIXEL_READY_EVENT, flushPendingPixelCalls);
     return () => {
       window.removeEventListener("gi:consent-granted", read);
       window.removeEventListener("gi:consent-denied", dropPendingPixelCalls);
+      window.removeEventListener(PIXEL_READY_EVENT, flushPendingPixelCalls);
     };
   }, []);
 
@@ -239,13 +253,22 @@ export function Analytics({ ids, match }: { ids: Ids; match?: PixelMatch | null 
         // onReady rather than onLoad: for an inline script Next fires onReady
         // after it has executed, which is the instant `fbq` starts existing.
         // Anything reported during hydration is waiting for exactly this.
+        // The snippet says when it is ready, rather than being asked.
+        //
+        // `onReady` was the obvious hook and it does not fire for an inline
+        // script here — verified against production 1 Sep 2026: ViewContent
+        // arrived on a soft navigation, where the pixel already existed, and
+        // never on a first load, which is the only kind an ad click makes.
+        // So the flush now hangs off the one thing that cannot be early or
+        // late: the last statement of the script that defines `fbq`.
         <Script id="meta-pixel" strategy="afterInteractive" onReady={flushPendingPixelCalls}>
           {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
 n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
 n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
 t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
 document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('init','${ids.metaPixelId}'${match ? `,${JSON.stringify(match)}` : ""});fbq('track','PageView');`}
+fbq('init','${ids.metaPixelId}'${match ? `,${JSON.stringify(match)}` : ""});fbq('track','PageView');
+window.dispatchEvent(new Event('${PIXEL_READY_EVENT}'));`}
         </Script>
       )}
 

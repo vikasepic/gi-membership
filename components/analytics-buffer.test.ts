@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import { readFileSync } from "node:fs";
 
 /**
  * An event fired before the pixel exists must still arrive.
@@ -81,5 +82,21 @@ describe("an event fired before the pixel loads", () => {
     for (let i = 0; i < 500; i++) track("ViewContent", { i });
     expect(pendingPixelCallCount()).toBeLessThanOrEqual(50);
     flushPendingPixelCalls();
+  });
+});
+
+describe("the pixel announces itself", () => {
+  it("ends the snippet by dispatching the ready event", () => {
+    // `onReady` was the obvious hook and it does not fire for this inline
+    // script. Verified on production 1 Sep 2026: ViewContent arrived on a soft
+    // navigation, where the pixel already existed, and never on a first load —
+    // which is the only kind of load an ad click makes. The dispatch is the
+    // last statement of the script that defines fbq, so it cannot be early and
+    // it cannot be skipped.
+    const src = readFileSync("components/analytics.tsx", "utf8");
+    const snippet = src.slice(src.indexOf("connect.facebook.net/en_US/fbevents.js"));
+    expect(snippet).toContain("window.dispatchEvent(new Event('${PIXEL_READY_EVENT}'))");
+    // And something has to be listening before the script may mount.
+    expect(src).toContain("window.addEventListener(PIXEL_READY_EVENT, flushPendingPixelCalls)");
   });
 });
