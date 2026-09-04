@@ -15,6 +15,7 @@ import { resolveGlobals } from "@/lib/templates-store";
 import { SalesPage } from "@/components/page/sales-page";
 import { pageMetadata, absoluteUrl } from "@/lib/page-metadata";
 import { getSettingsOrDefaults } from "@/lib/settings";
+import { recordPageHit } from "@/lib/traffic";
 import type { Metadata } from "next";
 
 /**
@@ -64,6 +65,11 @@ export default async function ProductPage({
   const { slug } = await params;
   const product = await getProductBySlug(slug);
   if (!product || product.status !== "published") notFound();
+
+  // Counted here rather than in middleware: this is one of four pages worth
+  // counting, and middleware runs on far more. Not awaited — a count is worth
+  // less than a page load.
+  void recordPageHit(`/p/${slug}`);
 
   const owned = (await ownedProductIdsForViewer()).has(product.id);
   const accessHref = owned ? await accessHrefForProduct(product.id) : "/library";

@@ -15,6 +15,7 @@ import { NOINDEX } from "@/lib/seo";
 import { TrackPurchase } from "@/components/track-purchase";
 import { purchaseForOrder, adEventForOrder } from "@/lib/tracking-receipt";
 import { googleAdsPurchaseLabel } from "@/lib/env";
+import { recordPageHit } from "@/lib/traffic";
 
 export const metadata = NOINDEX;
 
@@ -35,6 +36,9 @@ export default async function OtoPage({
   if (!token) redirect("/checkout/thank-you");
   const verified = verifyOtoToken(token, otoSigningSecret());
   if (!verified.ok) redirect("/checkout/thank-you?oto=" + verified.reason);
+
+  // Not awaited — a count is worth less than a page load.
+  void recordPageHit("/checkout/oto");
 
   const shown = await getOffer(verified.payload.offerId);
   if (!shown) redirect("/checkout/thank-you");

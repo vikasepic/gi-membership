@@ -22,6 +22,7 @@ import { usableCheckoutLayout } from "@/lib/checkout-layout";
 import { checkoutSkin } from "@/lib/checkout-skin";
 import { CheckoutStage } from "@/components/checkout/v2/stage";
 import { money } from "@/lib/money";
+import { recordPageHit } from "@/lib/traffic";
 import type { Block } from "@/lib/blocks";
 
 export const metadata = NOINDEX;
@@ -72,6 +73,8 @@ export default async function CheckoutPage({
   searchParams: Promise<{ product?: string; skin?: string }>;
 }) {
   const { product: slug, skin: wantSkin } = await searchParams;
+  // Not awaited — a count is worth less than a page load.
+  void recordPageHit("/checkout");
   const skin = checkoutSkin(wantSkin);
   if (!slug) notFound();
   const product = await getProductBySlug(slug);
