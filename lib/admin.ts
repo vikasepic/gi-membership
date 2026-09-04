@@ -2,6 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
 import { getStoreId, hydrateOffer, hydrateProduct, OFFER_COLUMNS, PRODUCT_COLUMNS } from "@/lib/store";
+import { backfillStripeProduct } from "@/lib/stripe-catalog";
 import { money } from "@/lib/money";
 import { sortPrices, type OfferPrice } from "@/lib/offer-prices";
 import type {
@@ -173,6 +174,10 @@ export async function createProduct(input: ProductInput): Promise<string> {
     .single();
   if (error) throw new Error(`createProduct: ${error.message}`);
   if (input.prices?.length) await savePrices(data.id as string, input.prices, "product");
+  // Give it a Stripe identity now rather than on its first sale, so it can be
+  // picked in Stripe's "specific products" coupon restriction straight away.
+  // Never blocks the save — see backfillStripeProduct.
+  await backfillStripeProduct({ id: data.id as string, title: input.title });
   return data.id as string;
 }
 
@@ -184,6 +189,10 @@ export async function updateProduct(id: string, input: ProductInput): Promise<vo
   // rewritten the prices. savePrices refuses a reprice with live buyers and
   // throws, which the form reports.
   if (input.prices?.length) await savePrices(id, input.prices, "product");
+  // Catches up anything that predates the Stripe catalogue. Idempotent: a
+  // product that already has an id for this mode makes no Stripe call.
+  const row = await getProductById(id);
+  if (row) await backfillStripeProduct(row);
 }
 
 export async function deleteProduct(id: string): Promise<void> {

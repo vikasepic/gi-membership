@@ -27,6 +27,7 @@ import { ensureUserProfile } from "@/lib/users";
 import { applyPendingEntitlements } from "@/lib/app-sync";
 import { sendCrmEvent, type CrmItem } from "@/lib/crm";
 import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
+import { ensureStripeProductForProduct, ensureStripeProduct } from "@/lib/stripe-catalog";
 import { livePrices, chargeNowCents as chargeNowFor } from "@/lib/offer-prices";
 import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
 import { markLeadConverted } from "@/lib/leads";
@@ -36,51 +37,7 @@ import type { Offer } from "@/lib/types";
 const OTO_TTL_SECONDS = 15 * 60; // 15 minutes
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
-// A Stripe subscription price needs a Stripe Product id. Create one per offer
-// on first use and cache it on the offer row (per mode).
-/**
- * The Stripe Product a product's recurring prices bill against.
- *
- * One per product, not one per price: every way to buy a thing is the same
- * thing on different terms, and a Stripe product per price turns a dashboard
- * into a list nobody can read.
- *
- * Written on first use rather than at creation, so a store that sells nothing
- * recurring never accumulates Stripe products it did not ask for.
- */
-async function ensureStripeProductForProduct(product: {
-  id: string;
-  title: string;
-  stripeProductIdTest?: string | null;
-  stripeProductIdLive?: string | null;
-}): Promise<string> {
-  const mode = stripeMode();
-  const existing = mode === "live" ? product.stripeProductIdLive : product.stripeProductIdTest;
-  if (existing) return existing;
-  const created = await stripe().products.create(
-    { name: product.title, metadata: { productId: product.id } },
-    { idempotencyKey: `prod_product_${product.id}_${mode}` },
-  );
-  const db = createServiceClient();
-  const col = mode === "live" ? "stripe_product_id_live" : "stripe_product_id_test";
-  await db.from("products").update({ [col]: created.id }).eq("id", product.id);
-  return created.id;
-}
-
-async function ensureStripeProduct(offer: Offer): Promise<string> {
-  const mode = stripeMode();
-  const existing = mode === "live" ? offer.stripeProductIdLive : offer.stripeProductIdTest;
-  if (existing) return existing;
-  const product = await stripe().products.create(
-    { name: offer.name, metadata: { offerId: offer.id } },
-    { idempotencyKey: `prod_offer_${offer.id}_${mode}` },
-  );
-  const db = createServiceClient();
-  const col = mode === "live" ? "stripe_product_id_live" : "stripe_product_id_test";
-  await db.from("offers").update({ [col]: product.id }).eq("id", offer.id);
-  return product.id;
-}
-
+// Stripe product identity lives in lib/stripe-catalog.ts — coupons need it too.
 // Money path. Base product = one PaymentIntent (card saved off_session). Bump
 // is fulfilled SEPARATELY via fulfilOffer on the saved card — one-time charge
 // or trial subscription. finalizeOrder is idempotent and is the single path
@@ -459,7 +416,9 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
 
   let coupon: AppliedCoupon | null = null;
   if (input.couponCode?.trim()) {
-    const res = await resolveCoupon(input.couponCode, listCents, product.currency);
+    const res = await resolveCoupon(input.couponCode, listCents, product.currency, {
+      item: product.slug,
+    });
     if (!res.ok) return { ok: false, error: res.error };
     coupon = res.coupon;
   }
@@ -957,7 +916,9 @@ export async function finalizeOrder(intentId: string): Promise<void> {
     });
 
     const coupon = pi.metadata.couponCode
-      ? await resolveCoupon(pi.metadata.couponCode, price.priceCents, prod.currency)
+      ? await resolveCoupon(pi.metadata.couponCode, price.priceCents, prod.currency, {
+          item: prod.slug,
+        })
       : null;
 
     const sub = await stripe().subscriptions.create(

@@ -141,7 +141,12 @@ export async function previewCoupon(
   if (!product || product.status !== "published") {
     return { ok: false, error: "Product not available" };
   }
-  const res = await resolveCoupon(code, product.priceCents, product.currency);
+  // The preview is display only, but it is scoped exactly like the charge —
+  // a preview that accepts a code the purchase then refuses is worse than one
+  // that refuses it here, where there is still a form to say so on.
+  const res = await resolveCoupon(code, product.priceCents, product.currency, {
+    item: product.slug,
+  });
   if (!res.ok) return res;
   return {
     ok: true,

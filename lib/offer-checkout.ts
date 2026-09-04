@@ -63,6 +63,7 @@ export async function previewOfferCoupon(args: {
     args.code,
     couponSubtotal(offer, immediateChargeCents(offer)),
     offer.currency,
+    { item: offer.key },
   );
   if (!res.ok) return res;
   return {
@@ -120,6 +121,7 @@ export async function startOfferCheckout(args: {
       args.couponCode,
       couponSubtotal(priced, immediateChargeCents(priced)),
       priced.currency,
+      { item: priced.key },
     );
     if (!res.ok) return { ok: false, error: res.error };
     coupon = res.coupon;
@@ -212,6 +214,7 @@ export async function completeOfferCheckout(
       savedCode,
       couponSubtotal(offer, immediateChargeCents(offer)),
       offer.currency,
+      { item: offer.key },
     );
     coupon = res.ok ? res.coupon : null;
   }

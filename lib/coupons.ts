@@ -9,6 +9,29 @@ import { getStoreId } from "@/lib/store";
 //
 // The discount is ALWAYS computed on the server from the code alone. A price
 // that arrives from the browser is a suggestion, not a fact.
+//
+// **This Stripe account is shared with six other apps**, and a promotion code
+// is an account-wide object. Until 1 Sep 2026 this file looked a code up by
+// name and applied whatever it found, so every other app's codes worked here:
+// CONTENT100 and DPBS are both 100% off and neither is ours, and DPBS had
+// already been used on seven live orders, each paying the 50c floor against a
+// $19 product.
+//
+// So the rule is DEFAULT DENY. A code works here only if it can show it
+// belongs to this store, one of two ways:
+//
+//   1. Its coupon (or promotion code) carries metadata `store=grow`. Without
+//      that it is somebody else's and is refused.
+//   2. Optionally, metadata `products=slug,slug` narrows it to named items.
+//      Absent means the whole catalogue.
+//
+// **Not Stripe's own "specific products" restriction.** Verified against this
+// API version on 1 Sep 2026: `applies_to` is not returned on the coupon at
+// all — not through the promotion code, not on a direct retrieve — and the
+// create call accepts it and drops it. So a restriction set in Stripe's UI is
+// invisible here and could never be enforced, which is exactly why a coupon
+// built for one product was taking money off every other one. Metadata is a
+// field we can actually read, so that is the field that decides.
 
 /**
  * Stripe refuses a card charge below this. A coupon generous enough to go under
@@ -19,6 +42,37 @@ import { getStoreId } from "@/lib/store";
  * USD-specific, which matches the store's only currency today.
  */
 export const MIN_CHARGE_CENTS = 50;
+
+/**
+ * The metadata that marks a coupon as this store's.
+ *
+ * In Stripe: open the coupon, add metadata `store` = `grow`. Without it the
+ * code does nothing here, however valid it is on the account.
+ */
+export const STORE_TAG = "grow";
+export const STORE_META_KEY = "store";
+
+/**
+ * Metadata that narrows a coupon to particular items.
+ *
+ * `products` = a comma-separated list of product slugs or offer keys, e.g.
+ * `digital-product-validator,the-idea-vault`. Slugs rather than Stripe ids
+ * because a person types this into a Stripe form, and a slug is something they
+ * can read off the address bar and check. Absent means the whole catalogue.
+ */
+export const ITEMS_META_KEY = "products";
+
+/**
+ * What is being bought, so a code can be checked against it.
+ *
+ * Required rather than optional on purpose: an optional scope is one every
+ * future call site can forget, and forgetting it is exactly the bug this
+ * exists to close. The type system now asks the question at every call.
+ */
+export type CouponScope = {
+  /** The product's slug, or the offer's key. */
+  item: string;
+};
 
 export type AppliedCoupon = {
   code: string;
@@ -56,6 +110,7 @@ export async function resolveCoupon(
   rawCode: string,
   subtotalCents: number,
   currency: string,
+  scope: CouponScope,
 ): Promise<CouponResult> {
   const code = rawCode.trim().toUpperCase();
   if (!code) return { ok: false, error: "Enter a code." };
@@ -87,6 +142,39 @@ export async function resolveCoupon(
   }
   if (c.currency && c.currency.toLowerCase() !== currency.toLowerCase()) {
     return { ok: false, error: "That code can't be used on this purchase." };
+  }
+  if (c.redeem_by && c.redeem_by * 1000 < Date.now()) {
+    return { ok: false, error: "That code isn't valid." };
+  }
+
+  // DEFAULT DENY. A promotion code is an account-wide object and this account
+  // is shared, so a code has to prove it is ours rather than merely existing.
+  const meta = { ...(c.metadata ?? {}), ...(promo.metadata ?? {}) };
+  if (meta[STORE_META_KEY] !== STORE_TAG) {
+    // Same message as an unknown code. Someone probing another app's codes
+    // against this checkout learns nothing about which ones exist.
+    return { ok: false, error: "That code isn't valid." };
+  }
+
+  // And if it names its items, this has to be one of them.
+  const only = (meta[ITEMS_META_KEY] ?? "")
+    .split(",")
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  if (only.length > 0 && !only.includes(scope.item.toLowerCase())) {
+    return { ok: false, error: "That code can't be used on this purchase." };
+  }
+
+  // Restrictions Stripe would enforce on a Checkout Session and cannot enforce
+  // on a PaymentIntent, so they are ours to apply or they mean nothing.
+  const r = promo.restrictions;
+  if (r?.minimum_amount != null) {
+    const sameCurrency =
+      !r.minimum_amount_currency ||
+      r.minimum_amount_currency.toLowerCase() === currency.toLowerCase();
+    if (!sameCurrency || subtotalCents < r.minimum_amount) {
+      return { ok: false, error: "That code can't be used on this purchase." };
+    }
   }
 
   // Stripe does not count PaymentIntent redemptions, so enforce the limit
