@@ -146,3 +146,32 @@ describe("saving the ways to pay", () => {
     expect(updated).not.toHaveBeenCalled();
   });
 });
+
+describe("the offer's own Meta event name", () => {
+  beforeEach(() => {
+    updated.mockClear();
+    created.mockClear();
+  });
+
+  it("reaches the database when it is typed", async () => {
+    // It did not, and everything else about it was right. The column existed,
+    // the type had the field, the row-builder wrote it and the form rendered
+    // the input — but this action parses the post through its own schema, and
+    // a field the schema does not name is dropped before it reaches any of
+    // that. So the admin saved and the value silently vanished.
+    await saveOffer({}, form([PRICE], { adEventName: "Upsell - Funnel App" }));
+    expect(updated).toHaveBeenCalled();
+    expect(updated.mock.calls[0][1]).toMatchObject({ adEventName: "Upsell - Funnel App" });
+  });
+
+  it("treats blank as no event rather than as an empty name", async () => {
+    await saveOffer({}, form([PRICE], { adEventName: "   " }));
+    expect(updated.mock.calls[0][1]).toMatchObject({ adEventName: null });
+  });
+
+  it("refuses a name Meta would silently drop", async () => {
+    const res = await saveOffer({}, form([PRICE], { adEventName: "x".repeat(41) }));
+    expect(res.error).toMatch(/40 characters/);
+    expect(updated).not.toHaveBeenCalled();
+  });
+});

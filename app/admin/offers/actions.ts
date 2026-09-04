@@ -45,6 +45,15 @@ const schema = z
     // matching at purchase time.
     // The second price on this offer's own page. Empty means one price.
     pageAltOfferId: z.string().trim().optional().default(""),
+    // The ads team's own name for this offer's sale event. Bounded because
+    // Meta drops a custom event name over 40 characters without saying so, and
+    // from inside an ad account that is indistinguishable from broken tracking.
+    adEventName: z
+      .string()
+      .trim()
+      .max(40, "Meta ignores a custom event name longer than 40 characters")
+      .optional()
+      .default(""),
     activecampaignTagId: z
       .string()
       .trim()
@@ -149,6 +158,7 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     imageUrl: v.imageUrl,
     acceptLabel: v.acceptLabel,
     pageAltOfferId: altOfferIdFor(v.pageAltOfferId, v.id),
+    adEventName: v.adEventName?.trim() || null,
     activecampaignTagId: v.activecampaignTagId?.trim() || null,
     activecampaignTrialTagId: v.activecampaignTrialTagId?.trim() || null,
     activecampaignCancelledTagId: v.activecampaignCancelledTagId?.trim() || null,
