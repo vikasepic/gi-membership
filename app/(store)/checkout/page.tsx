@@ -73,8 +73,6 @@ export default async function CheckoutPage({
   searchParams: Promise<{ product?: string; skin?: string }>;
 }) {
   const { product: slug, skin: wantSkin } = await searchParams;
-  // Not awaited — a count is worth less than a page load.
-  void recordPageHit("/checkout");
   const skin = checkoutSkin(wantSkin);
   if (!slug) notFound();
   const product = await getProductBySlug(slug);
@@ -107,6 +105,11 @@ export default async function CheckoutPage({
   // only after they had filled in a card and pressed pay. Send them to what they
   // bought instead of rendering a form that cannot succeed.
   if (owned.productIds.has(product.id)) redirect("/library");
+
+  // After every guard, not at the top: a request that 404s or redirects to
+  // the library never showed anybody a checkout, and counting it would put
+  // traffic in the funnel that never saw the page.
+  void recordPageHit("/checkout");
 
   // A signed-in member never types an email, so reaching this page IS the
   // moment we know they are considering it — the equivalent of the anonymous

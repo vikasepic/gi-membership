@@ -37,11 +37,14 @@ export default async function OtoPage({
   const verified = verifyOtoToken(token, otoSigningSecret());
   if (!verified.ok) redirect("/checkout/thank-you?oto=" + verified.reason);
 
-  // Not awaited — a count is worth less than a page load.
-  void recordPageHit("/checkout/oto");
-
   const shown = await getOffer(verified.payload.offerId);
   if (!shown) redirect("/checkout/thank-you");
+
+  // After every guard, not right after the token verifies: a valid token
+  // whose offer has since been deleted also bounces to thank-you, and that is
+  // not a shown upsell either.
+  void recordPageHit("/checkout/oto");
+
   // The upsell always follows a purchase, so we know exactly who this is: the
   // page shows the terms that will actually be charged.
   const offer = await offerAsSoldTo(await orderEmailFor(verified.payload.orderId), shown);

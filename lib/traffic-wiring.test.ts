@@ -2,11 +2,16 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 
 /**
- * Every funnel page counts its own view.
+ * The four funnel pages each count their own view.
  *
  * A source-reading test because the alternative is rendering four server
- * components against a database, and what actually goes wrong here is a page
- * being added later and nobody remembering the call.
+ * components against a database, and the failure this catches is a call
+ * being deleted or an await creeping in.
+ *
+ * It does NOT catch a fifth page added later — that page would have to be
+ * added to PAGES too. Discovering funnel pages automatically would mean
+ * listing every store page that is deliberately not counted, and that list
+ * rots the same way this one does.
  */
 const PAGES = [
   ["app/(store)/p/[slug]/page.tsx", "/p/"],
