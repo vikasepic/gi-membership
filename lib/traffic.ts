@@ -15,12 +15,18 @@ import { sourceOf, isBot } from "@/lib/traffic-source";
 export type TrafficRow = { path: string; source: string; hits: number };
 
 /**
- * The raw increment, which DOES throw.
+ * The raw increment, which DOES throw — but only on a transport failure or a
+ * bad store lookup. It does not inspect the `{ error }` supabase-js returns,
+ * so a database-level error (missing table, bad RPC signature, migration not
+ * yet applied) comes back in the result rather than as a rejection.
  *
- * Named so, because everything else in this file swallows its errors and this
- * one deliberately does not: the integration test calls it directly, and a
- * version that caught its own failure would pass while the write was broken.
- * `recordPageHit` is the safe door and the one pages use — it wraps this.
+ * That is deliberate, not an oversight: it is what lets code deployed ahead
+ * of its own migration degrade to a silent no-op instead of throwing on
+ * every page view. Named so because everything else in this file swallows
+ * its errors and this one deliberately does not for transport/lookup
+ * failures: the integration test calls it directly, and a version that
+ * caught those too would pass while the write was broken. `recordPageHit` is
+ * the safe door and the one pages use — it wraps this.
  */
 export async function bumpPageCountOrThrow(path: string, source: string): Promise<void> {
   const db = createServiceClient();

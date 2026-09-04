@@ -48,6 +48,23 @@ describe("where a visit came from", () => {
     // The value is attacker-controlled — it is a query parameter.
     expect(sourceOf(`?utm_campaign=${"x".repeat(200)}`, null)).toHaveLength(60);
   });
+
+  it("still accepts a normal campaign name", () => {
+    expect(sourceOf("?utm_campaign=spring-sale.v2", null)).toBe("spring-sale.v2");
+  });
+
+  it("rejects an email address as a campaign and falls through instead", () => {
+    // `source` is the one column that could carry an identifier. Several ESPs
+    // default to `utm_campaign=<recipient email>`, and that must never land
+    // in the database, malicious sender or not.
+    expect(sourceOf("?utm_campaign=jane@example.com&fbclid=abc", null)).toBe("meta");
+    expect(sourceOf("?utm_campaign=jane@example.com", null)).toBe("direct");
+  });
+
+  it("rejects a campaign with spaces or an @ in it", () => {
+    expect(sourceOf("?utm_campaign=hello world", null)).toBe("direct");
+    expect(sourceOf("?utm_campaign=a@b", null)).toBe("direct");
+  });
 });
 
 describe("obvious robots", () => {

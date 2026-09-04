@@ -17,8 +17,10 @@ export async function middleware(req: NextRequest) {
   // The query too, for the same reason: a server component cannot read it
   // unless its page happens to take searchParams, and two of the four funnel
   // pages do not. The traffic counter needs it to tell a Meta click from a
-  // Google one.
-  withPath.set("x-search", req.nextUrl.search);
+  // Google one. Capped: this rides on every matched request, not just the
+  // four counted pages, and sourceOf never looks past a handful of params —
+  // a pathological query string should not eat the header budget everywhere.
+  withPath.set("x-search", req.nextUrl.search.slice(0, 2048));
   const res = NextResponse.next({ request: { headers: withPath } });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

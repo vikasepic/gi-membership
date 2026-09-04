@@ -27,22 +27,17 @@ describe("the traffic table", () => {
 });
 
 describe("the coverage gap", () => {
-  it("states the share the ad tools never saw", () => {
-    // The reason there are two layers. A share is actionable; two bare
-    // numbers are a puzzle.
+  it("states both numbers rather than a percentage", () => {
+    // counted (views) and consented (people) count different things, so the
+    // note must not claim a share between them.
     const html = renderToStaticMarkup(<CoverageNote counted={100} consented={69} />);
-    expect(html).toContain("31%");
+    expect(html).toContain("100");
+    expect(html).toContain("69");
+    expect(html).not.toMatch(/\d+%/);
   });
 
   it("draws nothing before there is any traffic", () => {
     // 0 of 0 is not 100% invisible, it is nothing to say yet.
     expect(renderToStaticMarkup(<CoverageNote counted={0} consented={0} />)).toBe("");
-  });
-
-  it("never reports a negative gap", () => {
-    // visitors is upserted on later views, so it can briefly exceed the day's
-    // counted hits. That is a rounding artefact, not -12% invisible traffic.
-    const html = renderToStaticMarkup(<CoverageNote counted={10} consented={14} />);
-    expect(html).toContain("0%");
   });
 });

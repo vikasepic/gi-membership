@@ -10,6 +10,21 @@
 /** Long enough for a real campaign name, short enough not to store an essay. */
 const MAX_SOURCE = 60;
 
+/**
+ * What a campaign name is allowed to look like.
+ *
+ * `source` is the one column in page_counts that could carry an identifier,
+ * and the table's whole defensibility is that it holds none. A mailer that
+ * builds per-recipient links — `utm_campaign=jane@example.com`, which several
+ * ESPs do by default — would otherwise write a person into it. Anything
+ * outside this charset is treated as no campaign at all rather than stored.
+ *
+ * It also bounds cardinality: `path` can only be a slug that resolves, but
+ * `source` was free text, so a loop over random campaign values could add a
+ * row per request per day forever.
+ */
+const CAMPAIGN = /^[a-z0-9][a-z0-9._-]{0,59}$/i;
+
 export function sourceOf(search: string, referrer: string | null): string {
   let params: URLSearchParams;
   try {
@@ -20,7 +35,10 @@ export function sourceOf(search: string, referrer: string | null): string {
   }
 
   const utm = params.get("utm_campaign")?.trim();
-  if (utm) return utm.slice(0, MAX_SOURCE);
+  if (utm) {
+    const capped = utm.slice(0, MAX_SOURCE);
+    if (CAMPAIGN.test(capped)) return capped;
+  }
   if (params.get("fbclid")) return "meta";
   if (params.get("gclid")) return "google";
 
