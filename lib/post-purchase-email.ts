@@ -157,8 +157,15 @@ export type BuiltEmail = { subject: string; html: string; text: string };
 
 export function buildPostPurchaseEmail(args: {
   firstName: string;
-  /** Everything they bought, base first, then bump, then any upsell. */
-  products: string[];
+  /**
+   * Everything they bought, base first, then bump, then any upsell.
+   *
+   * A title and, where there is one, a picture of it. A plain bullet list read
+   * like an invoice — the buyer had just been looking at the artwork on the
+   * sales page and then got back three lines of text. The image is the thing
+   * they recognise.
+   */
+  products: { title: string; imageUrl?: string | null }[];
   settings?: Partial<PostPurchaseSettings>;
 }): BuiltEmail {
   const s = { ...POST_PURCHASE_DEFAULTS, ...args.settings };
@@ -166,14 +173,34 @@ export function buildPostPurchaseEmail(args: {
   // Collapsed rather than left as "hi ,". The trailing space goes with it.
   const greeting = s.greeting.replace(/\s*\{\{\s*first_name\s*\}\}/g, name ? ` ${name}` : "");
 
+  // Tables, not flexbox: Outlook renders neither grid nor flex, and a row that
+  // collapses in one client is worse than a plain list in all of them. Every
+  // style is inline for the same reason.
+  //
+  // The picture is optional on purpose. A product with no cover draws the row
+  // without it rather than a broken-image icon or an empty grey box, so a
+  // half-filled catalogue still sends a tidy email.
+  const row = (item: { title: string; imageUrl?: string | null }) => {
+    const cell = item.imageUrl
+      ? `<td width="72" style="padding:0 14px 0 0;vertical-align:middle;">
+           <img src="${escapeHtml(item.imageUrl)}" alt="" width="72"
+                style="display:block;width:72px;height:auto;border:0;border-radius:8px;" /></td>`
+      : "";
+    return `<tr><td style="padding:0 0 10px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="border:1px solid #e6e1db;border-radius:12px;">
+        <tr><td style="padding:12px 14px;">
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+            <tr>${cell}<td style="vertical-align:middle;font-size:16px;line-height:1.5;color:${s.textColor};font-weight:600;">${escapeHtml(item.title)}</td></tr>
+          </table>
+        </td></tr>
+      </table></td></tr>`;
+  };
+
   const items =
     args.products.length > 0
-      ? `<ul style="margin:0 0 18px;padding-left:20px;">${args.products
-          .map(
-            (p) =>
-              `<li style="margin:0 0 6px;font-size:16px;line-height:1.75;color:${s.textColor};">${escapeHtml(p)}</li>`,
-          )
-          .join("")}</ul>`
+      ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                style="margin:0 0 18px;">${args.products.map(row).join("")}</table>`
       : "";
 
   const header = s.headerImageUrl
@@ -216,7 +243,7 @@ export function buildPostPurchaseEmail(args: {
     greeting,
     s.intro,
     s.listIntro,
-    ...args.products.map((p) => `- ${p}`),
+    ...args.products.map((p) => `- ${p.title}`),
     `${s.accessIntro} ${s.accessUrl}`,
     s.accessNote,
     s.supportLine,

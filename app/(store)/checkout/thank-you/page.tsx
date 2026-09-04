@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { confirmCheckout } from "@/app/(store)/checkout/actions";
+import { createClient } from "@/lib/supabase/server";
+import { purchaseSummary } from "@/lib/purchase-summary";
+import { PurchaseReceipt } from "@/components/checkout/purchase-receipt";
 import { TrackPurchase } from "@/components/track-purchase";
 import { purchaseForTracking } from "@/lib/tracking-receipt";
 import { googleAdsPurchaseLabel } from "@/lib/env";
@@ -66,6 +69,20 @@ export default async function ThankYouPage({
       ? await purchaseForTracking(payment_intent)
       : null;
 
+  // What they bought, for the page itself. Found from the payment intent when
+  // there is one and otherwise from the signed-in session — a buyer is signed
+  // in the moment payment succeeds, and the upsell sends them here carrying
+  // only `?oto=…`. Null falls back to the plain confirmation below, so a
+  // summary that cannot be built never costs anyone their receipt.
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const summary =
+    payment_intent || user
+      ? await purchaseSummary({ userId: user?.id ?? null, paymentIntentId: payment_intent ?? null })
+      : null;
+
   // Arriving with an oto result means the purchase already completed on the
   // previous page — the upsell is only ever reached after a successful payment.
   const paid = redirect_status === "succeeded" || Boolean(oto);
@@ -87,7 +104,22 @@ export default async function ThankYouPage({
           adsLabel={googleAdsPurchaseLabel()}
         />
       )}
-      {paid ? (
+      {paid && summary ? (
+        <div className="w-full text-left">
+          <PurchaseReceipt summary={summary} />
+          {note && (
+            <p
+              className={`mx-auto mb-10 max-w-xl rounded-xl border px-4 py-3 text-sm ${
+                note.tone === "good"
+                  ? "border-navy/30 bg-navy/5 text-navy"
+                  : "border-border bg-surface-2 text-muted"
+              }`}
+            >
+              {note.text}
+            </p>
+          )}
+        </div>
+      ) : paid ? (
         <>
           <h1 className="text-3xl">You&rsquo;re in.</h1>
           <p className="text-muted">

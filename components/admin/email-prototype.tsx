@@ -50,7 +50,7 @@ export function EmailPrototype({
 
   const mail = buildPostPurchaseEmail({
     firstName: name,
-    products: SAMPLE.slice(0, count),
+    products: SAMPLE.slice(0, count).map((title) => ({ title })),
     settings: s,
   });
 

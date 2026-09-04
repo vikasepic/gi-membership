@@ -1,5 +1,6 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
+import { publicCoverUrl } from "@/lib/media";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import { buildPostPurchaseEmail, firstNameOf } from "@/lib/post-purchase-email";
 import { sendEmail } from "@/lib/email";
@@ -65,19 +66,44 @@ export async function sendPostPurchaseIfDue(orderId: string): Promise<Sent> {
   // three paths, so this needs no knowledge of which happened.
   const { data: items } = await db
     .from("order_items")
-    .select("description, created_at")
+    .select("description, created_at, product_id, offer_id")
     .eq("order_id", orderId)
     .order("created_at");
+
+  // The artwork the buyer was just looking at, so the email shows the thing
+  // rather than describing it. A product keeps its cover; an offer keeps the
+  // image the offer itself carries. Both are already absolute URLs, which is
+  // what an email client needs.
+  const productIds = (items ?? []).map((i) => i.product_id).filter(Boolean) as string[];
+  const offerIds = (items ?? []).map((i) => i.offer_id).filter(Boolean) as string[];
+  const [{ data: prods }, { data: offs }] = await Promise.all([
+    productIds.length
+      ? db.from("products").select("id, cover_path").in("id", productIds)
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    offerIds.length
+      ? db.from("offers").select("id, image_url").in("id", offerIds)
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+  ]);
+  const coverBy = new Map((prods ?? []).map((p) => [p.id as string, p.cover_path as string | null]));
+  const imageBy = new Map((offs ?? []).map((o) => [o.id as string, o.image_url as string | null]));
+
   const products = (items ?? [])
-    .map((i) => String(i.description ?? "").trim())
-    .filter(Boolean);
+    .map((i) => ({
+      title: String(i.description ?? "").trim(),
+      imageUrl: i.product_id
+        ? publicCoverUrl(coverBy.get(i.product_id as string) ?? null)
+        : i.offer_id
+          ? (imageBy.get(i.offer_id as string) ?? null)
+          : null,
+    }))
+    .filter((p) => p.title);
 
   // The name they typed at checkout, if they typed one. A signed-in member may
   // have none stored at all, and the greeting degrades rather than inventing
   // "there".
   const { data: profile } = await db
     .from("users")
-    .select("full_name")
+    .select("username")
     .eq("email", order.email)
     .maybeSingle();
 
@@ -97,7 +123,7 @@ export async function sendPostPurchaseIfDue(orderId: string): Promise<Sent> {
   if (!claimed || claimed.length === 0) return "already";
 
   const mail = buildPostPurchaseEmail({
-    firstName: firstNameOf(profile?.full_name as string | null),
+    firstName: firstNameOf(profile?.username as string | null),
     products,
     settings: conf,
   });
