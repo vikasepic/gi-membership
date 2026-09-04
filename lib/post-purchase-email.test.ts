@@ -52,22 +52,33 @@ describe("what they bought", () => {
     expect(build({ firstName: "A", products: [] }).html).not.toContain("border-radius:12px");
   });
 
-  it("shows the artwork when the item has some", () => {
-    // A plain list of names read like an invoice. The buyer was looking at the
-    // cover a minute ago on the sales page; it is what they recognise.
+  it("carries no artwork, so a blocked image cannot break the layout", () => {
+    // Tried with covers and taken out again. Gmail, Outlook and Apple Mail all
+    // block or defer remote images routinely, and the row reserved the
+    // picture's space either way — so the ordinary case was two rows indented
+    // past an empty box and one, lacking an image, flush left. Three rows, two
+    // indents, and a gap that reads as broken.
     const html = build({
       firstName: "A",
-      products: [{ title: "Validator", imageUrl: "https://example.com/cover.png" }],
+      products: [
+        { title: "Validator", imageUrl: "https://example.com/cover.png" },
+        { title: "No cover yet" },
+      ],
     }).html;
-    expect(html).toContain('src="https://example.com/cover.png"');
-    // Decorative — the title beside it already names the thing.
-    expect(html).toContain('alt=""');
+    expect(html, "an image url must not reach the markup").not.toContain("example.com/cover.png");
+    expect(html).not.toContain("<img");
+    // Both rows still render, and identically.
+    expect(html).toContain("Validator");
+    expect(html).toContain("No cover yet");
   });
 
-  it("draws the row without a picture rather than a broken one", () => {
-    const html = build({ firstName: "A", products: [{ title: "No cover yet" }] }).html;
-    expect(html).toContain("No cover yet");
-    expect(html).not.toContain("<img src=\"\"");
+  it("gives every row the same shape whatever it was given", () => {
+    const withImage = build({
+      firstName: "A",
+      products: [{ title: "X", imageUrl: "https://example.com/a.png" }],
+    }).html;
+    const without = build({ firstName: "A", products: [{ title: "X" }] }).html;
+    expect(withImage).toBe(without);
   });
 
   it("lays the row out with tables, because Outlook has no flexbox", () => {

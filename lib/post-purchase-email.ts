@@ -160,10 +160,17 @@ export function buildPostPurchaseEmail(args: {
   /**
    * Everything they bought, base first, then bump, then any upsell.
    *
-   * A title and, where there is one, a picture of it. A plain bullet list read
-   * like an invoice — the buyer had just been looking at the artwork on the
-   * sales page and then got back three lines of text. The image is the thing
-   * they recognise.
+   * Titles only. Artwork was tried here and taken out again: Gmail, Outlook
+   * and Apple Mail all block or defer remote images as a matter of course, and
+   * the row reserved the picture's space either way — so the common case was
+   * two rows indented past an empty box and one, with no image at all, flush
+   * left. A layout that only looks right when images load is the wrong way
+   * round for email.
+   *
+   * `imageUrl` is still accepted and deliberately ignored, so the callers that
+   * gather it need not be unpicked and turning it back on is one branch rather
+   * than a data change. Merchandising belongs on the thank-you page, which has
+   * the real covers and can rely on them.
    */
   products: { title: string; imageUrl?: string | null }[];
   settings?: Partial<PostPurchaseSettings>;
@@ -177,25 +184,14 @@ export function buildPostPurchaseEmail(args: {
   // collapses in one client is worse than a plain list in all of them. Every
   // style is inline for the same reason.
   //
-  // The picture is optional on purpose. A product with no cover draws the row
-  // without it rather than a broken-image icon or an empty grey box, so a
-  // half-filled catalogue still sends a tidy email.
-  const row = (item: { title: string; imageUrl?: string | null }) => {
-    const cell = item.imageUrl
-      ? `<td width="72" style="padding:0 14px 0 0;vertical-align:middle;">
-           <img src="${escapeHtml(item.imageUrl)}" alt="" width="72"
-                style="display:block;width:72px;height:auto;border:0;border-radius:8px;" /></td>`
-      : "";
-    return `<tr><td style="padding:0 0 10px;">
+  // One shape for every row, with nothing that can fail to arrive — so the
+  // list looks the same whether or not a client fetches remote content.
+  const row = (item: { title: string }) =>
+    `<tr><td style="padding:0 0 10px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
              style="border:1px solid #e6e1db;border-radius:12px;">
-        <tr><td style="padding:12px 14px;">
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-            <tr>${cell}<td style="vertical-align:middle;font-size:16px;line-height:1.5;color:${s.textColor};font-weight:600;">${escapeHtml(item.title)}</td></tr>
-          </table>
-        </td></tr>
+        <tr><td style="padding:14px 16px;font-size:16px;line-height:1.5;color:${s.textColor};font-weight:600;">${escapeHtml(item.title)}</td></tr>
       </table></td></tr>`;
-  };
 
   const items =
     args.products.length > 0
