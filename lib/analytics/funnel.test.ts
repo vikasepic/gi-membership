@@ -66,6 +66,22 @@ describe("when the card step is reported", () => {
     expect(handler).toContain("c.notePaymentInfo()");
   });
 
+  it("does not fire just because the element loaded", () => {
+    // Stripe's onChange fires when the element mounts and fills itself in —
+    // it detects the buyer's country and reports that as a change. Seen in
+    // production 4 Sep 2026: opening the checkout and touching nothing sent
+    // AddPaymentInfo three seconds after InitiateCheckout, so the event meant
+    // "the page loaded" rather than "a card is being entered", and the gap
+    // between them — the most useful signal on the page — measured nothing.
+    //
+    // `empty` is false only once a field actually has something in it.
+    const el = slots.slice(slots.indexOf("<PaymentElement"));
+    const handler = el.slice(0, el.indexOf("options={options}"));
+    expect(handler, "the change handler must gate on real input").toMatch(
+      /!e\.empty[\s\S]{0,80}c\.notePaymentInfo\(\)/,
+    );
+  });
+
   it("still fires for a wallet, which never touches the card fields", () => {
     // Apple Pay and Link complete without the form, and those buyers convert
     // best — the event would never fire for exactly them.

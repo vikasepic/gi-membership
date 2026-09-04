@@ -797,10 +797,22 @@ export function CardFieldsSlot(p: {
       ) : (
         /* Reported the moment they start filling the card in, not when they
            press pay. The gap between "began entering a card" and "completed a
-           purchase" is the most useful signal on the page. */
+           purchase" is the most useful signal on the page.
+        
+           Gated on `empty`, because Stripe fires onChange when the element
+           mounts and fills itself in — it detects the buyer's country and
+           reports that as a change with every field still blank. Unguarded,
+           seen in production 4 Sep 2026: opening the checkout and touching
+           nothing sent AddPaymentInfo three seconds after InitiateCheckout, so
+           the event meant "the page loaded", the two counted the same people,
+           and the gap between them measured nothing.
+        
+           A wallet still reports: Apple Pay and Link complete without the card
+           fields ever being touched, and the submit handler calls this for
+           exactly that reason. */
         <PaymentElement
           onChange={(e) => {
-            c.notePaymentInfo();
+            if (!e.empty) c.notePaymentInfo();
             // The country Stripe collected, handed straight to the form that
             // needs it for tax. Only ever set from a real two-letter answer:
             // switching to a wallet clears this object, and clearing a country
