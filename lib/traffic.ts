@@ -14,8 +14,15 @@ import { sourceOf, isBot } from "@/lib/traffic-source";
 
 export type TrafficRow = { path: string; source: string; hits: number };
 
-/** The raw increment. Exported for tests; pages call recordPageHit. */
-export async function bumpPageCount(path: string, source: string): Promise<void> {
+/**
+ * The raw increment, which DOES throw.
+ *
+ * Named so, because everything else in this file swallows its errors and this
+ * one deliberately does not: the integration test calls it directly, and a
+ * version that caught its own failure would pass while the write was broken.
+ * `recordPageHit` is the safe door and the one pages use — it wraps this.
+ */
+export async function bumpPageCountOrThrow(path: string, source: string): Promise<void> {
   const db = createServiceClient();
   await db.rpc("bump_page_count", {
     p_store: await getStoreId(),
@@ -35,7 +42,7 @@ export async function recordPageHit(path: string): Promise<void> {
   try {
     const h = await headers();
     if (isBot(h.get("user-agent"))) return;
-    await bumpPageCount(path, sourceOf(h.get("x-search") ?? "", h.get("referer")));
+    await bumpPageCountOrThrow(path, sourceOf(h.get("x-search") ?? "", h.get("referer")));
   } catch {
     // Deliberately silent. See the note at the top of this file.
   }
