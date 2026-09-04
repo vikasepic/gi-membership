@@ -243,6 +243,7 @@ export type OfferInput = {
   acceptLabel: string;
   pageAltOfferId?: string | null;
   activecampaignTagId?: string | null;
+  adEventName?: string | null;
   activecampaignTrialTagId?: string | null;
   activecampaignCancelledTagId?: string | null;
   otoTemplate?: string;
@@ -327,6 +328,7 @@ function toOfferRow(input: OfferInput, storeId: string) {
     image_url: input.imageUrl,
     accept_label: input.acceptLabel,
     page_alt_offer_id: input.pageAltOfferId ?? null,
+    ad_event_name: input.adEventName?.trim() || null,
     activecampaign_tag_id: input.activecampaignTagId ?? null,
     activecampaign_trial_tag_id: input.activecampaignTrialTagId ?? null,
     activecampaign_cancelled_tag_id: input.activecampaignCancelledTagId ?? null,

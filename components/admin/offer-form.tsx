@@ -414,6 +414,23 @@ export function OfferForm({
 
       <TabPanel tab="marketing">
       <Section
+        title="Ad reporting"
+        hint="One pixel serves every funnel on the ad account. Name an event for this offer and it is reported on its own, beside the standard Purchase or StartTrial."
+      >
+        <Field
+          label="Meta custom event name"
+          hint="Fired when someone buys this offer — as a bump, an upsell, or on its own. Carries the offer's own name and what was actually charged. Leave blank to send nothing. Your ads team chooses the name; it must match theirs exactly."
+        >
+          <input
+            name="adEventName"
+            defaultValue={offer?.adEventName ?? ""}
+            maxLength={40}
+            placeholder="e.g. Funnel App Trial"
+            className={input}
+          />
+        </Field>
+      </Section>
+      <Section
         title="ActiveCampaign"
         hint="Tags applied as someone moves through this offer. All take the numeric id, not the tag name."
       >

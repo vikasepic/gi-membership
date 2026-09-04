@@ -119,6 +119,8 @@ export type Offer = {
    * cancellation. On a trial offer that is when the trial converts, not when
    * it starts — see lifecycleTagOps.
    */
+  /** Meta custom event fired when this offer is bought. Ads team's name. */
+  adEventName?: string | null;
   activecampaignTagId: string | null;
   /**
    * A second price on this offer's OWN page at /o/<key>.

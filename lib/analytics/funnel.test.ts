@@ -154,3 +154,42 @@ describe("the add-on decisions are reported", () => {
     expect(shell).toContain('href="/checkout/thank-you?oto=declined"');
   });
 });
+
+describe("an offer reports as itself", () => {
+  const checkout = readFileSync("lib/checkout.ts", "utf8");
+  const block = checkout.slice(checkout.indexOf("async function trackOfferSale"));
+  const sale = block.slice(0, block.indexOf("export async function acceptStandingOffer"));
+
+  it("uses the offer's own name and key, not the order's", () => {
+    // `who` describes the whole ORDER — content ids are every product on it,
+    // content name is the first line's description. Seen in production 4 Sep
+    // 2026: a Funnel App trial arrived as content_name "Digital Product
+    // Validator", the product's uuid, num_items 3. Any audience built on
+    // content_name would have attributed every upsell to the product.
+    expect(sale).toContain("contentName: offer.name");
+    expect(sale).toContain("contentIds: [offer.key]");
+    expect(sale).toContain("numItems: 1");
+    // and the override has to come AFTER the spread, or it is not an override
+    expect(sale).toMatch(/\.\.\.who,\s*\n\s*\.\.\.identity,/);
+  });
+
+  it("still picks the standard event by what is actually charged", () => {
+    // A trial takes nothing today and is a StartTrial worth the recurring
+    // price. Anything that takes money — a one-time upsell, or a subscription
+    // with no trial — is a Purchase for the amount charged.
+    expect(sale).toContain('eventName: nowCents > 0 ? "Purchase" : "StartTrial"');
+    expect(sale).toContain("valueCents: nowCents > 0 ? nowCents : offer.priceCents");
+  });
+
+  it("sends the offer's own named event beside the standard one", () => {
+    expect(sale).toContain("const adName = offer.adEventName?.trim()");
+    expect(sale).toContain("customName: adName");
+    expect(sale, "GA4 has no name for a made-up event").toMatch(
+      /customName: adName[\s\S]{0,400}only: \["meta"\]/,
+    );
+  });
+
+  it("sends nothing extra for an offer with no name", () => {
+    expect(sale).toContain("if (adName) {");
+  });
+});

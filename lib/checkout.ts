@@ -1550,8 +1550,23 @@ async function trackOfferSale(
     // worthless; reporting the price as revenue says money moved when none did.
     const nowCents = immediateChargeCents(offer);
     const key = result.paymentIntentId ?? result.subscriptionId ?? orderId;
+    // The OFFER's identity, not the order's.
+    //
+    // `who` describes the whole order — its content ids are every product on
+    // it and its content name is the first line's description — so an upsell
+    // was reported under the base product's name. Seen in production 4 Sep
+    // 2026: a Funnel App trial arrived as content_name "Digital Product
+    // Validator" with the product's id and num_items 3, which would attribute
+    // every upsell to the product in any audience built on it.
+    const identity = {
+      contentName: offer.name,
+      contentIds: [offer.key],
+      contentType: "product" as const,
+      numItems: 1,
+    };
     await trackServerEvent({
       ...who,
+      ...identity,
       eventId: eventIdFor(nowCents > 0 ? "Purchase" : "StartTrial", key),
       eventName: nowCents > 0 ? "Purchase" : "StartTrial",
       valueCents: nowCents > 0 ? nowCents : offer.priceCents,
@@ -1559,6 +1574,27 @@ async function trackOfferSale(
       orderId,
       occurredAt: Math.floor(Date.now() / 1000),
     });
+
+    // And this offer's own named event, beside the standard one rather than
+    // instead of it: Meta optimises on Purchase and StartTrial, and a custom
+    // event cannot carry that. Meta only — GA4 has no name to map it onto.
+    const adName = offer.adEventName?.trim();
+    if (adName) {
+      await trackServerEvent(
+        {
+          ...who,
+          ...identity,
+          eventId: customEventIdFor(adName, key),
+          eventName: nowCents > 0 ? "Purchase" : "StartTrial",
+          customName: adName,
+          valueCents: nowCents > 0 ? nowCents : offer.priceCents,
+          currency: (order.currency as string) ?? offer.currency,
+          orderId,
+          occurredAt: Math.floor(Date.now() / 1000),
+        },
+        { only: ["meta"] },
+      );
+    }
   } catch (e) {
     console.error("[trackOfferSale] failed (the sale is still complete):", e);
   }
