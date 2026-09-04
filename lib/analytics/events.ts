@@ -212,6 +212,18 @@ export const NO_VALUE: EventName[] = [
  * deduplication survive a redirect. Random only when there is nothing stable to
  * derive it from.
  */
+/**
+ * The same id, for a funnel's own event name.
+ *
+ * Deliberately the same shape as eventIdFor — `name.key` — because the browser
+ * and the server each build it from the order without telling each other, and
+ * Meta collapses the pair on it. A different formula on either side is two
+ * sales.
+ */
+export function customEventIdFor(name: string, stableKey: string): string {
+  return `${name}.${stableKey}`;
+}
+
 export function eventIdFor(name: EventName, stableKey?: string | null): string {
   if (stableKey) return `${name}.${stableKey}`;
   const g = globalThis.crypto;

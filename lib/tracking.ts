@@ -15,6 +15,15 @@ import { recordError } from "@/lib/errors";
 export type PurchaseEvent = {
   eventId: string; // shared with the browser pixel for deduplication
   eventName: EventName;
+  /**
+   * A funnel's own event name, sent to Meta in place of `eventName`.
+   *
+   * Separate from `eventName` rather than widening it: the union is what stops
+   * a typo becoming a silent second event, and every typed call site keeps
+   * that. Only a caller that means to send a named custom event sets this, and
+   * it says so by name.
+   */
+  customName?: string;
   email: string;
   valueCents: number;
   currency: string;
@@ -140,7 +149,7 @@ export function buildMetaEvent(e: PurchaseEvent, testEventCode?: string) {
   return {
     data: [
       {
-        event_name: e.eventName,
+        event_name: e.customName ?? e.eventName,
         event_time: e.occurredAt,
         event_id: e.eventId, // dedupes against the browser pixel
         action_source: "website" as const,

@@ -135,14 +135,27 @@ export function track(
  * Separate from `track` on purpose: `track` takes an `EventName` from a fixed
  * union, which is what stops a typo becoming a silent second event. This one
  * takes a free string because it has to, so it is the only door that is open
- * and it is deliberately narrow — always trackCustom, browser only, no GA4,
- * no relay, and never a substitute for Purchase.
+ * and it is deliberately narrow — always trackCustom, no GA4 (there is no name
+ * to map a made-up event onto), and never a substitute for Purchase.
+ *
+ * The server sends this same event with the same id from finalizeOrder. It was
+ * browser-only when it shipped, which made the one event the ads team
+ * optimises against the least reliable thing the store sends: lost to an ad
+ * blocker or a closed tab, exactly like the browser copy of Purchase used to
+ * be. Two halves, one id, one sale.
  */
-export function trackNamedCustom(name: string, params: Record<string, unknown>): void {
+export function trackNamedCustom(
+  name: string,
+  params: Record<string, unknown>,
+  /** Shared with the server's copy, so Meta collapses the two into one sale. */
+  eventId?: string,
+): void {
   if (typeof window === "undefined") return;
   const clean = name.trim();
   if (!clean) return;
-  whenPixelReady(() => window.fbq?.("trackCustom", clean, params));
+  whenPixelReady(() =>
+    window.fbq?.("trackCustom", clean, params, eventId ? { eventID: eventId } : undefined),
+  );
 }
 
 /**

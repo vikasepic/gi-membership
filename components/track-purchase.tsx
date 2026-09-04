@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { track, adsConversion, trackNamedCustom } from "@/components/analytics";
-import { eventIdFor } from "@/lib/analytics/events";
+import { eventIdFor, customEventIdFor } from "@/lib/analytics/events";
 
 /**
  * The browser half of a completed purchase.
@@ -69,13 +69,20 @@ export function TrackPurchase({
     // event cannot replace it. Same money, read back from the order, so the
     // two can never disagree about what the sale was worth.
     if (customEvent) {
-      trackNamedCustom(customEvent.name, {
-        content_name: customEvent.contentName,
-        content_type: "product",
-        currency: currency.toUpperCase(),
-        value: valueCents / 100,
-        order_id: orderId,
-      });
+      trackNamedCustom(
+        customEvent.name,
+        {
+          content_name: customEvent.contentName,
+          content_type: "product",
+          currency: currency.toUpperCase(),
+          value: valueCents / 100,
+          order_id: orderId,
+        },
+        // The server sends this same event with this same id from
+        // finalizeOrder, so a blocked pixel or a closed tab still reports the
+        // sale and an unblocked one is not counted twice.
+        customEventIdFor(customEvent.name, orderId),
+      );
     }
 
     if (adsLabel) {

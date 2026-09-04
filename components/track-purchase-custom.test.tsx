@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { TrackPurchase } from "@/components/track-purchase";
 import { parseProductForm } from "@/lib/product-rules";
+import { readFileSync } from "node:fs";
 
 /**
  * The per-funnel sale event the ads team asked for.
@@ -110,5 +111,36 @@ describe("the event name the admin can save", () => {
     const r = parseProductForm(form({ adEventName: "x".repeat(41) }));
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors.adEventName).toMatch(/40 characters/);
+  });
+});
+
+describe("the funnel event has a server half", () => {
+  it("carries an id the server can match, so one sale is not counted twice", () => {
+    // finalizeOrder sends the same event with the same id. Without an eventID
+    // here Meta has no way to know the two are one sale, and a buyer with an
+    // unblocked pixel would be reported twice.
+    render(
+      <TrackPurchase
+        orderId="ord_9"
+        valueCents={3000}
+        currency="usd"
+        customEvent={{ name: "Product Validator Sale", contentName: "Product Validator" }}
+      />,
+    );
+    const custom = fbq.mock.calls.find((c) => c[0] === "trackCustom");
+    expect(custom![3]).toEqual({ eventID: "Product Validator Sale.ord_9" });
+  });
+
+  it("uses the same formula the server uses", () => {
+    // Both sides build the id from the order without telling each other, so
+    // the formula is the contract. A change on one side is two sales.
+    const src = readFileSync("lib/analytics/events.ts", "utf8");
+    expect(src).toContain("export function customEventIdFor(name: string, stableKey: string): string {");
+    expect(src).toContain("return `${name}.${stableKey}`;");
+    const server = readFileSync("lib/checkout.ts", "utf8");
+    expect(server, "the server must send the funnel event too")
+      .toContain("customEventIdFor(adEvent.name, order.id as string)");
+    expect(server, "and only to Meta — GA4 has no name for it")
+      .toMatch(/customName: adEvent\.name[\s\S]{0,400}only: \["meta"\]/);
   });
 });

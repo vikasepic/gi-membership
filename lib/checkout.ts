@@ -9,8 +9,9 @@ import { offerAsSoldTo, recordTrialStart } from "@/lib/trial-history";
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
 import { notifyAppEntitlement } from "@/lib/apps";
 import { trackPurchase, trackServerEvent } from "@/lib/tracking";
+import { customEventIdFor } from "@/lib/analytics/events";
 import { eventIdFor } from "@/lib/analytics/events";
-import { trialWorthFor } from "@/lib/tracking-receipt";
+import { trialWorthFor, adEventForOrder } from "@/lib/tracking-receipt";
 import { sendEmail, buildWelcomeEmail, buildReceiptEmail } from "@/lib/email";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import {
@@ -1215,6 +1216,34 @@ export async function finalizeOrder(intentId: string): Promise<void> {
         orderId: order.id as string,
         occurredAt: Math.floor(Date.now() / 1000),
       });
+    }
+
+    // This funnel's own event, from the server as well as the browser.
+    //
+    // It was browser-only when it shipped, which made the one event the ads
+    // team optimises against the least reliable thing we send — lost to an ad
+    // blocker, a closed tab, a tracking protection list, exactly like the
+    // browser copy of Purchase used to be. Same event_id on both sides, so
+    // Meta collapses the pair into one rather than counting two.
+    //
+    // Meta only: GA4 has no name to map a made-up event onto, and inventing
+    // one would put it in a report beside events that mean something else.
+    const adEvent = await adEventForOrder(order.id as string);
+    if (adEvent) {
+      await trackServerEvent(
+        {
+          ...who,
+          eventId: customEventIdFor(adEvent.name, order.id as string),
+          eventName: "Purchase",
+          customName: adEvent.name,
+          contentName: adEvent.contentName,
+          valueCents: pi.amount,
+          currency: pi.currency,
+          orderId: order.id as string,
+          occurredAt: Math.floor(Date.now() / 1000),
+        },
+        { only: ["meta"] },
+      );
     }
   } catch (e) {
     console.error("[finalizeOrder] tracking failed (order is still complete):", e);
