@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { bumpPageCountOrThrow, trafficByPage } from "@/lib/traffic";
 
-const canRun = !!process.env.NEXT_PUBLIC_SUPABASE_URL?.includes("127.0.0.1");
+const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 describe.skipIf(!canRun)("counting page views (integration)", () => {
   beforeEach(async () => {
