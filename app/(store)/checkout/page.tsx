@@ -109,7 +109,10 @@ export default async function CheckoutPage({
   // After every guard, not at the top: a request that 404s or redirects to
   // the library never showed anybody a checkout, and counting it would put
   // traffic in the funnel that never saw the page.
-  void recordPageHit("/checkout");
+  //
+  // The RESOLVED product, never the ?product= it was given: that value is
+  // whatever the visitor typed, and counting it would let anyone add rows.
+  void recordPageHit("/checkout", product.slug);
 
   // A signed-in member never types an email, so reaching this page IS the
   // moment we know they are considering it — the equivalent of the anonymous

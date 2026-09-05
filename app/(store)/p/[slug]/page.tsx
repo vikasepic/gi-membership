@@ -69,7 +69,7 @@ export default async function ProductPage({
   // Counted here rather than in middleware: this is one of four pages worth
   // counting, and middleware runs on far more. Not awaited — a count is worth
   // less than a page load.
-  void recordPageHit(`/p/${slug}`);
+  void recordPageHit(`/p/${slug}`, slug);
 
   const owned = (await ownedProductIdsForViewer()).has(product.id);
   const accessHref = owned ? await accessHrefForProduct(product.id) : "/library";

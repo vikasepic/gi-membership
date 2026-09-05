@@ -81,7 +81,7 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
   if (!(await hasPageSections("offer", listed.id))) notFound();
 
   // Not awaited — a count is worth less than a page load.
-  void recordPageHit(`/o/${key}`);
+  void recordPageHit(`/o/${key}`, key);
 
   // Who is reading it decides what it may promise: a free trial is a thing you
   // get once, so anyone who has had this one is shown what they will be

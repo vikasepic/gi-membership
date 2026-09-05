@@ -70,6 +70,50 @@ export async function recordPageHit(path: string, product = ""): Promise<void> {
 }
 
 /**
+ * The base product an order was for.
+ *
+ * Two queries rather than a PostgREST embed: the embed's shape depends on how
+ * the relationship is detected, and this runs behind a fire-and-forget count
+ * where a silently-wrong shape would never surface. `kind = 'product'` is the
+ * base row — a bump or an accepted upsell is an offer, not what was bought
+ * first.
+ */
+async function orderProductSlug(orderId: string): Promise<string> {
+  const db = createServiceClient();
+  const { data: items } = await db
+    .from("order_items")
+    .select("product_id")
+    .eq("order_id", orderId)
+    .eq("kind", "product")
+    .not("product_id", "is", null)
+    .limit(1);
+  const productId = items?.[0]?.product_id as string | undefined;
+  if (!productId) return "";
+  const { data: product } = await db
+    .from("products")
+    .select("slug")
+    .eq("id", productId)
+    .maybeSingle();
+  return (product?.slug as string) ?? "";
+}
+
+/**
+ * The upsell's own view, filed under the product the order was for.
+ *
+ * The slug is not on the request — it is behind the order the signed token
+ * names — so the lookup happens here rather than on the page, which would
+ * have to await it before rendering. Wrapped so the page can still fire and
+ * forget: a count must not put a query in front of an upsell.
+ */
+export async function recordOtoPageHit(orderId: string): Promise<void> {
+  try {
+    await recordPageHit("/checkout/oto", await orderProductSlug(orderId));
+  } catch {
+    // Deliberately silent, like everything else in this file.
+  }
+}
+
+/**
  * How many visitors the consented layer saw in the same window.
  *
  * The spec's second layer. Shown beside the true totals so the gap between
