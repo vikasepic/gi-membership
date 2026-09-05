@@ -122,15 +122,34 @@ export async function recordOtoPageHit(orderId: string): Promise<void> {
 }
 
 /**
+ * The first day of the window, as an ISO date — how `page_counts.day` is keyed.
+ *
+ * `daysInRange` in `lib/traffic-funnel.ts` is the definition every window here
+ * follows: the last N UTC calendar days INCLUDING today, so `days - 1` back and
+ * not `days`. Every reader in this file derives from it so they cannot
+ * drift apart again — when they disagreed, a row on the oldest day counted
+ * towards a card's totals but not towards the chart beside them, and the card
+ * contradicted itself at the boundary with nothing on screen to show it.
+ */
+function windowStart(days: number): string {
+  return new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
  * How many visitors the consented layer saw in the same window.
  *
  * The spec's second layer. Shown beside the true totals so the gap between
  * them is visible: that difference is the share of real traffic the pixel and
  * GA4 never saw, which is the number nobody could measure before this page.
+ *
+ * Bounded by the same UTC midnight as the other three, because `CoverageNote`
+ * prints this number on the same line as the views it is compared against.
+ * Refusing to turn that pair into a percentage is a reason not to panic about
+ * the gap, not a licence for the two halves to measure different spans.
  */
 export async function consentedVisitorCount(days: number): Promise<number> {
   try {
-    const since = new Date(Date.now() - days * 86_400_000).toISOString();
+    const since = `${windowStart(days)}T00:00:00.000Z`;
     const db = createServiceClient();
     const { count } = await db
       .from("visitors")
@@ -141,20 +160,6 @@ export async function consentedVisitorCount(days: number): Promise<number> {
   } catch {
     return 0;
   }
-}
-
-/**
- * The first day of the window, as an ISO date — how `page_counts.day` is keyed.
- *
- * `daysInRange` in `lib/traffic-funnel.ts` is the definition every window here
- * follows: the last N UTC calendar days INCLUDING today, so `days - 1` back and
- * not `days`. Both readers below derive from this one helper so they cannot
- * drift apart again — when they disagreed, a row on the oldest day counted
- * towards a card's totals but not towards the chart beside them, and the card
- * contradicted itself at the boundary with nothing on screen to show it.
- */
-function windowStart(days: number): string {
-  return new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
 }
 
 /**
