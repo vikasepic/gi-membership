@@ -68,15 +68,52 @@ describe.skipIf(!canRun)("counting page views (integration)", () => {
     }
   });
 
-  it("counts orders per product without throwing", async () => {
-    // Asserting the SHAPE, not a figure: the seed's order set is not this
-    // test's to pin down, and a test that hard-codes it fails the next time
-    // somebody adds a fixture.
-    const bought = await paidByProduct(90);
-    expect(Array.isArray(bought)).toBe(true);
-    for (const b of bought) {
-      expect(typeof b.product).toBe("string");
-      expect(b.orders).toBeGreaterThan(0);
+  it("counts the live paid order and not the test-mode one", async () => {
+    // The shape assertion this replaces could not fail: `paidByProduct`
+    // catches its own errors and returns [], which is an array whose zero
+    // rows all pass a per-row type check. Two test-mode paid orders sit in
+    // the production table, so the livemode filter is the thing worth
+    // pinning, and it needs fixtures of its own to pin it.
+    const db = createServiceClient();
+    const store = await getStoreId();
+    const { data: product } = await db
+      .from("products")
+      .select("id, slug")
+      .eq("store_id", store)
+      .limit(1)
+      .single();
+    expect(product).toBeTruthy();
+
+    const live = crypto.randomUUID();
+    const test = crypto.randomUUID();
+    const countFor = async () =>
+      (await paidByProduct(90)).find((b) => b.product === product!.slug)?.orders ?? 0;
+
+    // A delta, not an absolute: the seed's own orders are not this test's to
+    // pin down, but the number of ITS OWN orders that get counted is.
+    const before = await countFor();
+    try {
+      await db.from("orders").insert([
+        { id: live, store_id: store, email: "live@example.com", status: "paid", total_cents: 100, livemode: true },
+        { id: test, store_id: store, email: "test@example.com", status: "paid", total_cents: 100, livemode: false },
+      ]);
+      await db.from("order_items").insert(
+        [live, test].map((order_id) => ({
+          store_id: store,
+          order_id,
+          kind: "product",
+          product_id: product!.id,
+          description: "fixture",
+          amount_cents: 100,
+        })),
+      );
+
+      expect(await countFor()).toBe(before + 1);
+    } finally {
+      // order_items cascades on the order, but delete it explicitly so a
+      // failed orders insert cannot leave items behind either.
+      await db.from("order_items").delete().in("order_id", [live, test]);
+      await db.from("orders").delete().in("id", [live, test]);
     }
   });
 });

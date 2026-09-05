@@ -130,9 +130,64 @@ export async function recordOtoPageHit(orderId: string): Promise<void> {
  * drift apart again — when they disagreed, a row on the oldest day counted
  * towards a card's totals but not towards the chart beside them, and the card
  * contradicted itself at the boundary with nothing on screen to show it.
+ *
+ * `today` is a parameter and not a clock read for the same reason. One page
+ * render calls four of these and then builds its chart, and a request that
+ * crosses UTC midnight between two of those reads gets a chart a day short of
+ * its own totals. The caller settles "today" once and hands the same value to
+ * everything; the default is only for a caller that has nothing to settle.
  */
-function windowStart(days: number): string {
-  return new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+function windowStart(days: number, today: string): string {
+  return new Date(Date.parse(`${today}T00:00:00Z`) - (days - 1) * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+/** The clock read, in one place, so the shape of "today" is written once. */
+export function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Every row of a select, not the first thousand of them.
+ *
+ * PostgREST caps a response at `max_rows` (1000, per `supabase/config.toml`)
+ * and truncates SILENTLY — a partial `Content-Range` and no error. This page
+ * orders by `day asc`, so a truncation would shed TODAY: the owner opens the
+ * 90-day view after a launch and the launch week reads zero, with nothing on
+ * screen saying anything was dropped. A slow page is a far better failure than
+ * a confidently wrong one.
+ *
+ * The ceiling stops a pathological table spinning; hitting it returns what we
+ * have, because every reader in this file promises a possibly-empty list and
+ * never a throw.
+ */
+const PAGE_SIZE = 1000;
+const MAX_PAGES = 20;
+
+async function allRows<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null }>,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const { data } = await page(i * PAGE_SIZE, i * PAGE_SIZE + PAGE_SIZE - 1);
+    const rows = data ?? [];
+    out.push(...rows);
+    if (rows.length < PAGE_SIZE) break;
+  }
+  return out;
+}
+
+/**
+ * `.in(...)` in slices, because it travels in the GET query string.
+ *
+ * A thousand UUIDs is roughly 37KB of URL, which a proxy answers with a 414 —
+ * and that lands in the caller's `catch` and reads as "nobody bought".
+ */
+function chunks<T>(list: T[], size: number): T[][] {
+  return Array.from({ length: Math.ceil(list.length / size) }, (_, i) =>
+    list.slice(i * size, i * size + size),
+  );
 }
 
 /**
@@ -147,9 +202,12 @@ function windowStart(days: number): string {
  * Refusing to turn that pair into a percentage is a reason not to panic about
  * the gap, not a licence for the two halves to measure different spans.
  */
-export async function consentedVisitorCount(days: number): Promise<number> {
+export async function consentedVisitorCount(
+  days: number,
+  today: string = todayUtc(),
+): Promise<number> {
   try {
-    const since = `${windowStart(days)}T00:00:00.000Z`;
+    const since = `${windowStart(days, today)}T00:00:00.000Z`;
     const db = createServiceClient();
     const { count } = await db
       .from("visitors")
@@ -170,16 +228,32 @@ export async function consentedVisitorCount(days: number): Promise<number> {
  * rows a day over at most ninety days that is a small read, and it means those
  * four things cannot disagree with each other about what the window held.
  */
-export async function pageCountsSince(days: number): Promise<CountRow[]> {
+export async function pageCountsSince(
+  days: number,
+  today: string = todayUtc(),
+): Promise<CountRow[]> {
   try {
     const db = createServiceClient();
-    const { data } = await db
-      .from("page_counts")
-      .select("day, path, source, product, hits")
-      .eq("store_id", await getStoreId())
-      .gte("day", windowStart(days))
-      .order("day", { ascending: true });
-    return (data ?? []) as CountRow[];
+    const store = await getStoreId();
+    const start = windowStart(days, today);
+    // Paged, not capped. The product column multiplies rows per day and the
+    // range now runs to 90 of them, so a single select is well inside the
+    // distance where PostgREST would truncate — see `allRows`.
+    return await allRows<CountRow>((from, to) =>
+      db
+        .from("page_counts")
+        .select("day, path, source, product, hits")
+        .eq("store_id", store)
+        .gte("day", start)
+        // `day` alone is not a total order, and an offset-paged read over a
+        // partial order can repeat one row and skip another. The rest of the
+        // primary key makes it total.
+        .order("day", { ascending: true })
+        .order("path", { ascending: true })
+        .order("source", { ascending: true })
+        .order("product", { ascending: true })
+        .range(from, to),
+    );
   } catch {
     return [];
   }
@@ -197,7 +271,10 @@ export async function pageCountsSince(days: number): Promise<CountRow[]> {
  * a PostgREST embed's shape here would be a silent wrong answer rather than an
  * error if the relationship were detected differently.
  */
-export async function paidByProduct(days: number): Promise<BoughtRow[]> {
+export async function paidByProduct(
+  days: number,
+  today: string = todayUtc(),
+): Promise<BoughtRow[]> {
   try {
     const db = createServiceClient();
     const store = await getStoreId();
@@ -206,24 +283,43 @@ export async function paidByProduct(days: number): Promise<BoughtRow[]> {
     // steps are bounded by UTC midnights and this step has to be too. A
     // rolling cutoff would leave the last step counting a different span from
     // the three above it, by however many hours into the day it is now.
-    const since = `${windowStart(days)}T00:00:00.000Z`;
+    const since = `${windowStart(days, today)}T00:00:00.000Z`;
 
-    const { data: orders } = await db
-      .from("orders")
-      .select("id")
-      .eq("store_id", store)
-      .eq("status", "paid")
-      .eq("livemode", true)
-      .gte("created_at", since);
-    const ids = (orders ?? []).map((o) => o.id as string);
+    // Paged for the same reason as `pageCountsSince`: a truncated read here
+    // returns fewer orders than there were and understates revenue, which is
+    // the one direction this page must never be wrong in.
+    const orders = await allRows<{ id: string }>((from, to) =>
+      db
+        .from("orders")
+        .select("id")
+        .eq("store_id", store)
+        .eq("status", "paid")
+        .eq("livemode", true)
+        .gte("created_at", since)
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+    const ids = orders.map((o) => o.id);
     if (ids.length === 0) return [];
 
-    const { data: items } = await db
-      .from("order_items")
-      .select("order_id, product_id")
-      .in("order_id", ids)
-      .eq("kind", "product")
-      .not("product_id", "is", null);
+    // In batches: every id rides in the GET query string, and the whole list
+    // at volume is a URL a proxy refuses with a 414. The dedup below merges
+    // batches safely, so splitting the read changes no answer.
+    const items: { order_id: string; product_id: string }[] = [];
+    for (const batch of chunks(ids, 200)) {
+      items.push(
+        ...(await allRows<{ order_id: string; product_id: string }>((from, to) =>
+          db
+            .from("order_items")
+            .select("order_id, product_id")
+            .in("order_id", batch)
+            .eq("kind", "product")
+            .not("product_id", "is", null)
+            .order("id", { ascending: true })
+            .range(from, to),
+        )),
+      );
+    }
 
     const { data: products } = await db
       .from("products")
@@ -234,11 +330,11 @@ export async function paidByProduct(days: number): Promise<BoughtRow[]> {
     // Distinct ORDERS per product: an order with two rows for the same product
     // is one sale, and counting rows would inflate the step it feeds.
     const seen = new Map<string, Set<string>>();
-    for (const i of items ?? []) {
-      const slug = slugOf.get(i.product_id as string);
+    for (const i of items) {
+      const slug = slugOf.get(i.product_id);
       if (!slug) continue;
       const set = seen.get(slug) ?? new Set<string>();
-      set.add(i.order_id as string);
+      set.add(i.order_id);
       seen.set(slug, set);
     }
     return [...seen.entries()].map(([product, set]) => ({ product, orders: set.size }));

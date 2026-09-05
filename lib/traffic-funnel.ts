@@ -48,6 +48,15 @@ export type FunnelView = {
 
 const STEP_LABELS = ["Saw the sales page", "Reached the checkout", "Saw the upsell", "Bought"];
 
+/**
+ * One number format for the whole page.
+ *
+ * It lives here rather than in a component because two files render figures
+ * onto the same screen, and when only one of them had it the cards read
+ * `12,340` directly under a note reading `12340`.
+ */
+export const formatCount = (v: number): string => v.toLocaleString("en-US");
+
 /** Sorted busiest first, which is the only order anybody reads a split in. */
 function splitOf(m: Map<string, number>): SourceSplit[] {
   return [...m.entries()]

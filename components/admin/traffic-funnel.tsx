@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { sparklinePath, type DayPoint, type OtherPage, type ProductFunnel, type Range } from "@/lib/traffic-funnel";
+import { formatCount as n, sparklinePath, type DayPoint, type OtherPage, type ProductFunnel, type Range } from "@/lib/traffic-funnel";
 
 /**
  * The traffic page's furniture.
@@ -13,8 +13,6 @@ import { sparklinePath, type DayPoint, type OtherPage, type ProductFunnel, type 
  */
 
 const RANGES: Range[] = [7, 30, 90];
-
-const n = (v: number) => v.toLocaleString("en-US");
 
 /** The sparkline's box. The same numbers go to `sparklinePath`, so the path fits. */
 const SPARK_W = 132;
@@ -102,7 +100,13 @@ export function FunnelCard({ product }: { product: ProductFunnel }) {
           const width = top > 0 && step.count > 0 ? Math.max(1.5, (step.count / top) * 100) : 0;
           return (
             <li key={step.label} className="flex flex-col">
-              {prev !== null && <Drop from={prev} to={step.count} />}
+              {/*
+                No share on the last one: it is views above and people below,
+                and a percentage between two different units is a conversion
+                rate this page cannot compute. The other two are views to
+                views and keep theirs.
+              */}
+              {prev !== null && <Drop from={prev} to={step.count} share={!last} />}
               <div className="flex items-center gap-3">
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="truncate text-sm text-fg">{step.label}</span>
@@ -152,8 +156,12 @@ export function FunnelCard({ product }: { product: ProductFunnel }) {
  * 40,000 is nothing. Going up is possible and real — the checkout is reachable
  * from an offer page that never touched the sales page — so it is stated
  * rather than shown as a negative drop.
+ *
+ * `share` is off where the two steps count different things. The page says in
+ * words that views are not people; this is the one place a number would say
+ * otherwise, and the number is what somebody quotes.
  */
-function Drop({ from, to }: { from: number; to: number }) {
+function Drop({ from, to, share }: { from: number; to: number; share: boolean }) {
   if (from === 0) return <div className="h-3" />;
   const lost = from - to;
   return (
@@ -161,7 +169,9 @@ function Drop({ from, to }: { from: number; to: number }) {
       <span aria-hidden="true">↓</span>
       <span className="tabular-nums">
         {lost > 0
-          ? `${n(lost)} fewer · ${Math.round((lost / from) * 100)}% drop`
+          ? share
+            ? `${n(lost)} fewer · ${Math.round((lost / from) * 100)}% drop`
+            : `${n(lost)} fewer`
           : lost === 0
             ? "no drop"
             : `${n(-lost)} more than the step above`}

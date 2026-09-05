@@ -34,3 +34,13 @@ $$;
 -- Left in place it would keep writing product-less rows from any stale caller,
 -- and PostgREST would resolve to it happily. Drop it by its exact signature.
 drop function if exists bump_page_count(uuid, date, text, text);
+
+-- Only the service role calls this. Postgres grants EXECUTE to PUBLIC by
+-- default, and 0067 revoked function privileges from anon/authenticated but
+-- not from PUBLIC. The insert would still be refused — the function is
+-- `language sql` with no `security definer`, so it runs with the caller's
+-- privileges and anon has neither the table grant nor an RLS policy — but
+-- leaving EXECUTE open means that argument has to be reconstructed by whoever
+-- reads this next.
+revoke all privileges on function bump_page_count(uuid, date, text, text, text) from public;
+grant execute on function bump_page_count(uuid, date, text, text, text) to service_role;

@@ -47,6 +47,16 @@ describe("a product's funnel card", () => {
     expect(html).toMatch(/>0</);
   });
 
+  it("prints no percentage on the views-to-people step", () => {
+    // 21 views to 19 buyers is not a 10% drop — it is two different units,
+    // and the percentage is the bit somebody would quote. The two
+    // views-to-views transitions above it keep theirs (79%, 76%).
+    const html = renderToStaticMarkup(<FunnelCard product={PRODUCT} />);
+    expect(html).toContain("2 fewer");
+    expect(html).not.toContain("10%");
+    expect(html).toContain("%");
+  });
+
   it("shows where the traffic came from", () => {
     const html = renderToStaticMarkup(<FunnelCard product={PRODUCT} />);
     expect(html).toContain("meta");

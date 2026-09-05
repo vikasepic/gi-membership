@@ -1,3 +1,5 @@
+import { formatCount as n } from "@/lib/traffic-funnel";
+
 /**
  * The gap between what happened and what the ad tools saw.
  *
@@ -11,8 +13,8 @@ export function CoverageNote({ counted, consented }: { counted: number; consente
   if (counted === 0) return null;
   return (
     <p className="rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm text-muted">
-      <span className="font-medium text-fg">{counted}</span> views counted here, against{" "}
-      <span className="font-medium text-fg">{consented}</span> visitors your pixel saw in the
+      <span className="font-medium text-fg">{n(counted)}</span> views counted here, against{" "}
+      <span className="font-medium text-fg">{n(consented)}</span> visitors your pixel saw in the
       same window. These count different things — views against people, and one person browsing
       three pages is three views — so read the gap as a direction, not a percentage.
     </p>

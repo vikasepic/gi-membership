@@ -1,4 +1,10 @@
-import { pageCountsSince, paidByProduct, productNames, consentedVisitorCount } from "@/lib/traffic";
+import {
+  pageCountsSince,
+  paidByProduct,
+  productNames,
+  consentedVisitorCount,
+  todayUtc,
+} from "@/lib/traffic";
 import { buildFunnels, daysInRange, rangeFrom } from "@/lib/traffic-funnel";
 import { FunnelCard, RangeTabs, OtherPages } from "@/components/admin/traffic-funnel";
 import { CoverageNote } from "@/components/admin/traffic-table";
@@ -11,13 +17,17 @@ export default async function AdminTrafficPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const range = rangeFrom(await searchParams);
+  // One clock read for the whole request. Reading it again after the awaits
+  // lets a request that crosses UTC midnight build a chart one day short of
+  // the totals beside it — the disagreement b481969 closed.
+  const today = todayUtc();
   const [counts, bought, names, consented] = await Promise.all([
-    pageCountsSince(range),
-    paidByProduct(range),
+    pageCountsSince(range, today),
+    paidByProduct(range, today),
     productNames(),
-    consentedVisitorCount(range),
+    consentedVisitorCount(range, today),
   ]);
-  const days = daysInRange(range, new Date().toISOString().slice(0, 10));
+  const days = daysInRange(range, today);
   const view = buildFunnels(counts, bought, names, days);
 
   return (
@@ -33,9 +43,16 @@ export default async function AdminTrafficPage({
         <RangeTabs range={range} />
       </div>
 
-      {view.counted === 0 ? (
+      {/*
+        Not `counted === 0`: that is true whenever no VIEW was counted, and a
+        product can sell in a window without one — a direct link, or a sale on
+        a page counted before the product column existed. Gating on the views
+        alone would render "nothing here" over real orders.
+      */}
+      {view.products.length === 0 && view.others.length === 0 ? (
         <p className="text-muted">
-          No traffic counted yet. Views appear here as soon as somebody opens a sales page.
+          Nothing counted in this window. Try a longer range, or check back once somebody opens a
+          sales page.
         </p>
       ) : (
         <>
