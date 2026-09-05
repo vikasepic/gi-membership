@@ -8,9 +8,9 @@ describe("the traffic table", () => {
     const html = renderToStaticMarkup(
       <TrafficTable
         rows={[
-          { path: "/p/validator", source: "meta", hits: 80 },
-          { path: "/p/validator", source: "direct", hits: 20 },
-          { path: "/checkout", source: "meta", hits: 30 },
+          { path: "/p/validator", source: "meta", product: "validator", hits: 80 },
+          { path: "/p/validator", source: "direct", product: "validator", hits: 20 },
+          { path: "/checkout", source: "meta", product: "validator", hits: 30 },
         ]}
       />,
     );
