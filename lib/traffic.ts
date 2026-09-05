@@ -12,7 +12,7 @@ import { sourceOf, isBot } from "@/lib/traffic-source";
  * break a checkout would be a bad trade at any accuracy.
  */
 
-export type TrafficRow = { path: string; source: string; hits: number };
+export type TrafficRow = { path: string; source: string; product: string; hits: number };
 
 /**
  * The raw increment, which DOES throw — but only on a transport failure or a
@@ -28,27 +28,42 @@ export type TrafficRow = { path: string; source: string; hits: number };
  * caught those too would pass while the write was broken. `recordPageHit` is
  * the safe door and the one pages use — it wraps this.
  */
-export async function bumpPageCountOrThrow(path: string, source: string): Promise<void> {
+export async function bumpPageCountOrThrow(
+  path: string,
+  source: string,
+  product = "",
+): Promise<void> {
   const db = createServiceClient();
   await db.rpc("bump_page_count", {
     p_store: await getStoreId(),
     p_day: new Date().toISOString().slice(0, 10),
     p_path: path,
     p_source: source,
+    p_product: product,
   });
 }
 
 /**
  * Count this view, from whatever the request happens to say.
  *
+ * `product` is the slug this view was about, and it is the caller's job
+ * because only the caller knows: the sales pages have it in their path, the
+ * checkout has resolved it to a real row before it renders, and everything
+ * else has none. It defaults to "" so a page with no product does not have to
+ * say so.
+ *
  * Never awaited by its callers and never throws, so a slow database or a
  * failed write cannot delay a page or break one.
  */
-export async function recordPageHit(path: string): Promise<void> {
+export async function recordPageHit(path: string, product = ""): Promise<void> {
   try {
     const h = await headers();
     if (isBot(h.get("user-agent"))) return;
-    await bumpPageCountOrThrow(path, sourceOf(h.get("x-search") ?? "", h.get("referer")));
+    await bumpPageCountOrThrow(
+      path,
+      sourceOf(h.get("x-search") ?? "", h.get("referer")),
+      product,
+    );
   } catch {
     // Deliberately silent. See the note at the top of this file.
   }
@@ -83,7 +98,7 @@ export async function trafficByPage(days: number): Promise<TrafficRow[]> {
     const db = createServiceClient();
     const { data } = await db
       .from("page_counts")
-      .select("path, source, hits")
+      .select("path, source, product, hits")
       .eq("store_id", await getStoreId())
       .gte("day", since)
       .order("hits", { ascending: false });
