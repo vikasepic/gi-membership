@@ -143,9 +143,18 @@ export async function consentedVisitorCount(days: number): Promise<number> {
   }
 }
 
-/** An ISO date `days` days ago, which is how `page_counts.day` is keyed. */
-function sinceDay(days: number): string {
-  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+/**
+ * The first day of the window, as an ISO date — how `page_counts.day` is keyed.
+ *
+ * `daysInRange` in `lib/traffic-funnel.ts` is the definition every window here
+ * follows: the last N UTC calendar days INCLUDING today, so `days - 1` back and
+ * not `days`. Both readers below derive from this one helper so they cannot
+ * drift apart again — when they disagreed, a row on the oldest day counted
+ * towards a card's totals but not towards the chart beside them, and the card
+ * contradicted itself at the boundary with nothing on screen to show it.
+ */
+function windowStart(days: number): string {
+  return new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
 }
 
 /**
@@ -163,7 +172,7 @@ export async function pageCountsSince(days: number): Promise<CountRow[]> {
       .from("page_counts")
       .select("day, path, source, product, hits")
       .eq("store_id", await getStoreId())
-      .gte("day", sinceDay(days))
+      .gte("day", windowStart(days))
       .order("day", { ascending: true });
     return (data ?? []) as CountRow[];
   } catch {
@@ -187,7 +196,12 @@ export async function paidByProduct(days: number): Promise<BoughtRow[]> {
   try {
     const db = createServiceClient();
     const store = await getStoreId();
-    const since = new Date(Date.now() - days * 86_400_000).toISOString();
+    // UTC midnight of the window's first day, not a rolling `days * 24h`:
+    // `page_counts.day` is written from `toISOString()`, so the three view
+    // steps are bounded by UTC midnights and this step has to be too. A
+    // rolling cutoff would leave the last step counting a different span from
+    // the three above it, by however many hours into the day it is now.
+    const since = `${windowStart(days)}T00:00:00.000Z`;
 
     const { data: orders } = await db
       .from("orders")

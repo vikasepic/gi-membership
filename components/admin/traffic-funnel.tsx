@@ -114,7 +114,7 @@ export function FunnelCard({ product }: { product: ProductFunnel }) {
                   </div>
                 </div>
                 <div className="flex w-24 shrink-0 flex-col items-end">
-                  <span className="font-display text-lg leading-none tabular-nums">{step.count}</span>
+                  <span className="font-display text-lg leading-none tabular-nums">{n(step.count)}</span>
                   <span className="text-[0.65rem] text-muted">{last ? "people" : "views"}</span>
                 </div>
               </div>
@@ -227,7 +227,7 @@ export function OtherPages({ pages }: { pages: OtherPage[] }) {
                 </span>
               ))}
             </span>
-            <span className="ml-auto font-display text-sm tabular-nums">{p.hits}</span>
+            <span className="ml-auto font-display text-sm tabular-nums">{n(p.hits)}</span>
           </li>
         ))}
       </ul>

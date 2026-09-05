@@ -83,10 +83,27 @@ describe("the range control", () => {
 describe("the pages outside the funnel", () => {
   it("lists them with their totals", () => {
     const html = renderToStaticMarkup(
-      <OtherPages pages={[{ path: "/o/funnel-app", hits: 7, sources: [{ source: "direct", hits: 7 }] }]} />,
+      // Two sources summing to the total, so 7 appears only as the total —
+      // one source carrying the whole 7 would let the split satisfy an
+      // assertion meant for the figure at the end of the row.
+      <OtherPages
+        pages={[
+          {
+            path: "/o/funnel-app",
+            hits: 7,
+            sources: [
+              { source: "direct", hits: 5 },
+              { source: "email", hits: 2 },
+            ],
+          },
+        ]}
+      />,
     );
     expect(html).toContain("/o/funnel-app");
-    expect(html).toContain("7");
+    // Its own element's text, not a substring of the markup: `toContain("7")`
+    // passed against a card that never rendered the total at all, because
+    // `text-[0.7rem]` is in the class list.
+    expect(html).toMatch(/>7</);
   });
 
   it("renders nothing when there are none", () => {
