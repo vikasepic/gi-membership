@@ -12,7 +12,15 @@ import { sourceOf, isBot } from "@/lib/traffic-source";
  * break a checkout would be a bad trade at any accuracy.
  */
 
-export type TrafficRow = { path: string; source: string; product: string; hits: number };
+export type CountRow = {
+  day: string;
+  path: string;
+  source: string;
+  product: string;
+  hits: number;
+};
+export type BoughtRow = { product: string; orders: number };
+export type ProductName = { slug: string; title: string };
 
 /**
  * The raw increment, which DOES throw — but only on a transport failure or a
@@ -135,18 +143,106 @@ export async function consentedVisitorCount(days: number): Promise<number> {
   }
 }
 
-/** Every page and source with a hit in the last `days` days, busiest first. */
-export async function trafficByPage(days: number): Promise<TrafficRow[]> {
+/** An ISO date `days` days ago, which is how `page_counts.day` is keyed. */
+function sinceDay(days: number): string {
+  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Every counted row in the window, in one query.
+ *
+ * The funnel, the daily series, the source split and the other-pages list are
+ * all shaped from this same list rather than from a query each. At a few dozen
+ * rows a day over at most ninety days that is a small read, and it means those
+ * four things cannot disagree with each other about what the window held.
+ */
+export async function pageCountsSince(days: number): Promise<CountRow[]> {
   try {
-    const since = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
     const db = createServiceClient();
     const { data } = await db
       .from("page_counts")
-      .select("path, source, product, hits")
+      .select("day, path, source, product, hits")
       .eq("store_id", await getStoreId())
-      .gte("day", since)
-      .order("hits", { ascending: false });
-    return (data ?? []) as TrafficRow[];
+      .gte("day", sinceDay(days))
+      .order("day", { ascending: true });
+    return (data ?? []) as CountRow[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * How many real orders each product took in the window.
+ *
+ * The funnel's last step, and the only step that is people rather than views:
+ * it comes from the ledger, so the bottom of the funnel reconciles with
+ * revenue. Test-mode rows are excluded — two of them are sitting in production
+ * and counting them would overstate a launch by a third.
+ *
+ * Three small queries instead of one embedded join: order volume is tiny, and
+ * a PostgREST embed's shape here would be a silent wrong answer rather than an
+ * error if the relationship were detected differently.
+ */
+export async function paidByProduct(days: number): Promise<BoughtRow[]> {
+  try {
+    const db = createServiceClient();
+    const store = await getStoreId();
+    const since = new Date(Date.now() - days * 86_400_000).toISOString();
+
+    const { data: orders } = await db
+      .from("orders")
+      .select("id")
+      .eq("store_id", store)
+      .eq("status", "paid")
+      .eq("livemode", true)
+      .gte("created_at", since);
+    const ids = (orders ?? []).map((o) => o.id as string);
+    if (ids.length === 0) return [];
+
+    const { data: items } = await db
+      .from("order_items")
+      .select("order_id, product_id")
+      .in("order_id", ids)
+      .eq("kind", "product")
+      .not("product_id", "is", null);
+
+    const { data: products } = await db
+      .from("products")
+      .select("id, slug")
+      .eq("store_id", store);
+    const slugOf = new Map((products ?? []).map((p) => [p.id as string, p.slug as string]));
+
+    // Distinct ORDERS per product: an order with two rows for the same product
+    // is one sale, and counting rows would inflate the step it feeds.
+    const seen = new Map<string, Set<string>>();
+    for (const i of items ?? []) {
+      const slug = slugOf.get(i.product_id as string);
+      if (!slug) continue;
+      const set = seen.get(slug) ?? new Set<string>();
+      set.add(i.order_id as string);
+      seen.set(slug, set);
+    }
+    return [...seen.entries()].map(([product, set]) => ({ product, orders: set.size }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Every product in the catalogue, published or not.
+ *
+ * Unpublished ones are included on purpose: a product that sold and was then
+ * taken down still has orders, and dropping it would make this page's numbers
+ * disagree with the orders page.
+ */
+export async function productNames(): Promise<ProductName[]> {
+  try {
+    const db = createServiceClient();
+    const { data } = await db
+      .from("products")
+      .select("slug, title")
+      .eq("store_id", await getStoreId());
+    return (data ?? []) as ProductName[];
   } catch {
     return [];
   }
