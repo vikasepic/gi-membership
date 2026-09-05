@@ -31,8 +31,8 @@ describe("the admin sidebar", () => {
 
   it("still reaches every section", () => {
     const out = render("/admin");
-    for (const href of ["/admin", "/admin/courses", "/admin/offers", "/admin/orders",
-      "/admin/members", "/admin/apps", "/admin/errors", "/admin/settings"]) {
+    for (const href of ["/admin", "/admin/courses", "/admin/offers", "/admin/traffic",
+      "/admin/orders", "/admin/members", "/admin/apps", "/admin/errors", "/admin/settings"]) {
       expect(out, href).toContain(`href="${href}"`);
     }
   });

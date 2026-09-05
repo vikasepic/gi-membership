@@ -22,6 +22,7 @@ import { usableCheckoutLayout } from "@/lib/checkout-layout";
 import { checkoutSkin } from "@/lib/checkout-skin";
 import { CheckoutStage } from "@/components/checkout/v2/stage";
 import { money } from "@/lib/money";
+import { recordPageHit } from "@/lib/traffic";
 import type { Block } from "@/lib/blocks";
 
 export const metadata = NOINDEX;
@@ -104,6 +105,11 @@ export default async function CheckoutPage({
   // only after they had filled in a card and pressed pay. Send them to what they
   // bought instead of rendering a form that cannot succeed.
   if (owned.productIds.has(product.id)) redirect("/library");
+
+  // After every guard, not at the top: a request that 404s or redirects to
+  // the library never showed anybody a checkout, and counting it would put
+  // traffic in the funnel that never saw the page.
+  void recordPageHit("/checkout");
 
   // A signed-in member never types an email, so reaching this page IS the
   // moment we know they are considering it — the equivalent of the anonymous

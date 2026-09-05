@@ -58,6 +58,9 @@ function groups(c: NavCounts): { title: string; items: Item[] }[] {
     {
       title: "Customers",
       items: [
+        // First in the group because it is the top of the funnel: traffic,
+        // then the checkout it reaches, then the orders that come out.
+        { href: "/admin/traffic", label: "Traffic", icon: ICON.orders },
         // Above Orders, because it is the page an order comes from.
         { href: "/admin/checkout", label: "Checkout", icon: ICON.checkout },
         { href: "/admin/orders", label: "Orders", icon: ICON.orders, badge: n(c.orders) },

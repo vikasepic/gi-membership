@@ -17,6 +17,7 @@ import { offerAsSoldTo } from "@/lib/trial-history";
 import { altSaving } from "@/lib/offers";
 import { pageMetadata, absoluteUrl } from "@/lib/page-metadata";
 import { getSettingsOrDefaults } from "@/lib/settings";
+import { recordPageHit } from "@/lib/traffic";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +79,9 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
   const listed = await getOfferByKey(key);
   if (!listed || !listed.active) notFound();
   if (!(await hasPageSections("offer", listed.id))) notFound();
+
+  // Not awaited — a count is worth less than a page load.
+  void recordPageHit(`/o/${key}`);
 
   // Who is reading it decides what it may promise: a free trial is a thing you
   // get once, so anyone who has had this one is shown what they will be
