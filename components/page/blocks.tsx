@@ -1087,7 +1087,7 @@ function Inner({
         const wash = c.fill;
         const overInk = readableOn(wash);
         return rail(
-          <ul className="-mx-1 flex list-none snap-x snap-mandatory gap-4 overflow-x-auto p-0 px-1 pb-2">
+          <ul className="no-scrollbar -mx-1 flex list-none snap-x snap-mandatory gap-4 overflow-x-auto p-0 px-1 pb-2">
             {items.map((item, i) => {
               const photo = imageSrc(str(item.image));
               return (
@@ -1167,7 +1167,7 @@ function Inner({
       // adds arrows and dots on top of that, once it has mounted — the strip
       // could always be scrolled and had no way of saying so.
       return rail(
-        <ul className="-mx-1 flex list-none snap-x snap-mandatory gap-4 overflow-x-auto p-0 px-1 pb-2">
+        <ul className="no-scrollbar -mx-1 flex list-none snap-x snap-mandatory gap-4 overflow-x-auto p-0 px-1 pb-2">
           {items.map((item, i) => (
             <li
               key={i}

@@ -7,6 +7,7 @@ import { bandTheme } from "@/lib/page-sections";
 import { normalizeBlocks, newBlock } from "@/lib/blocks";
 import { controlsFor } from "@/lib/block-controls";
 import { listTemplates } from "@/lib/templates";
+import { readFileSync } from "node:fs";
 
 const theme = bandTheme("paper");
 let root: { unmount: () => void } | null = null;
@@ -236,5 +237,46 @@ describe("the shape of the arrows", () => {
   it("ships the words-only template on the bare chevron, which is the reference", () => {
     const t = listTemplates().find((x) => x.id === "testimonial-quotes");
     expect(t!.blocks[0].props.arrowStyle).toBe("bare");
+  });
+});
+
+/**
+ * The strip scrolls. The bar under it does not have to be drawn.
+ *
+ * `overflow-x-auto` paints a horizontal scrollbar on any desktop that draws
+ * them, sitting under the card — which contradicts the design the rest of the
+ * rail was built around: the arrows and the dots exist precisely because "on a
+ * desktop with no touch and a hidden scrollbar" a strip has no way of saying it
+ * scrolls.
+ *
+ * Only the painted bar goes. `overflow-x-auto` stays, so the element is still a
+ * scroll container: touch swipe, trackpad and keyboard all go through it, and
+ * `overflow: hidden` — which would take all three away — is never reached for.
+ */
+describe("the scrollbar under the slides", () => {
+  const strip = (props: Record<string, unknown>) =>
+    mount({ items: [slide("a"), slide("b"), slide("c")], ...props }).querySelector("ul")!;
+  const css = readFileSync("app/globals.css", "utf8");
+
+  it("hides the bar's chrome on both skins", () => {
+    expect(strip({}).className).toContain("no-scrollbar");
+    expect(strip({ skin: "portrait" }).className).toContain("no-scrollbar");
+  });
+
+  it("hides it in a stylesheet rule, not inline, because two skins need it", () => {
+    expect(css).toContain(".no-scrollbar");
+    // Firefox takes the property; everything else takes the pseudo-element.
+    expect(css).toMatch(/\.no-scrollbar\s*\{[^}]*scrollbar-width:\s*none/);
+    expect(css).toMatch(/\.no-scrollbar::-webkit-scrollbar\s*\{[^}]*display:\s*none/);
+  });
+
+  it("leaves the strip scrollable by touch, trackpad and keyboard", () => {
+    // All three are the same mechanism: the element is a scroll container
+    // because of `overflow-x-auto`, and hiding a bar's chrome does not stop it
+    // being one. `overflow: hidden` here would take all three away at once.
+    expect(strip({}).className).toContain("overflow-x-auto");
+    expect(strip({ skin: "portrait" }).className).toContain("overflow-x-auto");
+    const rule = css.slice(css.indexOf(".no-scrollbar"));
+    expect(rule.slice(0, rule.indexOf("}"))).not.toContain("overflow");
   });
 });

@@ -12,6 +12,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * cards, and the fourth is a secret. `arrows` and `dots` had been props since
  * the block was written and nothing read them.
  *
+ * The scrollbar is now hidden everywhere rather than only on the machines that
+ * happen to use overlay bars — the strip carries `no-scrollbar`, see
+ * app/globals.css — so these controls are the only thing saying it scrolls,
+ * which is what the paragraph above already assumed.
+ *
  * So this is added ON TOP rather than replacing anything. The list is passed in
  * as children and still renders on the server; without JavaScript it behaves
  * exactly as it did. The arrows, the dots and the fade only appear once this

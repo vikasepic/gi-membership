@@ -104,6 +104,26 @@ html {
   scroll-behavior: smooth;
 }
 
+/* A strip that scrolls sideways, with no bar drawn under it.
+
+   The slide rail's arrows and dots exist because a strip has no way of saying
+   it scrolls — "on a desktop with no touch and a hidden scrollbar, three slides
+   that happen to fit look like three cards". The scrollbar being painted under
+   the card contradicts the design the rest of that component was built around.
+
+   Only the chrome goes. The element keeps `overflow-x: auto`, so it is still a
+   scroll container and touch swipe, trackpad and keyboard all still reach it —
+   `overflow: hidden` would take all three away at once, which is why it is not
+   here. A class rather than inline styles because two slide skins need it, and
+   `::-webkit-scrollbar` cannot be written inline at all. */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Anything a link can point at stops clear of the header.
 
    The site header is `position: sticky`, so a target scrolled to the very top
