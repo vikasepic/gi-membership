@@ -137,7 +137,31 @@ export async function confirmCheckout(paymentIntentId: string): Promise<void> {
 export async function previewCoupon(
   productSlug: string,
   code: string,
-): Promise<{ ok: true; label: string; discountCents: number; clamped: boolean } | { ok: false; error: string }> {
+  /**
+   * Which way to buy — an INDEX into the list the page drew, the same answer
+   * the form posts when it charges. Absent means the headline price, which is
+   * what a product with one way to buy sends.
+   */
+  priceChoice?: number,
+): Promise<
+  | {
+      ok: true;
+      label: string;
+      discountCents: number;
+      clamped: boolean;
+      /**
+       * The trial this code grants, replacing the price's own. Null when it
+       * says nothing about one; zero when it takes the trial away.
+       *
+       * `finalizeOrder` hands `coupon.trialDays ?? price.trialDays` to the
+       * subscription, so a preview that did not return this left every
+       * sentence on the checkout promising the price's trial against a card
+       * getting the coupon's.
+       */
+      trialDays: number | null;
+    }
+  | { ok: false; error: string }
+> {
   const product = await getProductBySlug(productSlug);
   if (!product || product.status !== "published") {
     return { ok: false, error: "Product not available" };
@@ -145,17 +169,20 @@ export async function previewCoupon(
   // The preview is display only, but it is scoped exactly like the charge —
   // a preview that accepts a code the purchase then refuses is worse than one
   // that refuses it here, where there is still a form to say so on.
-  // The preview has no price choice to read, so it scopes to the product's
-  // headline billing — the same first-live-price the charge itself falls back
-  // to when no priceChoice is posted (see startCheckout's `chosen`).
-  const headline = livePrices(product.prices)[0] ?? null;
+  //
+  // Resolved the way createCheckoutIntent resolves it: the list is rebuilt from
+  // the product's own rows, the browser sends a position in it, and a position
+  // outside it refuses rather than falling back to the headline. No choice
+  // passed still means the headline — the same first-live-price the charge
+  // falls back to when no priceChoice is posted (see startCheckout's `chosen`).
+  const ways = livePrices(product.prices);
+  const chosen = priceChoice === undefined ? (ways[0] ?? null) : (ways[priceChoice] ?? null);
+  if (priceChoice !== undefined && !chosen) {
+    return { ok: false, error: "That option is no longer available." };
+  }
   const res = await resolveCoupon(code, product.priceCents, product.currency, {
     item: product.slug,
-    // A multi-price PRODUCT could therefore preview an interval-scoped code as
-    // valid and have the charge refuse it. No product is sold that way today,
-    // and the offer checkout — which is what the Content Engine offers use —
-    // passes the chosen price's interval exactly.
-    interval: headline?.billingType === "recurring" ? headline.interval : null,
+    interval: chosen?.billingType === "recurring" ? chosen.interval : null,
   });
   if (!res.ok) return res;
   return {
@@ -163,6 +190,7 @@ export async function previewCoupon(
     label: res.coupon.label,
     discountCents: res.coupon.discountCents,
     clamped: res.coupon.clamped,
+    trialDays: res.coupon.trialDays,
   };
 }
 

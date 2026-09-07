@@ -84,8 +84,8 @@ export type CheckoutSlotValue = {
      * Every sentence stating a trial is built with it — a code carrying
      * `trial_days` is what the subscription hands Stripe, so a terms line that
      * cannot see it promises the price's trial against a card getting the
-     * coupon's. Absent on the product checkout, which does not read trials off
-     * a code, and absent behaves exactly as before this existed.
+     * coupon's. Both checkouts fill it in now; still optional, and absent
+     * behaves exactly as before this existed.
      */
     trialDays?: number | null;
   } | null;

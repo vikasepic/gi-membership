@@ -8,7 +8,17 @@ import { track } from "@/components/analytics";
 import { eventIdFor } from "@/lib/analytics/events";
 import { needsAnswer, type BumpChoice } from "@/lib/bump";
 
-type AppliedDiscount = { label: string; discountCents: number; clamped: boolean };
+type AppliedDiscount = {
+  label: string;
+  discountCents: number;
+  clamped: boolean;
+  /**
+   * The trial the code grants, replacing the price's own. Null when it says
+   * nothing about one; zero when it takes the trial away — which is why every
+   * read of it is `??` and never `||`.
+   */
+  trialDays: number | null;
+};
 
 import { suggestEmail } from "@/lib/email-hint";
 import { Blocks } from "@/components/page/blocks";
@@ -284,19 +294,44 @@ function Inner({
     });
   }, [elements, totalNow, product.currency]);
 
-  async function applyCoupon() {
+  async function applyCoupon(atPick: number | null = pricePick) {
     const code = couponInput.trim();
     if (!code) return;
     setCouponBusy(true);
     setCouponError(null);
-    const res = await previewCoupon(product.slug, code);
+    // The way to pay goes with the code: a code can be scoped to one billing
+    // period, and the server prices it against the position it is sent — the
+    // same index the charge posts, so the two cannot be scoped to two
+    // different prices.
+    const res = await previewCoupon(product.slug, code, atPick ?? undefined);
     if (!res.ok) {
       setCoupon(null);
       setCouponError(res.error);
     } else {
-      setCoupon({ label: res.label, discountCents: res.discountCents, clamped: res.clamped });
+      setCoupon({
+        label: res.label,
+        discountCents: res.discountCents,
+        clamped: res.clamped,
+        trialDays: res.trialDays,
+      });
     }
     setCouponBusy(false);
+  }
+
+  /**
+   * Switching how you pay re-prices the code you already applied.
+   *
+   * A code can be scoped to one billing period, and it can carry a trial of its
+   * own. Leaving it on screen after a switch showed the discount and the code's
+   * trial beside a price it does not apply to — createCheckoutIntent resolves
+   * it again and refuses at the end, so the buyer read the promise, pressed pay
+   * and was only then told no. It must not silently persist and it must not
+   * silently apply: re-asking the server either re-prices it against the new
+   * choice or drops it with the reason.
+   */
+  function choosePrice(i: number) {
+    setPricePick(i);
+    if (coupon) void applyCoupon(i);
   }
 
   /**
@@ -441,7 +476,7 @@ function Inner({
     captureEmail,
     prices: product.prices ?? [],
     pricePick,
-    setPricePick,
+    setPricePick: choosePrice,
     bump,
     bumpAlt,
     bumpOptions,
