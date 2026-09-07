@@ -107,4 +107,45 @@ describe.skipIf(!canRun)("one access record per thing bought (integration)", () 
     const { subscribedToApp } = await import("@/lib/library");
     expect(await subscribedToApp(userId, APP)).toBe(false);
   });
+
+  it("revives the offer-less row on a resubscribe under a new subscription id, without touching a sibling offer row", async () => {
+    // Reproduces the churned-then-returning app subscriber from
+    // t3-findings.md: the offer-less row this function owns is stuck on the
+    // old subscription id, and a filter on the NEW id finds nothing to
+    // update, so the resubscribe is silently lost.
+    const db = createServiceClient();
+    await db
+      .from("ownership")
+      .insert({ ...row(null), source: "app", status: "canceled", stripe_subscription_id: "sub_A" });
+    // The sibling: an offer-granted row for the same app. Proves the update
+    // never strays onto it.
+    await db.from("ownership").insert({ ...row(SEEDED_OFFER), stripe_subscription_id: "sub_A" });
+
+    const { getAppById } = await import("@/lib/apps");
+    const app = await getAppById(APP);
+    if (!app) throw new Error("test fixture: seeded app not found");
+
+    const { recordAppEntitlement } = await import("@/lib/app-sync");
+    await recordAppEntitlement({
+      app,
+      email: USER_EMAIL,
+      entitlementKey: null,
+      status: "active",
+      stripeSubscriptionId: "sub_B",
+    });
+
+    const { data: rows } = await db
+      .from("ownership")
+      .select("offer_id, status, stripe_subscription_id")
+      .eq("user_id", userId)
+      .eq("app_id", APP);
+    const offerless = rows?.find((r) => r.offer_id === null);
+    const offerRow = rows?.find((r) => r.offer_id === SEEDED_OFFER);
+
+    expect(offerless?.status).toBe("active");
+    expect(offerless?.stripe_subscription_id).toBe("sub_B");
+
+    expect(offerRow?.status).toBe("active");
+    expect(offerRow?.stripe_subscription_id).toBe("sub_A");
+  });
 });

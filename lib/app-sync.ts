@@ -334,6 +334,15 @@ async function tagAppLifecycle(
 // ownership has a partial unique index on (store_id, user_id, app_id, offer_id)
 // (nulls not distinct), so this is an update-then-insert rather than an
 // upsert: onConflict can't name a partial index.
+//
+// The offer-less row (offer_id is null) is this function's own — the one it
+// created itself for a sale the app made directly. Offer rows belong to the
+// purchase path and this never touches them: `offer_id is null` already
+// guarantees that, since every offer-granted row has a non-null offer_id, and
+// the unique index guarantees at most one offer-less row per (store, user,
+// app). The subscription id is a value to WRITE here, never a value to
+// select on — filtering on it stops matching the row across a resubscribe,
+// where Stripe mints a new subscription id and the old row is left stranded.
 async function upsertAppOwnership(args: {
   storeId: string;
   userId: string;
@@ -342,10 +351,7 @@ async function upsertAppOwnership(args: {
   stripeSubscriptionId: string | null;
 }): Promise<void> {
   const db = createServiceClient();
-  // Since 0069 a person can hold one row per offer of the same app, so this
-  // must name the row it means. An app reporting one subscription's status
-  // would otherwise rewrite every channel a person holds.
-  let q = db
+  const { data: updated } = await db
     .from("ownership")
     .update({
       status: args.status,
@@ -354,11 +360,9 @@ async function upsertAppOwnership(args: {
     })
     .eq("store_id", args.storeId)
     .eq("user_id", args.userId)
-    .eq("app_id", args.appId);
-  q = args.stripeSubscriptionId
-    ? q.eq("stripe_subscription_id", args.stripeSubscriptionId)
-    : q.is("offer_id", null);
-  const { data: updated } = await q.select("id");
+    .eq("app_id", args.appId)
+    .is("offer_id", null)
+    .select("id");
   if (updated && updated.length > 0) return;
 
   const { error } = await db.from("ownership").insert({
