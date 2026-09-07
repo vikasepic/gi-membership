@@ -431,33 +431,28 @@ describe("what a card can now be told", () => {
 
 /**
  * `text-wrap: balance` evens line lengths, so it wraps NARROWER than the box on
- * purpose. A heading given a measure of 980px broke at about 840 and read as
- * "the width did not apply". The balancer yields to a stated measure.
+ * purpose — a heading given a measure of 980px broke at about 840 and read as
+ * "the width did not apply". It used to yield to a stated measure, which left
+ * every heading nobody had given a width to still breaking somewhere the
+ * builder could not reach.
+ *
+ * So it is off here entirely. The block builder is the one place where where a
+ * heading breaks is somebody's decision; the class stays on the pages that are
+ * not built block by block — the error page, the checkout panel, the OTO kit,
+ * the storefront — where there is no panel to decide it in.
  */
-describe("a heading that has been given a width", () => {
+describe("a heading block's line breaks", () => {
   const heading = (style: Record<string, unknown> = {}) => {
     const b = normalizeBlocks([{ id: "h1", type: "heading", props: { text: "A long enough heading to wrap" } }])[0];
     return render({ ...b, style: { ...b.style, ...style } } as Block);
   };
 
-  it("balances its lines when nothing says otherwise", () => {
-    expect(heading()).toContain("text-balance");
+  it("fall where the box ends, with nothing evening them out", () => {
+    expect(heading()).not.toContain("text-balance");
   });
 
-  it("stops balancing once a measure is stated, so the width is the width", () => {
+  it("do the same once a measure is stated, so the width is the width", () => {
     expect(heading({ width: "custom", maxWidthValue: 980, maxWidthUnit: "px" })).not.toContain("text-balance");
-  });
-
-  it("counts a measure set on the phone, which is the markup the phone gets", () => {
-    const b = normalizeBlocks([{ id: "h1", type: "heading", props: { text: "Wraps" } }])[0];
-    const phone = {
-      ...b,
-      responsive: {
-        tablet: { style: {}, props: {} },
-        mobile: { style: { width: "custom", maxWidthValue: 300, maxWidthUnit: "px" }, props: {} },
-      },
-    } as unknown as Block;
-    expect(render(phone)).not.toContain("text-balance");
   });
 });
 
