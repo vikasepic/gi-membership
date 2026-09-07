@@ -2,12 +2,21 @@ import { notFound } from "next/navigation";
 import { ProductForm } from "@/components/admin/product-form";
 import { publicCoverUrl } from "@/lib/media";
 import { AssetUpload } from "@/components/admin/asset-upload";
+import { DuplicateButton } from "@/components/admin/duplicate-button";
 import { getProductById, listOfferOptions, priceUsage } from "@/lib/admin";
 import { listCourses, coursesForProduct } from "@/lib/courses";
 import { hasPageSections } from "@/lib/pages";
 
-export default async function EditProductPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditProductPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ warning?: string | string[] }>;
+}) {
   const { id } = await params;
+  const { warning } = await searchParams;
+  const warnings = warning ? (Array.isArray(warning) ? warning : [warning]) : [];
   const [product, offers, allCourses, assigned, hasSalesPage, usage] = await Promise.all([
     getProductById(id),
     listOfferOptions(),
@@ -48,6 +57,26 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
       {assigned.length === 0 && (
         <AssetUpload productId={product.id} currentPath={product.mediaPath} />
       )}
+
+      {/* Beside the destructive control at the foot of the form above, not
+          the everyday fields inside it — duplicating a product is rare enough
+          that it should not compete with Save for attention. */}
+      {warnings.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary"
+        >
+          <p className="font-medium">The copy was made, but not everything came across:</p>
+          <ul className="mt-1 list-disc pl-4">
+            {warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="flex justify-end">
+        <DuplicateButton kind="product" id={product.id} currentKey={product.slug} />
+      </div>
     </div>
   );
 }

@@ -6,13 +6,18 @@ import { getOfferById, listProductOptions, listAppOptions, listOfferOptions, pri
 import { hasCustomOtoPage } from "@/components/oto/registry";
 import { hasPageSections } from "@/lib/pages";
 import { ViewLive } from "@/components/admin/view-live";
+import { DuplicateButton } from "@/components/admin/duplicate-button";
 
 export default async function EditOfferPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ warning?: string | string[] }>;
 }) {
   const { id } = await params;
+  const { warning } = await searchParams;
+  const warnings = warning ? (Array.isArray(warning) ? warning : [warning]) : [];
   const [offer, products, apps, offers, usage] = await Promise.all([
     getOfferById(id),
     listProductOptions(),
@@ -118,6 +123,26 @@ export default async function EditOfferPage({
         </div>
       </div>
       <OfferForm offer={offer} products={products} apps={apps} offers={offers} usage={usage} />
+
+      {/* Beside the destructive control at the foot of the form above, not
+          the everyday fields inside it — duplicating an offer is rare enough
+          that it should not compete with Save for attention. */}
+      {warnings.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-sm text-primary"
+        >
+          <p className="font-medium">The copy was made, but not everything came across:</p>
+          <ul className="mt-1 list-disc pl-4">
+            {warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className="flex justify-end">
+        <DuplicateButton kind="offer" id={offer.id} currentKey={offer.key} />
+      </div>
     </div>
   );
 }
