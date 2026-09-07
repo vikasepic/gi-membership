@@ -62,15 +62,38 @@ x-store-secret:  <the shared secret you already have>
 | `email` | The identity. This is the join key — not the Stripe ids. |
 | `entitlementKey` | Stays `content-engine` for all three offers. Do not key channel access off this. |
 | `channels` | **The complete list they should have.** Replace, don't merge. |
-| `status` | `active` \| `trialing` \| `canceled` \| `past_due` |
-| `hasAccess` | `false` only when `status` is `canceled`. Convenience for the common check. |
+| `status` | `active` \| `trialing` \| `canceled` \| `past_due`. **One value across all their subscriptions** — see the ladder below. |
+| `hasAccess` | `false` only when `status` is `canceled`, i.e. only when **every** subscription they hold for this app is cancelled. |
 | `stripeSubscriptionId` | One of their subscriptions. **Not stable** when a person holds two — do not use it as your primary key. |
 | `occurredAt` | Unix seconds. Use it to ignore a message older than one you have already applied. |
 
+### One `status` for several subscriptions
+
+A person can hold more than one subscription to this app, and `status` is a
+single value. It is the healthiest of what they hold:
+
+```
+trialing   if any subscription is trialing
+active     else if any is active
+past_due   else if any is past_due
+canceled   else
+```
+
+So **one failing card cannot freeze a workspace somebody is still paying for.**
+Instagram `active` + LinkedIn `past_due` arrives as `active`, `hasAccess: true`,
+with both channels listed. `hasAccess: false` means every subscription is gone.
+
+`channels`, by contrast, is the union of only the **live** ones — `active` or
+`trialing`. A cancelled subscription's channel stops appearing, which is how a
+single cancellation revokes one channel and leaves the rest.
+
 **`channels` is omitted entirely when the list is empty** — it is not sent as
 `[]`. An omitted `channels` with `hasAccess: false` means revoke everything.
-An omitted `channels` with `hasAccess: true` should not happen for Content
-Engine; treat it as "no change" rather than "revoke".
+An omitted `channels` with `hasAccess: true` **does** happen and means
+**no change** — never a grant, and never a revoke. It arrives when the store
+holds an entitlement it cannot attribute to an offer, which is what an
+app-reported sale is. Treating it as a whole-app grant is an over-grant; there
+is no list to act on, so the right response is to leave what you have alone.
 
 Reply `2xx`. Any other status, or a redirect, is treated as a failure and the
 store queues it for retry. **Do not put the endpoint behind auth middleware
