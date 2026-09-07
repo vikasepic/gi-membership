@@ -5,10 +5,12 @@ import { getStoreId } from "@/lib/store";
 const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const APP = "00000000-0000-0000-0000-0000000000a1";
 const USER_EMAIL = "zz-ownership-per-offer@example.test";
+const SEEDED_OFFER = "00000000-0000-0000-0000-0000000000c1";
 
 describe.skipIf(!canRun)("one access record per thing bought (integration)", () => {
   let storeId: string;
   let userId: string;
+  let secondOfferId: string;
 
   beforeEach(async () => {
     const db = createServiceClient();
@@ -18,12 +20,39 @@ describe.skipIf(!canRun)("one access record per thing bought (integration)", () 
     // insert omitted it and fails with 23502, so it is added here too.
     userId = crypto.randomUUID();
     await db.from("users").insert({ id: userId, store_id: storeId, email: USER_EMAIL });
+
+    // The test needs two distinct *existing* offer ids (offer_id has an FK to
+    // offers). The brief's second id is a real production offer that isn't in
+    // the local seed, so insert a throwaway one here instead — same shape as
+    // the seeded Content Engine offer, just a second row pointing at the same
+    // app, so "two purchases of one app" is exercised with real FK targets.
+    secondOfferId = crypto.randomUUID();
+    const { error: offerErr } = await db.from("offers").insert({
+      id: secondOfferId,
+      store_id: storeId,
+      key: `zz-ownership-per-offer-${secondOfferId}`,
+      name: "zz throwaway offer (ownership-per-offer test)",
+      grant_type: "subscription",
+      grant_app_id: APP,
+      grant_entitlement_key: "content-engine",
+      billing_type: "recurring",
+      interval: "month",
+      interval_count: 1,
+      trial_days: 7,
+      price_cents: 4700,
+      currency: "usd",
+      headline: "throwaway",
+      description: "throwaway",
+    });
+    if (offerErr) throw new Error(`test fixture: insert throwaway offer: ${offerErr.message}`);
   });
 
   afterEach(async () => {
     const db = createServiceClient();
+    // ownership rows reference the offer, so they must go first.
     await db.from("ownership").delete().eq("user_id", userId);
     await db.from("users").delete().eq("id", userId);
+    await db.from("offers").delete().eq("id", secondOfferId);
   });
 
   const row = (offerId: string | null) => ({
@@ -38,16 +67,16 @@ describe.skipIf(!canRun)("one access record per thing bought (integration)", () 
   it("admits two rows for the same app when the offers differ", async () => {
     // The whole point. Instagram and LinkedIn are two purchases of one app.
     const db = createServiceClient();
-    const a = await db.from("ownership").insert(row("00000000-0000-0000-0000-0000000000c1"));
-    const b = await db.from("ownership").insert(row("07f3d2f5-1694-4a2f-bc9e-7fec9dc164ed"));
+    const a = await db.from("ownership").insert(row(SEEDED_OFFER));
+    const b = await db.from("ownership").insert(row(secondOfferId));
     expect(a.error).toBeNull();
     expect(b.error).toBeNull();
   });
 
   it("still refuses a second row for the same offer", async () => {
     const db = createServiceClient();
-    await db.from("ownership").insert(row("00000000-0000-0000-0000-0000000000c1"));
-    const again = await db.from("ownership").insert(row("00000000-0000-0000-0000-0000000000c1"));
+    await db.from("ownership").insert(row(SEEDED_OFFER));
+    const again = await db.from("ownership").insert(row(SEEDED_OFFER));
     expect(again.error?.code).toBe("23505");
   });
 
