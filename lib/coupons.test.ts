@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { couponTrialDays, intervalAllowed } from "@/lib/coupons";
+import { couponTrialDays, intervalAllowed, couponTrialNote } from "@/lib/coupons";
 
 describe("the trial a coupon carries", () => {
   it("reads a whole number of days", () => {
@@ -48,5 +48,31 @@ describe("which billing intervals a coupon allows", () => {
 
   it("is not fooled by spacing or case", () => {
     expect(intervalAllowed({ intervals: " Month , YEAR " }, "year")).toBe(true);
+  });
+});
+
+describe("what the buyer is told about a coupon's trial", () => {
+  it("says nothing when the code does not touch the trial", () => {
+    expect(couponTrialNote(null, 7)).toBeNull();
+  });
+
+  it("says nothing when the code grants the trial they already had", () => {
+    // Technically a change, visibly not one. Saying "30 days free" twice is
+    // noise, and noise beside a price reads as a trick.
+    expect(couponTrialNote(30, 30)).toBeNull();
+  });
+
+  it("names the longer trial the code buys", () => {
+    expect(couponTrialNote(30, 7)).toBe("30 days free instead of 7");
+  });
+
+  it("is honest when a code shortens or removes the trial", () => {
+    expect(couponTrialNote(0, 7)).toBe("no free trial with this code");
+    expect(couponTrialNote(3, 7)).toBe("3 days free instead of 7");
+  });
+
+  it("names a trial added to a price that had none", () => {
+    expect(couponTrialNote(30, null)).toBe("30 days free");
+    expect(couponTrialNote(30, 0)).toBe("30 days free");
   });
 });

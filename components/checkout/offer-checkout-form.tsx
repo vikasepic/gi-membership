@@ -103,7 +103,14 @@ function Inner({
 
   const [couponInput, setCouponInput] = useState("");
   const [coupon, setCoupon] = useState<
-    { label: string; discountCents: number; clamped: boolean; recurringDiscount: boolean } | null
+    | {
+        label: string;
+        discountCents: number;
+        clamped: boolean;
+        recurringDiscount: boolean;
+        trialNote: string | null;
+      }
+    | null
   >(null);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [couponBusy, setCouponBusy] = useState(false);
@@ -412,6 +419,11 @@ function Inner({
               <p className="text-xs text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
                 Discount capped — {money(MIN_CHARGE_CENTS_CLIENT, offer.currency)} is the smallest
                 charge a card can take.
+              </p>
+            )}
+            {coupon?.trialNote && (
+              <p className="text-xs text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
+                {coupon.trialNote}
               </p>
             )}
           </div>

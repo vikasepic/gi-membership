@@ -7,7 +7,7 @@ import { ownershipFor, fulfilOffer, grantOfferOwnership, customerForUser } from 
 import { stripe, stripeMode } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
 import { ensureUserProfile } from "@/lib/users";
-import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
+import { MIN_CHARGE_CENTS, resolveCoupon, couponTrialNote, type AppliedCoupon } from "@/lib/coupons";
 
 // Standalone checkout for a single offer, for a member who has no card on file
 // yet (they were gifted access, or their only purchase predates a saved card).
@@ -48,7 +48,14 @@ export async function previewOfferCoupon(args: {
   code: string;
   priceChoice?: number;
 }): Promise<
-  | { ok: true; label: string; discountCents: number; clamped: boolean; recurringDiscount: boolean }
+  | {
+      ok: true;
+      label: string;
+      discountCents: number;
+      clamped: boolean;
+      recurringDiscount: boolean;
+      trialNote: string | null;
+    }
   | { ok: false; error: string }
 > {
   const raw = await getOffer(args.offerId);
@@ -72,6 +79,7 @@ export async function previewOfferCoupon(args: {
     discountCents: res.coupon.discountCents,
     clamped: res.coupon.clamped,
     recurringDiscount: res.coupon.recurringDiscount,
+    trialNote: couponTrialNote(res.coupon.trialDays, offer.trialDays),
   };
 }
 

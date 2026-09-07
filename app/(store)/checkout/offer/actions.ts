@@ -65,7 +65,14 @@ export async function previewOfferCouponAction(
   code: string,
   priceChoice?: number,
 ): Promise<
-  | { ok: true; label: string; discountCents: number; clamped: boolean; recurringDiscount: boolean }
+  | {
+      ok: true;
+      label: string;
+      discountCents: number;
+      clamped: boolean;
+      recurringDiscount: boolean;
+      trialNote: string | null;
+    }
   | { ok: false; error: string }
 > {
   return previewOfferCoupon({ offerId, code, priceChoice });
