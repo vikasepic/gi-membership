@@ -108,13 +108,20 @@ function hostOf(url: string | undefined): string | null {
 
 export async function subscribedToApp(userId: string, appId: string): Promise<boolean> {
   const db = createServiceClient();
+  // Not maybeSingle: since 0069 a person can hold one row per offer of the same
+  // app, and maybeSingle over two rows errors — which this function would have
+  // read as "not subscribed", offering them something they already pay for.
+  //
+  // And only LIVE rows count. A cancelled row is a record that they once had
+  // it, not a subscription.
   const { data } = await db
     .from("ownership")
     .select("id")
     .eq("user_id", userId)
     .eq("app_id", appId)
-    .maybeSingle();
-  return !!data;
+    .in("status", ["active", "trialing", "past_due"])
+    .limit(1);
+  return (data?.length ?? 0) > 0;
 }
 
 // A standing offer to surface in the library: an active subscription offer the

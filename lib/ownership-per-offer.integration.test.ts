@@ -90,4 +90,21 @@ describe.skipIf(!canRun)("one access record per thing bought (integration)", () 
     expect(first.error).toBeNull();
     expect(second.error?.code).toBe("23505");
   });
+
+  it("counts someone with two live rows as subscribed", async () => {
+    // maybeSingle() over two rows errors, and the caller reads that as "not
+    // subscribed" — which would offer them something they already pay for.
+    const db = createServiceClient();
+    await db.from("ownership").insert(row(SEEDED_OFFER));
+    await db.from("ownership").insert(row(secondOfferId));
+    const { subscribedToApp } = await import("@/lib/library");
+    expect(await subscribedToApp(userId, APP)).toBe(true);
+  });
+
+  it("does not count someone whose every row is cancelled", async () => {
+    const db = createServiceClient();
+    await db.from("ownership").insert({ ...row(SEEDED_OFFER), status: "canceled" });
+    const { subscribedToApp } = await import("@/lib/library");
+    expect(await subscribedToApp(userId, APP)).toBe(false);
+  });
 });
