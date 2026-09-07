@@ -12,6 +12,7 @@ import { publicCoverUrl } from "@/lib/media-url";
 import { buildBumpView } from "@/lib/bump";
 import { siteUrl } from "@/lib/env";
 import { CopyLink } from "@/components/admin/copy-link";
+import { OfferLinkForm } from "@/components/admin/offer-link-form";
 import { storePreview } from "@/lib/store-preview";
 
 export const dynamic = "force-dynamic";
@@ -108,9 +109,13 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
           </span>
         </summary>
         <div className="flex flex-col gap-3 border-t border-border p-3">
+          {/* Editable, not just copyable. The address used to be read-only
+              text here while the field that set it lived on another screen
+              under another name, so it read as fixed and nobody found it. */}
+          <OfferLinkForm offerId={id} offerKey={offer.key} siteUrl={siteUrl()} />
           <CopyLink
             url={`${siteUrl()}/o/${offer.key}`}
-            label="Public link"
+            label="Copy the link"
             note="The same nine sections at an address you can paste into an ad or an email. Live once you save a section; buying goes through the normal checkout."
           />
           <PageSeo

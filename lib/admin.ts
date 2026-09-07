@@ -497,6 +497,27 @@ export async function savePrices(
  * every pricing and grant field just to change a headline — and one missing
  * hidden input would silently rewrite the offer's price.
  */
+/**
+ * Change only the offer's public link.
+ *
+ * Its own function rather than a trip through updateOffer for the same reason
+ * updateOfferPage and updateOfferBump are: this is a one-field form on a
+ * different screen, and routing it through toOfferRow would make the link
+ * editor post every pricing and grant field just to rename a URL — where one
+ * missing hidden input silently rewrites the offer's price.
+ *
+ * The duplicate-key case is turned into a sentence here rather than left as a
+ * Postgres constraint name, because it is the failure an admin will actually
+ * hit: two offers cannot share an address.
+ */
+export async function updateOfferKey(id: string, key: string): Promise<void> {
+  const db = createServiceClient();
+  const { error } = await db.from("offers").update({ key }).eq("id", id);
+  if (!error) return;
+  if (error.code === "23505") throw new Error("Another offer already uses that link.");
+  throw new Error(`updateOfferKey: ${error.message}`);
+}
+
 export async function updateOfferPage(id: string, page: Record<string, string>): Promise<void> {
   const db = createServiceClient();
   const { error } = await db.from("offers").update({ oto_page: page }).eq("id", id);

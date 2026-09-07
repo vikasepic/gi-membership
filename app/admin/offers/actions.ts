@@ -8,9 +8,10 @@ import { parseOtoSections } from "@/lib/oto-sections";
 import { OTO_TEMPLATES } from "@/lib/oto-template";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createOffer, updateOffer, deleteOffer, type OfferInput } from "@/lib/admin";
+import { createOffer, updateOffer, updateOfferKey, deleteOffer, type OfferInput } from "@/lib/admin";
 import { requireAdmin } from "@/lib/admin-guard";
 import { altOfferIdFor } from "@/lib/offers";
+import { OFFER_KEY, offerKeyProblem } from "@/lib/offer-key";
 
 const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
 const uuidish = z
@@ -20,7 +21,10 @@ const uuidish = z
 const schema = z
   .object({
     id: uuidish.optional().or(z.literal("").transform(() => undefined)),
-    key: z.string().trim().min(1, "Key required").regex(/^[a-z0-9-]+$/, "lowercase, numbers, hyphens only"),
+    // Same rule as the link editor on the page builder — see lib/offer-key.ts.
+    // Two copies of this would be two definitions of what a public URL may
+    // contain, and the looser one would win wherever it was used.
+    key: z.string().trim().min(1, "Key required").regex(OFFER_KEY, "lowercase, numbers, hyphens only"),
     name: z.string().trim().min(1, "Name required"),
     grantType: z.enum(["product", "subscription"]),
     grantProductId: z.preprocess(emptyToNull, uuidish.nullable()),
@@ -204,4 +208,42 @@ export async function removeOffer(formData: FormData): Promise<void> {
     revalidatePath("/admin");
   }
   redirect("/admin/offers");
+}
+
+export type KeyState = { error?: string; saved?: string };
+
+/**
+ * Change an offer's public link, from the page builder.
+ *
+ * Separate from saveOffer because it is reached from a different screen with
+ * one field on it. The offer's whole form is not on that page, so posting
+ * through saveOffer would mean sending an offer's pricing and grants as hidden
+ * inputs in order to rename a URL.
+ *
+ * Says plainly what it costs, because it cannot be undone by knowing the old
+ * value: nothing redirects from the old address, so every link already
+ * published — an ad, an email, a DM — is dead the moment this returns.
+ */
+export async function saveOfferKey(_prev: KeyState, formData: FormData): Promise<KeyState> {
+  await requireAdmin();
+  const id = formData.get("id");
+  const raw = formData.get("key");
+  if (typeof id !== "string" || !id) return { error: "Missing offer." };
+  if (typeof raw !== "string") return { error: "Missing link." };
+
+  const problem = offerKeyProblem(raw);
+  if (problem) return { error: problem };
+  const key = raw.trim();
+
+  try {
+    await updateOfferKey(id, key);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not change the link." };
+  }
+
+  revalidatePath(`/admin/offers/${id}`);
+  revalidatePath(`/admin/offers/${id}/page-editor`);
+  revalidatePath("/admin/offers");
+  revalidatePath(`/o/${key}`);
+  return { saved: key };
 }
