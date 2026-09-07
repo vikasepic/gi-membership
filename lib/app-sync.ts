@@ -87,9 +87,16 @@ export async function pushAppEntitlement(
   }));
   const { channels, status } = unionEntitlement(shaped);
 
-  const live = rows.find((r) => r.status === "active" || r.status === "trialing") ?? rows[0];
+  const isLive = (r: { status: string }) => r.status === "active" || r.status === "trialing";
+  const live = rows.find(isLive) ?? rows[0];
+  // A live row's key, and never a null one where a real key exists. Production
+  // holds an offer-less row whose key is null beside a purchased row that has
+  // one; picking by position meant PostgREST's ordering decided whether a
+  // paying customer's entitlement arrived keyed or anonymous.
+  const keyOf = (r: { offer_id: unknown }) =>
+    (byOffer.get(r.offer_id as string)?.grant_entitlement_key as string | null) ?? null;
   const entitlementKey =
-    (byOffer.get(live.offer_id as string)?.grant_entitlement_key as string | null) ?? null;
+    rows.filter(isLive).map(keyOf).find(Boolean) ?? rows.map(keyOf).find(Boolean) ?? null;
 
   await notifyAppEntitlement({
     appId,
@@ -123,16 +130,36 @@ type EnrichedOwnershipRow = {
 // LinkedIn next week), so rows are grouped by (user, app) and sent as ONE
 // message carrying the union of their channels — never one message per row,
 // which is what let a second purchase silently overwrite the first.
+//
+// The ids say WHOSE entitlement changed; they never say what it now is. Every
+// caller but the backfill hands over a subset — usually the single row a
+// webhook just touched — so unioning only those rows told the app that
+// cancelling Instagram left the person with nothing, and Content Engine,
+// obeying replace-don't-merge, revoked the LinkedIn they still pay for. So the
+// ids are resolved to (user, app) pairs and EVERY row for those pairs is read,
+// which is also the shape pushAppEntitlement uses: the two paths now compute
+// the same answer from the same rows.
 export async function pushOwnershipStateToApps(ownershipIds: string[]): Promise<void> {
   if (ownershipIds.length === 0) return;
   const db = createServiceClient();
 
-  const { data: rows } = await db
+  const { data: seeds } = await db
     .from("ownership")
-    .select("id, app_id, user_id, status, stripe_subscription_id, offer_id")
+    .select("user_id, app_id")
     .in("id", ownershipIds)
     .not("app_id", "is", null);
-  if (!rows || rows.length === 0) return;
+  if (!seeds || seeds.length === 0) return;
+
+  const pairs = new Set(seeds.map((s) => `${s.user_id}:${s.app_id}`));
+  const { data: all } = await db
+    .from("ownership")
+    .select("id, app_id, user_id, status, stripe_subscription_id, offer_id")
+    .in("user_id", [...new Set(seeds.map((s) => s.user_id as string))])
+    .in("app_id", [...new Set(seeds.map((s) => s.app_id as string))]);
+  // The two `in` filters are a cross product; the pair set trims it back to the
+  // (user, app) combinations actually touched.
+  const rows = (all ?? []).filter((r) => pairs.has(`${r.user_id}:${r.app_id}`));
+  if (rows.length === 0) return;
 
   const enriched: EnrichedOwnershipRow[] = [];
 
@@ -200,8 +227,16 @@ export async function pushOwnershipStateToApps(ownershipIds: string[]): Promise<
     const { channels, status } = unionEntitlement(group);
     // No longer a stable identifier once a person can hold two subscriptions
     // to the same app — prefer a live row's, falling back to the first.
-    const liveRow = group.find((r) => r.status === "active" || r.status === "trialing");
+    const isLive = (r: EnrichedOwnershipRow) => r.status === "active" || r.status === "trialing";
+    const liveRow = group.find(isLive);
     const stripeSubscriptionId = (liveRow ?? first).stripeSubscriptionId;
+    // Same rule as pushAppEntitlement: a live row's key, and never a null one
+    // where a real key exists. Array order must not decide whether a paying
+    // customer's entitlement arrives keyed.
+    const entitlementKey =
+      group.filter(isLive).map((r) => r.entitlementKey).find(Boolean) ??
+      group.map((r) => r.entitlementKey).find(Boolean) ??
+      null;
 
     // Best-effort, exactly like the original provision call: an app being down
     // must never break a webhook or a refund.
@@ -209,7 +244,7 @@ export async function pushOwnershipStateToApps(ownershipIds: string[]): Promise<
       appId: first.appId,
       email: first.email,
       fullName: first.fullName,
-      entitlementKey: first.entitlementKey,
+      entitlementKey,
       channels,
       status,
       stripeCustomerId: first.stripeCustomerId,
