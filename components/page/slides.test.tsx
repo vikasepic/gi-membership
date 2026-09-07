@@ -4,7 +4,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { Blocks } from "@/components/page/blocks";
 import { bandTheme } from "@/lib/page-sections";
-import { normalizeBlocks, newBlock } from "@/lib/blocks";
+import { normalizeBlocks, newBlock, type Block } from "@/lib/blocks";
+import { renderToStaticMarkup } from "react-dom/server";
 import { controlsFor } from "@/lib/block-controls";
 import { listTemplates } from "@/lib/templates";
 import { readFileSync } from "node:fs";
@@ -278,5 +279,114 @@ describe("the scrollbar under the slides", () => {
     expect(strip({ skin: "portrait" }).className).toContain("overflow-x-auto");
     const rule = css.slice(css.indexOf(".no-scrollbar"));
     expect(rule.slice(0, rule.indexOf("}"))).not.toContain("overflow");
+  });
+});
+
+/**
+ * The person's name and their role, and how either one looks.
+ *
+ * They were hardcoded in three separate places — the portrait skin, the
+ * panelled skins with an avatar, and the panelled skins without one, where the
+ * two run together on one muted line. Somebody who wanted the name bigger had
+ * no control at all, on any of them.
+ *
+ * Six props, following exactly how `cardPadding` and its neighbours are
+ * declared on the cards block: null size, empty weight, null colour, and every
+ * one of them meaning "whatever the skin already drew". The goldens below were
+ * captured from the renderer BEFORE any of them existed, so a byte of drift
+ * fails here.
+ */
+describe("a slides block saved before the name and role had settings", () => {
+  const stored = (props: Record<string, unknown>): Block =>
+    normalizeBlocks([{ id: "b1", type: "slides", props }])[0];
+  // A sibling after the fixture, whose markup is cut back off: the last block
+  // in a flow has its bottom margin zeroed, so a one-block fixture would have
+  // to be re-baselined to keep passing — the one thing a golden must never be
+  // asked to do.
+  const TAIL_ID = "tail-sentinel";
+  const render = (b: Block) => {
+    const tail = normalizeBlocks([{ id: TAIL_ID, type: "spacer", props: { height: 8 } }]);
+    const out = renderToStaticMarkup(<Blocks blocks={[b, ...tail]} theme={theme} />);
+    const cut = out.indexOf(`<style>.bk-${TAIL_ID}`);
+    if (cut === -1) throw new Error("the sentinel did not render — the cut below is measuring nothing");
+    return `${out.slice(0, cut)}</div>`;
+  };
+  const ITEMS = [
+    { quote: "One", name: "A name", role: "A role", image: "/p1.svg" },
+    { quote: "Two", name: "B name", role: "", image: "" },
+  ];
+
+  it("renders the panelled slide byte for byte as it did", () => {
+    expect(render(stored({ items: ITEMS }))).toBe(
+      "<div class=\"mt-7 flex flex-col\"><style>.bk-b1.bk-b1{margin:0px 0px 16px 0px;padding:0px 0px 0px 0px;text-align:left;color:#16181f}</style><div class=\"bk-b1\"><div class=\"relative\"><div><ul class=\"no-scrollbar -mx-1 flex list-none snap-x snap-mandatory gap-4 overflow-x-auto p-0 px-1 pb-2\"><li class=\"min-w-0 shrink-0 snap-start rounded-2xl px-5 py-4\" style=\"flex-basis:calc(100% - 0px);background:#f4f2ec;color:#16181f\"><p class=\"m-0\"><span style=\"white-space:pre-line\">\u201cOne\u201d</span></p><span class=\"mt-2 block text-[0.8rem] opacity-70\">A name \u00b7 A role</span></li><li class=\"min-w-0 shrink-0 snap-start rounded-2xl px-5 py-4\" style=\"flex-basis:calc(100% - 0px);background:#f4f2ec;color:#16181f\"><p class=\"m-0\"><span style=\"white-space:pre-line\">\u201cTwo\u201d</span></p><span class=\"mt-2 block text-[0.8rem] opacity-70\">B name</span></li></ul></div></div></div></div>",
+    );
+  });
+
+  it("renders the slide with an avatar byte for byte as it did", () => {
+    expect(render(stored({ items: ITEMS, avatars: true }))).toBe(
+      "<link rel=\"preload\" as=\"image\" href=\"/p1.svg\"/><div class=\"mt-7 flex flex-col\"><style>.bk-b1.bk-b1{margin:0px 0px 16px 0px;padding:0px 0px 0px 0px;text-align:left;color:#16181f}</style><div class=\"bk-b1\"><div class=\"relative\"><div><ul class=\"no-scrollbar -mx-1 flex list-none snap-x snap-mandatory gap-4 overflow-x-auto p-0 px-1 pb-2\"><li class=\"min-w-0 shrink-0 snap-start rounded-2xl px-5 py-4\" style=\"flex-basis:calc(100% - 0px);background:#f4f2ec;color:#16181f\"><p class=\"m-0\"><span style=\"white-space:pre-line\">\u201cOne\u201d</span></p><span class=\"mt-4 flex items-center gap-3\"><img src=\"/p1.svg\" alt=\"\" class=\"h-10 w-10 shrink-0 rounded-full object-cover\"/><span class=\"min-w-0\"><span class=\"block text-[0.85rem] font-semibold\">A name</span><span class=\"block text-[0.8rem] opacity-70\">A role</span></span></span></li><li class=\"min-w-0 shrink-0 snap-start rounded-2xl px-5 py-4\" style=\"flex-basis:calc(100% - 0px);background:#f4f2ec;color:#16181f\"><p class=\"m-0\"><span style=\"white-space:pre-line\">\u201cTwo\u201d</span></p><span class=\"mt-2 block text-[0.8rem] opacity-70\">B name</span></li></ul></div></div></div></div>",
+    );
+  });
+
+  it("renders the portrait slide byte for byte as it did", () => {
+    expect(render(stored({ items: ITEMS, skin: "portrait" }))).toBe(
+      "<link rel=\"preload\" as=\"image\" href=\"/p1.svg\"/><div class=\"mt-7 flex flex-col\"><style>.bk-b1.bk-b1{margin:0px 0px 16px 0px;padding:0px 0px 0px 0px;text-align:left;color:#16181f}</style><div class=\"bk-b1\"><div class=\"relative\"><div><ul class=\"no-scrollbar -mx-1 flex list-none snap-x snap-mandatory gap-4 overflow-x-auto p-0 px-1 pb-2\"><li class=\"relative flex min-w-0 shrink-0 snap-start flex-col justify-end overflow-hidden\" style=\"flex-basis:calc(100% - 0px);aspect-ratio:3 / 4;border-radius:16px;background:#f4f2ec\"><img src=\"/p1.svg\" alt=\"\" class=\"absolute inset-0 h-full w-full object-cover\"/><div aria-hidden=\"true\" class=\"absolute inset-0\" style=\"background:linear-gradient(to top, #f4f2ec 0%, #f4f2ecf2 42%, #f4f2ec00 100%)\"></div><div class=\"relative p-5\"><span aria-hidden=\"true\" class=\"block font-display text-[2.6rem] leading-[0.6] opacity-60\" style=\"color:#000000\">\u201c</span><p class=\"mt-3 mb-0 text-[0.95rem] leading-snug\" style=\"color:#000000;white-space:pre-line\">One</p><div class=\"mt-4 pt-3\" style=\"border-top:1px solid #00000059\"><span class=\"block text-[0.86rem] font-semibold uppercase tracking-[0.06em]\" style=\"color:#000000\">A name</span><span class=\"block text-[0.82rem] opacity-80\" style=\"color:#000000\">A role</span></div></div></li><li class=\"relative flex min-w-0 shrink-0 snap-start flex-col justify-end overflow-hidden\" style=\"flex-basis:calc(100% - 0px);aspect-ratio:3 / 4;border-radius:16px;background:#f4f2ec\"><div aria-hidden=\"true\" class=\"absolute inset-0\" style=\"background:linear-gradient(to top, #f4f2ec 0%, #f4f2ecf2 42%, #f4f2ec00 100%)\"></div><div class=\"relative p-5\"><span aria-hidden=\"true\" class=\"block font-display text-[2.6rem] leading-[0.6] opacity-60\" style=\"color:#000000\">\u201c</span><p class=\"mt-3 mb-0 text-[0.95rem] leading-snug\" style=\"color:#000000;white-space:pre-line\">Two</p><div class=\"mt-4 pt-3\" style=\"border-top:1px solid #00000059\"><span class=\"block text-[0.86rem] font-semibold uppercase tracking-[0.06em]\" style=\"color:#000000\">B name</span></div></div></li></ul></div></div></div></div>",
+    );
+  });
+});
+
+/**
+ * And what those six settings actually do, on all three of the places the pair
+ * is drawn. Not routed through BlockStyle: that is one style for the whole
+ * block, and this is two parts inside one.
+ */
+describe("the name and the role, once somebody sets them", () => {
+  const set = {
+    nameSize: 22,
+    nameWeight: "800",
+    nameColor: "#ff0000",
+    roleSize: 11,
+    roleWeight: "300",
+    roleColor: "#0000ff",
+  };
+  const html = (props: Record<string, unknown>) =>
+    mount({ items: [slide("a"), slide("b")], ...props }).querySelector("ul")!.innerHTML;
+
+  it("sizes, weights and colours them on the panelled skin", () => {
+    const out = html(set);
+    expect(out).toContain("font-size: 22px");
+    expect(out).toContain("font-weight: 800");
+    expect(out).toContain("rgb(255, 0, 0)");
+    expect(out).toContain("font-size: 11px");
+    expect(out).toContain("font-weight: 300");
+    expect(out).toContain("rgb(0, 0, 255)");
+  });
+
+  it("does the same beside an avatar", () => {
+    const out = html({ ...set, avatars: true, items: [{ ...slide("a"), image: "/p1.svg" }, slide("b")] });
+    expect(out).toContain("font-size: 22px");
+    expect(out).toContain("rgb(0, 0, 255)");
+  });
+
+  it("does the same on the portrait skin, over the photograph", () => {
+    const out = html({ ...set, skin: "portrait" });
+    expect(out).toContain("font-size: 22px");
+    expect(out).toContain("rgb(255, 0, 0)");
+    expect(out).toContain("rgb(0, 0, 255)");
+  });
+
+  it("lets go of the muting once a colour is chosen, or the colour is a lie", () => {
+    // The role is drawn at 70% opacity, so a colour set through it would come
+    // out as something else entirely — the control would look broken.
+    expect(html({ roleColor: "#0000ff", avatars: true, items: [{ ...slide("a"), image: "/p1.svg" }] }))
+      .not.toContain("opacity-70");
+    expect(html({})).toContain("opacity-70");
+  });
+
+  it("offers all six as controls", () => {
+    const keys = controlsFor(newBlock("slides")).content.flatMap((c) => ("key" in c ? [c.key] : []));
+    for (const k of ["nameSize", "nameWeight", "nameColor", "roleSize", "roleWeight", "roleColor"]) {
+      expect(keys).toContain(k);
+    }
   });
 });

@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Blocks } from "@/components/page/blocks";
 import { blockRules } from "@/lib/block-style";
 import { bandTheme } from "@/lib/page-sections";
-import { emptyBackground, normalizeBlocks, setPropsAt, setStyleAt, type Block } from "@/lib/blocks";
+import { emptyBackground, newBlock, normalizeBlocks, setPropsAt, setStyleAt, type Block } from "@/lib/blocks";
+import { controlsFor } from "@/lib/block-controls";
 import { sanitizeBlocks } from "@/lib/sanitize-html";
 
 // The cards block, and the settings added to it after pages were already using
@@ -531,5 +532,54 @@ describe("the heading over a cards block", () => {
     );
     expect(String(b.props.subheading)).toContain("<em>ok</em>");
     expect(String(b.props.subheading)).not.toContain("<script");
+  });
+});
+
+/**
+ * The card's title and the copy under it, sized and weighted.
+ *
+ * Both already had a colour of their own and nothing else, so the one place a
+ * card carries a person — the ruled case-study template, where the title is
+ * their name and the body is what they do — could be recoloured and not
+ * resized. Same shape as `cardPadding` and its neighbours: null size, empty
+ * weight, and both meaning "whatever the skin already drew", which the goldens
+ * at the top of this file hold byte for byte.
+ */
+describe("the size and the weight of a card's two lines", () => {
+  const cards = (props: Record<string, unknown>) => render(stored({ items: ITEMS, ...props }));
+  const set = { cardTitleSize: 30, cardTitleWeight: "800", cardBodySize: 11, cardBodyWeight: "300" };
+
+  it("takes them on the grid skins", () => {
+    const out = cards({ skin: "boxed", ...set });
+    expect(out).toContain("font-size:30px");
+    expect(out).toContain("font-weight:800");
+    expect(out).toContain("font-size:11px");
+    expect(out).toContain("font-weight:300");
+  });
+
+  it("takes them with the number before the title", () => {
+    const out = cards({ numberStyle: "inline", numbered: true, ...set });
+    expect(out).toContain("font-size:30px");
+    expect(out).toContain("font-size:11px");
+  });
+
+  it("takes them on the one-card skin, where the rows are the cards", () => {
+    const out = cards({ skin: "list", title: "T", ...set });
+    expect(out).toContain("font-size:30px");
+    expect(out).toContain("font-size:11px");
+  });
+
+  it("leaves the skin's own sizes alone when nothing is set", () => {
+    // The two figures each layout has always used. Unset must not replace them
+    // with a number of this control's choosing.
+    expect(cards({ skin: "boxed" })).toContain("font-size:1.02rem");
+    expect(cards({ skin: "boxed" })).toContain("text-[0.88rem]");
+  });
+
+  it("offers all four as controls", () => {
+    const keys = controlsFor(newBlock("cards")).content.flatMap((c) => ("key" in c ? [c.key] : []));
+    for (const k of ["cardTitleSize", "cardTitleWeight", "cardBodySize", "cardBodyWeight"]) {
+      expect(keys).toContain(k);
+    }
   });
 });

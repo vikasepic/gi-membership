@@ -572,6 +572,18 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     arrows: true,
     dots: true,
     avatars: false,
+    // The speaker's name and what they do, and how either one looks. Same
+    // shape as the cards block's own spacing settings: null size, empty
+    // weight, null colour, and every one meaning "whatever the skin already
+    // drew". Three skins draw this pair and they draw it three different
+    // ways, so there is no single figure that could stand here as a default
+    // without repainting every slider already saved.
+    nameSize: null,
+    nameWeight: "",
+    nameColor: null,
+    roleSize: null,
+    roleWeight: "",
+    roleColor: null,
     arrowStyle: "solid",
     arrowColor: null,
     arrowSize: null,
@@ -896,6 +908,13 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     subheadingWeight: "",
     cardTitleColor: null,
     cardBodyColor: null,
+    // Both lines had a colour of their own and nothing else. Null and empty
+    // for the same reason as the padding above: each layout sizes these
+    // differently on purpose, so unset has to keep meaning "the skin decides".
+    cardTitleSize: null,
+    cardTitleWeight: "",
+    cardBodySize: null,
+    cardBodyWeight: "",
     // False, not null: a rule between cards is either there or it is not, and
     // there is no skin whose corner it could be following instead.
     divider: false,

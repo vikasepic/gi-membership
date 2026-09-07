@@ -67,6 +67,22 @@ const fillTokens = (text: string, money?: BlockMoney): string =>
     : text;
 const num = (v: unknown, fallback: number): number =>
   typeof v === "number" && Number.isFinite(v) ? v : fallback;
+
+/**
+ * One line's own size, weight and colour, or nothing at all.
+ *
+ * Null rather than an empty object on purpose: `style={{}}` renders a `style`
+ * attribute and `style={undefined}` renders none, so a part nobody has touched
+ * has to come back as null for its markup to be the markup it always was.
+ */
+const partType = (size: unknown, weight: unknown, color: unknown): React.CSSProperties | null => {
+  const css: React.CSSProperties = {
+    ...(size == null ? {} : { fontSize: num(size, 0) }),
+    ...(str(weight) ? { fontWeight: Number(str(weight)) } : {}),
+    ...(str(color) ? { color: str(color) } : {}),
+  };
+  return Object.keys(css).length === 0 ? null : css;
+};
 const bool = (v: unknown): boolean => v === true;
 
 /**
@@ -1056,6 +1072,15 @@ function Inner({
       // Up to six. Three was an arbitrary ceiling and a set of six logos or
       // small portraits is a normal thing to want.
       const perView = Math.min(Math.max(num(p.perView, 1), 1), 6);
+      // The speaker's name and their role. Null when nobody has set anything,
+      // so every skin below spreads nothing and emits the markup it always
+      // has. The role is drawn muted by every skin, so a colour set on it has
+      // to take the opacity class off too — 70% of the colour somebody picked
+      // is not the colour somebody picked.
+      const nameCss = partType(p.nameSize, p.nameWeight, p.nameColor);
+      const roleCss = partType(p.roleSize, p.roleWeight, p.roleColor);
+      const mute = (base: string, css: React.CSSProperties | null) =>
+        css?.color ? base.replace(/ opacity-\d+/, "") : base;
       const rail = (list: React.ReactNode) => (
         <SlideRail
           arrows={p.arrows !== false}
@@ -1140,14 +1165,14 @@ function Inner({
                       >
                         <span
                           className="block text-[0.86rem] font-semibold uppercase tracking-[0.06em]"
-                          style={{ color: overInk }}
+                          style={{ color: overInk, ...nameCss }}
                         >
                           {str(item.name)}
                         </span>
                         {str(item.role) && (
                           <span
-                            className="block text-[0.82rem] opacity-80"
-                            style={{ color: overInk }}
+                            className={mute("block text-[0.82rem] opacity-80", roleCss)}
+                            style={{ color: overInk, ...roleCss }}
                           >
                             {str(item.role)}
                           </span>
@@ -1201,16 +1226,35 @@ function Inner({
                       className="h-10 w-10 shrink-0 rounded-full object-cover"
                     />
                     <span className="min-w-0">
-                      <span className="block text-[0.85rem] font-semibold">{str(item.name)}</span>
+                      <span className="block text-[0.85rem] font-semibold" style={nameCss ?? undefined}>
+                        {str(item.name)}
+                      </span>
                       {str(item.role) && (
-                        <span className="block text-[0.8rem] opacity-70">{str(item.role)}</span>
+                        <span
+                          className={mute("block text-[0.8rem] opacity-70", roleCss)}
+                          style={roleCss ?? undefined}
+                        >
+                          {str(item.role)}
+                        </span>
                       )}
                     </span>
                   </span>
                 ) : (
-                  <span className="mt-2 block text-[0.8rem] opacity-70">
-                    {str(item.name)}
-                    {str(item.role) && ` · ${str(item.role)}`}
+                  // The two run together on one muted line here, so each gets
+                  // an inner span of its own — but only once somebody has
+                  // asked for one. Untouched, this is the single span it has
+                  // always been, which the golden test holds byte for byte.
+                  <span className={mute(mute("mt-2 block text-[0.8rem] opacity-70", nameCss), roleCss)}>
+                    {nameCss ? <span style={nameCss}>{str(item.name)}</span> : str(item.name)}
+                    {str(item.role) &&
+                      (roleCss ? (
+                        <>
+                          {" · "}
+                          <span style={roleCss}>{str(item.role)}</span>
+                        </>
+                      ) : (
+                        ` · ${str(item.role)}`
+                      ))}
                   </span>
                 ))}
             </li>
@@ -1251,6 +1295,12 @@ function Inner({
       // say so.
       const cardTitleInk = str(p.cardTitleColor) || c.fg;
       const cardBodyInk = str(p.cardBodyColor) || theme.muted;
+      // Its size and its weight, which colour alone could not reach. Spread
+      // last at each of the sites below and empty until somebody sets one, so
+      // a card block saved before these existed emits the identical markup —
+      // which the goldens in cards.test.tsx check byte for byte.
+      const cardTitleType = partType(p.cardTitleSize, p.cardTitleWeight, null) ?? {};
+      const cardBodyType = partType(p.cardBodySize, p.cardBodyWeight, null) ?? {};
       // The line ABOVE the cards — the list skin's title, the grid's caption.
       // A different thing from a card's own title, and it had no control at
       // all: the only way to recolour "YOUR FUNNEL PACKAGE" was to not have it.
@@ -1312,9 +1362,9 @@ function Inner({
                     </span>
                   )}
                   <span className="min-w-0">
-                    <span style={{ color: cardTitleInk, fontSize: "0.88rem", ...type }}><Inline html={str(it.title)} /></span>
+                    <span style={{ color: cardTitleInk, fontSize: "0.88rem", ...type, ...cardTitleType }}><Inline html={str(it.title)} /></span>
                     {str(it.body) && (
-                      <span className="mt-0.5 block text-[0.78rem] leading-snug" style={{ color: cardBodyInk }}>
+                      <span className="mt-0.5 block text-[0.78rem] leading-snug" style={{ color: cardBodyInk, ...cardBodyType }}>
                         <Inline html={str(it.body)} />
                       </span>
                     )}
@@ -1451,7 +1501,7 @@ function Inner({
                       {String(i + 1).padStart(2, "0")}
                     </span>
                   )}
-                  <h3 className="font-display font-semibold" style={{ color: cardTitleInk, fontSize: "1.02rem", ...type }}>
+                  <h3 className="font-display font-semibold" style={{ color: cardTitleInk, fontSize: "1.02rem", ...type, ...cardTitleType }}>
                     <Inline html={str(it.title)} />
                   </h3>
                 </div>
@@ -1465,6 +1515,7 @@ function Inner({
                     color: cardBodyInk,
                     paddingLeft: numbered ? "1.9rem" : 0,
                     ...(textGap == null ? {} : { marginTop: textGap }),
+                    ...cardBodyType,
                   }}
                 >
                   <Inline html={str(it.body)} />
@@ -1536,11 +1587,12 @@ function Inner({
                   marginTop: numbered && !circle ? ".45rem" : 0,
                   marginBottom: textGap ?? ".4rem",
                   ...type,
+                  ...cardTitleType,
                 }}
               >
                 <Inline html={str(it.title)} />
               </h3>
-              <p className="text-[0.88rem] leading-relaxed" style={{ color: cardBodyInk }}>
+              <p className="text-[0.88rem] leading-relaxed" style={{ color: cardBodyInk, ...cardBodyType }}>
                 <Inline html={str(it.body)} />
               </p>
               {str(it.amount) && (

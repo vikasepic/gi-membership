@@ -787,6 +787,17 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         label: "Avatars",
         hint: "Shows each slide's photograph as a small circle beside the name. Portrait lays it behind the quote instead, so this does nothing there.",
       },
+      // The speaker's name is a heading and their role is a subheading, and
+      // neither could be touched — three skins drew the pair, each with its
+      // own hardcoded size and weight. Declared the way the cards block
+      // declares its own spacing: unset is whatever the skin already drew.
+      group("The name and the role"),
+      { kind: "number", key: "nameSize", label: "Name size", min: 8, max: 72, step: 1, unit: "px", hint: "Unset keeps the size it has." },
+      { kind: "select", key: "nameWeight", label: "Name weight", options: [["", "Inherit"], ...["300", "400", "500", "600", "700", "800", "900"].map((w) => [w, w] as [string, string])] },
+      { kind: "color", key: "nameColor", label: "Name colour", hint: "Unset follows the skin." },
+      { kind: "number", key: "roleSize", label: "Role size", min: 8, max: 72, step: 1, unit: "px", hint: "Unset keeps the size it has." },
+      { kind: "select", key: "roleWeight", label: "Role weight", options: [["", "Inherit"], ...["300", "400", "500", "600", "700", "800", "900"].map((w) => [w, w] as [string, string])] },
+      { kind: "color", key: "roleColor", label: "Role colour", hint: "Unset follows the skin, which mutes it." },
       {
         kind: "select",
         key: "skin",
@@ -1046,6 +1057,13 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       // makes a working control look broken.
       { kind: "color", key: "cardTitleColor", label: "Card title", hint: "The bold line on each card. Unset follows the band." },
       { kind: "color", key: "cardBodyColor", label: "Card text", hint: "The copy under it, and the closing note. Unset follows the band." },
+      // Colour was all either line had. On the ruled case-study design the
+      // card's title IS a person's name and its body is what they do, and
+      // there was no way to make the name bigger than the sentence under it.
+      { kind: "number", key: "cardTitleSize", label: "Card title size", min: 8, max: 72, step: 1, unit: "px", hint: "Unset keeps the size the skin gives it." },
+      { kind: "select", key: "cardTitleWeight", label: "Card title weight", options: [["", "Inherit"], ...["300", "400", "500", "600", "700", "800", "900"].map((w) => [w, w] as [string, string])] },
+      { kind: "number", key: "cardBodySize", label: "Card text size", min: 8, max: 48, step: 1, unit: "px", hint: "Unset keeps the size the skin gives it." },
+      { kind: "select", key: "cardBodyWeight", label: "Card text weight", options: [["", "Inherit"], ...["300", "400", "500", "600", "700", "800", "900"].map((w) => [w, w] as [string, string])] },
 
       group("Icon tile", (b) => b.props.media !== "none"),
       { kind: "select", key: "iconShape", label: "Shape", options: [["square", "Square"], ["rounded", "Rounded"], ["circle", "Circle"]], when: (b) => b.props.media !== "none" },
