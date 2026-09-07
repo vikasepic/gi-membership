@@ -15,10 +15,23 @@ describe("a coupon's trial reaches Stripe", () => {
   it("prefers the coupon's trial at both subscription sites", () => {
     const uses = src.match(/trial_period_days:\s*[^\n]*/g) ?? [];
     expect(uses).toHaveLength(2);
+
+    // The regression this guards: one of the two sites going back to reading
+    // the price's own trial, so a code carrying trial_days is honoured on one
+    // kind of purchase and silently ignored on the other.
+    //
+    // Asserted as "neither site reads a bare price trial", not as "both lines
+    // contain the word coupon" — the product site now resolves its value one
+    // line above the call, which is more readable and which the older, shapier
+    // assertion called a failure.
     for (const line of uses) {
-      expect(line).toMatch(/coupon/);
-      expect(line).toMatch(/\?\?/);
+      expect(line).not.toMatch(/trial_period_days:\s*(price|offer)\.trialDays\s*\?\?\s*undefined\s*,?$/);
     }
+
+    // And the coupon's value must still reach each site, inline or through a
+    // variable resolved just above it.
+    expect(src).toMatch(/coupon\?\.trialDays/);
+    expect(src).toMatch(/coupon\?\.ok \? coupon\.coupon\.trialDays/);
   });
 
   it("still hands Stripe the promotion code rather than computing a discount", () => {

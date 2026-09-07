@@ -931,6 +931,11 @@ export async function finalizeOrder(intentId: string): Promise<void> {
   const productId = pi.metadata.productId;
   const paymentMethodId = typeof pi.payment_method === "string" ? pi.payment_method : pi.payment_method?.id;
   let baseSubscriptionId: string | null = null;
+  // The trial the base subscription actually starts on — the coupon's where one
+  // carries it, else the price's. Hoisted out of the subscription block because
+  // the ownership row written below has to agree with what Stripe was told, and
+  // it used to say "active" whatever the terms were.
+  let baseTrialDays: number | null = null;
   const basePriceId: string | null = pi.metadata.productPriceId || null;
 
   if (isSetup && productId && paymentMethodId && order.stripe_customer_id) {
@@ -957,6 +962,11 @@ export async function finalizeOrder(intentId: string): Promise<void> {
         })
       : null;
 
+    // Worked out once, then used twice: told to Stripe, and used to decide the
+    // ownership status. `??` not `||` — a coupon carrying `trial_days: 0`
+    // deliberately REMOVES the trial, and `0 || x` would hand back the price's.
+    baseTrialDays = (coupon?.ok ? coupon.coupon.trialDays : null) ?? price.trialDays ?? null;
+
     const sub = await stripe().subscriptions.create(
       {
         customer: order.stripe_customer_id as string,
@@ -976,7 +986,7 @@ export async function finalizeOrder(intentId: string): Promise<void> {
         ],
         // As on the offer path: a coupon carrying trial_days replaces the
         // price's own trial for this purchase.
-        trial_period_days: coupon?.ok ? (coupon.coupon.trialDays ?? price.trialDays ?? undefined) : (price.trialDays ?? undefined),
+        trial_period_days: baseTrialDays ?? undefined,
         // Stripe applies the coupon for as long as the coupon says — on a trial
         // that is the first REAL invoice, not today's £0 one. Computing it here
         // is how the invoice and the receipt start disagreeing.
@@ -1014,7 +1024,10 @@ export async function finalizeOrder(intentId: string): Promise<void> {
       // on this".
       stripe_subscription_id: baseSubscriptionId,
       source: "purchase",
-      status: "active",
+      // What Stripe is doing, not what we wish it were. A trialing
+      // subscription recorded as active tags the buyer in the CRM as a paid
+      // customer and shows the admin a sale that has not been paid for yet.
+      status: baseTrialDays && baseTrialDays > 0 ? "trialing" : "active",
     });
     if (error && error.code !== "23505") throw new Error(`grant base: ${error.message}`);
   }

@@ -129,6 +129,12 @@ describe.skipIf(!canRun)("a product sold on a recurring price (integration)", ()
     // a buyer was shown have to be the terms they are on.
     const sub = await stripe().subscriptions.retrieve(row.stripe_subscription_id as string);
     expect(sub.status).toBe("trialing");
+
+    // And OUR record has to say the same thing. It said "active" for a
+    // subscription Stripe was trialing — so the CRM tagged them a buyer, the
+    // admin showed a paid sale, and the row was already selected here without
+    // anybody asserting on it.
+    expect(row.status).toBe("trialing");
     const item = sub.items.data[0];
     expect(item.price.unit_amount).toBe(900);
     expect(item.price.recurring?.interval).toBe("month");
