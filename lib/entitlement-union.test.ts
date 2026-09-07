@@ -52,3 +52,17 @@ describe("what one person is entitled to in one app", () => {
     expect(unionEntitlement([row([], "active")])).toEqual({ channels: [], status: "active" });
   });
 });
+
+import { readFileSync } from "node:fs";
+
+describe("the purchase path and the sync path agree", () => {
+  it("grantOfferOwnership sends the union, not one offer's channels", () => {
+    // The bug this closes: buying LinkedIn told the app channels:["linkedin"],
+    // revoking Instagram at the moment of the second purchase. Two code paths
+    // that answer the same question differently is the defect, not the wording.
+    const src = readFileSync("lib/checkout.ts", "utf8");
+    expect(src).toContain("pushAppEntitlement");
+    // The hand-built call passed the single offer's channels straight through.
+    expect(src).not.toMatch(/channels:\s*offer\.grantChannels/);
+  });
+});

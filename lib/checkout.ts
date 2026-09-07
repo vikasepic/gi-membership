@@ -7,7 +7,6 @@ import { priceForChoice, shownPrices, type OfferPrice } from "@/lib/offer-prices
 import type { BumpChoice } from "@/lib/bump";
 import { offerAsSoldTo, recordTrialStart } from "@/lib/trial-history";
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
-import { notifyAppEntitlement } from "@/lib/apps";
 import { trackPurchase, trackServerEvent } from "@/lib/tracking";
 import { customEventIdFor } from "@/lib/analytics/events";
 import { eventIdFor } from "@/lib/analytics/events";
@@ -25,7 +24,7 @@ import { COUNTRY_REQUIRED } from "@/components/checkout/checkout-types";
 import { stripe, stripeMode } from "@/lib/stripe";
 import { otoSigningSecret } from "@/lib/env";
 import { ensureUserProfile } from "@/lib/users";
-import { applyPendingEntitlements } from "@/lib/app-sync";
+import { applyPendingEntitlements, pushAppEntitlement } from "@/lib/app-sync";
 import { sendCrmEvent, type CrmItem } from "@/lib/crm";
 import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
 import { ensureStripeProductForProduct, ensureStripeProduct } from "@/lib/stripe-catalog";
@@ -1375,15 +1374,10 @@ export async function grantOfferOwnership(
         .select("username")
         .eq("id", userId)
         .maybeSingle();
-      await notifyAppEntitlement({
-        appId: offer.grantAppId,
+      await pushAppEntitlement(storeId, userId, offer.grantAppId, {
         email: ctx.email,
         fullName: ctx.fullName ?? (buyer?.username as string | null) ?? null,
-        entitlementKey: offer.grantEntitlementKey,
-        channels: offer.grantChannels,
-        status: trialing ? "trialing" : "active",
         stripeCustomerId: ctx.stripeCustomerId,
-        stripeSubscriptionId: subscriptionId,
       });
     }
   } else if (offer.grantType === "product" && offer.grantProductId) {

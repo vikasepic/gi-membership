@@ -96,13 +96,18 @@ describe("what reaches the app", () => {
   });
 
   it("is passed on by every path that grants access", () => {
-    for (const [file, why] of [
-      ["lib/checkout.ts", "a purchase"],
-      ["lib/members.ts", "an admin granting or revoking by hand"],
-      ["lib/app-sync.ts", "the backfill that replays what is already owned"],
-      ["lib/retry.ts", "the sweep that retries a push the app missed"],
+    // lib/checkout.ts no longer builds `channels` itself — it delegates to
+    // pushAppEntitlement (lib/app-sync.ts), which reads every row back and
+    // sends the union. That is the fix for the bug where a purchase's own
+    // hand-built `channels: offer.grantChannels` silently dropped whatever
+    // else the person already held.
+    for (const [file, why, pattern] of [
+      ["lib/checkout.ts", "a purchase", /pushAppEntitlement/],
+      ["lib/members.ts", "an admin granting or revoking by hand", /channels[:,]/],
+      ["lib/app-sync.ts", "the backfill that replays what is already owned", /channels[:,]/],
+      ["lib/retry.ts", "the sweep that retries a push the app missed", /channels[:,]/],
     ] as const) {
-      expect(readFileSync(file, "utf8"), `${file} — ${why}`).toMatch(/channels[:,]/);
+      expect(readFileSync(file, "utf8"), `${file} — ${why}`).toMatch(pattern);
     }
   });
 });

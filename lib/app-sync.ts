@@ -44,6 +44,65 @@ export function unionEntitlement(
   return { channels, status };
 }
 
+/**
+ * Tell an app everything one person is entitled to in it, right now.
+ *
+ * Called at the moment of a purchase, where the tempting thing is to send the
+ * channels of the offer just bought. That was the bug: a person buying
+ * LinkedIn while holding Instagram had the app told `channels: ["linkedin"]`,
+ * and the receiving app replaces its list, so Instagram went dark at the exact
+ * moment they paid for more.
+ *
+ * Reads the rows back rather than trusting what the caller just wrote, so this
+ * and `pushOwnershipStateToApps` cannot disagree — they now compute the same
+ * answer from the same place.
+ *
+ * Best-effort, like every other app call: a failure here never breaks a
+ * purchase, and the handoff re-provisions on first open.
+ */
+export async function pushAppEntitlement(
+  storeId: string,
+  userId: string,
+  appId: string,
+  ctx: { email: string; fullName?: string | null; stripeCustomerId: string | null },
+): Promise<void> {
+  const db = createServiceClient();
+  const { data: rows } = await db
+    .from("ownership")
+    .select("offer_id, status, stripe_subscription_id")
+    .eq("store_id", storeId)
+    .eq("user_id", userId)
+    .eq("app_id", appId);
+  if (!rows || rows.length === 0) return;
+
+  const offerIds = [...new Set(rows.map((r) => r.offer_id).filter(Boolean) as string[])];
+  const { data: offers } = offerIds.length
+    ? await db.from("offers").select("id, grant_entitlement_key, grant_channels").in("id", offerIds)
+    : { data: [] as { id: string; grant_entitlement_key: string | null; grant_channels: string[] | null }[] };
+  const byOffer = new Map((offers ?? []).map((o) => [o.id as string, o]));
+
+  const shaped = rows.map((r) => ({
+    channels: (byOffer.get(r.offer_id as string)?.grant_channels as string[] | null) ?? [],
+    status: r.status as OwnershipStatus,
+  }));
+  const { channels, status } = unionEntitlement(shaped);
+
+  const live = rows.find((r) => r.status === "active" || r.status === "trialing") ?? rows[0];
+  const entitlementKey =
+    (byOffer.get(live.offer_id as string)?.grant_entitlement_key as string | null) ?? null;
+
+  await notifyAppEntitlement({
+    appId,
+    email: ctx.email,
+    fullName: ctx.fullName ?? null,
+    entitlementKey,
+    channels,
+    status,
+    stripeCustomerId: ctx.stripeCustomerId,
+    stripeSubscriptionId: (live.stripe_subscription_id as string) ?? null,
+  });
+}
+
 type EnrichedOwnershipRow = {
   appId: string;
   userId: string;
