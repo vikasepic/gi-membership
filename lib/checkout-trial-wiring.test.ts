@@ -28,6 +28,30 @@ describe("a coupon's trial reaches Stripe", () => {
   });
 });
 
+/**
+ * Extracts the argument text of every `name(...)` call in `src`, matching
+ * parens by depth rather than by regex, since a call's own arguments (e.g.
+ * `chosen?.interval ?? null`) contain nested parens that a line-based match
+ * can't skip over.
+ */
+function callArgSpans(src: string, name: string): string[] {
+  const marker = `${name}(`;
+  const spans: string[] = [];
+  let idx = src.indexOf(marker);
+  while (idx !== -1) {
+    let depth = 1;
+    let i = idx + marker.length;
+    while (i < src.length && depth > 0) {
+      if (src[i] === "(") depth++;
+      else if (src[i] === ")") depth--;
+      i++;
+    }
+    spans.push(src.slice(idx + marker.length, i - 1));
+    idx = src.indexOf(marker, i);
+  }
+  return spans;
+}
+
 describe("every coupon lookup says what interval is being bought", () => {
   for (const file of [
     "lib/offer-checkout.ts",
@@ -36,10 +60,15 @@ describe("every coupon lookup says what interval is being bought", () => {
   ]) {
     it(`${file} passes an interval with every item`, () => {
       const s = readFileSync(file, "utf8");
-      const items = s.match(/item:\s*[^,\n]+/g) ?? [];
-      const intervals = s.match(/interval:\s*[^,\n]+/g) ?? [];
-      expect(items.length).toBeGreaterThan(0);
-      expect(intervals.length).toBeGreaterThanOrEqual(items.length);
+      // Scoped per resolveCoupon() call, not counted across the whole file —
+      // lib/checkout.ts also has two unrelated `interval:` fields inside its
+      // Stripe subscription bodies, which would silently satisfy a raw count.
+      const calls = callArgSpans(s, "resolveCoupon");
+      expect(calls.length).toBeGreaterThan(0);
+      for (const call of calls) {
+        expect(call).toMatch(/item:/);
+        expect(call).toMatch(/interval:/);
+      }
     });
   }
 });
