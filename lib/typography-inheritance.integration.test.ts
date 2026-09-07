@@ -85,11 +85,18 @@ describe.skipIf(!canRun)("a desktop-only value, across the migration", () => {
   it("stops reaching the narrower widths before the migration runs", async () => {
     await seed();
     const before = blockRules(await readBack(), paper);
-    // The point of the change: nothing is said about size at 1023px and narrower, which
-    // is what leaves room for the site's own `:root h2`.
+    // The point of the change: nothing is said about SIZE at 1023px and
+    // narrower, which is what leaves room for the site's own `:root h2`.
     expect(before).toContain("@media (width > 1023px)");
     expect(scope(before, "width > 1023px")).toContain("font-size:48px");
-    expect(before).not.toContain("max-width:");
+    // Scoped to the size, not to the whole query. The weight is restated at
+    // both narrow widths on purpose — site typography holds one weight for
+    // every device, so a withdrawn weight has nothing to fall to but the value
+    // the laptop already had. `not.toContain("max-width:")` was reading that
+    // restatement as the size leaking down.
+    for (const at of ["max-width:1023px", "max-width:767px"]) {
+      expect(scope(before, at), at).not.toContain("font-size");
+    }
   });
 
   it("renders the same at every width once the migration has run", async () => {

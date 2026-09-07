@@ -53,7 +53,7 @@ describe("what a device inherits", () => {
 });
 
 describe("what the inspector is allowed to say a width renders", () => {
-  // `styleFor` layers all six site-defaulted keys and the emitter withdraws
+  // `styleFor` layers all three site-defaulted keys and the emitter withdraws
   // them, so the panel and the canvas beside it answered differently. These
   // pin the two together: whatever a field shows, the rule for that width has
   // to carry — and whatever it leaves blank, the rule has to leave out.
@@ -209,7 +209,7 @@ describe("the CSS a block emits", () => {
 
   it("emits exactly this, for the one block shape the split actually changes", () => {
     // The golden above holds no typography at all, so it could not see the
-    // change that moved the six keys into a width query and gave them an arm
+    // change that moved the metrics into a width query and gave them an arm
     // that names the text. This one is that shape, byte for byte: a heading
     // with typography on the laptop and a smaller size on the phone.
     // The 16px bottom margin, stated rather than inherited. These goldens were
@@ -229,15 +229,21 @@ describe("the CSS a block emits", () => {
       ".bk-gold1.bk-gold1{margin:0px 0px 16px 0px;padding:0px 0px 0px 0px;text-align:left;" +
         "font-size:clamp(1.7rem,3.4vw,2.4rem);font-weight:600;line-height:1.15;" +
         "letter-spacing:-0.015em;color:#123456}" +
-        // The six, scoped to the laptop, on the wrapper and on the text alike.
+        // The laptop's own typography, on the wrapper and on the text alike.
         `@media (width > 1023px){.bk-gold1.bk-gold1,.bk-gold1.bk-gold1 :where(${TAGS})` +
         "{font-size:48px;font-weight:700}}" +
         // The author's colour, named on the text so `:root h2{color}` cannot
         // take it there while the wrapper keeps it.
         `.bk-gold1.bk-gold1 :where(${TAGS}){color:#123456}` +
-        // The phone's own size. Nothing restated, nothing reverted.
+        // The weight again, at both narrow widths, because the desktop rule is
+        // scoped away and site typography holds ONE weight for every device —
+        // there is nothing for a withdrawn weight to fall to but the value the
+        // laptop already had. The size is the opposite case and stops here.
+        `@media (max-width:1023px){.bk-gold1.bk-gold1,.bk-gold1.bk-gold1 :where(${TAGS})` +
+        "{font-weight:700}}" +
+        // The phone's own size, and that same weight. Nothing reverted.
         `@media (max-width:767px){.bk-gold1.bk-gold1,.bk-gold1.bk-gold1 :where(${TAGS})` +
-        "{font-size:28px}}",
+        "{font-size:28px;font-weight:700}}",
     );
   });
 
@@ -300,6 +306,36 @@ describe("the CSS a block emits", () => {
     expect(blockRules(b, paper)).not.toContain("@media (max-width:");
     // And the size is nowhere a narrower width can see it.
     expect(blockRules(b, paper).split("@media (width > 1023px)")[0]).not.toContain("font-size:20px");
+  });
+
+  it("carries the face, the weight and the case down to the phone", () => {
+    // Only the three metrics stop being inherited, because only the three
+    // metrics are what lib/site-typography answers per device — its `family`,
+    // `weight` and `transform` are ONE value for every width. Withdrawing
+    // those three at 1023px handed the block back a site default that desktop
+    // would have used anyway if the block had said nothing, and threw the
+    // block's own design away for it: a counter strip set in uppercase on the
+    // laptop went sentence case on a phone with nobody having asked.
+    const b = setStyleAt(heading(), "desktop", {
+      size: 48,
+      weight: 700,
+      transform: "uppercase",
+      fontFamily: "Lora",
+    });
+    const css = blockRules(b, paper);
+    for (const at of [DEVICE_MAX.tablet, DEVICE_MAX.mobile]) {
+      const scoped = css.split(`@media (max-width:${at}px)`)[1] ?? "";
+      expect(scoped, `${at}px`).toContain("font-weight:700");
+      expect(scoped, `${at}px`).toContain("text-transform:uppercase");
+      expect(scoped, `${at}px`).toContain("Lora");
+      // The size is the one that still stops, so `:root h2` can answer for it.
+      expect(scoped, `${at}px`).not.toContain("font-size:48px");
+    }
+    // And the canvas agrees with the stylesheet, at every width.
+    expect(blockCssAt(b, paper, "mobile").fontWeight).toBe(700);
+    expect(blockCssAt(b, paper, "mobile").textTransform).toBe("uppercase");
+    // The h2 tag default, which is what the size falls to — never the 48.
+    expect(blockCssAt(b, paper, "mobile").fontSize).not.toBe("48px");
   });
 
   it("says it again at a width that was given its own value", () => {

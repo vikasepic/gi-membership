@@ -2330,7 +2330,7 @@ function ControlField({
   // used to claim there were no such controls.
   const shared = device !== "desktop" && at === "desktop";
 
-  // The six keys a narrow width stopped inheriting. Clearing one does NOT give
+  // The three keys a narrow width stopped inheriting. Clearing one does NOT give
   // the width above back — nothing is emitted at all and Site settings is what
   // is left standing — so the chip must not offer "the desktop value again",
   // and a field that reads blank here has not lost anything.

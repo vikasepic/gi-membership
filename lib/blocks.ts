@@ -1276,13 +1276,26 @@ export function styleFor(block: Block, device: Device): BlockStyle {
 }
 
 /**
- * The six keys a width no longer inherits from the width above it.
+ * The three keys a width no longer inherits from the width above it.
  *
- * They are exactly the ones lib/site-typography now answers for. A block that
- * says nothing about its size on a phone used to be handed the desktop size,
- * which meant the site's own mobile heading size could never reach any block
- * whose desktop size had been touched once — the setting would look broken on
- * the pages it matters most on.
+ * They are exactly the ones lib/site-typography answers PER DEVICE. Its schema
+ * splits in two: `family`, `weight`, `style`, `transform`, `decoration` and
+ * `color` are one value for the whole site, and only the metrics — size, line
+ * height, tracking — are stored under `desktop` / `tablet` / `mobile`. So only
+ * the metrics have somewhere to fall.
+ *
+ * A block that says nothing about its size on a phone used to be handed the
+ * desktop size, which meant the site's own mobile heading size could never
+ * reach any block whose desktop size had been touched once — the setting would
+ * look broken on the pages it matters most on.
+ *
+ * `fontFamily`, `weight` and `transform` were here too, and should not have
+ * been. Withdrawing one of those at 1023px hands the block back the site's
+ * single global value — the same value desktop would have used if the block
+ * had said nothing — so the break bought nothing and discarded the block's own
+ * design to do it: a counter strip set in uppercase and semibold on a laptop
+ * came out sentence case and regular on a phone, with nothing touched on
+ * either. Those three inherit again; see `ownTypography`.
  *
  * Everything else on BlockStyle keeps inheriting, because there is no global
  * for it to fall to. A padding that stopped inheriting would fall to zero, not
@@ -1298,44 +1311,55 @@ export function styleFor(block: Block, device: Device): BlockStyle {
  * padding notice and the editor canvas all ask "what does this block look like
  * on a phone", and the honest answer to that is still the layered one.
  */
-export const SITE_DEFAULTED_KEYS = [
-  "fontFamily",
-  "size",
-  "lineHeight",
-  "letterSpacing",
-  "weight",
-  "transform",
-] as const satisfies readonly (keyof BlockStyle)[];
+export const SITE_DEFAULTED_KEYS = ["size", "lineHeight", "letterSpacing"] as const satisfies readonly (keyof BlockStyle)[];
 
-const ownSeven = (patch: Partial<BlockStyle>): Partial<BlockStyle> => {
+/**
+ * The typography keys a block's rules carry, minus the three above.
+ *
+ * `ownTypography` is the only source of these declarations — nothing else in
+ * the emitter writes a family, a weight or a case — so a key dropped from both
+ * lists is a key the page stops rendering at all, not one that falls back.
+ */
+const INHERITED_TYPE_KEYS = ["fontFamily", "weight", "transform"] as const satisfies readonly (keyof BlockStyle)[];
+
+const ownMetrics = (patch: Partial<BlockStyle>): Partial<BlockStyle> => {
   const out: Partial<BlockStyle> = {};
   for (const k of SITE_DEFAULTED_KEYS) if (k in patch) (out as Record<string, unknown>)[k] = patch[k];
   return out;
 };
 
 /**
- * The site-defaulted values this exact width sets, rather than the ones it
- * would inherit.
+ * The typography this width renders: the metrics it set ITSELF, plus the face,
+ * weight and case it inherits.
  *
- * Mobile still layers on tablet — a phone is also a narrow screen, and the
- * tablet media query matches it anyway — but neither layers on desktop.
+ * Mobile still layers on tablet for the metrics — a phone is also a narrow
+ * screen, and the tablet media query matches it anyway — but neither layers on
+ * desktop. The other three are read off `styleFor`, so they are restated at
+ * every width; restating is safe because it is computed from the stored style
+ * on every render rather than baked into an override, so the next desktop edit
+ * still reaches the phone.
  */
 export function ownTypography(block: Block, device: Device): Partial<BlockStyle> {
-  // The desktop style is total, so every key is its own.
-  if (device === "desktop") return ownSeven(block.style);
+  const layered = styleFor(block, device);
+  const out: Partial<BlockStyle> = {};
+  for (const k of INHERITED_TYPE_KEYS) (out as Record<string, unknown>)[k] = layered[k];
+  // The desktop style is total, so every metric is its own.
+  if (device === "desktop") return { ...out, ...ownMetrics(block.style) };
   const r = block.responsive;
-  if (!r) return {};
-  const tablet = ownSeven(r.tablet.style);
-  return device === "tablet" ? tablet : { ...tablet, ...ownSeven(r.mobile.style) };
+  if (!r) return out;
+  const tablet = ownMetrics(r.tablet.style);
+  return device === "tablet"
+    ? { ...out, ...tablet }
+    : { ...out, ...tablet, ...ownMetrics(r.mobile.style) };
 }
 
 /**
  * The style this width actually renders — the one a panel may show a person.
  *
- * `styleFor` layers every key, including the six that stopped being inherited,
+ * `styleFor` layers every key, including the three that stopped being inherited,
  * because the frame emitter, the hide flags and the padding cap all still want
  * the layered answer. The inspector wants a different one: it sits beside a
- * canvas drawn from `ownTypography`, and for those six keys the two disagree.
+ * canvas drawn from `ownTypography`, and for those three keys the two disagree.
  *
  * A heading given 48px on a laptop and nothing on a phone renders the SITE's
  * mobile heading size — that is the whole point of the break — but the Size

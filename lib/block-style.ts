@@ -809,7 +809,7 @@ export function blockCssAt(block: Block, theme: BandTheme, device: Device = "des
 /**
  * Everything about a block's look that a narrower width still inherits.
  *
- * The colour is here rather than with the six per-width values because nothing
+ * The colour is here rather than with the per-width metrics because nothing
  * site-wide answers for it on a sales page: the band paints `color` inline on
  * its own `<section>`, so `:root body{color}` never reaches inside one. A
  * colour withdrawn at 1023px and narrower would fall to the band's ink, not to
@@ -837,10 +837,14 @@ function ownInk(block: Block, device: Device): CSSProperties {
 }
 
 /**
- * The six values a width only gets if it set them itself.
+ * The typography a width renders, as `ownTypography` resolved it.
  *
- * They are exactly the ones lib/site-typography answers for, so a width that
- * says nothing has somewhere better to fall than "whatever the laptop said".
+ * Three of the six only appear if this width set them itself — the metrics,
+ * which are the only half lib/site-typography answers PER DEVICE, so a width
+ * that says nothing has somewhere better to fall than "whatever the laptop
+ * said". The face, the weight and the case are one value site-wide, so they
+ * are carried down instead: withdrawing them would fall to the value the
+ * laptop already had and lose the block's own design on the way.
  */
 function typographyAt(own: Partial<BlockStyle>): CSSProperties {
   return typographyCss(baseStyle(own));
@@ -945,7 +949,7 @@ export function blockRules(block: Block, theme: BandTheme): string {
   const desktop = declarations(typographyAt(ownTypography(block, "desktop")));
   if (desktop) out.push(`@media (width > ${DEVICE_MAX.tablet}px){${textSel}{${desktop}}}`);
 
-  // The colour follows the frame's rules, not the six's — but it still has to
+  // The colour follows the frame's rules, not the metrics' — but it still has to
   // name the text, or `:root h2{color}` beats it there while the wrapper keeps
   // it. Diffed, so a width that did not change it stays silent.
   const ink = declarations(ownInk(block, "desktop"));

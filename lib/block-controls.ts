@@ -1688,7 +1688,7 @@ function forBlock(c: Control, block: Block): Control {
  * Read a control's current value, following a dotted key such as background.color.
  *
  * `renderedStyle`, not `styleFor`: what a field shows has to be what the width
- * beside it draws. They differ for the six keys a narrow width no longer
+ * beside it draws. They differ for the three keys a narrow width no longer
  * inherits — see the comment there.
  */
 export function readControl(block: Block, c: Control, device: Device = "desktop"): unknown {
@@ -1737,7 +1737,7 @@ export function writeControl(block: Block, c: Control, value: unknown, device: D
   //
   // `styleFor`, deliberately NOT the `renderedStyle` that `readControl` uses.
   // Reading has to show what the width beside it draws; writing has to merge
-  // onto what is STORED, or the six keys `renderedStyle` blanks at a narrow
+  // onto what is STORED, or the three keys `renderedStyle` blanks at a narrow
   // width would be baked into the patch as site defaults the moment anyone
   // edited a sibling field. The two disagree on purpose. It costs nothing
   // today because `current` is only consulted for dotted keys and every dotted
