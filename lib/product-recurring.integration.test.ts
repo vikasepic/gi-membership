@@ -14,6 +14,43 @@ const canRun =
 const createdEmails: string[] = [];
 const createdProductIds: string[] = [];
 const createdSubs: string[] = [];
+const createdOfferIds: string[] = [];
+const APP = "00000000-0000-0000-0000-0000000000a1";
+
+/**
+ * An offer for this test to upsell with, owned by this test.
+ *
+ * It used to grab whatever active offer the store happened to hold first. That
+ * is a shared table other suites insert throwaway offers into and delete again
+ * mid-run, so the upsell was sometimes pointed at a row that no longer existed
+ * by the time the token was resolved — a missing upsell, indistinguishable
+ * from the bug this test exists to catch.
+ */
+async function makeUpsellOffer(): Promise<string> {
+  const db = createServiceClient();
+  const id = crypto.randomUUID();
+  createdOfferIds.push(id);
+  const { error } = await db.from("offers").insert({
+    id,
+    store_id: await getStoreId(),
+    key: `zz-rec-upsell-${id}`,
+    name: "zz upsell fixture (product-recurring test)",
+    grant_type: "subscription",
+    grant_app_id: APP,
+    grant_entitlement_key: "content-engine",
+    grant_channels: [],
+    billing_type: "recurring",
+    interval: "month",
+    interval_count: 1,
+    trial_days: 7,
+    price_cents: 2900,
+    currency: "usd",
+    headline: "fixture",
+    description: "fixture",
+  });
+  if (error) throw new Error(`test fixture: upsell offer: ${error.message}`);
+  return id;
+}
 
 /**
  * Buying a product on a recurring price, end to end.
@@ -195,23 +232,16 @@ describe.skipIf(!canRun)("a product sold on a recurring price (integration)", ()
     // wrong and every buyer on a recurring price silently skips the upsell,
     // which looks like nothing at all rather than like a bug.
     const db = createServiceClient();
-    const storeId = await getStoreId();
-    // An offer to upsell them to. Any active one will do.
-    const { data: offer } = await db
-      .from("offers")
-      .select("id")
-      .eq("store_id", storeId)
-      .eq("active", true)
-      .limit(1)
-      .maybeSingle();
-    if (!offer) return; // nothing to upsell with in this database
+    // An offer to upsell them to, created here so nothing else can retire it
+    // between the purchase and the assertion.
+    const offerId = await makeUpsellOffer();
 
     const product = await makeProduct({
       billing_type: "recurring",
       interval: "month",
       price_cents: 800,
     });
-    await db.from("products").update({ upsell_offer_id: offer.id }).eq("id", product.id);
+    await db.from("products").update({ upsell_offer_id: offerId }).eq("id", product.id);
 
     const { email, res } = await buy(product.slug);
     if (!res.ok) throw new Error("unreachable");
@@ -258,6 +288,9 @@ afterAll(async () => {
     if (!user) continue;
     await db.from("ownership").delete().eq("user_id", user.id);
     await db.from("order_items").delete().eq("store_id", await getStoreId()).is("order_id", null);
+  }
+  for (const id of createdOfferIds) {
+    await db.from("offers").delete().eq("id", id);
   }
   for (const id of createdProductIds) {
     const { data: orders } = await db.from("orders").select("id").eq("store_id", await getStoreId());

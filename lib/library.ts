@@ -137,7 +137,14 @@ export async function getStandingOffer(userId: string): Promise<Offer | null> {
     .select(OFFER_COLUMNS)
     .eq("store_id", await getStoreId())
     .eq("active", true)
-    .eq("grant_type", "subscription");
+    .eq("grant_type", "subscription")
+    // Oldest first, and `id` to break a same-timestamp tie. Without an order
+    // the store's longest-standing subscription is not what comes back — the
+    // row Postgres reaches first is, and that moves whenever any offer row is
+    // written. This query decides what a member is offered; the choice is the
+    // store's to make, not the heap's.
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
   const owned = await ownershipFor(userId);
   for (const offer of (data ?? []).map(hydrateOffer)) {
     if (isOfferEligible(offer, owned)) return offer;
