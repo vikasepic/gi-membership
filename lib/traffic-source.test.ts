@@ -61,9 +61,36 @@ describe("where a visit came from", () => {
     expect(sourceOf("?utm_campaign=jane@example.com", null)).toBe("direct");
   });
 
-  it("rejects a campaign with spaces or an @ in it", () => {
-    expect(sourceOf("?utm_campaign=hello world", null)).toBe("direct");
+  it("slugifies a campaign name written for humans", () => {
+    // What Meta's {{campaign.name}} actually expands to. Refusing it sent
+    // every campaign to the `meta` bucket instead, which looks like working
+    // tracking and answers none of the questions it was built for.
+    expect(sourceOf("?utm_campaign=AJ | Product Validator | Sales&fbclid=abc", null)).toBe(
+      "aj-product-validator-sales",
+    );
+    expect(sourceOf("?utm_campaign=hello world", null)).toBe("hello-world");
+  });
+
+  it("files one campaign under one name however it was typed", () => {
+    // Case is not a distinction anybody means. Two spellings of one campaign
+    // would otherwise be two rows and two lines on the funnel.
+    const each = ["Spring Sale", "spring sale", "SPRING  SALE"].map((c) =>
+      sourceOf(`?utm_campaign=${c}`, null),
+    );
+    expect(new Set(each)).toEqual(new Set(["spring-sale"]));
+  });
+
+  it("still refuses an email, which slugifying would hide rather than remove", () => {
+    // jane@example.com would slugify to jane-example-com — no longer matching
+    // the old charset rule, and still naming a person. The @ has to be
+    // refused BEFORE any cleaning, or this guard quietly stops working.
     expect(sourceOf("?utm_campaign=a@b", null)).toBe("direct");
+    expect(sourceOf("?utm_campaign=Jane Doe <jane@example.com>", null)).toBe("direct");
+  });
+
+  it("falls through when there is nothing left after cleaning", () => {
+    expect(sourceOf("?utm_campaign=---", null)).toBe("direct");
+    expect(sourceOf("?utm_campaign=%20%20", null)).toBe("direct");
   });
 });
 

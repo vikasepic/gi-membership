@@ -11,19 +11,41 @@
 const MAX_SOURCE = 60;
 
 /**
- * What a campaign name is allowed to look like.
+ * A campaign name, reduced to something safe to store as a bucket label.
  *
  * `source` is the one column in page_counts that could carry an identifier,
- * and the table's whole defensibility is that it holds none. A mailer that
- * builds per-recipient links — `utm_campaign=jane@example.com`, which several
- * ESPs do by default — would otherwise write a person into it. Anything
- * outside this charset is treated as no campaign at all rather than stored.
+ * and the table's whole defensibility is that it holds none. So this cleans
+ * what it can and refuses what it cannot.
  *
- * It also bounds cardinality: `path` can only be a slug that resolves, but
- * `source` was free text, so a loop over random campaign values could add a
- * row per request per day forever.
+ * **The @ is refused before any cleaning, and that order is the point.**
+ * Several ESPs build per-recipient links — `utm_campaign=jane@example.com` —
+ * and slugifying one produces `jane-example-com`, which passes every charset
+ * rule and still names a person. Cleaning first would turn this guard into
+ * decoration.
+ *
+ * Everything else is lowercased and reduced to `[a-z0-9._-]`, because the
+ * alternative was refusing it. Meta's `{{campaign.name}}` expands to things
+ * like `AJ | Product Validator | Sales`, and a rule that rejected spaces sent
+ * every campaign to the `meta` bucket instead — tracking that looked like it
+ * worked and answered none of the questions it existed for. Lowercasing also
+ * means one campaign is one row however somebody typed it.
+ *
+ * The 60-character cap bounds cardinality: `path` can only be a slug that
+ * resolved to a real row, but this is free text, so without a cap a loop over
+ * random values could add a row per request per day forever.
  */
-const CAMPAIGN = /^[a-z0-9][a-z0-9._-]{0,59}$/i;
+function campaignSlug(raw: string): string | null {
+  if (raw.includes("@")) return null;
+  const slug = raw
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^[-._]+/, "")
+    .slice(0, MAX_SOURCE)
+    .replace(/[-._]+$/, "");
+  // Must still begin with something meaningful — a value that cleaned down to
+  // nothing is not a campaign, it is punctuation.
+  return /^[a-z0-9]/.test(slug) ? slug : null;
+}
 
 export function sourceOf(search: string, referrer: string | null): string {
   let params: URLSearchParams;
@@ -36,8 +58,8 @@ export function sourceOf(search: string, referrer: string | null): string {
 
   const utm = params.get("utm_campaign")?.trim();
   if (utm) {
-    const capped = utm.slice(0, MAX_SOURCE);
-    if (CAMPAIGN.test(capped)) return capped;
+    const slug = campaignSlug(utm);
+    if (slug) return slug;
   }
   if (params.get("fbclid")) return "meta";
   if (params.get("gclid")) return "google";
