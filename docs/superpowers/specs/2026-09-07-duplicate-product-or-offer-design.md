@@ -55,6 +55,11 @@ constraint violation.
 included. An archived price is part of the record's history and dropping it
 would make the copy quietly different from the thing it was copied from.
 
+**Its courses** (products) — the rows in `product_courses`. The attachment
+lives in a join table rather than on the product row, so nothing that copies
+columns finds it, and a copy without it grants an empty library: the buyer pays
+and receives nothing. The same courses, shared, not copies of them.
+
 **Its sales page** — through the existing `copyPage`, which already rewrites
 price labels for the destination.
 
@@ -62,25 +67,57 @@ price labels for the destination.
 `meta_description`, `share_image_path`. `copyPage` does not touch these and a
 copy without them loses its SEO and any embedded script.
 
-### The trap: price ids are referenced by id
+### The trap: price ids are referenced by id — but not all of them are ours
 
-Three columns hold **arrays of price ids**:
+Three columns hold **arrays of price ids**, and they do **not** all mean the
+same thing. This section said they did, and the first implementation followed
+it faithfully; the correction is below.
 
-- `offers.page_price_ids` — which prices the sales page offers
-- `products.bump_price_ids`, `products.upsell_price_ids`
+**Names this record's own prices — must be remapped:**
 
-The prices are copied with **new ids**, so copying these arrays verbatim leaves
-the duplicate pointing at the **original's** price rows. The copy's sales page
-would then show the original's prices, and buying one would charge against a
-price belonging to another record.
+- `offers.page_price_ids` — which of the offer's own prices its sales page
+  offers. `app/(store)/p/[slug]/page.tsx` reads it against `soldOn.prices`.
 
-Nothing fails. There is no foreign key on these arrays — they are `jsonb` — so
-the write succeeds and the damage is silent.
+**Names ANOTHER record's prices — must be carried verbatim:**
 
-**Every price id must be remapped through an old-id → new-id table built while
-the prices are copied.** An id in one of these arrays that does not appear in
-that table is dropped rather than carried, because a dangling reference is
-worse than a missing option.
+- `products.bump_price_ids`, `products.upsell_price_ids` — "Which of the bump
+  offer's prices this product shows, in order" (migration 0049). They hold the
+  price ids of the placement's offer *or product* (0056: "a placement names
+  either an offer or a product, so the ids belong to whichever one it named"),
+  never of the product carrying the column — the constraint
+  `products_bump_is_not_self` makes naming itself impossible.
+
+The prices are copied with **new ids**, so copying the *first* kind verbatim
+leaves the duplicate pointing at the **original's** price rows: the copy's sales
+page would show the original's prices, and there is no foreign key on these
+arrays — they are `jsonb` — so the write succeeds and the damage is silent.
+
+Remapping the *second* kind is the same bug in the other direction, and worse.
+Those ids belong to a record the copy shares with the original (see "No deep
+copy of what it points at"), so the old-id → new-id table built from this
+record's own prices contains none of them and every one is dropped, writing
+`[]`. An empty list is not inert: `lib/offer-prices.ts`'s `shownPrices` falls
+back to the offer's **first live price**, so a product whose bump deliberately
+showed the yearly comes out selling the monthly — a different add-on at a
+different price, with no error and nothing on screen.
+
+So: **the arrays that name this record's own prices are remapped through an
+old-id → new-id table built while the prices are copied; the arrays that name a
+shared record's prices are carried unchanged.** An id being remapped that does
+not appear in that table is dropped rather than carried, because a dangling
+reference is worse than a missing option. `lib/duplicate-write.ts` says which
+column is which, per kind, in `priceIdColumns`.
+
+The remapped columns are **seeded empty in the INSERT**, not carried and then
+rewritten. The rewrite is a best-effort step, and an insert holding the
+original's ids plus a rewrite that fails is exactly the silent state above.
+
+The same division applies one level deeper. A "Ways to pay" block stores its
+chosen `priceIds` inside `page_sections.content`, and `copyPage` carries content
+verbatim. A block with **no `offerId`** sells whatever the page sells — which on
+an offer's page is the prices that were just copied, so it is remapped; on a
+product's page it is the sold-on offer's prices, which are shared. A block
+**naming an offer** is a shared reference and is left alone.
 
 ### What it does not copy
 
@@ -104,6 +141,18 @@ orphaned `page_sections` rows behind on failure, which nothing in the admin can
 see or clean up, because that join is by convention and not by foreign key.
 
 The reply says what was copied and what was not, rather than claiming success.
+That obliges every best-effort step to be able to TELL. `getPageSettings`
+answers a read failure with the same empty settings it gives a record that has
+none, so the settings step asks whether the row exists before believing there is
+nothing to copy — otherwise a transient failure reports a clean copy of a page
+that has lost its SEO and its custom code.
+
+One warning is not a failure at all. A **coded** upsell page is registered
+against `offers.key` (`components/oto/registry.tsx`) and an unregistered key
+falls back to the default layout, so an offer with `oto_template = "custom"`
+produces a copy whose upsell page is a different page. That is inherent to
+changing the key, and the person is told rather than finding out on a page a
+buyer has already paid to reach.
 
 ## Testing
 
@@ -111,12 +160,22 @@ The reply says what was copied and what was not, rather than claiming success.
 - Stripe ids are empty on the copy, and the original's are untouched
 - The copy is draft/inactive whatever the original was
 - Prices are copied, archived ones included, with new ids
-- **`page_price_ids`, `bump_price_ids` and `upsell_price_ids` point at the
-  COPY's prices**, and an id with no counterpart is dropped
+- **`page_price_ids` points at the COPY's prices**, and an id with no
+  counterpart is dropped — and it is `[]` in the INSERT, not the original's ids
+- **`bump_price_ids` and `upsell_price_ids` are unchanged on the copy**, from a
+  fixture built the way a save builds it: a real bump offer with prices of its
+  own, and the array naming one of THOSE
+- A Ways to pay block with no offer named points at the copy's prices; one
+  naming another offer is untouched
+- The copy grants the same courses
 - Sections and page settings arrive, and the original keeps its own
 - A key already in use is refused before anything is written
 - A duplicate of a record with no page produces a record with no page, not an
-  error
+  error — and no page on the copy
+- A best-effort step that fails reaches the caller as a warning, and a settings
+  read that fails is not reported as a clean copy
+- Duplicating an offer with a coded upsell page warns that the copy will not
+  get it
 
 ## What this does not do
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { duplicateRow, remapPriceIds, DROPPED_COLUMNS } from "@/lib/duplicate";
+import { duplicateRow, remapBlockPriceIds, remapPriceIds } from "@/lib/duplicate";
 
 describe("what carries into a duplicate", () => {
   it("keeps the fields that describe the thing", () => {
@@ -38,10 +38,6 @@ describe("what carries into a duplicate", () => {
   it("lets the caller override anything, including a dropped column", () => {
     expect(duplicateRow({ id: "old", status: "published" }, { status: "draft" })).toEqual({ status: "draft" });
   });
-
-  it("names every dropped column once", () => {
-    expect(new Set(DROPPED_COLUMNS).size).toBe(DROPPED_COLUMNS.length);
-  });
 });
 
 describe("price ids inside a duplicated record", () => {
@@ -66,5 +62,54 @@ describe("price ids inside a duplicated record", () => {
     for (const bad of [null, undefined, {}, "p1", [1, 2], [{ id: "p1" }]]) {
       expect(remapPriceIds(bad, map)).toEqual([]);
     }
+  });
+});
+
+describe("price ids inside a copied section's blocks", () => {
+  const map = new Map([["p1", "n1"], ["p2", "n2"]]);
+  const prices = (props: Record<string, unknown>) => ({ id: "b1", type: "prices", props, style: {} });
+
+  it("re-points a block that sells whatever the page sells", () => {
+    const out = remapBlockPriceIds({ blocks: [prices({ offerId: "", priceIds: ["p2", "p1"] })] }, map);
+    expect((out!.blocks as { props: { priceIds: string[] } }[])[0].props.priceIds).toEqual(["n2", "n1"]);
+  });
+
+  it("leaves a block naming another offer alone", () => {
+    // Shared reference. Its ids belong to a record the copy did not duplicate,
+    // so they are still valid — remapping them would empty the block.
+    expect(remapBlockPriceIds({ blocks: [prices({ offerId: "off-2", priceIds: ["p1"] })] }, map)).toBeNull();
+  });
+
+  it("reaches a block inside a column", () => {
+    const content = {
+      blocks: [
+        { id: "r", type: "row", props: {}, style: {}, columns: [[prices({ offerId: "", priceIds: ["p1"] })]] },
+      ],
+    };
+    const out = remapBlockPriceIds(content, map) as { blocks: { columns: { props: { priceIds: string[] } }[][] }[] };
+    expect(out.blocks[0].columns[0][0].props.priceIds).toEqual(["n1"]);
+  });
+
+  it("says nothing changed rather than rewriting a section it did not touch", () => {
+    for (const same of [
+      { blocks: [] },
+      { blocks: [prices({ offerId: "", priceIds: [] })] },
+      { blocks: [{ id: "h", type: "heading", props: { text: "hi" }, style: {} }] },
+      {},
+      null,
+      "nonsense",
+    ]) {
+      expect(remapBlockPriceIds(same, map)).toBeNull();
+    }
+  });
+
+  it("keeps everything else about the block", () => {
+    const out = remapBlockPriceIds(
+      { version: 2, blocks: [prices({ offerId: "", priceIds: ["p1"], heading: "Pick one" })] },
+      map,
+    ) as { version: number; blocks: { style: unknown; props: Record<string, unknown> }[] };
+    expect(out.version).toBe(2);
+    expect(out.blocks[0].props.heading).toBe("Pick one");
+    expect(out.blocks[0].style).toEqual({});
   });
 });
