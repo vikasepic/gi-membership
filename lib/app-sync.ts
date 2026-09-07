@@ -32,7 +32,18 @@ const normEmail = (e: string) => e.trim().toLowerCase();
 export function unionEntitlement(
   rows: { channels: string[]; status: OwnershipStatus }[],
 ): { channels: string[]; status: OwnershipStatus } {
-  const live = rows.filter((r) => r.status === "active" || r.status === "trialing");
+  // `past_due` counts as live. `canceled` is the revoke signal; `past_due` is a
+  // card Stripe is still collecting, and dunning often succeeds days later.
+  //
+  // It was excluded, and that made the SAME event mean two different things: a
+  // failing LinkedIn card cost the customer LinkedIn at once if they also held
+  // Instagram (its channel dropped out of a union that still had one) and cost
+  // them nothing if LinkedIn was all they had (an empty union is omitted, which
+  // an app reads as "no change"). The outcome turned on what else was in their
+  // account. Content Engine found it reading the contract; nobody chose it.
+  const live = rows.filter(
+    (r) => r.status === "active" || r.status === "trialing" || r.status === "past_due",
+  );
   const channels = [...new Set(live.flatMap((r) => r.channels ?? []))].sort();
   const status: OwnershipStatus = rows.some((r) => r.status === "trialing")
     ? "trialing"

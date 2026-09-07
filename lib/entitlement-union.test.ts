@@ -36,6 +36,35 @@ describe("what one person is entitled to in one app", () => {
     expect(unionEntitlement([row(["instagram"], "trialing"), row(["linkedin"], "active")]).status).toBe("trialing");
   });
 
+  it("keeps a past_due channel, whatever else the person holds", () => {
+    // Stripe dunning runs for days and often succeeds. Dropping the channel on
+    // the FIRST failed charge takes away something they have paid for while it
+    // is still being collected.
+    //
+    // And it has to be the same answer either way round. With `past_due`
+    // excluded, a failing card cost a person LinkedIn instantly if they also
+    // held Instagram, and cost them nothing if LinkedIn was all they had — the
+    // outcome decided by what else was in their account. Content Engine found
+    // that reading the contract; nobody chose it.
+    expect(unionEntitlement([row(["instagram"], "active"), row(["linkedin"], "past_due")])).toEqual({
+      channels: ["instagram", "linkedin"],
+      status: "active",
+    });
+    expect(unionEntitlement([row(["linkedin"], "past_due")])).toEqual({
+      channels: ["linkedin"],
+      status: "past_due",
+    });
+  });
+
+  it("still drops a cancelled channel while a past_due one survives", () => {
+    // `canceled` is the revoke signal; `past_due` is a warning. Widening the
+    // union must not blur the two.
+    expect(unionEntitlement([row(["instagram"], "canceled"), row(["linkedin"], "past_due")])).toEqual({
+      channels: ["linkedin"],
+      status: "past_due",
+    });
+  });
+
   it("reports past_due only when nothing is live", () => {
     expect(unionEntitlement([row(["instagram"], "past_due"), row(["linkedin"], "active")]).status).toBe("active");
     expect(unionEntitlement([row(["instagram"], "past_due")]).status).toBe("past_due");

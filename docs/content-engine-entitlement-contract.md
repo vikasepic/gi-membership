@@ -83,9 +83,15 @@ So **one failing card cannot freeze a workspace somebody is still paying for.**
 Instagram `active` + LinkedIn `past_due` arrives as `active`, `hasAccess: true`,
 with both channels listed. `hasAccess: false` means every subscription is gone.
 
-`channels`, by contrast, is the union of only the **live** ones — `active` or
-`trialing`. A cancelled subscription's channel stops appearing, which is how a
-single cancellation revokes one channel and leaves the rest.
+`channels` is the union of every subscription that is **not cancelled** —
+`active`, `trialing` **and `past_due`**. A cancelled subscription's channel
+stops appearing, which is how a single cancellation revokes one channel and
+leaves the rest.
+
+**`past_due` keeps its channel on purpose.** Stripe goes on collecting for
+days and often succeeds, so a first failed charge must not take away something
+already paid for. `canceled` is the revoke signal; `past_due` is a warning you
+can act on however you like — the store keeps sending the real `status`.
 
 **`channels` is omitted entirely when the list is empty** — it is not sent as
 `[]`. An omitted `channels` with `hasAccess: false` means revoke everything.
