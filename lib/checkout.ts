@@ -154,7 +154,7 @@ export async function ownershipFor(userId: string): Promise<Ownership> {
   const db = createServiceClient();
   const { data, error } = await db
     .from("ownership")
-    .select("product_id, app_id")
+    .select("product_id, app_id, offer_id")
     .eq("user_id", userId)
     .neq("status", "canceled");
   if (error) throw new Error(`ownershipFor: ${error.message}`);
@@ -164,7 +164,34 @@ export async function ownershipFor(userId: string): Promise<Ownership> {
     if (row.product_id) productIds.add(row.product_id as string);
     if (row.app_id) appIds.add(row.app_id as string);
   }
-  return { productIds, appIds };
+
+  // Which CHANNELS of each app they hold, resolved through the offer that
+  // granted each row. One app is sold as three subscriptions, so the app id on
+  // its own says "Content Engine" where the question is "Instagram or
+  // LinkedIn?". Costs one extra query, and only when an app row has an offer.
+  const appChannels = new Map<string, Set<string>>();
+  const appRows = (data ?? []).filter((r) => r.app_id && r.offer_id);
+  const offerIds = [...new Set(appRows.map((r) => r.offer_id as string))];
+  if (offerIds.length > 0) {
+    const { data: offers, error: offerErr } = await db
+      .from("offers")
+      .select("id, grant_channels")
+      .in("id", offerIds);
+    // Same reasoning as above: a failed read must not read as "holds nothing",
+    // which here would re-sell a channel they already pay for.
+    if (offerErr) throw new Error(`ownershipFor (channels): ${offerErr.message}`);
+    const byOffer = new Map(
+      (offers ?? []).map((o) => [o.id as string, (o.grant_channels as string[] | null) ?? []]),
+    );
+    for (const row of appRows) {
+      const channels = byOffer.get(row.offer_id as string) ?? [];
+      if (channels.length === 0) continue;
+      const held = appChannels.get(row.app_id as string) ?? new Set<string>();
+      for (const c of channels) held.add(c);
+      appChannels.set(row.app_id as string, held);
+    }
+  }
+  return { productIds, appIds, appChannels };
 }
 
 /** The attribution visitor captured on landing, if there is one. */

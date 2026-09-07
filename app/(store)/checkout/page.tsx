@@ -96,7 +96,7 @@ export default async function CheckoutPage({
   const [owned, bumpOffer, defaultCountry] = await Promise.all([
     user
       ? ownershipFor(user.id)
-      : Promise.resolve({ productIds: new Set<string>(), appIds: new Set<string>() }),
+      : Promise.resolve({ productIds: new Set<string>(), appIds: new Set<string>(), appChannels: new Map<string, Set<string>>() }),
     product.bumpOfferId ? getOffer(product.bumpOfferId) : Promise.resolve(null),
     user ? lastBillingCountry(user.id) : Promise.resolve(null),
   ]);

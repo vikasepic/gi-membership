@@ -5,7 +5,7 @@ import { getStoreId, hydrateOffer, hydrateProduct, OFFER_COLUMNS, PRODUCT_COLUMN
 import { savedPaymentMethodFor, ownershipFor } from "@/lib/checkout";
 import { createClient } from "@/lib/supabase/server";
 import { coursesForProduct } from "@/lib/courses";
-import type { Ownership } from "@/lib/offers";
+import { isOfferEligible, type Ownership } from "@/lib/offers";
 import type { Product, Offer } from "@/lib/types";
 
 
@@ -126,6 +126,10 @@ export async function subscribedToApp(userId: string, appId: string): Promise<bo
 
 // A standing offer to surface in the library: an active subscription offer the
 // buyer isn't already in. Returns the first eligible one (Content Engine today).
+//
+// Asks isOfferEligible rather than subscribedToApp, because "are they in this
+// app?" is the wrong question once one app is sold as three subscriptions: an
+// Instagram subscriber is in the app and should still be shown LinkedIn.
 export async function getStandingOffer(userId: string): Promise<Offer | null> {
   const db = createServiceClient();
   const { data } = await db
@@ -134,8 +138,9 @@ export async function getStandingOffer(userId: string): Promise<Offer | null> {
     .eq("store_id", await getStoreId())
     .eq("active", true)
     .eq("grant_type", "subscription");
+  const owned = await ownershipFor(userId);
   for (const offer of (data ?? []).map(hydrateOffer)) {
-    if (offer.grantAppId && !(await subscribedToApp(userId, offer.grantAppId))) return offer;
+    if (isOfferEligible(offer, owned)) return offer;
   }
   return null;
 }
@@ -255,7 +260,7 @@ export async function viewerOwnership(): Promise<Ownership> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return { productIds: new Set(), appIds: new Set() };
+  if (!user) return { productIds: new Set(), appIds: new Set(), appChannels: new Map() };
   return ownershipFor(user.id);
 }
 

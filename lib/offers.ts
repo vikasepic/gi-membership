@@ -2,21 +2,58 @@ import type { OfferPrice } from "@/lib/offer-prices";
 // Offer eligibility — correctness, not polish (plan): an offer is NEVER shown
 // to a buyer who already owns or subscribes to what it grants.
 
-export type Ownership = { productIds: Set<string>; appIds: Set<string> };
+export type Ownership = {
+  productIds: Set<string>;
+  appIds: Set<string>;
+  /**
+   * App id -> the channels already held under it.
+   *
+   * Needed because three Content Engine offers share ONE grant_app_id, so the
+   * app id alone cannot tell Instagram from LinkedIn — and collapsing them to
+   * a set of app ids made one active subscription block the other two offers
+   * entirely. Empty for an app whose held rows grant no channels (the Funnel
+   * App, and any row an app reported itself), which is exactly the case the
+   * app-id rule still answers.
+   */
+  appChannels: Map<string, Set<string>>;
+};
 
 type GrantTarget = {
   grantType: "product" | "subscription";
   grantProductId: string | null;
   grantAppId: string | null;
+  /** What this offer unlocks inside the app. Absent/empty = the whole app. */
+  grantChannels?: string[] | null;
 };
 
+/**
+ * Whether this offer may be sold to this buyer.
+ *
+ * Channel-aware since one app is sold as three subscriptions. The rule:
+ *
+ * - An offer granting NO channels is ineligible to anyone holding that app —
+ *   byte-for-byte today's behaviour, which is what keeps the Funnel App and
+ *   every product offer unchanged.
+ * - An offer granting channels needs its channel set to be disjoint from what
+ *   the buyer already holds in that app. So an Instagram subscriber may buy
+ *   LinkedIn, but not the bundle: the bundle is priced as the sum of the two
+ *   singles, and selling it to a half-holder charges for access they have.
+ * - Holding the app through a row we cannot attribute channels to blocks it
+ *   too. "They hold this app and we don't know which parts" is not a licence
+ *   to sell them the parts again.
+ */
 export function isOfferEligible(offer: GrantTarget, owned: Ownership): boolean {
   if (offer.grantType === "product") {
     if (!offer.grantProductId) return false; // misconfigured — skip
     return !owned.productIds.has(offer.grantProductId);
   }
   if (!offer.grantAppId) return false; // misconfigured — skip
-  return !owned.appIds.has(offer.grantAppId);
+  if (!owned.appIds.has(offer.grantAppId)) return true; // holds none of this app
+  const wanted = offer.grantChannels ?? [];
+  if (wanted.length === 0) return false;
+  const held = owned.appChannels.get(offer.grantAppId);
+  if (!held || held.size === 0) return false;
+  return wanted.every((c) => !held.has(c));
 }
 
 // Whether an offer may be SHOWN at all — the display-side counterpart to

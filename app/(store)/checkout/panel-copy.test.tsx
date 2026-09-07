@@ -54,7 +54,7 @@ vi.mock("@/lib/supabase/server", () => ({
   },
 }));
 vi.mock("@/lib/offers", () => ({ shouldShowOffer: () => false }));
-vi.mock("@/lib/checkout", () => ({ ownershipFor: async () => ({ productIds: new Set(), appIds: new Set() }) }));
+vi.mock("@/lib/checkout", () => ({ ownershipFor: async () => ({ productIds: new Set(), appIds: new Set(), appChannels: new Map() }) }));
 vi.mock("@/lib/env", () => ({ stripePublishableKey: () => "pk_test_x" }));
 vi.mock("@/lib/bump", () => ({ buildBumpView: () => null }));
 vi.mock("@/lib/trial-history", () => ({ offerAsSoldTo: async () => null }));

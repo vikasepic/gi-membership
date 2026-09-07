@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { altOfferIdFor, altSaving, offerForChoice, isOfferEligible, immediateChargeCents, type Ownership } from "@/lib/offers";
 
-const empty: Ownership = { productIds: new Set(), appIds: new Set() };
+const empty: Ownership = { productIds: new Set(), appIds: new Set(), appChannels: new Map() };
 
 describe("isOfferEligible", () => {
   it("shows a product offer the buyer does not own", () => {
@@ -11,19 +11,84 @@ describe("isOfferEligible", () => {
 
   it("hides a product offer the buyer already owns", () => {
     const offer = { grantType: "product" as const, grantProductId: "p1", grantAppId: null };
-    const owned: Ownership = { productIds: new Set(["p1"]), appIds: new Set() };
+    const owned: Ownership = { productIds: new Set(["p1"]), appIds: new Set(), appChannels: new Map() };
     expect(isOfferEligible(offer, owned)).toBe(false);
   });
 
   it("hides a subscription offer the buyer already subscribes to", () => {
     const offer = { grantType: "subscription" as const, grantProductId: null, grantAppId: "app1" };
-    const owned: Ownership = { productIds: new Set(), appIds: new Set(["app1"]) };
+    const owned: Ownership = { productIds: new Set(), appIds: new Set(["app1"]), appChannels: new Map() };
     expect(isOfferEligible(offer, owned)).toBe(false);
   });
 
   it("shows a subscription offer for an app the buyer lacks", () => {
     const offer = { grantType: "subscription" as const, grantProductId: null, grantAppId: "app1" };
     expect(isOfferEligible(offer, empty)).toBe(true);
+  });
+
+  // --- one app sold as three subscriptions ---------------------------------
+  //
+  // All three Content Engine offers share ONE grant_app_id, so the app id
+  // alone cannot tell them apart. Collapsing ownership to a set of app ids
+  // made a single Instagram subscription block all three offers — the sales
+  // page hid the button, the checkout redirected, and completeOfferCheckout
+  // returned ok after saving the card while creating nothing at all.
+  const ce = (channels: string[]) => ({
+    grantType: "subscription" as const,
+    grantProductId: null,
+    grantAppId: "app-ce",
+    grantChannels: channels,
+  });
+  const holding = (channels: string[]): Ownership => ({
+    productIds: new Set(),
+    appIds: new Set(["app-ce"]),
+    appChannels: new Map([["app-ce", new Set(channels)]]),
+  });
+
+  it("sells every channel of an app to somebody holding none of it", () => {
+    for (const offer of [ce(["instagram"]), ce(["linkedin"]), ce(["instagram", "linkedin"])]) {
+      expect(isOfferEligible(offer, empty)).toBe(true);
+    }
+  });
+
+  it("sells LinkedIn to an Instagram subscriber", () => {
+    // The purchase the old rule refused outright.
+    expect(isOfferEligible(ce(["linkedin"]), holding(["instagram"]))).toBe(true);
+  });
+
+  it("refuses the bundle to an Instagram subscriber", () => {
+    // Priced as the sum of the two singles, so selling it to a half-holder
+    // charges $87 for $58 of access. They buy LinkedIn separately instead.
+    expect(isOfferEligible(ce(["instagram", "linkedin"]), holding(["instagram"]))).toBe(false);
+  });
+
+  it("refuses a channel they already hold", () => {
+    expect(isOfferEligible(ce(["instagram"]), holding(["instagram"]))).toBe(false);
+  });
+
+  it("refuses everything to somebody holding both channels", () => {
+    for (const offer of [ce(["instagram"]), ce(["linkedin"]), ce(["instagram", "linkedin"])]) {
+      expect(isOfferEligible(offer, holding(["instagram", "linkedin"]))).toBe(false);
+    }
+  });
+
+  it("refuses an app-wide offer to somebody holding one channel of it", () => {
+    // An offer with no channels grants the whole app; part of it is already
+    // theirs, so there is nothing honest to sell.
+    expect(isOfferEligible(ce([]), holding(["instagram"]))).toBe(false);
+  });
+
+  it("refuses a channel to somebody whose hold on the app cannot be attributed", () => {
+    // A row an app reported itself carries no offer and therefore no channels.
+    // "They hold this app and we do not know which parts" is not a licence to
+    // sell them the parts again.
+    const opaque: Ownership = {
+      productIds: new Set(),
+      appIds: new Set(["app-ce"]),
+      appChannels: new Map(),
+    };
+    expect(isOfferEligible(ce(["instagram"]), opaque)).toBe(false);
+    expect(isOfferEligible(ce([]), opaque)).toBe(false);
   });
 
   it("skips a misconfigured offer with no grant target", () => {
@@ -53,7 +118,7 @@ describe("immediateChargeCents", () => {
 // --- display-side gate: never show an offer for something already held -----
 import { shouldShowOffer } from "@/lib/offers";
 
-const noneOwned = { productIds: new Set<string>(), appIds: new Set<string>() };
+const noneOwned = { productIds: new Set<string>(), appIds: new Set<string>(), appChannels: new Map<string, Set<string>>() };
 const subOffer = {
   grantType: "subscription" as const,
   grantProductId: null,
@@ -75,12 +140,12 @@ describe("shouldShowOffer", () => {
   it("hides a subscription offer from an existing subscriber", () => {
     // The exact case that showed the Content Engine bump to a member who was
     // already subscribed.
-    const owned = { productIds: new Set<string>(), appIds: new Set(["app-content-engine"]) };
+    const owned = { productIds: new Set<string>(), appIds: new Set(["app-content-engine"]), appChannels: new Map<string, Set<string>>() };
     expect(shouldShowOffer(subOffer, owned)).toBe(false);
   });
 
   it("hides a product offer from someone who already owns that product", () => {
-    const owned = { productIds: new Set(["prod-guide"]), appIds: new Set<string>() };
+    const owned = { productIds: new Set(["prod-guide"]), appIds: new Set<string>(), appChannels: new Map<string, Set<string>>() };
     expect(shouldShowOffer(prodOffer, owned)).toBe(false);
   });
 
