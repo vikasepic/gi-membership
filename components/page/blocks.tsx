@@ -1177,12 +1177,35 @@ function Inner({
                   &ldquo;{withLineBreaks(str(item.quote))}&rdquo;
                 </span>
               </p>
-              {(str(item.name) || str(item.role)) && (
-                <span className="mt-2 block text-[0.8rem] opacity-70">
-                  {str(item.name)}
-                  {str(item.role) && ` · ${str(item.role)}`}
-                </span>
-              )}
+              {/* The face beside the name rather than behind the quote — the
+                  same `image` Portrait lays full-bleed, reduced to a circle.
+                  Off unless asked for: a slide keeps its photograph when the
+                  style is switched away from Portrait, so a panelled slider
+                  with one stored is an ordinary row and must not sprout a
+                  picture it never drew. A slide with no photograph falls back
+                  to the one-line form, so a half-filled set still reads. */}
+              {(str(item.name) || str(item.role)) &&
+                (p.avatars === true && imageSrc(str(item.image)) ? (
+                  <span className="mt-4 flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={imageSrc(str(item.image))!}
+                      alt=""
+                      className="h-10 w-10 shrink-0 rounded-full object-cover"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-[0.85rem] font-semibold">{str(item.name)}</span>
+                      {str(item.role) && (
+                        <span className="block text-[0.8rem] opacity-70">{str(item.role)}</span>
+                      )}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="mt-2 block text-[0.8rem] opacity-70">
+                    {str(item.name)}
+                    {str(item.role) && ` · ${str(item.role)}`}
+                  </span>
+                ))}
             </li>
           ))}
         </ul>

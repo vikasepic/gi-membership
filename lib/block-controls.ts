@@ -721,8 +721,10 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
           { key: "quote", label: "Quote", kind: "textarea" },
           { key: "name", label: "Name", kind: "text" },
           { key: "role", label: "Role", kind: "text" },
-          // Only the Portrait style reads it. Kept on the slide either way, so
-          // switching styles hides the picture rather than throwing it away.
+          // Portrait lays it behind the quote; the panelled styles show it as
+          // a small circle beside the name, and only with Avatars on. Kept on
+          // the slide either way, so switching styles hides the picture rather
+          // than throwing it away.
           { key: "image", label: "Photograph", kind: "image" },
         ],
         addLabel: "Add a slide",
@@ -734,6 +736,12 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       // like three cards and the fourth stays a secret.
       { kind: "toggle", key: "arrows", label: "Arrows" },
       { kind: "toggle", key: "dots", label: "Dots" },
+      {
+        kind: "toggle",
+        key: "avatars",
+        label: "Avatars",
+        hint: "Shows each slide's photograph as a small circle beside the name. Portrait lays it behind the quote instead, so this does nothing there.",
+      },
       {
         kind: "select",
         key: "skin",

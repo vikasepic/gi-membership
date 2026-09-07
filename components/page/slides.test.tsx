@@ -6,6 +6,7 @@ import { Blocks } from "@/components/page/blocks";
 import { bandTheme } from "@/lib/page-sections";
 import { normalizeBlocks, newBlock } from "@/lib/blocks";
 import { controlsFor } from "@/lib/block-controls";
+import { listTemplates } from "@/lib/templates";
 
 const theme = bandTheme("paper");
 let root: { unmount: () => void } | null = null;
@@ -82,5 +83,68 @@ describe("the slide rail", () => {
     const keys = controlsFor(newBlock("slides")).content.flatMap((c) => ("key" in c ? [c.key] : []));
     expect(keys).toContain("arrows");
     expect(keys).toContain("dots");
+  });
+});
+
+/**
+ * The picture as a face beside the name, rather than as the ground behind it.
+ *
+ * Portrait lays the quote over a full-bleed photograph. A text-only design
+ * wants the same strip and the same words with the picture reduced to a small
+ * circle, which is the one part of that shape the panelled skins did not draw
+ * at all — they read `quote`, `name` and `role` and ignored `image`.
+ */
+describe("the avatar on a panelled slide", () => {
+  const withPhoto = { quote: "Words", name: "A name", role: "A role", image: "/templates/sections/portrait-1.svg" };
+
+  it("draws a round picture beside the name once it is asked for", () => {
+    const host = mount({ items: [withPhoto, withPhoto], avatars: true });
+    const img = host.querySelector("li img");
+    expect(img).not.toBeNull();
+    expect(img!.className).toContain("rounded-full");
+    // The name and the role stand beside it, on their own lines rather than
+    // run together with a middot.
+    expect(host.querySelector("li")!.textContent).not.toContain("·");
+  });
+
+  it("draws none at all until it is, so no slider already saved changes", () => {
+    // The photograph is kept on the slide when the style is switched away from
+    // Portrait, so rows with an image and a panelled skin already exist. They
+    // draw exactly what they drew before.
+    const host = mount({ items: [withPhoto, withPhoto] });
+    expect(host.querySelector("li img")).toBeNull();
+    expect(host.querySelector("li")!.textContent).toContain("A name · A role");
+  });
+
+  it("falls back to the plain line for a slide with no picture", () => {
+    const host = mount({ items: [{ ...withPhoto, image: "" }, withPhoto], avatars: true });
+    expect(host.querySelectorAll("li img").length).toBe(1);
+    expect(host.querySelectorAll("li")[0].textContent).toContain("A name · A role");
+  });
+
+  it("is offered as a control, or nobody can reach it", () => {
+    const keys = controlsFor(newBlock("slides")).content.flatMap((c) => ("key" in c ? [c.key] : []));
+    expect(keys).toContain("avatars");
+  });
+});
+
+/**
+ * The design the avatar was added for: one testimonial at a time, no
+ * photograph behind it, on the shelf as its own entry.
+ */
+describe("the text-only testimonial design", () => {
+  const t = listTemplates().find((x) => x.id === "testimonial-quotes");
+
+  it("is on the shelf under Testimonials", () => {
+    expect(t?.group).toBe("Testimonials");
+  });
+
+  it("draws the words, a round face and the two affordances, and no backdrop", () => {
+    const host = mount(t!.blocks[0].props);
+    expect(host.querySelector('[aria-label="Next slides"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label^="Go to slide"]')).not.toBeNull();
+    expect(host.querySelector("li img")!.className).toContain("rounded-full");
+    // Portrait's tell: a 3/4 box with the picture stretched behind the quote.
+    expect(host.querySelector("li")!.getAttribute("style") ?? "").not.toContain("aspect-ratio");
   });
 });

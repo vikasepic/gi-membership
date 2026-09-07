@@ -39,6 +39,7 @@ import { template as testimonialPortraits } from "./testimonial-portraits";
 import { template as guideShelf } from "./guide-shelf";
 import { template as testimonialCases } from "./testimonial-cases";
 import { template as testimonialSingle } from "./testimonial-single";
+import { template as testimonialQuotes } from "./testimonial-quotes";
 import { template as testimonialVideo } from "./testimonial-video";
 import { template as outcomeList } from "./outcome-list";
 import { template as pricingWithIncludes } from "./pricing-with-includes";
@@ -84,6 +85,7 @@ const BUILT_INS: Template[] = [
   guideShelf,
   testimonialCases,
   testimonialSingle,
+  testimonialQuotes,
   testimonialVideo,
   outcomeList,
   pricingWithIncludes,

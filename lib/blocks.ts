@@ -553,7 +553,11 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     iconGap: 10,
     iconColor: null,
   },
-  slides: { items: [], skin: "card", perView: 1, arrows: true, dots: true },
+  // `avatars` starts off, and that is "as it was" rather than a preference: a
+  // slide keeps its photograph when the style is switched away from Portrait,
+  // so there are stored panelled sliders carrying one, and every panelled skin
+  // has always ignored it.
+  slides: { items: [], skin: "card", perView: 1, arrows: true, dots: true, avatars: false },
   spacer: { height: 40 },
   divider: { thickness: 1, width: 100 },
   html: { code: "" },
