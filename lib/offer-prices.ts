@@ -110,12 +110,27 @@ export function priceLabel(price: OfferPrice, currency: string): string {
  * The small print: what happens today, and what happens after.
  *
  * Null for a one-time price, where the amount has already said everything.
+ *
+ * `couponTrialDays` is the trial an applied code grants, and it REPLACES the
+ * price's own — `coupon.trialDays ?? price.trialDays`, the same expression the
+ * subscription hands Stripe, so the sentence states the trial that will
+ * actually run. Null (the default) means no code, or a code that says nothing
+ * about a trial; zero is a real answer and means a code took the trial away.
+ *
+ * Without this the line was built from the price alone and could not see a
+ * coupon, so a 30-day code on a 7-day price left the checkout promising seven
+ * days while Stripe had been told thirty.
  */
-export function priceTerms(price: OfferPrice, currency: string): string | null {
+export function priceTerms(
+  price: OfferPrice,
+  currency: string,
+  couponTrialDays: number | null = null,
+): string | null {
   if (price.billingType !== "recurring") return null;
   const then = `then ${money(price.priceCents, currency)} every ${everyLabel(price)}`;
-  if (price.trialDays && price.trialDays > 0) {
-    return `${price.trialDays} days free, ${then}, cancel any time`;
+  const trialDays = couponTrialDays ?? price.trialDays;
+  if (trialDays && trialDays > 0) {
+    return `${trialDays} days free, ${then}, cancel any time`;
   }
   return `${then}, cancel any time`;
 }

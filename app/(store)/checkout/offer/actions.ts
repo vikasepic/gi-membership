@@ -71,7 +71,7 @@ export async function previewOfferCouponAction(
       discountCents: number;
       clamped: boolean;
       recurringDiscount: boolean;
-      trialNote: string | null;
+      trialDays: number | null;
     }
   | { ok: false; error: string }
 > {

@@ -108,7 +108,8 @@ function Inner({
         discountCents: number;
         clamped: boolean;
         recurringDiscount: boolean;
-        trialNote: string | null;
+        /** Replaces the price's own trial. Null when the code says nothing. */
+        trialDays: number | null;
       }
     | null
   >(null);
@@ -158,6 +159,11 @@ function Inner({
   // and the saving is stated separately. Subtracting it here would promise a
   // reduction on a $0 trial charge that no invoice will ever show.
   const grossNow = picked ? chargeNowCents(picked) : offer.chargeNowCents;
+  // The trial that will actually run. A code carrying `trial_days` replaces the
+  // price's own — the same `coupon.trialDays ?? price.trialDays` the
+  // subscription hands Stripe — so every sentence about the trial has to be
+  // built with it, or the page promises seven days against a card getting 30.
+  const couponTrial = coupon?.trialDays ?? null;
   const dueNow =
     coupon && !isRecurring ? Math.max(MIN_CHARGE_CENTS_CLIENT, grossNow - coupon.discountCents) : grossNow;
 
@@ -321,8 +327,10 @@ function Inner({
                     <span className="ml-2 text-[0.72rem] font-medium text-muted">{p.label.trim()}</span>
                   )}
                 </span>
-                {priceTerms(p, offer.currency) && (
-                  <span className="text-[0.76rem] text-muted">{priceTerms(p, offer.currency)}</span>
+                {priceTerms(p, offer.currency, pick === i ? couponTrial : null) && (
+                  <span className="text-[0.76rem] text-muted">
+                    {priceTerms(p, offer.currency, pick === i ? couponTrial : null)}
+                  </span>
                 )}
               </span>
             </label>
@@ -436,11 +444,6 @@ function Inner({
                 charge a card can take.
               </p>
             )}
-            {coupon?.trialNote && (
-              <p className="text-xs text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
-                {coupon.trialNote}
-              </p>
-            )}
           </div>
         ) : (
           <button
@@ -459,9 +462,9 @@ function Inner({
         </div>
       </div>
       {picked
-        ? priceTerms(picked, offer.currency) && (
+        ? priceTerms(picked, offer.currency, couponTrial) && (
             <p className="-mt-3 text-sm text-muted" style={{ fontSize: "0.875rem", lineHeight: 1.5 }}>
-              {priceTerms(picked, offer.currency)}
+              {priceTerms(picked, offer.currency, couponTrial)}
             </p>
           )
         : offer.recurringNote && (

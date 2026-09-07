@@ -73,7 +73,22 @@ export type CheckoutSlotValue = {
    */
   priceUnanswered?: boolean;
 
-  coupon: { label: string; discountCents: number; clamped?: boolean } | null;
+  coupon: {
+    label: string;
+    discountCents: number;
+    clamped?: boolean;
+    /**
+     * The trial this code grants, replacing the price's own. Null or absent
+     * when it says nothing about one; zero when it takes the trial away.
+     *
+     * Every sentence stating a trial is built with it — a code carrying
+     * `trial_days` is what the subscription hands Stripe, so a terms line that
+     * cannot see it promises the price's trial against a card getting the
+     * coupon's. Absent on the product checkout, which does not read trials off
+     * a code, and absent behaves exactly as before this existed.
+     */
+    trialDays?: number | null;
+  } | null;
   couponInput: string;
   setCouponInput: (v: string) => void;
   couponBusy: boolean;
@@ -133,6 +148,19 @@ export const CheckoutSlots = ({ value, children }: { value: CheckoutSlotValue; c
  * editor, not a reason to take a page down.
  */
 export const useCheckout = () => useContext(Ctx);
+
+/**
+ * The trial an applied code grants, for `priceTerms` to state instead of the
+ * price's own.
+ *
+ * One expression rather than four copies of it: the summary line, the plan
+ * cards, the plan rows and the renewal sentence all describe the same trial,
+ * and three of them agreeing is worse than none — the buyer reads whichever
+ * one they happen to look at.
+ */
+export function couponTrialOf(c: CheckoutSlotValue): number | null {
+  return c.coupon?.trialDays ?? null;
+}
 
 const input =
   "w-full rounded-xl border border-border bg-surface px-3.5 py-3 text-sm outline-none transition-colors placeholder:text-muted focus:border-primary";
@@ -356,8 +384,10 @@ export function PriceChoiceSlot(p: {
                   <span className="ml-2 text-[0.72rem] font-medium text-muted">{price.label.trim()}</span>
                 )}
               </span>
-              {priceTerms(price, c.product.currency) && (
-                <span className="text-[0.76rem] text-muted">{priceTerms(price, c.product.currency)}</span>
+              {priceTerms(price, c.product.currency, on ? couponTrialOf(c) : null) && (
+                <span className="text-[0.76rem] text-muted">
+                  {priceTerms(price, c.product.currency, on ? couponTrialOf(c) : null)}
+                </span>
               )}
             </span>
           </label>
@@ -390,7 +420,7 @@ function PriceCards({ title }: { title?: string }) {
       {c.prices.map((price, i) => {
         const on = c.pricePick === i;
         const saving = baseline && baseline.id !== price.id ? savingAgainst(baseline, price) : null;
-        const terms = priceTerms(price, c.product.currency);
+        const terms = priceTerms(price, c.product.currency, on ? couponTrialOf(c) : null);
         return (
           <label
             key={price.id}
@@ -500,7 +530,7 @@ export function OrderSummarySlot(p: {
   // when they dispute the charge.
   const chosenPrice = c.pricePick === null ? null : (c.prices[c.pricePick] ?? null);
   const lineCents = chosenPrice?.priceCents ?? c.product.priceCents;
-  const lineTerms = chosenPrice ? priceTerms(chosenPrice, c.product.currency) : null;
+  const lineTerms = chosenPrice ? priceTerms(chosenPrice, c.product.currency, couponTrialOf(c)) : null;
 
   return (
     <div className="flex flex-col gap-4">

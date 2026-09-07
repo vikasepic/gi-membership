@@ -96,10 +96,9 @@ const radios = (host: HTMLElement) => [...host.querySelectorAll<HTMLInputElement
  * and it must not silently apply."
  *
  * Nothing re-ran the preview when the radio changed, so the label, the discount
- * and the new trial note stayed on screen against the yearly price.
+ * and the code's trial stayed on screen against the yearly price.
  * startOfferCheckout re-resolves and refuses at the end — so the buyer read
- * "30 days free instead of 7" beside $199/year, pressed pay, and was then told
- * no.
+ * "30 days free" beside $199/year, pressed pay, and was then told no.
  */
 describe("switching how you pay, with a code already applied", () => {
   it("re-prices the code against the newly chosen price", async () => {
@@ -109,7 +108,7 @@ describe("switching how you pay, with a code already applied", () => {
       discountCents: 580,
       clamped: false,
       recurringDiscount: false,
-      trialNote: "30 days free instead of 7",
+      trialDays: 30,
     });
     const host = mount();
     await applyCode(host, "SAVE");
@@ -128,18 +127,20 @@ describe("switching how you pay, with a code already applied", () => {
       discountCents: 580,
       clamped: false,
       recurringDiscount: false,
-      trialNote: "30 days free instead of 7",
+      trialDays: 30,
     });
     const host = mount();
     await applyCode(host, "MONTHLYONLY");
     expect(host.textContent).toContain("MONTHLYONLY — 20% off");
-    expect(host.textContent).toContain("30 days free instead of 7");
+    // The code's trial, stated by the terms line itself — which is where a
+    // coupon's trial is said now, rather than in a note beside it.
+    expect(host.textContent).toContain("30 days free, then $29 every month");
 
     preview.mockResolvedValueOnce({ ok: false, error: "That code can’t be used on this purchase." });
     await act(async () => radios(host)[1].click());
 
     expect(host.textContent).not.toContain("MONTHLYONLY — 20% off");
-    expect(host.textContent).not.toContain("30 days free instead of 7");
+    expect(host.textContent).not.toContain("30 days free");
     expect(host.textContent).toContain("That code can’t be used on this purchase.");
   });
 

@@ -6,6 +6,7 @@ import {
   BuyerDetailsSlot,
   CardFieldsSlot,
   CouponSlot,
+  couponTrialOf,
   OrderBumpSlot,
   OrderSummarySlot,
   PayButtonSlot,
@@ -112,7 +113,7 @@ function DueRow() {
   // buyer can be starting two subscriptions on one press and only being told
   // about one of them is the thing that becomes a dispute.
   const renewals = [
-    chosen ? priceTerms(chosen, c.product.currency) : null,
+    chosen ? priceTerms(chosen, c.product.currency, couponTrialOf(c)) : null,
     c.chosenBump?.termsLabel ? `${c.chosenBump.name}: ${c.chosenBump.termsLabel}` : null,
   ].filter(Boolean) as string[];
 

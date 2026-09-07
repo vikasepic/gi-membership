@@ -41,6 +41,21 @@ describe("what a price says it costs", () => {
     expect(chargeNowCents(ONCE)).toBe(49000);
   });
 
+  // The sentence has to state the trial that will actually run, which on a
+  // coupon carrying `trial_days` is the coupon's. Built from the price alone it
+  // said "7 days free" beside a subscription Stripe had been told to give 30 —
+  // two different trials on one screen, and the buyer left to guess which the
+  // card would honour.
+  it("states the trial a coupon replaced, not the one the price carries", () => {
+    const trial = { ...MONTHLY, trialDays: 7 };
+    expect(priceTerms(trial, "usd", 30)).toContain("30 days free");
+    expect(priceTerms(trial, "usd", 30)).not.toContain("7 days free");
+    // Zero is a real answer — a code may take the trial away — and distinct
+    // from "this code says nothing about a trial", which is null.
+    expect(priceTerms(trial, "usd", 0)).toBe("then $29 every month, cancel any time");
+    expect(priceTerms(trial, "usd", null)).toContain("7 days free");
+  });
+
   it("has nothing to add to a one-off", () => {
     expect(priceTerms(ONCE, "usd")).toBe(null);
   });

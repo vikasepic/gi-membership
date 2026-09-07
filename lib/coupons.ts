@@ -332,22 +332,3 @@ export async function resolveCoupon(
     },
   };
 }
-
-/**
- * What to say under an applied code about the trial it changes.
- *
- * Null when it changes nothing, so the caller renders nothing rather than a
- * line that repeats what the price already said. A promotion the buyer cannot
- * see is one they do not trust, and one that restates itself reads as a trick.
- */
-export function couponTrialNote(
-  trialDays: number | null,
-  priceTrialDays: number | null,
-): string | null {
-  if (trialDays === null) return null;
-  const had = priceTrialDays ?? 0;
-  if (trialDays === had) return null;
-  if (trialDays === 0) return "no free trial with this code";
-  if (had === 0) return `${trialDays} days free`;
-  return `${trialDays} days free instead of ${had}`;
-}

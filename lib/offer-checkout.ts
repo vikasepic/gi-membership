@@ -7,7 +7,7 @@ import { ownershipFor, fulfilOffer, grantOfferOwnership, customerForUser } from 
 import { stripe, stripeMode } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
 import { ensureUserProfile } from "@/lib/users";
-import { MIN_CHARGE_CENTS, resolveCoupon, couponTrialNote, type AppliedCoupon } from "@/lib/coupons";
+import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
 
 // Standalone checkout for a single offer, for a member who has no card on file
 // yet (they were gifted access, or their only purchase predates a saved card).
@@ -54,7 +54,17 @@ export async function previewOfferCoupon(args: {
       discountCents: number;
       clamped: boolean;
       recurringDiscount: boolean;
-      trialNote: string | null;
+      /**
+       * The trial this code grants, replacing the price's own. Null when it
+       * says nothing about one; zero when it takes the trial away.
+       *
+       * The DAYS, not a sentence about them. This used to be a note reading
+       * "30 days free instead of 7", printed beside a terms line that could
+       * not see the coupon and still said "7 days free" — two trials on one
+       * screen. The terms line states the real one now, and the number is
+       * what it needs to do that.
+       */
+      trialDays: number | null;
     }
   | { ok: false; error: string }
 > {
@@ -79,7 +89,7 @@ export async function previewOfferCoupon(args: {
     discountCents: res.coupon.discountCents,
     clamped: res.coupon.clamped,
     recurringDiscount: res.coupon.recurringDiscount,
-    trialNote: couponTrialNote(res.coupon.trialDays, offer.trialDays),
+    trialDays: res.coupon.trialDays,
   };
 }
 
