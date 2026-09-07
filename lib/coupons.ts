@@ -161,7 +161,13 @@ export type AppliedCoupon = {
   recurringDiscount: boolean;
   /** Human label for the order summary, e.g. "SAVE20 — 20% off". */
   label: string;
-  /** True when the discount was capped by the minimum charge. */
+  /**
+   * True when the discount was capped by the minimum charge.
+   *
+   * One-time purchases only. The minimum is what a PaymentIntent will accept,
+   * and a subscription does not use one — so a recurring purchase is never
+   * capped by it and this is always false there.
+   */
   clamped: boolean;
   /**
    * The trial this code grants, replacing the price's own. Null when it says
@@ -286,8 +292,19 @@ export async function resolveCoupon(
   }
 
   // Never below the floor, and never negative.
-  const maxDiscount = Math.max(0, subtotalCents - MIN_CHARGE_CENTS);
-  const clamped = discount > maxDiscount;
+  //
+  // The floor is a PaymentIntent rule, so it belongs to a ONE-TIME purchase and
+  // to nothing else. A subscription is not a PaymentIntent: Stripe is handed
+  // the promotion code and applies it to the invoice, and a $0 invoice is
+  // perfectly legal — no card is touched. Clamping a recurring purchase both
+  // understated the discount (−$28.50 on a $29 plan) and printed "the smallest
+  // charge a card can take" to a buyer whose card was taking nothing at all.
+  const floor = scope.interval === null ? MIN_CHARGE_CENTS : 0;
+  const maxDiscount = Math.max(0, subtotalCents - floor);
+  // Only the floor can "cap" anything — a recurring discount is still held to
+  // the subtotal, but running out of price to discount is not the minimum
+  // charge and must not be reported as it.
+  const clamped = floor > 0 && discount > maxDiscount;
   discount = Math.min(discount, maxDiscount);
 
   // A trial-only code is valid with nothing off. Stripe will not create a

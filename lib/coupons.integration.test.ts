@@ -73,6 +73,22 @@ describe.skipIf(!canRun)("coupons (integration)", () => {
     expect(res.coupon.clamped).toBe(true);
   });
 
+  // The floor is a PaymentIntent rule and a subscription is not one. Stripe is
+  // handed the promotion code and applies it to the invoice; a $0 invoice is
+  // legal and no card is touched. Clamping here made a 100%-off code on a $29
+  // plan read "−$28.50" beside "Due today $0", under a notice telling the buyer
+  // about a 50c minimum that was never going to be charged to them.
+  it("does not clamp a subscription, where no card is charged today", async () => {
+    const code = `SUB${Date.now()}`;
+    await makePromo(code, { percent_off: 100 });
+
+    const res = await resolveCoupon(code, 2900, "usd", { item: "content-engine", interval: "month" });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.coupon.discountCents).toBe(2900);
+    expect(res.coupon.clamped).toBe(false);
+  });
+
   it("rejects an unknown code without saying whether it ever existed", async () => {
     const res = await resolveCoupon("NOPE-DOES-NOT-EXIST", 4999, "usd", ANY_PRODUCT);
     expect(res).toEqual({ ok: false, error: "That code isn't valid." });
