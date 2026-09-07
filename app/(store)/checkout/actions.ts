@@ -8,6 +8,7 @@ import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
 import { createClient } from "@/lib/supabase/server";
 import { getProductBySlug } from "@/lib/store";
 import { resolveCoupon } from "@/lib/coupons";
+import { livePrices } from "@/lib/offer-prices";
 import { rememberLead } from "@/lib/leads";
 import { looksLikeEmail } from "@/lib/email-hint";
 
@@ -144,8 +145,17 @@ export async function previewCoupon(
   // The preview is display only, but it is scoped exactly like the charge —
   // a preview that accepts a code the purchase then refuses is worse than one
   // that refuses it here, where there is still a form to say so on.
+  // The preview has no price choice to read, so it scopes to the product's
+  // headline billing — the same first-live-price the charge itself falls back
+  // to when no priceChoice is posted (see startCheckout's `chosen`).
+  const headline = livePrices(product.prices)[0] ?? null;
   const res = await resolveCoupon(code, product.priceCents, product.currency, {
     item: product.slug,
+    // A multi-price PRODUCT could therefore preview an interval-scoped code as
+    // valid and have the charge refuse it. No product is sold that way today,
+    // and the offer checkout — which is what the Content Engine offers use —
+    // passes the chosen price's interval exactly.
+    interval: headline?.billingType === "recurring" ? headline.interval : null,
   });
   if (!res.ok) return res;
   return {

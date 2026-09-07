@@ -10,7 +10,7 @@ const created: { coupons: string[]; promos: string[]; products: string[] } = {
 };
 
 /** A scope for tests that are about the discount, not about who owns the code. */
-const ANY_PRODUCT = { item: "any-product" };
+const ANY_PRODUCT = { item: "any-product", interval: null };
 
 async function makePromo(
   code: string,
@@ -105,7 +105,7 @@ describe.skipIf(!canRun)("a shared Stripe account: whose code is this?", () => {
     const code = `FOREIGN${Date.now()}`;
     await makePromo(code, { percent_off: 100 }, { tagged: false });
 
-    const res = await resolveCoupon(code, 1900, "usd", { item: "digital-product-validator" });
+    const res = await resolveCoupon(code, 1900, "usd", { item: "digital-product-validator", interval: null });
     expect(res.ok, "an untagged code must not apply here").toBe(false);
     // Same wording as an unknown code, so probing another app's codes against
     // this checkout reveals nothing about which ones exist.
@@ -115,7 +115,7 @@ describe.skipIf(!canRun)("a shared Stripe account: whose code is this?", () => {
   it("accepts a tagged code across the whole catalogue", async () => {
     const code = `OURS${Date.now()}`;
     await makePromo(code, { percent_off: 10 });
-    const res = await resolveCoupon(code, 1900, "usd", { item: "anything-at-all" });
+    const res = await resolveCoupon(code, 1900, "usd", { item: "anything-at-all", interval: null });
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.coupon.discountCents).toBe(190);
   });
@@ -126,10 +126,10 @@ describe.skipIf(!canRun)("a shared Stripe account: whose code is this?", () => {
     const code = `ONLYONE${Date.now()}`;
     await makePromo(code, { percent_off: 20 }, { only: ["digital-product-validator"] });
 
-    const onIt = await resolveCoupon(code, 1900, "usd", { item: "digital-product-validator" });
+    const onIt = await resolveCoupon(code, 1900, "usd", { item: "digital-product-validator", interval: null });
     expect(onIt.ok, "must work on the product it names").toBe(true);
 
-    const elsewhere = await resolveCoupon(code, 1900, "usd", { item: "the-idea-vault" });
+    const elsewhere = await resolveCoupon(code, 1900, "usd", { item: "the-idea-vault", interval: null });
     expect(elsewhere.ok, "must not work on any other product").toBe(false);
   });
 
@@ -138,7 +138,7 @@ describe.skipIf(!canRun)("a shared Stripe account: whose code is this?", () => {
     // space after the comma. Neither should quietly disable the restriction.
     const code = `CASE${Date.now()}`;
     await makePromo(code, { percent_off: 20 }, { only: ["The-Idea-Vault", " digital-product-validator"] });
-    const res = await resolveCoupon(code, 1900, "usd", { item: "DIGITAL-PRODUCT-VALIDATOR" });
+    const res = await resolveCoupon(code, 1900, "usd", { item: "DIGITAL-PRODUCT-VALIDATOR", interval: null });
     expect(res.ok).toBe(true);
   });
 });

@@ -419,6 +419,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   if (input.couponCode?.trim()) {
     const res = await resolveCoupon(input.couponCode, listCents, product.currency, {
       item: product.slug,
+      interval: recurring ? (chosen?.interval ?? null) : null,
     });
     if (!res.ok) return { ok: false, error: res.error };
     coupon = res.coupon;
@@ -656,7 +657,7 @@ export async function fulfilOffer(args: {
    * `unit_amount` down — would discount every renewal forever, silently, which
    * is the expensive version of this bug.
    */
-  coupon?: { promotionCodeId: string; discountCents: number } | null;
+  coupon?: { promotionCodeId: string; discountCents: number; trialDays?: number | null } | null;
   // Override for flows where the order row itself is created per attempt (the
   // standalone offer checkout mints a fresh $0 order each visit). Keying on the
   // SetupIntent instead makes Stripe dedupe the subscription even if two orders
@@ -693,7 +694,10 @@ export async function fulfilOffer(args: {
         // Already resolved for this buyer — offerAsSoldTo strips it for anyone
         // who has had one, so this is the single place it is granted and the
         // single place worth recording.
-        trial_period_days: offer.trialDays ?? undefined,
+        // The coupon's trial wins when it carries one. A Stripe coupon cannot
+        // extend a trial itself — it discounts money — so this is the only
+        // place "30 days free instead of 7" can be expressed.
+        trial_period_days: coupon?.trialDays ?? offer.trialDays ?? undefined,
         // Stripe applies it for as long as the coupon says. On a trial that is
         // the first REAL invoice, not today's £0 one, which is the behaviour a
         // buyer expects and the one this cannot get wrong by computing itself.
@@ -919,6 +923,7 @@ export async function finalizeOrder(intentId: string): Promise<void> {
     const coupon = pi.metadata.couponCode
       ? await resolveCoupon(pi.metadata.couponCode, price.priceCents, prod.currency, {
           item: prod.slug,
+          interval: price.billingType === "recurring" ? price.interval : null,
         })
       : null;
 
@@ -939,7 +944,9 @@ export async function finalizeOrder(intentId: string): Promise<void> {
             },
           },
         ],
-        trial_period_days: price.trialDays ?? undefined,
+        // As on the offer path: a coupon carrying trial_days replaces the
+        // price's own trial for this purchase.
+        trial_period_days: coupon?.ok ? (coupon.coupon.trialDays ?? price.trialDays ?? undefined) : (price.trialDays ?? undefined),
         // Stripe applies the coupon for as long as the coupon says — on a trial
         // that is the first REAL invoice, not today's £0 one. Computing it here
         // is how the invoice and the receipt start disagreeing.

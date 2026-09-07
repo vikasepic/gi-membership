@@ -63,7 +63,7 @@ export async function previewOfferCoupon(args: {
     args.code,
     couponSubtotal(offer, immediateChargeCents(offer)),
     offer.currency,
-    { item: offer.key },
+    { item: offer.key, interval: offer.billingType === "recurring" ? offer.interval : null },
   );
   if (!res.ok) return res;
   return {
@@ -121,7 +121,7 @@ export async function startOfferCheckout(args: {
       args.couponCode,
       couponSubtotal(priced, immediateChargeCents(priced)),
       priced.currency,
-      { item: priced.key },
+      { item: priced.key, interval: priced.billingType === "recurring" ? priced.interval : null },
     );
     if (!res.ok) return { ok: false, error: res.error };
     coupon = res.coupon;
@@ -214,7 +214,7 @@ export async function completeOfferCheckout(
       savedCode,
       couponSubtotal(offer, immediateChargeCents(offer)),
       offer.currency,
-      { item: offer.key },
+      { item: offer.key, interval: offer.billingType === "recurring" ? offer.interval : null },
     );
     coupon = res.ok ? res.coupon : null;
   }
@@ -261,7 +261,9 @@ export async function completeOfferCheckout(
       order: { id: order.id as string, stripeCustomerId: customerId },
       offer,
       paymentMethodId: pm,
-      coupon: coupon ? { promotionCodeId: coupon.promotionCodeId, discountCents: coupon.discountCents } : null,
+      coupon: coupon
+        ? { promotionCodeId: coupon.promotionCodeId, discountCents: coupon.discountCents, trialDays: coupon.trialDays }
+        : null,
       idempotencyKey: `offerco_${setupIntentId}_${offer.id}`,
     });
   } catch {

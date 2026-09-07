@@ -63,6 +63,66 @@ export const STORE_META_KEY = "store";
 export const ITEMS_META_KEY = "products";
 
 /**
+ * Metadata that limits a coupon to particular billing periods.
+ *
+ * `intervals` = a comma-separated list of day|week|month|year. Absent means
+ * every interval, which is what every code written before this did.
+ *
+ * It exists because a duration-based coupon means something very different on
+ * a yearly price: `duration: repeating, duration_in_months: 2` discounts the
+ * whole ANNUAL invoice, because the next one falls twelve months later, well
+ * outside the window. A "2 months free" code on a $199/year plan gives away a
+ * free year. DPBS on this account is configured exactly that way.
+ */
+export const INTERVALS_META_KEY = "intervals";
+
+/**
+ * Metadata that replaces the trial length for this purchase.
+ *
+ * `trial_days` = a whole number of days, 0 to 365. A Stripe coupon cannot
+ * extend a trial — it discounts money — so this is the only way to sell "30
+ * days free, then the usual price", which is a different promotion from any
+ * amount off.
+ */
+export const TRIAL_DAYS_META_KEY = "trial_days";
+
+/** Which interval is being bought; null for a one-time purchase. */
+export type BillingInterval = "day" | "week" | "month" | "year";
+
+/**
+ * The trial this coupon grants, or null when it says nothing about one.
+ *
+ * Nonsense is IGNORED rather than refused. This field is optional, so a typo
+ * in it must not take a working discount off the air — the failure would be a
+ * code that silently stops working, reported as "the coupon is broken", with
+ * nothing pointing at a stray character in an unrelated field.
+ *
+ * Zero is a real value and distinct from absent: a code may deliberately
+ * remove a trial rather than extend one.
+ */
+export function couponTrialDays(meta: Record<string, string>): number | null {
+  const raw = (meta[TRIAL_DAYS_META_KEY] ?? "").trim();
+  if (!/^\d{1,3}$/.test(raw)) return null;
+  const n = Number(raw);
+  return n >= 0 && n <= 365 ? n : null;
+}
+
+/** Whether this coupon may be used on a purchase billed at this interval. */
+export function intervalAllowed(
+  meta: Record<string, string>,
+  interval: BillingInterval | null,
+): boolean {
+  const only = (meta[INTERVALS_META_KEY] ?? "")
+    .split(",")
+    .map((x) => x.trim().toLowerCase())
+    .filter(Boolean);
+  if (only.length === 0) return true;
+  // A one-time charge has no interval, so a code that names one cannot apply.
+  if (!interval) return false;
+  return only.includes(interval);
+}
+
+/**
  * What is being bought, so a code can be checked against it.
  *
  * Required rather than optional on purpose: an optional scope is one every
@@ -72,6 +132,14 @@ export const ITEMS_META_KEY = "products";
 export type CouponScope = {
   /** The product's slug, or the offer's key. */
   item: string;
+  /**
+   * The billing interval being bought, or null for a one-time purchase.
+   *
+   * Required rather than optional for the same reason `item` is: an optional
+   * scope field is one every future call site can forget, and forgetting it is
+   * exactly the bug this exists to close.
+   */
+  interval: BillingInterval | null;
 };
 
 export type AppliedCoupon = {
@@ -95,6 +163,11 @@ export type AppliedCoupon = {
   label: string;
   /** True when the discount was capped by the minimum charge. */
   clamped: boolean;
+  /**
+   * The trial this code grants, replacing the price's own. Null when it says
+   * nothing about one, which is every code written before this.
+   */
+  trialDays: number | null;
 };
 
 export type CouponResult =
@@ -165,6 +238,12 @@ export async function resolveCoupon(
     return { ok: false, error: "That code can't be used on this purchase." };
   }
 
+  // And if it names billing periods, this has to be one of them. Same message
+  // as a wrong item: the code exists and is simply not for this purchase.
+  if (!intervalAllowed(meta, scope.interval)) {
+    return { ok: false, error: "That code can't be used on this purchase." };
+  }
+
   // Restrictions Stripe would enforce on a Checkout Session and cannot enforce
   // on a PaymentIntent, so they are ours to apply or they mean nothing.
   const r = promo.restrictions;
@@ -192,6 +271,8 @@ export async function resolveCoupon(
     }
   }
 
+  const trialDays = couponTrialDays(meta);
+
   let discount = 0;
   let label = code;
   if (c.percent_off) {
@@ -209,7 +290,12 @@ export async function resolveCoupon(
   const clamped = discount > maxDiscount;
   discount = Math.min(discount, maxDiscount);
 
-  if (discount <= 0) {
+  // A trial-only code is valid with nothing off. Stripe will not create a
+  // coupon with no discount at all, so such a code carries a nominal one — and
+  // a nominal percentage rounds to zero cents on a small price, which this
+  // guard used to refuse outright. Without this branch a trial-only promotion
+  // is impossible to express.
+  if (discount <= 0 && trialDays === null) {
     return { ok: false, error: "This order is already at the minimum charge." };
   }
 
@@ -225,6 +311,7 @@ export async function resolveCoupon(
       recurringDiscount: c.duration !== "once",
       label,
       clamped,
+      trialDays,
     },
   };
 }
