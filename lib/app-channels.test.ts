@@ -103,11 +103,22 @@ describe("what reaches the app", () => {
     // else the person already held.
     for (const [file, why, pattern] of [
       ["lib/checkout.ts", "a purchase", /pushAppEntitlement/],
-      ["lib/members.ts", "an admin granting or revoking by hand", /channels[:,]/],
+      ["lib/members.ts", "an admin granting or revoking by hand", /pushAppEntitlement/],
       ["lib/app-sync.ts", "the backfill that replays what is already owned", /channels[:,]/],
       ["lib/retry.ts", "the sweep that retries a push the app missed", /channels[:,]/],
     ] as const) {
       expect(readFileSync(file, "utf8"), `${file} — ${why}`).toMatch(pattern);
+    }
+  });
+
+  it("is not hand-built from a single offer anywhere that grants access", () => {
+    // The pattern above used to be /channels[:,]/ for lib/members.ts, and that
+    // matched the WORD in a comment — so the admin grant/revoke path kept
+    // sending one offer's channels long after the purchase path stopped, and
+    // the test that was meant to catch it stayed green. Comping LinkedIn to an
+    // Instagram customer took Instagram away.
+    for (const file of ["lib/checkout.ts", "lib/members.ts"]) {
+      expect(readFileSync(file, "utf8"), file).not.toMatch(/channels:\s*offer[?.]/);
     }
   });
 });

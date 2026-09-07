@@ -2,8 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { getStoreId, getOffer } from "@/lib/store";
-import { notifyAppEntitlement } from "@/lib/apps";
-import { applyPendingEntitlements } from "@/lib/app-sync";
+import { applyPendingEntitlements, pushAppEntitlement } from "@/lib/app-sync";
 
 // Member (customer) views for admin, plus the Stripe Customer Portal that lets
 // a customer manage their own card, plan and cancellation. The portal is hosted
@@ -229,15 +228,13 @@ export async function grantOfferAccess(args: {
   if (error && error.code !== "23505") return { ok: false, error: error.message };
 
   if (offer.grantAppId) {
-    await notifyAppEntitlement({
-      appId: offer.grantAppId,
+    // The whole entitlement, not this offer's channels. Comping LinkedIn to an
+    // Instagram customer used to send channels:["linkedin"], and the receiving
+    // app replaces its list — so the gift took Instagram away.
+    await pushAppEntitlement(storeId, args.userId, offer.grantAppId, {
       email: user.email as string,
       fullName: (user.username as string | null) ?? null,
-      entitlementKey: offer.grantEntitlementKey,
-      channels: offer.grantChannels,
-      status: "active",
       stripeCustomerId: null,
-      stripeSubscriptionId: null,
     });
   }
   return { ok: true };
@@ -269,16 +266,14 @@ export async function revokeOwnership(ownershipId: string): Promise<{ ok: boolea
       .select("email, username")
       .eq("id", row.user_id as string)
       .maybeSingle();
-    const offer = row.offer_id ? await getOffer(row.offer_id as string) : null;
     if (user?.email) {
-      await notifyAppEntitlement({
-        appId: row.app_id as string,
+      // Read every row back rather than announcing this one's cancellation.
+      // Revoking one of two subscriptions used to send hasAccess:false and
+      // killed both; what the app needs is what is LEFT.
+      await pushAppEntitlement(await getStoreId(), row.user_id as string, row.app_id as string, {
         email: user.email as string,
-        entitlementKey: offer?.grantEntitlementKey ?? null,
-        channels: offer?.grantChannels ?? null,
-        status: "canceled",
+        fullName: (user.username as string | null) ?? null,
         stripeCustomerId: null,
-        stripeSubscriptionId: null,
       });
     }
   } else {
