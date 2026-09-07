@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getStoreName, getProductBySlug, getProductById, getOffer } from "@/lib/store";
-import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerForChoice, type Ownership } from "@/lib/offers";
+import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerForChoice, offerWithCouponTrial, type Ownership } from "@/lib/offers";
 import { priceForChoice, shownPrices, type OfferPrice } from "@/lib/offer-prices";
 import type { BumpChoice } from "@/lib/bump";
 import { offerAsSoldTo, recordTrialStart } from "@/lib/trial-history";
@@ -741,7 +741,11 @@ export async function fulfilOffer(args: {
       },
       { idempotencyKey: idem },
     );
-    await noteTrial(args.order.id, offer);
+    // The trial that actually ran, which is the coupon's when it carries one.
+    // Reading the price's own value here recorded nothing for a promotional
+    // trial — leaving the buyer free to take a second free trial afterwards —
+    // and recorded one for a code that had just taken the trial away.
+    await noteTrial(args.order.id, offerWithCouponTrial(offer, coupon));
     return { subscriptionId: sub.id };
   }
 

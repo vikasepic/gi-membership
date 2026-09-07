@@ -78,6 +78,26 @@ export function shouldShowOffer(
   return isOfferEligible(offer, owned);
 }
 
+/**
+ * The offer as the coupon actually sells it — its trial, not the price's.
+ *
+ * A promotion code may carry `trial_days`, and Stripe is handed that number.
+ * Everything else read the price's own value, so a code granting 30 days on a
+ * no-trial yearly wrote ownership `status: "active"` for a subscription that
+ * was trialing and recorded no trial history — leaving the buyer free to take
+ * the monthly's 7 days as well. `trial_days=0` against a 7-day price is the
+ * same bug pointing the other way.
+ *
+ * `??`, not a truthiness test: 0 is a coupon saying "no trial", not silence.
+ */
+export function offerWithCouponTrial<T extends { trialDays: number | null }>(
+  offer: T,
+  coupon: { trialDays?: number | null } | null | undefined,
+): T {
+  const trialDays = coupon?.trialDays ?? offer.trialDays;
+  return trialDays === offer.trialDays ? offer : { ...offer, trialDays };
+}
+
 // What fulfilling this offer charges the saved card RIGHT NOW. A trial
 // subscription is $0 today (charged after the trial) — one-time + trial can
 // never be a single charge. A recurring offer without a trial bills its first

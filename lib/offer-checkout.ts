@@ -1,7 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getOffer } from "@/lib/store";
-import { isOfferEligible, immediateChargeCents, offerAtPrice } from "@/lib/offers";
+import { isOfferEligible, immediateChargeCents, offerAtPrice, offerWithCouponTrial } from "@/lib/offers";
 import { livePrices, priceForChoice } from "@/lib/offer-prices";
 import { ownershipFor, fulfilOffer, grantOfferOwnership, customerForUser } from "@/lib/checkout";
 import { stripe, stripeMode } from "@/lib/stripe";
@@ -263,11 +263,18 @@ export async function completeOfferCheckout(
     .single();
   if (orderErr || !order) return { ok: false, error: "order_failed" };
 
+  // The offer as this coupon sells it. A code carrying trial_days replaces the
+  // price's trial, and the ownership row's status and the trial we record as
+  // used both have to follow it — otherwise a 30-day promotional trial is
+  // written down as an active paid subscription and burns nobody's one trial,
+  // leaving them free to take the monthly's seven days as well.
+  const sold = offerWithCouponTrial(offer, coupon);
+
   let result: { subscriptionId?: string; paymentIntentId?: string };
   try {
     result = await fulfilOffer({
       order: { id: order.id as string, stripeCustomerId: customerId },
-      offer,
+      offer: sold,
       paymentMethodId: pm,
       coupon: coupon
         ? { promotionCodeId: coupon.promotionCodeId, discountCents: coupon.discountCents, trialDays: coupon.trialDays }
@@ -281,7 +288,7 @@ export async function completeOfferCheckout(
     return { ok: false, error: "charge_failed" };
   }
 
-  await grantOfferOwnership(storeId, userId, offer, "grant", result.subscriptionId ?? null, {
+  await grantOfferOwnership(storeId, userId, sold, "grant", result.subscriptionId ?? null, {
     email,
     stripeCustomerId: customerId,
   });
