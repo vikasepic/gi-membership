@@ -39,8 +39,11 @@ export function grantKeysOf(
 ): string[] {
   if (offer.grantAppId) {
     const base = `app:${offer.grantAppId}:${offer.grantEntitlementKey ?? ""}`;
-    const channels = [...(offer.grantChannels ?? [])].sort();
-    // Sorted so one channel set is one identity however the array arrived.
+    // Deduped as well as sorted: one channel set is one identity however the
+    // array arrived, and a repeat would send two identical conflict keys in one
+    // upsert — which Postgres rejects outright ("cannot affect row a second
+    // time"), turning a duplicate tickbox into a failed purchase.
+    const channels = [...new Set(offer.grantChannels ?? [])].sort();
     return channels.length === 0 ? [base] : channels.map((c) => `${base}:ch:${c}`);
   }
   if (offer.grantProductId) return [`product:${offer.grantProductId}`];

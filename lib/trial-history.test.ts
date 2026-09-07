@@ -144,6 +144,15 @@ describe("what a trial is recorded against", () => {
     ]);
   });
 
+  it("does not repeat a key when a channel is listed twice", () => {
+    // Two identical conflict keys in one upsert is not a duplicate Postgres
+    // shrugs at — it aborts the statement ("cannot affect row a second time"),
+    // so a duplicated channel would turn recording a trial into an error.
+    expect(grantKeysOf(app(["instagram", "instagram"]))).toEqual([
+      "app:8ee0321c-c78b-4638-a4a6-81a70d1e37bb:content-engine:ch:instagram",
+    ]);
+  });
+
   it("orders channels the same way however they arrive", () => {
     // The key IS the identity. Two spellings of one channel set would be two
     // trials, which is the loophole this is meant to close.
