@@ -116,12 +116,12 @@ function Inner({
   const [couponBusy, setCouponBusy] = useState(false);
   const [couponOpen, setCouponOpen] = useState(false);
 
-  async function applyCoupon() {
+  async function applyCoupon(atPick: number = pick) {
     const code = couponInput.trim();
     if (!code) return;
     setCouponBusy(true);
     setCouponError(null);
-    const res = await previewOfferCouponAction(offer.id, code, pick >= 0 ? pick : undefined);
+    const res = await previewOfferCouponAction(offer.id, code, atPick >= 0 ? atPick : undefined);
     if (!res.ok) {
       setCoupon(null);
       setCouponError(res.error);
@@ -129,6 +129,21 @@ function Inner({
       setCoupon(res);
     }
     setCouponBusy(false);
+  }
+
+  /**
+   * Switching how you pay re-prices the code you already applied.
+   *
+   * A code can be scoped to one billing period. Leaving it on screen after a
+   * switch to yearly showed the discount and "30 days free instead of 7" beside
+   * a price it does not apply to — startOfferCheckout refuses it at the end, so
+   * the buyer reads the promise, presses pay and is only then told no. It must
+   * not silently persist and it must not silently apply: re-asking the server
+   * either re-prices it against the new choice or drops it with the reason.
+   */
+  function choosePrice(i: number) {
+    setPick(i);
+    if (coupon) void applyCoupon(i);
   }
 
   // Recurring where the chosen price renews — and where nothing has been
@@ -228,7 +243,7 @@ function Inner({
     captureEmail: () => setEmailHint(suggestEmail(email.trim().toLowerCase())),
     prices,
     pricePick: pick >= 0 ? pick : null,
-    setPricePick: setPick,
+    setPricePick: choosePrice,
     bump: null,
     bumpAlt: null,
     bumpOptions: [],
@@ -296,7 +311,7 @@ function Inner({
                 type="radio"
                 name="offer-price"
                 checked={pick === i}
-                onChange={() => setPick(i)}
+                onChange={() => choosePrice(i)}
                 className="size-[18px] shrink-0 cursor-pointer accent-[var(--primary)]"
               />
               <span className="flex min-w-0 flex-1 flex-col">
