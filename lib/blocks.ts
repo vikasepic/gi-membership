@@ -557,7 +557,27 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   // slide keeps its photograph when the style is switched away from Portrait,
   // so there are stored panelled sliders carrying one, and every panelled skin
   // has always ignored it.
-  slides: { items: [], skin: "card", perView: 1, arrows: true, dots: true, avatars: false },
+  //
+  // Everything from `arrowStyle` down describes the two arrows and nothing
+  // else, and every one of them starts at "as it was": "solid" is the filled
+  // circle the rail has always drawn, null colour is the band's accent it has
+  // always been filled with, and null size is the `size-9` class it has always
+  // carried — a 36 here instead would swap that class for an inline width on
+  // every slider ever saved, which is a repaint even when it lands on the same
+  // pixel. Empty images mean the chevron is drawn rather than uploaded.
+  slides: {
+    items: [],
+    skin: "card",
+    perView: 1,
+    arrows: true,
+    dots: true,
+    avatars: false,
+    arrowStyle: "solid",
+    arrowColor: null,
+    arrowSize: null,
+    arrowPrevImage: "",
+    arrowNextImage: "",
+  },
   spacer: { height: 40 },
   divider: { thickness: 1, width: 100 },
   html: { code: "" },

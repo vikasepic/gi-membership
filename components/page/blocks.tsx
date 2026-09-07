@@ -1,4 +1,4 @@
-import { blockRendersNothing, styleFor, type Block, type Device } from "@/lib/blocks";
+import { blockRendersNothing, oneOf, styleFor, type Block, type Device } from "@/lib/blocks";
 import { PriceChoice } from "@/components/page/price-choice";
 import { StickyBarBlock } from "@/components/page/sticky-bar-block";
 import { chosenPrices, priceLabel, type OfferPrice } from "@/lib/offer-prices";
@@ -1064,6 +1064,13 @@ function Inner({
           perView={perView}
           accent={c.accent}
           ink={readableOn(c.accent)}
+          arrowStyle={oneOf(p.arrowStyle, ["solid", "bare", "outline"] as const, "solid")}
+          arrowColor={str(p.arrowColor)}
+          arrowSize={p.arrowSize == null ? null : num(p.arrowSize, 36)}
+          // Resolved here rather than in the rail: the rail is a client
+          // component and the media path is the server's business.
+          arrowPrevImage={imageSrc(str(p.arrowPrevImage)) ?? ""}
+          arrowNextImage={imageSrc(str(p.arrowNextImage)) ?? ""}
         >
           {list}
         </SlideRail>

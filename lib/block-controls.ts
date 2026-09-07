@@ -735,6 +735,51 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
       // no way of saying so, which is how three slides that happen to fit look
       // like three cards and the fourth stays a secret.
       { kind: "toggle", key: "arrows", label: "Arrows" },
+      // The arrow had one shape and no way to say otherwise: a filled circle
+      // in the accent. "Solid" is that circle and stays the default, so no
+      // slider already saved moves; the reference design is "Bare".
+      {
+        kind: "select",
+        key: "arrowStyle",
+        label: "Arrow shape",
+        options: [["solid", "Filled circle"], ["bare", "Chevron only"], ["outline", "Outlined circle"]],
+        when: (b) => b.props.arrows !== false,
+      },
+      {
+        kind: "color",
+        key: "arrowColor",
+        label: "Arrow colour",
+        hint: "Unset follows the band's accent, which is what it has always used.",
+        when: (b) => b.props.arrows !== false,
+      },
+      {
+        kind: "number",
+        key: "arrowSize",
+        label: "Arrow size",
+        min: 16,
+        max: 96,
+        step: 2,
+        unit: "px",
+        hint: "Unset is 36, the size it has always been.",
+        when: (b) => b.props.arrows !== false,
+      },
+      // Per direction, because a left arrow and a right arrow are two pictures
+      // and nothing here can flip one into the other. A side with none set
+      // keeps whatever the shape above says.
+      {
+        kind: "image",
+        key: "arrowPrevImage",
+        label: "Back arrow picture",
+        hint: "Replaces the drawn chevron on that side only.",
+        when: (b) => b.props.arrows !== false,
+      },
+      {
+        kind: "image",
+        key: "arrowNextImage",
+        label: "Forward arrow picture",
+        hint: "Replaces the drawn chevron on that side only.",
+        when: (b) => b.props.arrows !== false,
+      },
       { kind: "toggle", key: "dots", label: "Dots" },
       {
         kind: "toggle",

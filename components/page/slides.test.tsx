@@ -148,3 +148,93 @@ describe("the text-only testimonial design", () => {
     expect(host.querySelector("li")!.getAttribute("style") ?? "").not.toContain("aspect-ratio");
   });
 });
+
+/**
+ * The arrows had one shape and no controls.
+ *
+ * A filled circle in the accent with a chevron inside it, and no way to say
+ * otherwise — the reference design is a bare chevron over the card's edge, and
+ * getting it meant editing this file. So the shape, its colour, its size and a
+ * custom picture per direction are settings now.
+ *
+ * `arrowStyle: "solid"` is the default and `arrowSize` is null, which is what
+ * "nothing already saved moves" looks like: the button below is byte for byte
+ * the one the renderer drew before any of these existed.
+ */
+describe("the shape of the arrows", () => {
+  const three = { items: [slide("a"), slide("b"), slide("c")], perView: 1 };
+  const button = (props: Record<string, unknown>, side = "Previous") =>
+    mount({ ...three, ...props }).querySelector(`[aria-label="${side} slides"]`)!;
+
+  it("draws the filled circle it always drew when nothing is set", () => {
+    // Captured from the renderer at the commit before these controls existed.
+    // Not a snapshot on purpose: a snapshot updated with a flag is no defence
+    // against the thing this guards, which is a default that repaints every
+    // slider on every live page.
+    expect(button({}).outerHTML).toBe(
+      '<button type="button" disabled="" aria-label="Previous slides" class="absolute top-1/2 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full shadow-md transition-opacity disabled:opacity-0 -left-2 md:-left-4" style="background: rgb(176, 83, 47); color: rgb(255, 255, 255);"><svg viewBox="0 0 24 24" aria-hidden="true" class="size-4 fill-current"><path d="M15.4 4.6 7 13l8.4 8.4 1.4-1.4L9.8 13l7-7-1.4-1.4Z"></path></svg></button>',
+    );
+  });
+
+  it("drops the circle, the shadow and the fill for the bare chevron", () => {
+    const b = button({ arrowStyle: "bare" });
+    expect(b.className).not.toContain("rounded-full");
+    expect(b.className).not.toContain("shadow-md");
+    expect(b.getAttribute("style")).not.toContain("background");
+    // Painted in the band's accent, which is what the circle was filled with.
+    expect(b.getAttribute("style")).toContain("rgb(176, 83, 47)");
+  });
+
+  it("draws the outline as a hairline with nothing inside it", () => {
+    const b = button({ arrowStyle: "outline" });
+    expect(b.className).toContain("rounded-full");
+    expect(b.getAttribute("style")).toContain("border");
+    expect(b.getAttribute("style")).not.toContain("background");
+  });
+
+  it("takes a colour of its own", () => {
+    expect(button({ arrowColor: "#ff0000" }).getAttribute("style")).toContain("rgb(255, 0, 0)");
+  });
+
+  it("takes a size, and the box is what moves", () => {
+    const b = button({ arrowSize: 60 });
+    expect(b.className).not.toContain("size-9");
+    expect(b.getAttribute("style")).toContain("width: 60px");
+    expect(b.getAttribute("style")).toContain("height: 60px");
+  });
+
+  it("swaps an uploaded picture in for one side and leaves the other drawn", () => {
+    const host = mount({ ...three, arrowPrevImage: "/templates/sections/portrait-1.svg" });
+    const prev = host.querySelector('[aria-label="Previous slides"]')!;
+    const next = host.querySelector('[aria-label="Next slides"]')!;
+    const img = prev.querySelector("img");
+    expect(img).not.toBeNull();
+    // Decoration beside a button that already carries the label.
+    expect(img!.getAttribute("alt")).toBe("");
+    expect(prev.querySelector("svg")).toBeNull();
+    expect(next.querySelector("svg")).not.toBeNull();
+    expect(next.querySelector("img")).toBeNull();
+  });
+
+  it("keeps the label, the position and the disabling whatever the shape is", () => {
+    const b = button({ arrowStyle: "bare", arrowSize: 60, arrowNextImage: "/x.svg" });
+    expect(b.getAttribute("aria-label")).toBe("Previous slides");
+    expect(b.className).toContain("-left-2");
+    expect(b.className).toContain("disabled:opacity-0");
+    expect((b as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("offers every one of them as a control", () => {
+    const keys = controlsFor(newBlock("slides")).content.flatMap((c) => ("key" in c ? [c.key] : []));
+    expect(keys).toContain("arrowStyle");
+    expect(keys).toContain("arrowColor");
+    expect(keys).toContain("arrowSize");
+    expect(keys).toContain("arrowPrevImage");
+    expect(keys).toContain("arrowNextImage");
+  });
+
+  it("ships the words-only template on the bare chevron, which is the reference", () => {
+    const t = listTemplates().find((x) => x.id === "testimonial-quotes");
+    expect(t!.blocks[0].props.arrowStyle).toBe("bare");
+  });
+});

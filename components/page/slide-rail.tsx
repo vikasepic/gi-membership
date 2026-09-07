@@ -26,6 +26,11 @@ export function SlideRail({
   perView,
   accent,
   ink,
+  arrowStyle = "solid",
+  arrowColor = "",
+  arrowSize = null,
+  arrowPrevImage = "",
+  arrowNextImage = "",
 }: {
   children: React.ReactNode;
   arrows: boolean;
@@ -36,6 +41,15 @@ export function SlideRail({
   perView: number;
   accent: string;
   ink: string;
+  /** The shape of the two arrows. "solid" is the circle they have always been. */
+  arrowStyle?: ArrowStyle;
+  /** Empty is the band's accent, which is what they have always been painted in. */
+  arrowColor?: string;
+  /** Null is the `size-9` they have always carried. */
+  arrowSize?: number | null;
+  /** Already resolved to a URL by the renderer — this side never touches storage. */
+  arrowPrevImage?: string;
+  arrowNextImage?: string;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
   // The scrolling element is the list passed in as children, not this wrapper.
@@ -104,8 +118,28 @@ export function SlideRail({
 
       {scrollable && arrows && (
         <>
-          <RailButton side="left" disabled={ends.start} accent={accent} ink={ink} onClick={() => go(-1)} />
-          <RailButton side="right" disabled={ends.end} accent={accent} ink={ink} onClick={() => go(1)} />
+          <RailButton
+            side="left"
+            disabled={ends.start}
+            accent={accent}
+            ink={ink}
+            shape={arrowStyle}
+            color={arrowColor}
+            size={arrowSize}
+            image={arrowPrevImage}
+            onClick={() => go(-1)}
+          />
+          <RailButton
+            side="right"
+            disabled={ends.end}
+            accent={accent}
+            ink={ink}
+            shape={arrowStyle}
+            color={arrowColor}
+            size={arrowSize}
+            image={arrowNextImage}
+            onClick={() => go(1)}
+          />
         </>
       )}
 
@@ -132,35 +166,83 @@ export function SlideRail({
   );
 }
 
+export type ArrowStyle = "solid" | "bare" | "outline";
+
+/** The box the arrow is drawn in when nobody has said otherwise — `size-9`. */
+const ARROW_BOX = 36;
+/** The chevron inside that box when nobody has said otherwise — `size-4`. */
+const ARROW_GLYPH = 16;
+
 function RailButton({
   side,
   disabled,
   accent,
   ink,
+  shape,
+  color,
+  size,
+  image,
   onClick,
 }: {
   side: "left" | "right";
   disabled: boolean;
   accent: string;
   ink: string;
+  shape: ArrowStyle;
+  color: string;
+  size: number | null;
+  image: string;
   onClick: () => void;
 }) {
+  // Painted from the band, so it reads on paper and on navy without a second
+  // set of colours to keep in step. A colour of its own overrides that.
+  const tint = color || accent;
+  // An uploaded picture IS the arrow: a custom graphic sitting inside the
+  // accent circle would be two arrows on top of each other, so the chrome goes
+  // with the chevron it replaces. The other side is untouched and keeps
+  // whatever the shape says.
+  const bare = shape === "bare" || !!image;
+  // The class stays when nothing is set, so a slider saved before these
+  // controls existed renders the identical button — which the golden test
+  // checks byte for byte.
+  const box = size == null ? "size-9 " : "";
+  const px = size ?? ARROW_BOX;
+  // A bare chevron has no circle to sit inside, so the box IS the chevron.
+  // Inside a circle it keeps the 16-in-36 proportion it has always had.
+  const glyph = bare ? px : Math.round((px * ARROW_GLYPH) / ARROW_BOX);
+  const glyphClass = size == null && !bare ? "size-4 " : "";
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       aria-label={side === "left" ? "Previous slides" : "Next slides"}
-      className={`absolute top-1/2 z-10 grid size-9 -translate-y-1/2 place-items-center rounded-full shadow-md transition-opacity disabled:opacity-0 ${
-        side === "left" ? "-left-2 md:-left-4" : "-right-2 md:-right-4"
-      }`}
-      // Painted from the band, so it reads on paper and on navy without a
-      // second set of colours to keep in step.
-      style={{ background: accent, color: ink }}
+      className={`absolute top-1/2 z-10 grid ${box}-translate-y-1/2 place-items-center ${
+        bare ? "" : "rounded-full shadow-md "
+      }transition-opacity disabled:opacity-0 ${side === "left" ? "-left-2 md:-left-4" : "-right-2 md:-right-4"}`}
+      style={{
+        ...(bare
+          ? { color: tint }
+          : shape === "outline"
+            ? { border: `1px solid ${tint}`, color: tint }
+            : { background: tint, color: ink }),
+        ...(size == null ? {} : { width: px, height: px }),
+      }}
     >
-      <svg viewBox="0 0 24 24" aria-hidden className="size-4 fill-current">
-        <path d={side === "left" ? "M15.4 4.6 7 13l8.4 8.4 1.4-1.4L9.8 13l7-7-1.4-1.4Z" : "M8.6 4.6 7.2 6l7 7-7 7 1.4 1.4L17 13 8.6 4.6Z"} />
-      </svg>
+      {image ? (
+        // Empty alt: decoration beside a button that already carries the label.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={image} alt="" style={{ width: glyph, height: glyph, objectFit: "contain" }} />
+      ) : (
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden
+          className={`${glyphClass}fill-current`}
+          {...(glyphClass ? {} : { style: { width: glyph, height: glyph } })}
+        >
+          <path d={side === "left" ? "M15.4 4.6 7 13l8.4 8.4 1.4-1.4L9.8 13l7-7-1.4-1.4Z" : "M8.6 4.6 7.2 6l7 7-7 7 1.4 1.4L17 13 8.6 4.6Z"} />
+        </svg>
+      )}
     </button>
   );
 }

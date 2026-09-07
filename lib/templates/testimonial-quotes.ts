@@ -28,6 +28,10 @@ export const template: Template = {
         perView: 1,
         avatars: true,
         arrows: true,
+        // The reference is a bare chevron over the card's edge, not the filled
+        // circle the rail defaults to. Set here rather than changed there:
+        // every slider already saved keeps the circle it was built with.
+        arrowStyle: "bare",
         dots: true,
         items: [
           {
