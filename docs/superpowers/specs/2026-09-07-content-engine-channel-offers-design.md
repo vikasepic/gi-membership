@@ -78,6 +78,14 @@ trial must still carry one. Use a nominal `percent_off` (0.01% is two cents on
 $199 and invisible on a receipt), or give the code a real discount as well —
 the two are independent.
 
+**And the zero-discount guard has to admit it.** `resolveCoupon` currently
+refuses any code whose computed discount is zero — "This order is already at
+the minimum charge." A nominal 0.01% on a $29 price is 0.29 cents, which rounds
+to zero, so a trial-only code would be refused outright. The guard becomes
+`discount <= 0 && trialDays === null`. Without that change the mechanism above
+cannot be expressed at all, which was a real defect in the first draft of this
+spec, found while writing the plan.
+
 **Scope gains the interval.** `CouponScope` becomes:
 
 ```ts
