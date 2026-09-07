@@ -17,9 +17,53 @@ import { tagLifecycle } from "@/lib/ac-tags";
 
 const normEmail = (e: string) => e.trim().toLowerCase();
 
+/**
+ * Everything one person is entitled to in one app, as a single answer.
+ *
+ * Two subscriptions granting the same app used to send two messages under one
+ * entitlement key, and the second overwrote the first — so buying LinkedIn
+ * took Instagram away, or cancelling one left both unlocked, depending on
+ * which side the receiving app came down on. The store decides instead.
+ *
+ * Only live rows contribute channels. A cancelled subscription's channels are
+ * gone, which is the whole point: the receiving app replaces its list with
+ * this one, so a channel that stops appearing is a channel that stops working.
+ */
+export function unionEntitlement(
+  rows: { channels: string[]; status: OwnershipStatus }[],
+): { channels: string[]; status: OwnershipStatus } {
+  const live = rows.filter((r) => r.status === "active" || r.status === "trialing");
+  const channels = [...new Set(live.flatMap((r) => r.channels ?? []))].sort();
+  const status: OwnershipStatus = rows.some((r) => r.status === "trialing")
+    ? "trialing"
+    : rows.some((r) => r.status === "active")
+      ? "active"
+      : rows.some((r) => r.status === "past_due")
+        ? "past_due"
+        : "canceled";
+  return { channels, status };
+}
+
+type EnrichedOwnershipRow = {
+  appId: string;
+  userId: string;
+  status: OwnershipStatus;
+  stripeSubscriptionId: string | null;
+  email: string;
+  fullName: string | null;
+  entitlementKey: string | null;
+  channels: string[];
+  stripeCustomerId: string | null;
+};
+
 // Tell every app behind these ownership rows what their state is now. Ownership
 // rows carry app_id; the buyer's email and the entitlement key come from the
 // user and the offer that granted it.
+//
+// One person can hold two subscriptions to the same app (Instagram today,
+// LinkedIn next week), so rows are grouped by (user, app) and sent as ONE
+// message carrying the union of their channels — never one message per row,
+// which is what let a second purchase silently overwrite the first.
 export async function pushOwnershipStateToApps(ownershipIds: string[]): Promise<void> {
   if (ownershipIds.length === 0) return;
   const db = createServiceClient();
@@ -30,6 +74,8 @@ export async function pushOwnershipStateToApps(ownershipIds: string[]): Promise<
     .in("id", ownershipIds)
     .not("app_id", "is", null);
   if (!rows || rows.length === 0) return;
+
+  const enriched: EnrichedOwnershipRow[] = [];
 
   for (const row of rows) {
     const { data: user } = await db
@@ -69,17 +115,46 @@ export async function pushOwnershipStateToApps(ownershipIds: string[]): Promise<
       .limit(1)
       .maybeSingle();
 
-    // Best-effort, exactly like the original provision call: an app being down
-    // must never break a webhook or a refund.
-    await notifyAppEntitlement({
+    enriched.push({
       appId: row.app_id as string,
+      userId: row.user_id as string,
+      status: row.status as OwnershipStatus,
+      stripeSubscriptionId: (row.stripe_subscription_id as string) ?? null,
       email: user.email as string,
       fullName: (user.username as string | null) ?? null,
       entitlementKey,
       channels,
-      status: row.status as OwnershipStatus,
       stripeCustomerId: (order?.stripe_customer_id as string) ?? null,
-      stripeSubscriptionId: (row.stripe_subscription_id as string) ?? null,
+    });
+  }
+
+  const groups = new Map<string, EnrichedOwnershipRow[]>();
+  for (const r of enriched) {
+    const key = `${r.userId}:${r.appId}`;
+    const group = groups.get(key);
+    if (group) group.push(r);
+    else groups.set(key, [r]);
+  }
+
+  for (const group of groups.values()) {
+    const first = group[0];
+    const { channels, status } = unionEntitlement(group);
+    // No longer a stable identifier once a person can hold two subscriptions
+    // to the same app — prefer a live row's, falling back to the first.
+    const liveRow = group.find((r) => r.status === "active" || r.status === "trialing");
+    const stripeSubscriptionId = (liveRow ?? first).stripeSubscriptionId;
+
+    // Best-effort, exactly like the original provision call: an app being down
+    // must never break a webhook or a refund.
+    await notifyAppEntitlement({
+      appId: first.appId,
+      email: first.email,
+      fullName: first.fullName,
+      entitlementKey: first.entitlementKey,
+      channels,
+      status,
+      stripeCustomerId: first.stripeCustomerId,
+      stripeSubscriptionId,
     });
   }
 }
