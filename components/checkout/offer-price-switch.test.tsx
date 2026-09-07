@@ -57,7 +57,8 @@ function mount() {
           headline: "Content Engine",
           description: null,
           chargeNowCents: 0,
-          recurringNote: "then $29/mo",
+          trialDays: 7,
+          recurring: { priceCents: 2900, interval: "month" },
           acceptLabel: "Start",
           currency: "usd",
         }}

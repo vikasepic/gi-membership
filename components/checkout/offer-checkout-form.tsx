@@ -10,7 +10,20 @@ export type OfferSummary = {
   headline: string;
   description: string | null;
   chargeNowCents: number;
-  recurringNote: string | null;
+  /**
+   * The offer's own trial, for when no way to pay has been picked yet. The
+   * base a coupon's `trial_days` replaces — see `trialDays` below.
+   */
+  trialDays: number | null;
+  /**
+   * What it renews at, where it renews at all.
+   *
+   * The pieces rather than the finished sentence. It used to arrive as
+   * `recurringNote`, built on the server from `offer.trialDays` — which meant
+   * the one line the form shows before a price is picked went on naming the
+   * price's trial after a code had replaced it.
+   */
+  recurring: { priceCents: number; interval: string | null } | null;
   acceptLabel: string;
   currency: string;
 };
@@ -21,6 +34,7 @@ import { priceLabel, priceTerms, chargeNowCents, type OfferPrice } from "@/lib/o
 import { MIN_CHARGE_CENTS_CLIENT } from "@/components/checkout/checkout-types";
 import { previewOfferCouponAction } from "@/app/(store)/checkout/offer/actions";
 import { CheckoutSlots, type CheckoutSlotValue } from "@/components/checkout/slots";
+import { usePublishTrialDays } from "@/components/checkout/trial";
 import { CheckoutV2Layout } from "@/components/checkout/v2/layout";
 import { stripeAppearance } from "@/components/checkout/v2/appearance";
 import type { CheckoutSkin } from "@/lib/checkout-skin";
@@ -150,7 +164,7 @@ function Inner({
   // Recurring where the chosen price renews — and where nothing has been
   // chosen yet, from the offer's own note, which is the only signal this
   // component is given.
-  const isRecurring = picked ? Boolean(picked.interval) : Boolean(offer.recurringNote);
+  const isRecurring = picked ? Boolean(picked.interval) : Boolean(offer.recurring);
 
   // What is taken today, after any discount that applies today.
   //
@@ -163,7 +177,20 @@ function Inner({
   // price's own — the same `coupon.trialDays ?? price.trialDays` the
   // subscription hands Stripe — so every sentence about the trial has to be
   // built with it, or the page promises seven days against a card getting 30.
-  const couponTrial = coupon?.trialDays ?? null;
+  //
+  // Worked out ONCE, here, because this is the only component that can see both
+  // the code and the choice. The selling half of the page reads the answer
+  // rather than deriving its own: two derivations off different inputs is how
+  // the stage came to say seven beside a form saying thirty.
+  const trialDays = coupon?.trialDays ?? (picked ? picked.trialDays : offer.trialDays);
+  usePublishTrialDays(trialDays);
+  // What it renews at, said before a price has been picked. The picked case has
+  // its own sentence — `priceTerms` below — and both state `trialDays`.
+  const recurringNote = offer.recurring
+    ? `Then ${money(offer.recurring.priceCents, offer.currency)}/${offer.recurring.interval}${
+        trialDays ? ` after your ${trialDays}-day trial` : ""
+      }. Cancel anytime.`
+    : null;
   const dueNow =
     coupon && !isRecurring ? Math.max(MIN_CHARGE_CENTS_CLIENT, grossNow - coupon.discountCents) : grossNow;
 
@@ -327,9 +354,9 @@ function Inner({
                     <span className="ml-2 text-[0.72rem] font-medium text-muted">{p.label.trim()}</span>
                   )}
                 </span>
-                {priceTerms(p, offer.currency, pick === i ? couponTrial : null) && (
+                {priceTerms(p, offer.currency, pick === i ? trialDays : null) && (
                   <span className="text-[0.76rem] text-muted">
-                    {priceTerms(p, offer.currency, pick === i ? couponTrial : null)}
+                    {priceTerms(p, offer.currency, pick === i ? trialDays : null)}
                   </span>
                 )}
               </span>
@@ -462,14 +489,14 @@ function Inner({
         </div>
       </div>
       {picked
-        ? priceTerms(picked, offer.currency, couponTrial) && (
+        ? priceTerms(picked, offer.currency, trialDays) && (
             <p className="-mt-3 text-sm text-muted" style={{ fontSize: "0.875rem", lineHeight: 1.5 }}>
-              {priceTerms(picked, offer.currency, couponTrial)}
+              {priceTerms(picked, offer.currency, trialDays)}
             </p>
           )
-        : offer.recurringNote && (
+        : recurringNote && (
             <p className="-mt-3 text-sm text-muted" style={{ fontSize: "0.875rem", lineHeight: 1.5 }}>
-              {offer.recurringNote}
+              {recurringNote}
             </p>
           )}
 

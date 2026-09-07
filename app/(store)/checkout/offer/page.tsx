@@ -4,9 +4,10 @@ import { getOffer } from "@/lib/store";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { ownershipFor } from "@/lib/checkout";
 import { isOfferEligible, immediateChargeCents } from "@/lib/offers";
-import { livePrices, priceTerms } from "@/lib/offer-prices";
+import { livePrices } from "@/lib/offer-prices";
 import { checkoutSkin } from "@/lib/checkout-skin";
 import { CheckoutStage } from "@/components/checkout/v2/stage";
+import { CheckoutTrial, TrialEyebrow, TrialPriceTerms } from "@/components/checkout/trial";
 import { stripePublishableKey } from "@/lib/env";
 import { OfferCheckoutForm } from "@/components/checkout/offer-checkout-form";
 
@@ -61,13 +62,6 @@ export default async function OfferCheckoutPage({
     if (!isOfferEligible(offer, owned)) redirect("/library?offer=already_owned");
   }
 
-  const recurringNote =
-    offer.billingType === "recurring"
-      ? `Then ${money(offer.priceCents, offer.currency)}/${offer.interval}${
-          offer.trialDays ? ` after your ${offer.trialDays}-day trial` : ""
-        }. Cancel anytime.`
-      : null;
-
   // What this offer looks like: its own image where one has been set, else the
   // artwork of whatever it grants.
   //
@@ -106,7 +100,13 @@ export default async function OfferCheckoutPage({
         headline: offer.headline ?? offer.name,
         description: offer.description,
         chargeNowCents: immediateChargeCents(offer),
-        recurringNote,
+        // The offer's own trial and renewal, so the form can say what happens
+        // after — with the trial a coupon actually grants, which only it knows.
+        trialDays: offer.trialDays,
+        recurring:
+          offer.billingType === "recurring"
+            ? { priceCents: offer.priceCents, interval: offer.interval }
+            : null,
         acceptLabel: offer.acceptLabel ?? "Confirm",
         currency: offer.currency,
       }}
@@ -124,8 +124,16 @@ export default async function OfferCheckoutPage({
     />
   );
 
+  // Both halves under one answer about the trial.
+  //
+  // The stage is server-rendered and the coupon is client state, so before this
+  // a code carrying `trial_days` moved the form and left the panel beside it
+  // still naming the price's own — "30 days free" and "7-day free trial" on one
+  // screen at once. Seeded with the offer's own trial, so the first HTML is
+  // right for everybody without a code and needs no JavaScript to be.
   if (skin === "v2") {
     return (
+      <CheckoutTrial days={offer.trialDays}>
       <div className="checkout-v2 min-h-dvh bg-bg" style={checkoutDesignVars(design)}>
         {/* Half and half, both hugging the seam — the arrangement Stripe's own
             checkout uses, and for the reason it uses it: two columns of equal
@@ -139,13 +147,9 @@ export default async function OfferCheckoutPage({
           design={design}
           backHref="/library"
           backLabel="Back"
-          // The terms as a label, never a claim. An offer with no trial says
-          // how it renews instead of saying nothing.
-          eyebrow={
-            offer.trialDays
-              ? `${offer.name} · ${offer.trialDays}-day free trial`
-              : offer.name
-          }
+          // The terms as a label, never a claim — and the trial a code
+          // actually grants rather than the price's. See checkout/trial.
+          eyebrow={<TrialEyebrow name={offer.name} />}
           title={offer.headline ?? offer.name}
           sub={offer.description}
           imageUrl={coverUrl}
@@ -154,17 +158,25 @@ export default async function OfferCheckoutPage({
           // on the other half are the price and a headline figure beside them
           // is a second answer to the same question.
           priceLabel={ways.length === 1 ? money(ways[0].priceCents, offer.currency) : null}
-          priceCaption={ways.length === 1 ? (priceTerms(ways[0], offer.currency) ?? null) : null}
+          // A one-time price has no terms to state, with or without a code —
+          // which is the whole of what `priceTerms` returns null for.
+          priceCaption={
+            ways.length === 1 && ways[0].billingType === "recurring" ? (
+              <TrialPriceTerms price={ways[0]} currency={offer.currency} />
+            ) : null
+          }
         />
         <div className="mx-auto flex w-full max-w-[30rem] flex-col gap-6 px-5 py-8 md:px-8 lg:mx-0 lg:mr-auto lg:py-12 lg:pl-10 lg:pr-0">
             {form}
           </div>
         </div>
       </div>
+      </CheckoutTrial>
     );
   }
 
   return (
+    <CheckoutTrial days={offer.trialDays}>
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <CheckoutPanel
         title={offer.headline ?? offer.name}
@@ -189,5 +201,6 @@ export default async function OfferCheckoutPage({
         {form}
       </div>
     </div>
+    </CheckoutTrial>
   );
 }

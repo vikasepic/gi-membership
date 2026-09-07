@@ -53,7 +53,8 @@ const offer = {
   headline: "Build funnels that actually convert",
   description: "Pages, checkouts and follow-up in one place.",
   chargeNowCents: 0,
-  recurringNote: "Then $29/month after your 7-day trial. Cancel anytime.",
+  trialDays: 7,
+  recurring: { priceCents: 2900, interval: "month" },
   acceptLabel: "Start my trial",
   currency: "usd",
 };

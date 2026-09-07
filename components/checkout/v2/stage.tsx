@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { StageBody } from "@/components/checkout/v2/stage-body";
 import { CHECKOUT_DESIGN_DEFAULTS, type CheckoutDesign } from "@/lib/checkout-design";
 
@@ -33,8 +34,15 @@ export function CheckoutStage({
 }: {
   backHref: string;
   backLabel: string;
-  /** The pill above the title — terms, never a claim. */
-  eyebrow: string | null;
+  /**
+   * The pill above the title — terms, never a claim.
+   *
+   * A node rather than a string because the terms it states can change after
+   * the server has rendered: a promotion code carrying `trial_days` replaces
+   * the price's trial, and this half of the checkout has to follow the form's
+   * answer instead of repeating the offer's. See components/checkout/trial.
+   */
+  eyebrow: ReactNode;
   title: string;
   sub: string | null;
   /** Whatever this thing looks like. Same treatment for a product and an offer. */
@@ -42,7 +50,8 @@ export function CheckoutStage({
   bullets: string[];
   /** The headline figure, where there is a single one worth showing. */
   priceLabel: string | null;
-  priceCaption: string | null;
+  /** Reactive for the same reason as the eyebrow. Null draws nothing. */
+  priceCaption: ReactNode;
   /** What the store chose to show, and in what colour. See lib/checkout-design. */
   design?: CheckoutDesign | null;
 }) {

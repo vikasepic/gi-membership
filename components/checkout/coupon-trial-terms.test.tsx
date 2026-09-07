@@ -69,7 +69,8 @@ function mount(skin: CheckoutSkin) {
           headline: "Content Engine",
           description: null,
           chargeNowCents: 0,
-          recurringNote: null,
+          trialDays: 7,
+          recurring: { priceCents: 2900, interval: "month" },
           acceptLabel: "Start",
           currency: "usd",
         }}
