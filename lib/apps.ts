@@ -127,6 +127,22 @@ export async function notifyAppEntitlement(args: {
   status: "active" | "trialing" | "canceled" | "past_due";
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
+  /**
+   * When the entitlement CHANGED, in unix seconds — not when we got round to
+   * sending it. Apps order messages by this, and they have to: an app that
+   * replaces its channel list on every message (which is what this contract
+   * asks of them) is undone rather than merely repeated by a late retry. Buy
+   * Instagram, add LinkedIn, and a stale first message landing last would
+   * revoke LinkedIn from somebody paying for it.
+   *
+   * So it is taken ONCE by the caller and carried through the retry queue. It
+   * was previously minted inside the send, which meant every attempt got a
+   * fresh "now" and no guard on the other side could ever fire.
+   *
+   * Optional so the dozens of existing call sites keep working; it defaults to
+   * now, which is correct for a first attempt made at the moment of the change.
+   */
+  occurredAt?: number;
 },
   /**
    * Whether a failure should be queued for another go.
@@ -140,6 +156,12 @@ export async function notifyAppEntitlement(args: {
   opts: { queueOnFailure?: boolean } = {},
 ): Promise<{ ok: boolean; status?: number; error?: string }> {
   const queueOnFailure = opts.queueOnFailure !== false;
+  // Resolved ONCE, here, so the value sent and the value queued are the same
+  // number. Defaulting inside the body instead would let a first attempt send
+  // one timestamp and its retry queue none — and the replay would then mint a
+  // fresh one, which is the whole failure this exists to stop.
+  const occurredAt = args.occurredAt ?? Math.floor(Date.now() / 1000);
+  const stamped = { ...args, occurredAt };
   const app = await getAppById(args.appId);
   // Not queued: an app that is switched off is a decision someone made, not a
   // delivery that failed. Retrying it forever would fill the queue with work
@@ -160,7 +182,7 @@ export async function notifyAppEntitlement(args: {
         hasAccess: args.status !== "canceled",
         stripeCustomerId: args.stripeCustomerId,
         stripeSubscriptionId: args.stripeSubscriptionId,
-        occurredAt: Math.floor(Date.now() / 1000),
+        occurredAt,
       }),
       signal: AbortSignal.timeout(5000),
       // A provision call is server-to-server and authenticated by the header.
@@ -170,11 +192,11 @@ export async function notifyAppEntitlement(args: {
       // middleware did exactly this: 307 to /login on both endpoints.
       redirect: "manual",
     });
-    if (!res.ok && queueOnFailure) await queueRetry(args, `app returned ${res.status}`);
+    if (!res.ok && queueOnFailure) await queueRetry(stamped, `app returned ${res.status}`);
     return { ok: res.ok, status: res.status };
   } catch (e) {
     const error = e instanceof Error ? e.message : "fetch_failed";
-    if (queueOnFailure) await queueRetry(args, error);
+    if (queueOnFailure) await queueRetry(stamped, error);
     return { ok: false, error };
   }
 }

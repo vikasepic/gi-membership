@@ -47,6 +47,9 @@ const RUNNERS: Record<JobKind, Runner> = {
       stripeCustomerId: (p.stripeCustomerId as string) ?? null,
       stripeSubscriptionId: (p.stripeSubscriptionId as string) ?? null,
       fullName: (p.fullName as string) ?? null,
+      // Replayed, never re-taken. Re-stamping here is what let a stale retry
+      // land looking newer than the message that superseded it.
+      occurredAt: typeof p.occurredAt === "number" ? p.occurredAt : undefined,
     },
     // This IS the retry. Queueing from here would add a job per sweep.
     { queueOnFailure: false });
