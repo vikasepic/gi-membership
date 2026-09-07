@@ -183,6 +183,16 @@ export function withLineBreaks(value: string): string {
  * size, weight and colour.
  */
 /**
+ * What a tinted card falls back to when the block states neither.
+ *
+ * These are the two figures the skin used to hard-code. They are the values
+ * every tinted card on a live page is already drawing, so they are a baseline
+ * rather than a preference — moving either repaints work nobody touched.
+ */
+const TINTED_CARD_RADIUS = 3;
+const TINT_ALPHA = 0.12;
+
+/**
  * A card's padding, whether it was saved as one number or as four sides.
  *
  * It shipped as a single figure, and a card is a box like any other — the
@@ -1306,7 +1316,22 @@ function Inner({
         skin === "boxed"
           ? { background: c.fill, border: `1px solid ${c.rule}`, borderRadius: 16, padding: "1.35rem 1.4rem" }
           : skin === "tinted"
-            ? { background: softAccent(theme, 0.12), borderRadius: 3, padding: "1.6rem 1.7rem" }
+            ? {
+                // Both read off the block, the way Boxed has always read
+                // `c.fill`. Hard-coded, a tinted card could not be made to
+                // match the page around it: the corner was a bare 3 and the
+                // wash was the band accent at a fixed alpha whatever the block
+                // said. `c.fill` is the block's own background where it has
+                // one and the band's panel where it does not, so the accent
+                // wash stays the fallback rather than becoming it.
+                //
+                // Unset is still unset: `radius` is 0 and `background.color` is
+                // null on every tinted card already saved, so those land on the
+                // two constants and nothing on a live page moves.
+                background: s.background.color ?? softAccent(theme, TINT_ALPHA),
+                borderRadius: s.radius || TINTED_CARD_RADIUS,
+                padding: "1.6rem 1.7rem",
+              }
             : skin === "bordered"
               ? { border: `1px solid ${c.rule}`, borderRadius: 16, padding: "1.35rem 1.4rem" }
               : {};

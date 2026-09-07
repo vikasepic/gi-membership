@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Blocks } from "@/components/page/blocks";
 import { blockRules } from "@/lib/block-style";
 import { bandTheme } from "@/lib/page-sections";
-import { normalizeBlocks, setPropsAt, setStyleAt, type Block } from "@/lib/blocks";
+import { emptyBackground, normalizeBlocks, setPropsAt, setStyleAt, type Block } from "@/lib/blocks";
 import { sanitizeBlocks } from "@/lib/sanitize-html";
 
 // The cards block, and the settings added to it after pages were already using
@@ -230,6 +230,27 @@ describe("the card corner and the rule between cards", () => {
 
   it("changes nothing at all while it is off", () => {
     expect(cells({ skin: "plain", divider: false })).toEqual(["", ""]);
+  });
+
+  it("gives a tinted card the block's own corner and fill, the way boxed does", () => {
+    // Boxed has always read both off the block — `c.fill` is the block's own
+    // background when it has one — and Tinted read neither: a hard-coded 3px
+    // corner and an accent wash at a fixed alpha, so a tinted card could not
+    // be made to match the page around it.
+    const b = setStyleAt(stored({ items: ITEMS, skin: "tinted" }), "desktop", {
+      radius: 18,
+      background: { ...emptyBackground(), type: "classic", color: "#832a63" },
+    });
+    const cell = /<div style="([^"]*)"><span aria-hidden/.exec(render(b))![1];
+    expect(cell).toContain("border-radius:18px");
+    expect(cell).toContain("background:#832a63");
+  });
+
+  it("leaves a tinted card that says neither exactly where it was", () => {
+    // The default is the defect, not the override: every tinted card already
+    // saved says nothing about either, and must not move.
+    expect(cells({ skin: "tinted" })[0]).toContain("border-radius:3px");
+    expect(cells({ skin: "tinted" })[0]).toContain("background:rgba(176, 83, 47, 0.12)");
   });
 });
 
