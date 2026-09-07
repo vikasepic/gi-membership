@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { grantKeyOf, withoutTrial } from "@/lib/trial-history";
+import { grantKeysOf, withoutTrial } from "@/lib/trial-history";
 import type { Offer } from "@/lib/types";
 
 // A free trial is a thing you get once. The rules that decide it, without the
@@ -11,6 +11,7 @@ const offer = (over: Partial<Offer>): Offer =>
     grantAppId: null,
     grantEntitlementKey: null,
     grantProductId: null,
+    grantChannels: [],
     trialDays: 7,
     priceCents: 2900,
     interval: "month",
@@ -26,27 +27,27 @@ describe("what a trial is remembered against", () => {
     // loophole with two doors.
     const monthly = offer({ id: "m", grantAppId: "app1", grantEntitlementKey: "funnel" });
     const yearly = offer({ id: "y", grantAppId: "app1", grantEntitlementKey: "funnel" });
-    expect(grantKeyOf(monthly)).toBe(grantKeyOf(yearly));
+    expect(grantKeysOf(monthly)).toEqual(grantKeysOf(yearly));
   });
 
   it("keeps different apps apart", () => {
-    expect(grantKeyOf(offer({ grantAppId: "a", grantEntitlementKey: "x" }))).not.toBe(
-      grantKeyOf(offer({ grantAppId: "b", grantEntitlementKey: "x" })),
+    expect(grantKeysOf(offer({ grantAppId: "a", grantEntitlementKey: "x" }))).not.toEqual(
+      grantKeysOf(offer({ grantAppId: "b", grantEntitlementKey: "x" })),
     );
   });
 
   it("keeps different entitlements of one app apart", () => {
-    expect(grantKeyOf(offer({ grantAppId: "a", grantEntitlementKey: "basic" }))).not.toBe(
-      grantKeyOf(offer({ grantAppId: "a", grantEntitlementKey: "pro" })),
+    expect(grantKeysOf(offer({ grantAppId: "a", grantEntitlementKey: "basic" }))).not.toEqual(
+      grantKeysOf(offer({ grantAppId: "a", grantEntitlementKey: "pro" })),
     );
   });
 
   it("handles an offer that grants a product instead", () => {
-    expect(grantKeyOf(offer({ grantProductId: "p1" }))).toBe("product:p1");
+    expect(grantKeysOf(offer({ grantProductId: "p1" }))).toEqual(["product:p1"]);
   });
 
-  it("is null for an offer that grants nothing identifiable", () => {
-    expect(grantKeyOf(offer({}))).toBeNull();
+  it("is empty for an offer that grants nothing identifiable", () => {
+    expect(grantKeysOf(offer({}))).toEqual([]);
   });
 });
 
@@ -105,5 +106,53 @@ describe("what removing the trial makes every surface do", () => {
     const label = (o: Offer) => (o.trialDays ? `${o.trialDays} days` : null);
     expect(label(offer({ trialDays: 7 }))).toBe("7 days");
     expect(label(repeat)).toBeNull();
+  });
+});
+
+const app = (channels: string[]) => ({
+  grantAppId: "8ee0321c-c78b-4638-a4a6-81a70d1e37bb",
+  grantEntitlementKey: "content-engine",
+  grantProductId: null,
+  grantChannels: channels,
+});
+
+describe("what a trial is recorded against", () => {
+  it("keeps the old key exactly when an offer has no channels", () => {
+    // Rows already exist under this string. A changed format would silently
+    // hand everybody a second free trial of something they have had.
+    expect(grantKeysOf(app([]))).toEqual([
+      "app:8ee0321c-c78b-4638-a4a6-81a70d1e37bb:content-engine",
+    ]);
+  });
+
+  it("records a product grant unchanged", () => {
+    expect(
+      grantKeysOf({ grantAppId: null, grantEntitlementKey: null, grantProductId: "p1", grantChannels: [] }),
+    ).toEqual(["product:p1"]);
+  });
+
+  it("gives one key per channel", () => {
+    expect(grantKeysOf(app(["instagram"]))).toEqual([
+      "app:8ee0321c-c78b-4638-a4a6-81a70d1e37bb:content-engine:ch:instagram",
+    ]);
+  });
+
+  it("gives the bundle both channels' keys", () => {
+    expect(grantKeysOf(app(["instagram", "linkedin"]))).toEqual([
+      "app:8ee0321c-c78b-4638-a4a6-81a70d1e37bb:content-engine:ch:instagram",
+      "app:8ee0321c-c78b-4638-a4a6-81a70d1e37bb:content-engine:ch:linkedin",
+    ]);
+  });
+
+  it("orders channels the same way however they arrive", () => {
+    // The key IS the identity. Two spellings of one channel set would be two
+    // trials, which is the loophole this is meant to close.
+    expect(grantKeysOf(app(["linkedin", "instagram"]))).toEqual(grantKeysOf(app(["instagram", "linkedin"])));
+  });
+
+  it("grants nothing a key when it grants nothing", () => {
+    expect(
+      grantKeysOf({ grantAppId: null, grantEntitlementKey: null, grantProductId: null, grantChannels: [] }),
+    ).toEqual([]);
   });
 });
