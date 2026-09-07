@@ -109,6 +109,16 @@ describe.skipIf(!canRun)("a coupon's trial (integration)", () => {
       .eq("email", email)
       .in("grant_key", grantKeysOf((await getOffer(offerId))!));
     expect(history).toHaveLength(1);
+
+    // And the ledger has to agree with the card. Stripe charges nothing today
+    // — the trial runs 30 days — so an order booking $199 is revenue that was
+    // never taken, on the one promotion this feature exists to run.
+    const { data: order } = await db
+      .from("orders")
+      .select("subtotal_cents, total_cents")
+      .eq("email", email)
+      .single();
+    expect(order).toEqual({ subtotal_cents: 0, total_cents: 0 });
   });
 
   it("removes a trial the price does have, and spends nothing", async () => {
@@ -123,6 +133,23 @@ describe.skipIf(!canRun)("a coupon's trial (integration)", () => {
 
     const { data: history } = await db.from("trial_history").select("grant_key").eq("email", email);
     expect(history).toHaveLength(0);
+
+    // The same defect pointing the other way: the price's trial made the order
+    // book $0 while Stripe billed the first period immediately. A paid sale
+    // recorded as free is the half nobody notices.
+    const { data: order } = await db
+      .from("orders")
+      .select("subtotal_cents, total_cents")
+      .eq("email", email)
+      .single();
+    // Read from the offer rather than hardcoded: the seeded price differs
+    // between this database and production, and a literal here would pin the
+    // test to whichever one its author happened to look at.
+    //
+    // Full price, not 1% off — on a subscription the discount is Stripe's to
+    // apply to the first invoice, so the order books the undiscounted figure.
+    const full = (await getOffer(SEEDED_TRIAL_OFFER))!.priceCents;
+    expect(order).toEqual({ subtotal_cents: full, total_cents: full });
   });
 });
 

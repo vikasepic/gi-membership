@@ -234,9 +234,20 @@ export async function completeOfferCheckout(
   // real invoice, not on today's $0 — so the order books the undiscounted
   // charge-now figure and records the code beside it. Taking it off here would
   // book money nobody was charged today.
-  const gross = immediateChargeCents(offer);
+  // The offer as this coupon sells it. A code carrying trial_days replaces the
+  // price's trial, and EVERYTHING the trial decides has to follow it — what
+  // Stripe is told, the ownership row's status, the trial recorded as spent,
+  // and the money booked here.
+  //
+  // Booked from `sold`, not `offer`, because that was the bug: a 30-day code
+  // on a no-trial $199 yearly wrote $199 onto an order Stripe charged $0 for,
+  // and a trial-removing code wrote $0 onto one it billed immediately. The
+  // ledger has to agree with the card.
+  const sold = offerWithCouponTrial(offer, coupon);
+
+  const gross = immediateChargeCents(sold);
   const discount =
-    coupon && offer.billingType !== "recurring"
+    coupon && sold.billingType !== "recurring"
       ? Math.min(coupon.discountCents, Math.max(0, gross - MIN_CHARGE_CENTS))
       : 0;
   const chargeNow = gross - discount;
@@ -262,13 +273,6 @@ export async function completeOfferCheckout(
     .select("id")
     .single();
   if (orderErr || !order) return { ok: false, error: "order_failed" };
-
-  // The offer as this coupon sells it. A code carrying trial_days replaces the
-  // price's trial, and the ownership row's status and the trial we record as
-  // used both have to follow it — otherwise a 30-day promotional trial is
-  // written down as an active paid subscription and burns nobody's one trial,
-  // leaving them free to take the monthly's seven days as well.
-  const sold = offerWithCouponTrial(offer, coupon);
 
   let result: { subscriptionId?: string; paymentIntentId?: string };
   try {

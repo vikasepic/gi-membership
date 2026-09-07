@@ -64,9 +64,21 @@ describe("a subscription is discounted by Stripe, not by us", () => {
     // On a subscription the discount lands on the first REAL invoice, so
     // today's order must record the undiscounted figure — booking a reduction
     // nobody was charged today would put the ledger out by the discount.
-    expect(offerCheckout).toContain('offer.billingType !== "recurring"');
+    expect(offerCheckout).toContain('sold.billingType !== "recurring"');
     expect(offerCheckout).toContain("total_cents: chargeNow");
     expect(offerCheckout).toContain("subtotal_cents: gross");
+  });
+
+  it("prices the order from the offer as the COUPON sells it", () => {
+    // `sold` carries the coupon's trial; `offer` carries the price's. Pricing
+    // from `offer` booked $199 on an order Stripe charged $0 for, because the
+    // code had turned a no-trial yearly into a 30-day trial — and $0 on one it
+    // billed immediately when a code removed a trial. The ledger has to agree
+    // with the card, so `sold` must exist before the money is worked out.
+    expect(offerCheckout).toContain("const gross = immediateChargeCents(sold)");
+    expect(offerCheckout.indexOf("const sold = offerWithCouponTrial")).toBeLessThan(
+      offerCheckout.indexOf("const gross = immediateChargeCents"),
+    );
   });
 });
 
