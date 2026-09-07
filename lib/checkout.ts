@@ -1335,11 +1335,15 @@ export async function grantOfferOwnership(
       stripe_subscription_id: subscriptionId,
       status,
     });
-    // 23505 means a row for this (store, user, app) already exists. It is NOT
-    // simply a duplicate to ignore: a returning subscriber's old row is still
-    // there marked `canceled`, and now that cancelled rows no longer count as
-    // owned, they can buy again — so the row must be revived. Swallowing the
+    // 23505 means a row for this (store, user, app, OFFER) already exists. It is
+    // NOT simply a duplicate to ignore: a returning subscriber's old row is
+    // still there marked `canceled`, and now that cancelled rows no longer count
+    // as owned, they can buy again — so the row must be revived. Swallowing the
     // conflict would leave them paid up with status `canceled` and no access.
+    //
+    // Keyed on the offer since 0069. Without that this update would rewrite
+    // EVERY one of a person's channel rows on any purchase — buying LinkedIn
+    // would point the Instagram row at the LinkedIn subscription.
     if (error?.code === "23505") {
       const { error: reviveErr } = await db
         .from("ownership")
@@ -1352,7 +1356,8 @@ export async function grantOfferOwnership(
         })
         .eq("store_id", storeId)
         .eq("user_id", userId)
-        .eq("app_id", offer.grantAppId);
+        .eq("app_id", offer.grantAppId)
+        .eq("offer_id", offer.id);
       if (reviveErr) throw new Error(`grant offer (app revive): ${reviveErr.message}`);
     } else if (error) {
       throw new Error(`grant offer (app): ${error.message}`);

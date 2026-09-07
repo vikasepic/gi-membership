@@ -53,12 +53,12 @@ describe.skipIf(!canRun)("offer eligibility vs ownership status (integration)", 
     if (!offer) return; // seed offer absent
 
     await db.from("ownership").insert({
-      store_id: storeId, user_id: userId, app_id: APP_ID, source: "bump", status: "canceled",
+      store_id: storeId, user_id: userId, app_id: APP_ID, offer_id: offer.id, source: "bump", status: "canceled",
     });
 
-    // The unique index on (store, user, app) makes this insert conflict. Before
-    // the fix that 23505 was swallowed and the row stayed `canceled` — a buyer
-    // could pay to resubscribe and still have no access.
+    // The unique index on (store, user, app, offer) makes this insert conflict.
+    // Before the fix that 23505 was swallowed and the row stayed `canceled` — a
+    // buyer could pay to resubscribe and still have no access.
     await grantOfferOwnership(storeId, userId, offer, "bump", "sub_reactivated");
 
     const { data } = await db
