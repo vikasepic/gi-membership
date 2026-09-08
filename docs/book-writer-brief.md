@@ -23,7 +23,7 @@ names your files and tables directly.
 | Entitlement key | `book-writer` |
 | Channels | **none** — you have no sub-permissions, so the store will never send a `channels` array |
 | Shared secret | sent separately, never in this pack |
-| App id | in your `.env.example` |
+| App id | `4fdef120-149d-462a-84df-7d64ed725128` — also in your `.env.example` |
 
 **Until we flip you active, the store cannot call you and you cannot call the
 store.** `POST /api/apps/entitlement` answers `401` for an inactive app, and
