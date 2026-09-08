@@ -69,7 +69,10 @@ describe.skipIf(!canRun)("buying a one-time offer (integration)", () => {
     expect(orders.data![0].stripe_payment_intent_id).toBe(piId);
     expect(orders.data![0].stripe_setup_intent_id).toBeNull();
 
-    // The buyer refreshes the return page. Granting twice would be the bug.
+    // The buyer refreshes the return page. This is prevented by the sequential
+    // guarantee (eligibility re-check); the concurrent race (webhook + return route
+    // landing at once) is covered separately by Promise.all tests in
+    // offer-checkout-complete.integration.test.ts.
     expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
     const again = await db.from("ownership").select("id").eq("user_id", userId);
     expect(again.data).toHaveLength(1);
