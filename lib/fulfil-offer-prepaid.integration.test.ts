@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { fulfilOffer } from "@/lib/checkout";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
@@ -7,6 +7,16 @@ import { stripe } from "@/lib/stripe";
 const canRun =
   !!process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") &&
   !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+const orderIds: string[] = [];
+
+afterAll(async () => {
+  if (!canRun) return;
+  const db = createServiceClient();
+  for (const id of orderIds) {
+    await db.from("orders").delete().eq("id", id);
+  }
+});
 
 describe.skipIf(!canRun)("a prepaid one-time offer (integration)", () => {
   it("grants without creating a second charge", async () => {
@@ -29,6 +39,8 @@ describe.skipIf(!canRun)("a prepaid one-time offer (integration)", () => {
       .select("id")
       .single();
 
+    orderIds.push(order!.id as string);
+
     const before = await stripe().paymentIntents.list({ customer: customer.id, limit: 100 });
 
     const res = await fulfilOffer({
@@ -48,7 +60,5 @@ describe.skipIf(!canRun)("a prepaid one-time offer (integration)", () => {
     const after = await stripe().paymentIntents.list({ customer: customer.id, limit: 100 });
     expect(res.paymentIntentId).toBeUndefined();
     expect(after.data.length).toBe(before.data.length);
-
-    await db.from("orders").delete().eq("id", order!.id);
   });
 });
