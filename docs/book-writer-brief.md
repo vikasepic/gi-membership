@@ -33,34 +33,32 @@ us when your endpoints are up and we will activate.
 
 ---
 
-## 2. The question that decides how much work this is
+## 2. Yes, it is the same Stripe account — and it does not matter
 
-**Does `book.greaterinside.com` bill through the same Stripe account as the
-store?**
+Confirmed: `book.greaterinside.com` bills through the same Stripe account as
+the store. Normally that is the answer that makes an integration expensive.
+Here it costs nothing, for a reason worth knowing:
 
-You already run a webhook on `checkout.session.completed`. If it is the same
-account, that webhook is about to start receiving *our* events — every
-subscription the store creates, for every app, not only yours.
+**The store does not use Stripe Checkout Sessions.** It creates PaymentIntents
+and SetupIntents directly against the Payment Element. So it never emits
+`checkout.session.completed` — the only event your webhook subscribes to.
+**Store purchases are invisible to your webhook.** Not filtered out: never
+delivered.
 
-Your classifier already saves you here, and it is worth knowing why: step 03
-matches the expanded product id against your three `_PRODUCT_ID` env vars and
-returns `source=null` for anything else, so a store event lands on
-`diag.stage='ignored_unrelated_product'` and provisions nothing. That is the
-correct behaviour and you should keep it.
+Your `ignored_unrelated_product` branch is therefore not load-bearing for this
+integration. Keep it anyway — it is what protects you the day someone adds a
+Checkout Session somewhere on this account.
 
-Two things to check even so:
+Two things the shared account does give you:
 
-- Store-created subscriptions carry `metadata.store_created = "true"`. If you
-  ever relax the product-id match, filter on that instead.
-- Store subscriptions can be in `trialing`. Your flow has never seen a
-  subscription at all — it is a one-time $47 payment — so if you add any
-  subscription handling later, treat `trialing` as access.
+- **`stripeCustomerId` resolves.** The `cus_…` we send is a real customer in
+  your account, so you can look it up, attach it, or reconcile against it.
+  Store it if it is useful to you.
+- **`stripeSubscriptionId` will be null** for Book Writer, because the offer is
+  a one-time $47 payment. There is no subscription. Do not require the field.
 
-If it is a **different** Stripe account, ignore all of the above: the
-`stripeCustomerId` and `stripeSubscriptionId` we send are informational and
-will not resolve against your account.
-
----
+If you ever subscribe to more events, note that store-created objects carry
+`metadata.store_created = "true"` — filter on that rather than on product ids.
 
 ## 3. You have already built most of this
 
@@ -91,39 +89,42 @@ Two differences from the webhook path:
 
 ## 4. What is genuinely new
 
-### 4.1 Revocation — you have no path for it today
+### 4.1 Revocation — rarer than you would expect, still required
 
 Every write in your reference sets `has_access: true`. Nothing in your flow
 ever sets it false, because a $47 one-time purchase never ends.
 
-A store subscription does. You will receive:
+The store offer is **also** a one-time $47 purchase, so there is no
+subscription to lapse and no renewal to fail. In practice you will receive
+`canceled` only when an admin revokes access by hand on our members screen.
 
-```json
-{ "email": "...", "entitlementKey": "book-writer", "status": "canceled", "hasAccess": false, "occurredAt": 1785300000 }
+Build it anyway. It is one line:
+
+```js
+has_access: payload.hasAccess
 ```
 
-**Honour `hasAccess`.** Set `has_access = false` on that user's `user_access`
-row. Treating our endpoint as grant-only leaves you serving customers who
-stopped paying, and nothing will ever come along to correct it.
+Writing the field we send, rather than branching on `status`, also gets
+`past_due` right for free — it arrives with `hasAccess: true` on purpose,
+because Stripe retries a failed card for days and often succeeds. You will not
+see `past_due` on this offer, but you will if Book Writer is ever sold on a
+subscription later, and the line does not change.
 
-`past_due` arrives with `hasAccess: true` on purpose — Stripe retries a failed
-card for days and often succeeds. Only `canceled` removes access. If you simply
-write `has_access = payload.hasAccess` you get this right without thinking
-about it.
+What you must not do is treat the endpoint as grant-only. A revoke that lands
+nowhere leaves you serving someone whose access we removed, and nothing will
+ever come along to correct it.
 
 ### 4.2 `user_access.source` needs a fourth value
 
 Today it is `greater_inside | mindvalley | sahara`, chosen by your product-id
 classifier. A store-provisioned buyer came through none of those.
 
-Add **`store`**. If `source` is a Postgres enum or has a CHECK constraint, that
-is a migration — worth finding out now rather than at the first live purchase,
-because the upsert will fail and the buyer will be charged with no access. If
-it is a plain `text` column, nothing to do.
+Add **`store`**. Confirmed as a plain `text` column, so there is no enum and no
+CHECK constraint to migrate — just start writing the new value.
 
 Do **not** reuse `greater_inside`. Your affiliate tracker resolves its
 destination from `source`, and a store sale is not a `greater_inside` sale — it
-would report revenue to the tracker twice, once by us and once by you.
+would report the same revenue to the tracker twice, once by us and once by you.
 
 ### 4.3 The out-of-order guard
 
@@ -182,16 +183,20 @@ Your reference lists six. Three change once the store is connected:
 |---|---|
 | **Wrong email typed at Stripe** | Cannot happen on the store path — we own the email and it is already lowercased when it reaches you. Still your biggest risk on your own three routes. |
 | **Email fails but everything else succeeded** | Store buyers have a second door: they open the app from the store library and the handoff signs them in. Your `/login` + `check_paid_access` path stays the fallback for direct buyers. |
-| **Non-Books product event on this webhook** | Becomes the *common* case if we share a Stripe account. Keep the `ignored_unrelated_product` branch exactly as it is. |
+| **Non-Books product event on this webhook** | Unchanged. We share the Stripe account but never emit `checkout.session.completed`, so store traffic does not arrive here at all — see §2. Keep the branch anyway. |
 
 One new one: **a store buyer whose `auth.users` row already exists from a direct
 purchase.** `generate_link` is idempotent and the `user_access` upsert is keyed
-on `user_id`, so this is safe — but it means one person can hold access from
-both a direct $47 payment and a store subscription. Decide what happens when
-the store subscription is cancelled and they still have the direct purchase:
-**do not blindly write `has_access = false`** if they paid you separately. If
-that is a real scenario for you, tell us and we will talk about how to
-represent it.
+on `user_id`, so provisioning twice is safe. What is not safe is the reverse:
+one person can now hold access from a direct $47 payment *and* from a store
+purchase, and `user_access` has one row and one flag to express both.
+
+If we ever revoke, we send `hasAccess: false` for the store's grant — we have
+no idea they also paid you directly. **Writing that straight through would take
+away something they bought from you.** Both purchases being one-time makes this
+rare, but decide it before it happens: either keep a per-source record of who
+granted what, or treat a direct payment as a floor that a store revoke cannot
+go under. Tell us which and we will match it on our side.
 
 ---
 
@@ -216,8 +221,28 @@ Steps 1–4 need nothing from us. Step 6 is where we are involved.
 
 ## 8. What we still need from you
 
-- Whether you bill through the same Stripe account as the store.
-- Whether `user_access.source` is constrained.
 - Your production URL confirmed as `https://book.greaterinside.com` — a
   per-commit preview URL is not one, and if your host has deployment protection
   enabled it returns a `401` that looks exactly like a wrong shared secret.
+- A shout when steps 1-5 are done, so we can activate and test together.
+
+Answered already, recorded here so nobody re-asks: same Stripe account (§2),
+`user_access.source` is plain text (§4.2), and the store offer is a one-time
+$47 payment (§9).
+
+---
+
+## 9. The offer, for reference
+
+| | |
+|---|---|
+| Price | **$47 USD, one-time** |
+| Billing | one-off payment — no interval, no trial, no renewal |
+| Grants | `book-writer`, no channels |
+| `stripeSubscriptionId` we send | always `null` |
+| `status` we send | `active` on purchase |
+
+It matches your own direct price, so a buyer pays the same either way.
+
+Because it is one-time, ownership does not expire. Once we have told you a
+buyer has access, that stays true until somebody revokes it deliberately.
