@@ -141,15 +141,22 @@ Then backfill any existing subscribers of theirs through
 
 ---
 
-## What we still owe every app
+## Retries — closed, and what to tell them
 
-`notifyAppEntitlement` has **no retry**. `lib/retry.ts` has a working
-`app_entitlement` runner with backoff, but nothing enqueues the job — the only
-caller of `recordError` is `lib/ac-tags.ts`.
+`notifyAppEntitlement` queues a failed push through `recordError`
+(`lib/apps.ts` → `queueRetry`) onto the `app_entitlement` runner in
+`lib/retry.ts`, which retries with backoff. This used to be an open gap and
+every brief asked the app to expire access in windows to cover it. **Stop
+asking for that** — it is work we no longer need to push onto them.
 
-A missed **grant** self-heals, because the handoff re-provisions. A missed
-**revoke** does not: nothing brings the user back to trigger a correction. Until
-that gap is closed, every brief has to ask the app to expire access in windows,
-which is work we push onto them.
+Two things a brief should still say:
 
-Closing it is roughly one `recordError` call at the failure branch.
+- **`occurredAt` is stamped when the entitlement changed**, by the caller, and
+  the same value is carried into the retry queue. It is stable across retries of
+  one message, so an app can safely ignore anything older than the last message
+  it applied. It has to: a replayed old message would otherwise undo newer state.
+- **Answer `2xx` even when ignoring a message**, or the store keeps retrying it.
+
+The reason a missed message mattered asymmetrically is still worth knowing: a
+missed **grant** self-heals, because the handoff re-provisions on the next
+sign-in. A missed **revoke** never does — nothing brings that person back.
