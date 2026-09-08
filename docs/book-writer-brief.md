@@ -119,8 +119,16 @@ ever come along to correct it.
 Today it is `greater_inside | mindvalley | sahara`, chosen by your product-id
 classifier. A store-provisioned buyer came through none of those.
 
-Add **`store`**. Confirmed as a plain `text` column, so there is no enum and no
-CHECK constraint to migrate — just start writing the new value.
+Add **`store`**. It is a **CHECK constraint**, not a plain column — we were told
+otherwise and were wrong, and you found it:
+
+```
+source = ANY (ARRAY['greater_inside','mindvalley','sahara','complimentary','store'])
+```
+
+You have already added `store` to it. Recorded here because the failure it would
+have caused is the expensive kind: the upsert rejects, the buyer is charged, and
+no access is granted.
 
 Do **not** reuse `greater_inside`. Your affiliate tracker resolves its
 destination from `source`, and a store sale is not a `greater_inside` sale — it
