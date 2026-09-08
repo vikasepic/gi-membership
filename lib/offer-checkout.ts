@@ -1,4 +1,5 @@
 import "server-only";
+import type Stripe from "stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getOffer, getStoreName } from "@/lib/store";
 import { isOfferEligible, immediateChargeCents, offerAtPrice, offerWithCouponTrial } from "@/lib/offers";
@@ -228,7 +229,18 @@ export async function completeOfferCheckout(
   setupIntentId: string,
   country?: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const si = await stripe().setupIntents.retrieve(setupIntentId);
+  // Either kind. A one-time offer is paid for on-session, so the money is
+  // already taken by the time the buyer lands back here; a recurring one saved
+  // a card and its subscription is created below. Anything else is refused
+  // rather than guessed at — a wrong retrieve would throw on a completed
+  // purchase, which is the worst outcome available.
+  const paid = setupIntentId.startsWith("pi_");
+  if (!paid && !setupIntentId.startsWith("seti_")) {
+    return { ok: false, error: "unknown_intent" };
+  }
+  const si = paid
+    ? await stripe().paymentIntents.retrieve(setupIntentId)
+    : await stripe().setupIntents.retrieve(setupIntentId);
   if (si.status !== "succeeded") return { ok: false, error: "card_not_saved" };
 
   const userId = si.metadata?.userId;
@@ -322,10 +334,19 @@ export async function completeOfferCheckout(
       status: "paid",
       currency: offer.currency,
       subtotal_cents: gross,
-      total_cents: chargeNow,
+      // What the card was actually charged, not what it would cost if bought
+      // again this second. The intent is the receipt; a recomputed figure can
+      // drift from it when a coupon dies between opening the form and paying.
+      // Cast: `si` is a PaymentIntent whenever `paid` is true — that's the very
+      // condition that chose paymentIntents.retrieve over setupIntents.retrieve
+      // above — but the two Stripe types share no discriminant TS can see.
+      total_cents: paid ? (si as Stripe.PaymentIntent).amount : chargeNow,
       coupon_code: coupon?.code ?? null,
       discount_cents: discount,
       stripe_customer_id: customerId,
+      // Which object took the money, so the ledger points at the real charge.
+      stripe_payment_intent_id: paid ? si.id : null,
+      stripe_setup_intent_id: paid ? null : si.id,
       buyer_country: normalizeCountry(country) ?? null,
     })
     .select("id")
@@ -342,6 +363,8 @@ export async function completeOfferCheckout(
         ? { promotionCodeId: coupon.promotionCodeId, discountCents: coupon.discountCents, trialDays: coupon.trialDays }
         : null,
       idempotencyKey: `offerco_${setupIntentId}_${offer.id}`,
+      // The money is in the intent the buyer just confirmed.
+      prepaid: paid,
     });
   } catch {
     // The card saved but the charge/subscription didn't take. Void the order so

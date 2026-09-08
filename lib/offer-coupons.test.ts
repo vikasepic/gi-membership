@@ -84,8 +84,11 @@ describe("a subscription is discounted by Stripe, not by us", () => {
     // On a subscription the discount lands on the first REAL invoice, so
     // today's order must record the undiscounted figure — booking a reduction
     // nobody was charged today would put the ledger out by the discount.
+    // (A subscription never reaches the `paid` branch below — only a one-time
+    // offer's on-session PaymentIntent does — so `chargeNow` is still what a
+    // recurring sale books.)
     expect(offerCheckout).toContain('sold.billingType !== "recurring"');
-    expect(offerCheckout).toContain("total_cents: chargeNow");
+    expect(offerCheckout).toContain("total_cents: paid ? (si as Stripe.PaymentIntent).amount : chargeNow");
     expect(offerCheckout).toContain("subtotal_cents: gross");
   });
 
