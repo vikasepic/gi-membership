@@ -82,10 +82,12 @@ export async function mintPostPurchaseLogin(
 /**
  * The same thing, for an offer bought by somebody who had no account.
  *
- * The product version keys on a PaymentIntent and an order row. An offer takes
- * nothing today — it saves a card and bills later — so it has a SetupIntent and
- * no order at all; what it produces is an `ownership` row. Different objects,
- * identical reasoning, so the checks are identical too:
+ * The product version keys on a PaymentIntent and an order row. An offer's
+ * intent can be either kind now: a one-time offer takes money today, same as
+ * the product checkout; a trial takes nothing today, so it saves a card on a
+ * SetupIntent instead and the subscription bills itself. Either way what this
+ * produces is an `ownership` row. Same reasoning as the product version, so
+ * the checks are identical too:
  *
  *   the client secret proves WHICH BROWSER is asking,
  *   the status proves the card was actually saved,
@@ -95,14 +97,18 @@ export async function mintPostPurchaseLogin(
  * the third the return URL is a login link for anybody who ever sees it.
  */
 export async function mintOfferLogin(
-  setupIntentId: string,
+  intentId: string,
   clientSecret: string | null,
 ): Promise<string | null> {
-  if (!setupIntentId || !clientSecret) return null;
+  if (!intentId || !clientSecret) return null;
+  const paid = intentId.startsWith("pi_");
+  if (!paid && !intentId.startsWith("seti_")) return null;
 
   let si;
   try {
-    si = await stripe().setupIntents.retrieve(setupIntentId);
+    si = paid
+      ? await stripe().paymentIntents.retrieve(intentId)
+      : await stripe().setupIntents.retrieve(intentId);
   } catch {
     return null;
   }
