@@ -75,6 +75,10 @@ const RUNNERS: Record<JobKind, Runner> = {
       // the order must not be charged by the retry that grants it.
       prepaid: p.prepaid === true,
       paidByIntentId: (p.paidByIntentId as string) ?? null,
+      // Replayed as queued, not re-derived — the offer's headline may not be
+      // what this bump was placed at, and the figure queued here is what the
+      // ledger already booked.
+      amountCents: typeof p.amountCents === "number" ? p.amountCents : undefined,
     });
   },
   crm_event: async (p) => {

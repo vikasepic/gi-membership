@@ -9,6 +9,7 @@ import { normalizeCountry } from "@/lib/tax";
 import { ensureUserProfile } from "@/lib/users";
 import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
 import { offerAsSoldTo } from "@/lib/trial-history";
+import { recordError } from "@/lib/errors";
 import type { Offer } from "@/lib/types";
 
 // Standalone checkout for a single offer, for a member who has no card on file
@@ -152,6 +153,10 @@ export async function startOfferCheckout(args: {
   // The bump, resolved by the same rules the product checkout uses — and with
   // the same helpers, so display and fulfilment cannot disagree.
   let bumpOffer: Offer | null = null;
+  // The PRICE they ticked, not just the offer — shownPrices can show more than
+  // one, so bumpChoice: 1 is a real purchase. Carried to metadata below so
+  // completion reads back which one, instead of assuming the first.
+  let bumpPriceId: string | null = null;
   if (args.bumpChoice !== undefined && args.bumpChoice !== "none" && offer.bumpOfferId) {
     // A bump's money only has an on-session PaymentIntent to ride. A recurring
     // offer opens a SetupIntent instead, which takes no money today, so there
@@ -177,6 +182,7 @@ export async function startOfferCheckout(args: {
       };
     }
     const picked = offerAtPrice(shownBump, price);
+    bumpPriceId = price.id;
     const asSold = await offerAsSoldTo(args.email, picked);
     if (!shouldShowOffer(asSold, owned)) {
       // Refuse rather than drop it silently: quietly discarding it charges for
@@ -269,6 +275,10 @@ export async function startOfferCheckout(args: {
         // alongside their own ids in lib/checkout.ts, the product side of
         // this same checkout.
         bumpOfferName: bumpOffer?.name ?? "",
+        // The exact price they ticked — offerPriceId's counterpart for the
+        // bump. Without this, completion had no way to tell bumpChoice: 1 from
+        // bumpChoice: 0 and simply assumed the first price the placement shows.
+        bumpPriceId: bumpOffer ? (bumpPriceId ?? "") : "",
         // Whether a bump was resolved, not whether it cost anything — a
         // genuinely $0 bump (a free add-on) is still fully paid for by THIS
         // intent, because there is nothing left to take. Keying this off
@@ -402,18 +412,43 @@ export async function completeOfferCheckout(
   // offer's own headline. A host may place its bump at a price other than that
   // offer's headline one — getOffer(bumpOfferId) alone returns the headline —
   // so reading immediateChargeCents straight off it here would book a figure
-  // the buyer was never actually shown or charged.
+  // the buyer was never actually shown or charged. Fetched and kept (bumpRaw)
+  // rather than just the cents figure: the fulfilment call further down reuses
+  // this exact object instead of fetching the same row again a moment later.
   const bumpOfferId = si.metadata?.bumpOfferId ?? "";
+  // Whether a bump was resolved, not whether it cost anything — see the
+  // matching comment in startOfferCheckout. Always "true" whenever
+  // bumpOfferId is set on this path; read back once here rather than three
+  // times below.
+  const bumpPrepaid = si.metadata?.bumpPrepaid === "true";
+  let bumpRaw: Offer | null = null;
   let bumpNowCents = 0;
   if (bumpOfferId) {
-    const bumpRaw = await getOffer(bumpOfferId);
+    bumpRaw = await getOffer(bumpOfferId);
     // Mirrors fulfilBump's own guard below: a bump withdrawn since checkout
     // gets no order line from fulfilBump, so the ledger must not book one either.
     if (bumpRaw?.active) {
-      const bumpPrice = shownPrices(bumpRaw.prices, raw.bumpPriceIds ?? [])[0] ?? null;
+      // The price chosen at start, read back from metadata WE wrote — never
+      // assumed to be index 0: shownPrices can show more than one price for
+      // one placement, so bumpChoice: 1 is a real purchase resolving to a
+      // different price than bumpChoice: 0. Falls back to the placement's
+      // first price when the id is missing (an intent from before this field
+      // existed) or has since been archived — the same fallback shape
+      // offerPriceId uses for the host's own price above.
+      const bumpOptions = shownPrices(bumpRaw.prices, raw.bumpPriceIds ?? []);
+      const wantBumpPriceId = si.metadata?.bumpPriceId ?? "";
+      const bumpPrice =
+        (wantBumpPriceId ? bumpOptions.find((p) => p.id === wantBumpPriceId && !p.archived) : null) ??
+        bumpOptions[0] ??
+        null;
       bumpNowCents = immediateChargeCents(offerAtPrice(bumpRaw, bumpPrice));
     }
   }
+  // Paid for (bumpPrepaid, above) but not resolvable any more — an admin
+  // deactivated it between start and completion. The card already took its
+  // money as part of the single intent above, so this can't just vanish: see
+  // the recordError call near the bottom of this function.
+  const bumpUnresolved = Boolean(bumpOfferId) && bumpPrepaid && !bumpRaw?.active;
 
   // What the card was actually charged. On the paid path that is the intent's
   // own amount, never `chargeNow`/`gross` recomputed above — a coupon that died
@@ -551,9 +586,11 @@ export async function completeOfferCheckout(
     // here), and on the recurring path it created the subscription under an
     // idempotency key derived from the intent id, so calling it again on
     // retry hands back the SAME subscription rather than a second one.
-    // Nothing after the order_items insert lives inside this try, so a
-    // purchase that actually finished (grant done, line written) can never
-    // be the one this catches — only one where that work did not complete.
+    // Nothing after the order_items insert lives inside this try — the bump
+    // is fulfilled separately, below, OUTSIDE it, for exactly the reason this
+    // one exists: a purchase that actually finished (grant done, line
+    // written) can never be the one this catches — only one where that work
+    // did not complete.
     await grantOfferOwnership(storeId, userId, sold, "grant", result.subscriptionId ?? null, {
       email,
       stripeCustomerId: customerId,
@@ -564,33 +601,16 @@ export async function completeOfferCheckout(
       kind: "oto",
       offer_id: offer.id,
       description: offer.name,
-      // The HOST's share alone, not the combined total — fulfilBump just below
-      // writes the bump's own line at its own amount, and the two must sum to
-      // total_cents. Equal to totalCents whenever bumpNowCents is 0 (no bump,
-      // on every path except a bumped paid one), so this is a no-op rename
-      // everywhere except the purchase this task exists to fix.
+      // The HOST's share alone, not the combined total — fulfilBump, further
+      // below once this try succeeds, writes the bump's own line at its own
+      // amount, and the two must sum to total_cents. Equal to totalCents
+      // whenever bumpNowCents is 0 (no bump, on every path except a bumped
+      // paid one), so this is a no-op rename everywhere except the purchase
+      // this task exists to fix.
       amount_cents: totalCents - bumpNowCents,
       stripe_subscription_id: result.subscriptionId ?? null,
       stripe_payment_intent_id: result.paymentIntentId ?? null,
     });
-
-    // The bump the buyer ticked, whose money is already in the intent above.
-    // fulfilBump is the same function the product checkout uses — it grants,
-    // writes exactly one order line however many times it runs, and charges
-    // nothing when prepaid.
-    if (bumpOfferId) {
-      await fulfilBump({
-        orderId,
-        storeId,
-        userId,
-        email,
-        stripeCustomerId: customerId,
-        offerId: bumpOfferId,
-        paymentMethodId: pm,
-        prepaid: si.metadata?.bumpPrepaid === "true",
-        paidByIntentId: paid ? si.id : null,
-      });
-    }
   } catch {
     // The card saved (and may already be charged or subscribed) but
     // fulfilment did not finish — granting access or recording the line can
@@ -601,5 +621,93 @@ export async function completeOfferCheckout(
     await db.from("orders").update({ status: "failed" }).eq("id", orderId);
     return { ok: false, error: "charge_failed" };
   }
+
+  // The bump the buyer ticked, whose money is already in the intent above.
+  // fulfilBump is the same function the product checkout uses — it grants,
+  // writes exactly one order line however many times it runs, and charges
+  // nothing when prepaid.
+  //
+  // Deliberately its OWN try/catch, separate from the host's above, and NEVER
+  // rethrown — exactly the shape finalizeOrder (lib/checkout.ts) already uses
+  // for the product checkout's own bump. The host is bought and paid for by
+  // the time we get here (the try above already succeeded); an add-on that
+  // could not be granted must not undo that or void an order that genuinely
+  // completed. It used to sit INSIDE the try above, so a throw here — plainly
+  // reachable, since grantOfferOwnership really can throw — voided the whole
+  // order instead: the host's ownership row was already written, so the next
+  // delivery (a webhook redelivery, the buyer reloading the return page) hit
+  // the eligibility check at the top of this function and returned
+  // { ok: true } without ever retrying the bump. Charged for host and bump,
+  // granted only the host, told success.
+  if (bumpOfferId && bumpRaw?.active) {
+    try {
+      await fulfilBump({
+        orderId,
+        storeId,
+        userId,
+        email,
+        stripeCustomerId: customerId,
+        offerId: bumpOfferId,
+        // Already fetched above, fresh, to price the ledger — not fetched
+        // again here.
+        offer: bumpRaw,
+        // The placement's price, not the bump's headline — see the
+        // computation above.
+        amountCents: bumpNowCents,
+        paymentMethodId: pm,
+        prepaid: bumpPrepaid,
+        paidByIntentId: paid ? si.id : null,
+      });
+    } catch (e) {
+      await recordError({
+        source: "bump_charge",
+        message: `Could not charge the order bump: ${e instanceof Error ? e.message : String(e)}`,
+        context: { orderId, offerId: bumpOfferId },
+        jobKind: "bump_charge",
+        jobPayload: {
+          orderId,
+          storeId,
+          userId,
+          email,
+          stripeCustomerId: customerId,
+          offerId: bumpOfferId,
+          paymentMethodId: pm,
+          prepaid: bumpPrepaid,
+          paidByIntentId: paid ? si.id : null,
+          amountCents: bumpNowCents,
+        },
+      });
+    }
+  } else if (bumpUnresolved) {
+    // The bump's money is already folded into totalCents above (the
+    // Math.max clamp books it against the host's own line, because the order
+    // still has to add up to what Stripe actually charged) but nothing was
+    // granted for it, and fulfilBump would just no-op silently for the same
+    // reason it never ran above. Recorded the same way a failed fulfilBump is
+    // — so a human sees "this order's host line includes money for a bump
+    // that was never granted" instead of a clean-looking order that quietly
+    // absorbed it.
+    await recordError({
+      source: "bump_charge",
+      message: `Could not resolve the order bump: offer ${bumpOfferId} is no longer active`,
+      context: { orderId, offerId: bumpOfferId },
+      jobKind: "bump_charge",
+      jobPayload: {
+        orderId,
+        storeId,
+        userId,
+        email,
+        stripeCustomerId: customerId,
+        offerId: bumpOfferId,
+        paymentMethodId: pm,
+        prepaid: bumpPrepaid,
+        paidByIntentId: paid ? si.id : null,
+        // No reliable figure to replay: the ledger never priced this bump (it
+        // was never active here), so a future retry — should the offer come
+        // back — falls back to its headline rather than booking $0.
+      },
+    });
+  }
+
   return { ok: true };
 }

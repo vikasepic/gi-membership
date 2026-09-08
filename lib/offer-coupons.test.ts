@@ -111,7 +111,18 @@ describe("a subscription is discounted by Stripe, not by us", () => {
     // it, so the invariant this test has always checked — a subscription's
     // booked subtotal is undiscounted — survives the bump unchanged.
     expect(offerCheckout).toContain("subtotal_cents: subtotalCents");
-    expect(offerCheckout).toMatch(/const subtotalCents = .*gross \+ bumpNowCents/);
+    // Anchored to the statement's OWN terminating `;` — `[^;]*` cannot cross
+    // it — not just `.*`, which is satisfied by ANY `gross + bumpNowCents` in
+    // the statement and so passed on `const subtotalCents = Math.max(gross +
+    // bumpNowCents, totalCents) : gross + bumpNowCents - discount;`: the
+    // regression this test exists to catch, matched via the untouched
+    // Math.max occurrence while the actually-regressed tail went unchecked.
+    // `[^;]*` forces the match onto the text immediately before that `;` —
+    // the tail — so a trailing `- discount` there fails it. Same terminator
+    // idea as the assertion two lines above, adapted because a statement
+    // (ending in `;`) needs a different anchor than an argument (ending in
+    // `;`, `,` or `)`).
+    expect(offerCheckout).toMatch(/const subtotalCents = [^;]*gross \+ bumpNowCents\s*;/);
   });
 
   it("prices the order from the offer as the COUPON sells it", () => {

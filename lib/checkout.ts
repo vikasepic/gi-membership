@@ -575,6 +575,12 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       couponCode: coupon?.code ?? "",
       discountCents: String(coupon?.discountCents ?? 0),
       bumpOfferId: bumpOffer?.id ?? "",
+      // Resolved ONCE, here, from THIS product's placement (product.bumpPriceIds)
+      // — bumpOffer is already priced at whatever the placement named, never the
+      // bump's own headline. finalizeOrder has only the id by the time it runs
+      // fulfilBump, so this is how the placement price survives to that call
+      // instead of fulfilBump re-deriving the (possibly different) headline.
+      bumpAmountCents: String(bumpNowCents),
       // Already paid for in THIS intent, so fulfilment grants it without
       // charging again. Written by us, read by us.
       bumpPrepaid: bumpNowCents > 0 ? "true" : "",
@@ -833,9 +839,31 @@ export async function fulfilBump(args: {
   prepaid?: boolean;
   /** The payment that covered it, for the order line. */
   paidByIntentId?: string | null;
+  /**
+   * Skip the fetch when the caller already has this offer fresh.
+   *
+   * completeOfferCheckout resolves it a few lines earlier to price the bump
+   * for the ledger — re-fetching the same row a moment later would spend a
+   * round trip to learn nothing new. Left undefined (the default) for every
+   * other caller: the retry sweep in particular runs minutes later, where a
+   * fresh read is the whole point — an offer withdrawn since the last attempt
+   * must not be fulfilled just because a stale copy still says active.
+   */
+  offer?: Offer | null;
+  /**
+   * What to book the order line at.
+   *
+   * Defaults to the offer's own headline price, which is wrong whenever the
+   * host placed this bump at a price other than that headline
+   * (offer.bumpPriceIds / product.bumpPriceIds) — the caller has already
+   * resolved the placement's actual figure to price its own ledger, and must
+   * hand it over rather than let this re-derive the headline. Kept optional,
+   * headline-fallback, so a caller with nothing better changes nothing.
+   */
+  amountCents?: number;
 }): Promise<void> {
   const db = createServiceClient();
-  const offer = await getOffer(args.offerId);
+  const offer = args.offer !== undefined ? args.offer : await getOffer(args.offerId);
   // A deactivated offer must not be fulfilled even though the PaymentIntent
   // still carries its id: an admin may have withdrawn it between intent
   // creation and confirmation. Returning rather than throwing — there is
@@ -876,7 +904,7 @@ export async function fulfilBump(args: {
     kind: "bump",
     offer_id: offer.id,
     description: offer.name,
-    amount_cents: immediateChargeCents(offer),
+    amount_cents: args.amountCents ?? immediateChargeCents(offer),
     stripe_subscription_id: result.subscriptionId ?? null,
     stripe_payment_intent_id: result.paymentIntentId ?? null,
   });
@@ -1085,6 +1113,11 @@ export async function finalizeOrder(intentId: string): Promise<void> {
         paymentMethodId,
         prepaid: pi.metadata.bumpPrepaid === "true",
         paidByIntentId: pi.id,
+        // Resolved once at checkout time, from the product's own placement —
+        // see createCheckoutIntent. Missing only for an intent written before
+        // this field existed, where the headline fallback inside fulfilBump
+        // takes over.
+        amountCents: pi.metadata.bumpAmountCents ? Number(pi.metadata.bumpAmountCents) : undefined,
       });
     } catch (e) {
       // Queued, not lost. The sweep replays it every few minutes and the charge
@@ -1110,6 +1143,9 @@ export async function finalizeOrder(intentId: string): Promise<void> {
           paymentMethodId,
           prepaid: pi.metadata.bumpPrepaid === "true",
           paidByIntentId: pi.id,
+          // Replayed by the sweep so a retry books the same placement price
+          // rather than falling back to the bump's headline.
+          amountCents: pi.metadata.bumpAmountCents ? Number(pi.metadata.bumpAmountCents) : undefined,
         },
       });
     }

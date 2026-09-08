@@ -3,6 +3,7 @@ import { startOfferCheckout, completeOfferCheckout } from "@/lib/offer-checkout"
 import { stripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
+import { STORE_TAG } from "@/lib/coupons";
 
 const canRun =
   !!process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") &&
@@ -74,6 +75,19 @@ async function addBumpPrice(offerId: string, cents: number, sortOrder: number): 
   });
   if (error) throw new Error(`fixture second price: ${error.message}`);
   return id;
+}
+
+/** A flat, fixed-amount code — a clean number to check the arithmetic against. */
+async function flatCode(amountOffCents: number) {
+  const coupon = await stripe().coupons.create({
+    amount_off: amountOffCents,
+    currency: "usd",
+    duration: "once",
+    metadata: { store: STORE_TAG },
+  });
+  const code = `ZZBUMPCODE${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+  await stripe().promotionCodes.create({ promotion: { type: "coupon", coupon: coupon.id }, code });
+  return code;
 }
 
 async function member() {
@@ -270,6 +284,104 @@ describe.skipIf(!canRun)("completing a bumped offer checkout (integration)", () 
     expect(itemsAgain.data).toHaveLength(2);
     const ownAgain = await db.from("ownership").select("id").eq("user_id", userId);
     expect(ownAgain.data).toHaveLength(2);
+  });
+
+  // IMPORTANT 2 (fix round 1): fulfilBump used to book the bump's line at
+  // immediateChargeCents(getOffer(bumpOfferId)) — the bump's own HEADLINE
+  // price — rather than the price this host actually placed it at and
+  // charged. Same two-price shape as the "buys the price the placement
+  // named" test above, but carried all the way through completion, where the
+  // bug actually lived.
+  it("books the bump's line at the price the host placed, not the bump's own headline", async () => {
+    const bumpId = await offerOf(1500); // the bump's own headline — NOT placed here
+    const placedId = await addBumpPrice(bumpId, 2900, 1); // the ONLY price this host placed
+    const hostId = await offerOf(4700, { bump_offer_id: bumpId, bump_price_ids: [placedId] });
+    const { userId, email } = await member();
+
+    const start = await startOfferCheckout({ userId, email, offerId: hostId, bumpChoice: 0 });
+    expect(start.ok).toBe(true);
+    if (!start.ok) return;
+    const piId = start.clientSecret.split("_secret_")[0];
+
+    await stripe().paymentIntents.confirm(piId, {
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/checkout/offer/complete",
+    });
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+
+    const db = createServiceClient();
+    const { data: order } = await db
+      .from("orders")
+      .select("id, total_cents")
+      .eq("user_id", userId)
+      .single();
+    expect(order?.total_cents).toBe(4700 + 2900); // charged the PLACED price, not the 1500 headline
+
+    const { data: items } = await db
+      .from("order_items")
+      .select("kind, amount_cents")
+      .eq("order_id", order!.id as string);
+    expect(items).toHaveLength(2);
+    const bump = items!.find((i) => i.kind === "bump");
+    // THE bug this test exists to catch: booked 1500 (the bump's headline)
+    // instead of 2900 (what the placement named and the card was charged).
+    expect(bump?.amount_cents).toBe(2900);
+    const sum = (items ?? []).reduce((s, i) => s + (i.amount_cents as number), 0);
+    expect(sum).toBe(order?.total_cents); // the lines still add up to what was charged
+  });
+
+  // IMPORTANT 6 (fix round 1): the one shape where the subtotal/discount
+  // arithmetic is non-trivial — a coupon applies to the HOST alone
+  // (couponSubtotal/resolveCoupon never see the bump), so the bump's own
+  // money must survive untouched next to a discounted host line.
+  it("discounts the host alone and still adds up with a bump riding along", async () => {
+    const bumpId = await offerOf(2900);
+    const hostId = await offerOf(4700, { bump_offer_id: bumpId });
+    const { userId, email } = await member();
+    const code = await flatCode(1000); // $10 off
+
+    const start = await startOfferCheckout({
+      userId,
+      email,
+      offerId: hostId,
+      bumpChoice: 0,
+      couponCode: code,
+    });
+    expect(start.ok).toBe(true);
+    if (!start.ok) return;
+    const piId = start.clientSecret.split("_secret_")[0];
+
+    const beforeConfirm = await stripe().paymentIntents.retrieve(piId);
+    expect(beforeConfirm.amount).toBe(4700 - 1000 + 2900); // 6600: host discounted, bump untouched
+
+    await stripe().paymentIntents.confirm(piId, {
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/checkout/offer/complete",
+    });
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+
+    const db = createServiceClient();
+    const { data: order } = await db
+      .from("orders")
+      .select("id, subtotal_cents, discount_cents, total_cents")
+      .eq("user_id", userId)
+      .single();
+    expect(order?.subtotal_cents).toBe(7600); // 4700 host + 2900 bump, undiscounted
+    expect(order?.discount_cents).toBe(1000); // the coupon's own figure, off the host alone
+    expect(order?.total_cents).toBe(6600);
+    expect((order?.subtotal_cents ?? 0) - (order?.discount_cents ?? 0)).toBe(order?.total_cents);
+
+    const { data: items } = await db
+      .from("order_items")
+      .select("kind, amount_cents")
+      .eq("order_id", order!.id as string);
+    expect(items).toHaveLength(2);
+    const oto = items!.find((i) => i.kind === "oto");
+    const bump = items!.find((i) => i.kind === "bump");
+    expect(oto?.amount_cents).toBe(3700); // 4700 - 1000 — the discount landed only on the host
+    expect(bump?.amount_cents).toBe(2900); // untouched by the coupon
+    const sum = (items ?? []).reduce((s, i) => s + (i.amount_cents as number), 0);
+    expect(sum).toBe(order?.total_cents);
   });
 });
 
