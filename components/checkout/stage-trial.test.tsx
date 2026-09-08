@@ -28,7 +28,9 @@ vi.mock("@stripe/react-stripe-js", () => ({
   Elements: ({ children }: { children: ReactNode }) => children,
   PaymentElement: () => null,
   useStripe: () => ({}),
-  useElements: () => ({}),
+  // The form's own effect calls elements.update on every render that changes
+  // the price or coupon — a bare {} throws the moment it mounts.
+  useElements: () => ({ update: async () => {} }),
 }));
 
 import { OfferCheckoutForm } from "@/components/checkout/offer-checkout-form";

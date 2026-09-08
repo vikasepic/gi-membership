@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { startOffer } from "@/app/(store)/checkout/offer/actions";
@@ -68,10 +68,11 @@ export function OfferCheckoutForm({
     <Elements
       stripe={stripePromise}
       options={{
-        // Setup, not payment: a trial charges nothing today, so there is no
-        // amount to authorise — we are saving the card the subscription bills.
-        // setupFutureUsage is deliberately absent: it describes a PaymentIntent,
-        // and mode:"setup" already means "save this card for later".
+        // The safe starting guess, before a price is even known: nothing to
+        // authorise yet, so there is no amount to give it. Inner's own effect
+        // corrects this the moment a price is picked (or on mount, for a
+        // preselected or single one) — this is only ever what's on screen
+        // for the instant before that runs.
         mode: "setup",
         currency: offer.currency,
         appearance: stripeAppearance(skin, design?.buttonColor),
@@ -193,6 +194,42 @@ function Inner({
     : null;
   const dueNow =
     coupon && !isRecurring ? Math.max(MIN_CHARGE_CENTS_CLIENT, grossNow - coupon.discountCents) : grossNow;
+
+  /**
+   * Keep Stripe's idea of the checkout in step with the page's — the same
+   * reason checkout-form.tsx keeps this effect (its lines ~267-295): Elements
+   * was created once, at mount, in "setup" mode with no amount, and nothing
+   * here ever moved it, so a PaymentElement for a one-time offer rendered as
+   * though nothing were owed and confirmPayment against it does not work.
+   *
+   * Mode follows `isRecurring`, not `dueNow > 0` the way the product form's
+   * does: startOfferCheckout (lib/offer-checkout.ts) opens a PaymentIntent
+   * only for `billingType === "one_time"` and a SetupIntent for every
+   * recurring price, trial or not — a no-trial subscription's first charge is
+   * its own invoice, not this intent, even though `dueNow` is its full price
+   * for that price. Keying this off `dueNow` instead would put Elements in
+   * "payment" mode for exactly that price while the server still opens a
+   * SetupIntent — the same mismatch this effect exists to close, just on the
+   * other billing type.
+   *
+   * `dueNow` still supplies the amount: it is the one figure this component
+   * works out for what a PaymentIntent should ask for, and it is what "Due
+   * today" already prints below — a second calculation here is how the two
+   * end up disagreeing.
+   */
+  useEffect(() => {
+    if (!elements) return;
+    if (isRecurring) {
+      void elements.update({ mode: "setup", currency: offer.currency, setupFutureUsage: "off_session" });
+      return;
+    }
+    void elements.update({
+      mode: "payment",
+      amount: dueNow,
+      currency: offer.currency,
+      setupFutureUsage: "off_session",
+    });
+  }, [elements, isRecurring, dueNow, offer.currency]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
