@@ -81,3 +81,33 @@ describe("weight", () => {
     expect(layout).toMatch(/Poppins\(\{[\s\S]*?"700"/);
   });
 });
+
+// Padding, on the button people mean by "the button".
+//
+// The Padding control wrote to the wrapper around the pill. That wrapper is
+// transparent — a button's fill belongs to the pill, by the same decision — and
+// when Block position centres it, the box shrinks to its contents and centres,
+// so the space lands outside a box nobody can see. Typing 47 changed nothing on
+// screen, which reads as a control that reverts.
+describe("padding", () => {
+  const pill = (html: string) => html.slice(html.indexOf("<a "));
+
+  it("pads the pill, not the invisible box around it", () => {
+    const out = render({}, { padding: { t: 20, r: 47, b: 20, l: 47, u: "px", link: false } });
+    expect(pill(out)).toContain("padding:20px 47px 20px 47px");
+  });
+
+  it("leaves the built-in padding alone when none was set", () => {
+    // Every button ever saved is at zero here, and zero must not strip the
+    // class that has always given a pill its shape.
+    const out = render({});
+    expect(out).toContain("px-7 py-3");
+    expect(pill(out)).not.toContain("padding");
+  });
+
+  it("does not also pad the wrapper, or the space is counted twice", () => {
+    const out = render({}, { padding: { t: 20, r: 47, b: 20, l: 47, u: "px", link: false } });
+    const wrapper = out.slice(0, out.indexOf("<a "));
+    expect(wrapper).not.toContain("padding:20px 47px");
+  });
+});

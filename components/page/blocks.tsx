@@ -31,6 +31,8 @@ import {
   blockTextRules,
   cardsTrack,
   columnCss,
+  dimCss,
+  paddingBelongsToPill,
   rowLayout,
   headingTag,
   softAccent,
@@ -958,6 +960,11 @@ function Inner({
         display: full ? "block" : "inline-block",
         width: full ? "100%" : undefined,
         textAlign: "center",
+        // The pill's own size. BUTTON_CLASS carries the built-in px-7 py-3 and
+        // keeps it while nothing has been set; a number typed in the panel
+        // outranks the class from here. See paddingBelongsToPill — this is the
+        // same argument as the background above, applied to the space inside.
+        ...(paddingBelongsToPill(block) ? { padding: dimCss(s.padding) } : {}),
         ...type,
       };
       // A buy button with no control to render is plain text — a sales page

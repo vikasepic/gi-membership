@@ -9,6 +9,7 @@ import {
   type BandStyleKey,
   type SectionLayout,
   type SectionUnit,
+  bandPatch,
 } from "@/lib/page-sections";
 import { ColorControl } from "@/components/admin/color-control";
 import { emptyBackground, type Background } from "@/lib/blocks";
@@ -276,7 +277,7 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
                   title={BAND_STYLES[k].label}
                   aria-label={BAND_STYLES[k].label}
                   aria-pressed={section.style === k}
-                  onClick={() => section.onChange({ style: k })}
+                  onClick={() => section.onChange(bandPatch(section.background, k))}
                   className={`size-6 rounded-md border-2 transition-colors ${
                     section.style === k ? "border-fg" : "border-transparent"
                   }`}

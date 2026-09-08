@@ -1,5 +1,5 @@
 import { normalizeColor, readableInk, tint } from "@/lib/color";
-import { normalizeBlocks, walkBlocks } from "@/lib/blocks";
+import { normalizeBlocks, walkBlocks, type Background } from "@/lib/blocks";
 
 // The ten-section sales page.
 //
@@ -79,6 +79,42 @@ export function bandTheme(
     panel2: s.panel2,
     rule: tint(fg, 0.14),
     muted: tint(fg, 0.72),
+  };
+}
+
+/**
+ * What picking a band colour has to write.
+ *
+ * The preset alone is not enough. A template carries the ground it was drawn
+ * on, and the insert paints it by writing a classic fill into the SECTION's
+ * background (`insertTemplate`) — because no preset has that colour. The
+ * renderer paints that fill over the preset, and the Section panel's Background
+ * group only offers an image, so there was no control on screen that could
+ * reach it. Choosing a colour appeared to do nothing, for ever.
+ *
+ * So choosing one clears it. An explicit pick is the newer instruction and has
+ * to win over the one the template left behind.
+ *
+ * An image is not a colour and is left alone — a band with a photograph on it
+ * keeps the photograph, and the preset underneath it changes as asked.
+ */
+export function bandPatch(
+  background: Background | null | undefined,
+  style: string,
+): { style: string; background?: Background } {
+  // Nothing painted over the band, so nothing to undo — and no write, or every
+  // click on a swatch would touch a field it has no business touching.
+  if (!background || !background.color) return { style };
+  return {
+    style,
+    background: {
+      ...background,
+      color: null,
+      // A fill with no colour and no picture is not a background at all. Left
+      // as "classic" it would still paint — `backgroundCss` falls back to the
+      // band's PANEL there, which is a different colour from its ground.
+      type: background.image ? "classic" : "none",
+    },
   };
 }
 

@@ -32,6 +32,27 @@ export function dimCss(d: Dim): string {
   return `${d.t}${d.u} ${d.r}${d.u} ${d.b}${d.u} ${d.l}${d.u}`;
 }
 
+/** Nothing was asked for on any edge, so whatever is built in should stand. */
+export function dimIsZero(d: Dim): boolean {
+  return d.t === 0 && d.r === 0 && d.b === 0 && d.l === 0;
+}
+
+/**
+ * A button's padding belongs to the PILL, not to the box around it.
+ *
+ * The same call as its background, and for the same reason: the pill is the
+ * thing anybody means by "the button". On the wrapper the space was invisible
+ * — the wrapper paints nothing, and Block position shrinks it to its contents
+ * and centres it, so 47px each side moved nothing anybody could see. A control
+ * that changes nothing reads as a control that reverts.
+ *
+ * Zero is left alone rather than written as `padding:0`, because every button
+ * ever saved sits at zero and its shape comes from the pill's own class.
+ */
+export function paddingBelongsToPill(block: Block): boolean {
+  return block.type === "button" && !dimIsZero(block.style.padding);
+}
+
 /**
  * The border, written onto whichever edges it was asked for.
  *
@@ -249,7 +270,10 @@ export function blockWrapperCss(block: Block, theme: BandTheme): CSSProperties {
 function wrapperCssFrom(block: Block, s: BlockStyle, theme: BandTheme): CSSProperties {
   const css: CSSProperties = {
     margin: dimCss(s.margin),
-    padding: dimCss(s.padding),
+    // See paddingBelongsToPill: on a button this space would sit outside a box
+    // that paints nothing and shrinks to its contents, so it would be spent
+    // twice or seen not at all.
+    ...(paddingBelongsToPill(block) ? {} : { padding: dimCss(s.padding) }),
     // Where the words sit. Nothing to do with where the box sits — one control
     // used to set both, so asking for a centred column of text centred every
     // line inside it as well, which is the thing nobody wants.
@@ -1023,6 +1047,10 @@ export const MOBILE_SIDE_PADDING_MAX = 24;
 export const MOBILE_SIDE_PADDING_VW = 5;
 
 export function mobilePaddingCap(block: Block, sel: string): string {
+  // The wrapper holds no padding on a button, so a rule here would name a
+  // declaration that is not there. The pill hugs its label and cannot pull a
+  // column of text off a phone, which is what the cap exists to stop.
+  if (paddingBelongsToPill(block)) return "";
   const p = styleFor(block, "mobile").padding;
   // A percentage or em already scales with something; only a fixed length is
   // stuck at its desktop size.
