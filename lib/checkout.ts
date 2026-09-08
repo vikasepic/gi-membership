@@ -689,6 +689,15 @@ export async function fulfilOffer(args: {
   // SetupIntent instead makes Stripe dedupe the subscription even if two orders
   // exist, which the default order-derived key could not do.
   idempotencyKey?: string;
+  /**
+   * Its money is already in the order's own payment.
+   *
+   * The offer checkout now charges a one-time offer on-session, in a
+   * PaymentIntent the buyer confirms while they are present. Charging again
+   * here would bill them twice for one purchase — and would do it
+   * off-session, which is the thing that cannot happen on an Indian card.
+   */
+  prepaid?: boolean;
 }): Promise<{ subscriptionId?: string; paymentIntentId?: string }> {
   const { order, offer, paymentMethodId } = args;
   const coupon = args.coupon ?? null;
@@ -748,6 +757,9 @@ export async function fulfilOffer(args: {
     await noteTrial(args.order.id, offerWithCouponTrial(offer, coupon));
     return { subscriptionId: sub.id };
   }
+
+  // Already paid for in the order's own intent. Nothing to take.
+  if (args.prepaid) return {};
 
   // A PaymentIntent cannot take a promotion code, so the discount is money off
   // the amount — never below the floor Stripe will accept.

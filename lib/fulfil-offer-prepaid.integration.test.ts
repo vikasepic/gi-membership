@@ -1,0 +1,54 @@
+import { describe, it, expect } from "vitest";
+import { fulfilOffer } from "@/lib/checkout";
+import { createServiceClient } from "@/lib/supabase/server";
+import { getStoreId } from "@/lib/store";
+import { stripe } from "@/lib/stripe";
+
+const canRun =
+  !!process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") &&
+  !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+describe.skipIf(!canRun)("a prepaid one-time offer (integration)", () => {
+  it("grants without creating a second charge", async () => {
+    const db = createServiceClient();
+    const storeId = await getStoreId();
+    const customer = await stripe().customers.create({ email: `prepaid_${Date.now()}@example.test` });
+
+    const { data: order } = await db
+      .from("orders")
+      .insert({
+        livemode: false,
+        store_id: storeId,
+        email: "prepaid@example.test",
+        status: "paid",
+        currency: "usd",
+        subtotal_cents: 4700,
+        total_cents: 4700,
+        stripe_customer_id: customer.id,
+      })
+      .select("id")
+      .single();
+
+    const before = await stripe().paymentIntents.list({ customer: customer.id, limit: 100 });
+
+    const res = await fulfilOffer({
+      order: { id: order!.id as string, stripeCustomerId: customer.id },
+      offer: {
+        id: "00000000-0000-0000-0000-0000000000f1",
+        name: "zz prepaid fixture",
+        billingType: "one_time",
+        priceCents: 4700,
+        currency: "usd",
+        trialDays: null,
+      } as never,
+      paymentMethodId: "pm_card_visa",
+      prepaid: true,
+    });
+
+    const after = await stripe().paymentIntents.list({ customer: customer.id, limit: 100 });
+    expect(res.paymentIntentId).toBeUndefined();
+    expect(after.data.length).toBe(before.data.length);
+
+    await db.from("orders").delete().eq("id", order!.id);
+  });
+});
