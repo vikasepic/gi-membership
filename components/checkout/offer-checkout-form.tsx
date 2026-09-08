@@ -165,7 +165,15 @@ function Inner({
   // Recurring where the chosen price renews — and where nothing has been
   // chosen yet, from the offer's own note, which is the only signal this
   // component is given.
-  const isRecurring = picked ? Boolean(picked.interval) : Boolean(offer.recurring);
+  //
+  // Keyed on billingType, not interval: the CHECK constraints enforce
+  // recurring -> interval but nothing forbids a one_time price carrying a
+  // stray non-null interval (only the admin editor keeps that true today), and
+  // the server (startOfferCheckout) branches on billingType alone. Reading
+  // interval here would leave Elements in setup mode against such a row while
+  // the server opened a PaymentIntent — exactly the mismatch this file's
+  // effect exists to prevent.
+  const isRecurring = picked ? picked.billingType === "recurring" : Boolean(offer.recurring);
 
   // What is taken today, after any discount that applies today.
   //
@@ -277,10 +285,10 @@ function Inner({
   /**
    * The offer checkout, described in the same terms as the product one.
    *
-   * The money above is untouched — same startOffer, same SetupIntent, same
-   * confirmSetup. This only publishes what the form already knows so the
-   * redesign's pieces can read it, which is what lets ONE arrangement serve
-   * both halves of the store instead of two that drift.
+   * The money above is untouched — same startOffer, same branch between
+   * confirmPayment and confirmSetup. This only publishes what the form
+   * already knows so the redesign's pieces can read it, which is what lets
+   * ONE arrangement serve both halves of the store instead of two that drift.
    *
    * The fields an offer has no answer for are honestly empty: there is no
    * bump here, no name to type and no email to collect, and every slot that

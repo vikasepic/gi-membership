@@ -19,9 +19,12 @@ describe("the offer form keeps Elements' mode in step with what it charges", () 
     // Tied to elements.update, not the initial <Elements options>, which also
     // reads mode: "setup" and would pass this even unfixed.
     expect(src).toMatch(/elements\.update\(\{\s*mode:\s*"setup"/);
-    // isRecurring has to drive the branch (not dueNow's sign): a one-time
-    // price and a no-trial recurring one can owe the same amount today, and
-    // only isRecurring tells startOfferCheckout's own two paths apart.
-    expect(src).toMatch(/\[elements,\s*isRecurring,\s*dueNow,\s*offer\.currency\]/);
+    // isRecurring has to GATE the branch, not just ride along in the deps
+    // array — a one-time price and a no-trial recurring one can owe the same
+    // dueNow, and only isRecurring tells startOfferCheckout's own two paths
+    // apart. Tied to the literal `if (isRecurring)` guarding the setup call,
+    // so swapping the condition to `dueNow <= 0` (deps array left untouched)
+    // turns this red, which a bare deps-array match would not have caught.
+    expect(src).toMatch(/if\s*\(isRecurring\)\s*\{\s*void elements\.update\(\{\s*mode:\s*"setup"/);
   });
 });
