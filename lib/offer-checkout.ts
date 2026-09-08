@@ -1,13 +1,15 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getOffer, getStoreName } from "@/lib/store";
-import { isOfferEligible, immediateChargeCents, offerAtPrice, offerWithCouponTrial } from "@/lib/offers";
-import { livePrices, priceForChoice } from "@/lib/offer-prices";
+import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerWithCouponTrial } from "@/lib/offers";
+import { livePrices, priceForChoice, shownPrices } from "@/lib/offer-prices";
 import { ownershipFor, fulfilOffer, grantOfferOwnership, customerForUser } from "@/lib/checkout";
 import { stripe, stripeMode } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
 import { ensureUserProfile } from "@/lib/users";
 import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
+import { offerAsSoldTo } from "@/lib/trial-history";
+import type { Offer } from "@/lib/types";
 
 // Standalone checkout for a single offer, for a member who has no card on file
 // yet (they were gifted access, or their only purchase predates a saved card).
@@ -114,6 +116,8 @@ export async function startOfferCheckout(args: {
   offerId: string;
   /** Which way to pay — an INDEX into the list this offer's page shows. */
   priceChoice?: number;
+  /** Which bump price they ticked — an INDEX into the list the page drew. */
+  bumpChoice?: number | "none";
   /** The code they typed. Re-checked here; never trusted for an amount. */
   couponCode?: string | null;
   /** Whether this checkout created the account. Decides the sign-in on return. */
@@ -127,15 +131,64 @@ export async function startOfferCheckout(args: {
   // only thing it can buy is something it was shown. An index outside the list
   // refuses rather than falling back to the headline price.
   const shown = livePrices(offer.prices);
-  if (args.priceChoice !== undefined) {
-    const price = priceForChoice(shown, args.priceChoice);
-    if (!price) return { ok: false, error: "That option is no longer available." };
+  // The chosen price, resolved ONCE. It used to be derived four separate times
+  // in this function — this guard, the coupon block, `sold` (behind a
+  // non-null assertion whose safety depended on this guard having already
+  // run), and the metadata — and four independent derivations of one value is
+  // where one of them drifts.
+  const chosenPrice = args.priceChoice !== undefined ? priceForChoice(shown, args.priceChoice) : null;
+  if (args.priceChoice !== undefined && !chosenPrice) {
+    return { ok: false, error: "That option is no longer available." };
   }
+  // The offer as this checkout is actually selling it, before any coupon.
+  const priced = chosenPrice ? offerAtPrice(offer, chosenPrice) : offer;
 
   // Never sell someone what they already have.
   const owned = await ownershipFor(args.userId);
   if (!isOfferEligible(offer, owned)) {
     return { ok: false, error: "You already have this." };
+  }
+
+  // The bump, resolved by the same rules the product checkout uses — and with
+  // the same helpers, so display and fulfilment cannot disagree.
+  let bumpOffer: Offer | null = null;
+  if (args.bumpChoice !== undefined && args.bumpChoice !== "none" && offer.bumpOfferId) {
+    // A bump's money only has an on-session PaymentIntent to ride. A recurring
+    // offer opens a SetupIntent instead, which takes no money today, so there
+    // is nothing to fold the bump's charge into and no on-session moment to
+    // take it in. Refusing beats silently taking the tickbox and then
+    // charging (and granting) nothing for it.
+    if (priced.billingType !== "one_time") {
+      return { ok: false, error: "That add-on can't be added to this purchase." };
+    }
+    const shownBump = await getOffer(offer.bumpOfferId);
+    // The options come from THIS offer's placement, never from the request.
+    const options = shownBump ? shownPrices(shownBump.prices, offer.bumpPriceIds ?? []) : [];
+    const price = priceForChoice(options, args.bumpChoice);
+    // Out of range REFUSES. Charging somebody for a thing they did not choose
+    // is the failure this rule exists to prevent.
+    if (!price || !shownBump) {
+      return {
+        ok: false,
+        error: "That add-on option is no longer available. Choose another and try again.",
+      };
+    }
+    const picked = offerAtPrice(shownBump, price);
+    const asSold = await offerAsSoldTo(args.email, picked);
+    if (!shouldShowOffer(asSold, owned)) {
+      // Refuse rather than drop it silently: quietly discarding it charges for
+      // the offer and ignores what they ticked, with nothing on the receipt.
+      return {
+        ok: false,
+        error: "You already have the add-on you selected, so it can't be added again. Untick it to continue.",
+      };
+    }
+    // Belt and braces: saveOffer refuses a recurring offer into the bump slot,
+    // but this one may have been one-time when placed and changed since.
+    if (asSold.billingType !== "one_time") {
+      return { ok: false, error: "That add-on can't be bought here." };
+    }
+    bumpOffer = asSold;
   }
 
   const storeId = await getStoreId();
@@ -147,8 +200,6 @@ export async function startOfferCheckout(args: {
   // out again at fulfilment against the offer as it stands then.
   let coupon: AppliedCoupon | null = null;
   if (args.couponCode?.trim()) {
-    const chosen = args.priceChoice !== undefined ? priceForChoice(shown, args.priceChoice) : null;
-    const priced = chosen ? offerAtPrice(offer, chosen) : offer;
     const res = await resolveCoupon(
       args.couponCode,
       couponSubtotal(priced, immediateChargeCents(priced)),
@@ -162,12 +213,7 @@ export async function startOfferCheckout(args: {
   // The offer as this checkout actually sells it — a code carrying trial_days
   // replaces the price's own, and that is what has to decide whether today's
   // intent is a charge or a save.
-  const sold = offerWithCouponTrial(
-    args.priceChoice !== undefined
-      ? offerAtPrice(offer, priceForChoice(shown, args.priceChoice)!)
-      : offer,
-    coupon,
-  );
+  const sold = offerWithCouponTrial(priced, coupon);
 
   // The metadata is identical on both objects: completeOfferCheckout reads the
   // same keys back whichever kind came back, and it is written by US rather
@@ -177,8 +223,7 @@ export async function startOfferCheckout(args: {
     storeId,
     userId: args.userId,
     offerId: offer.id,
-    offerPriceId:
-      args.priceChoice !== undefined ? (priceForChoice(shown, args.priceChoice)?.id ?? "") : "",
+    offerPriceId: chosenPrice?.id ?? "",
     // The code, not the discount. An amount written here would be an amount
     // the browser could have influenced at preview time.
     couponCode: coupon?.code ?? "",
@@ -197,14 +242,26 @@ export async function startOfferCheckout(args: {
   if (sold.billingType === "one_time") {
     const gross = immediateChargeCents(sold);
     const discount = coupon ? Math.min(coupon.discountCents, Math.max(0, gross - MIN_CHARGE_CENTS)) : 0;
+    // One charge, on-session, for the amount on the button. A second charge
+    // afterwards is what Stripe refuses on an India-issued card without an
+    // e-mandate — and it would also mean the figure the buyer agreed to and
+    // the figure their card saw were never the same number.
+    const bumpNowCents = bumpOffer ? immediateChargeCents(bumpOffer) : 0;
     const pi = await stripe().paymentIntents.create({
-      amount: gross - discount,
+      amount: gross - discount + bumpNowCents,
       currency: sold.currency,
       customer: customerId,
       setup_future_usage: "off_session",
       automatic_payment_methods: { enabled: true },
       description,
-      metadata: { ...metadata, discountCents: String(discount) },
+      metadata: {
+        ...metadata,
+        discountCents: String(discount),
+        bumpOfferId: bumpOffer?.id ?? "",
+        // Its money is in THIS intent, so fulfilment grants it and charges
+        // nothing. Written by us, read by us.
+        bumpPrepaid: bumpNowCents > 0 ? "true" : "",
+      },
     });
     if (!pi.client_secret) return { ok: false, error: "Could not start checkout." };
     return { ok: true, clientSecret: pi.client_secret, customerId, mode: "payment" };
