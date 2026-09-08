@@ -223,13 +223,17 @@ function Inner({
       return;
     }
 
-    const { error: setupError } = await stripe.confirmSetup({
-      elements,
-      clientSecret: res.clientSecret,
-      confirmParams: { return_url: `${window.location.origin}/checkout/offer/complete` },
-    });
+    // A one-time offer takes money now, so the buyer confirms a payment while
+    // they are here. A trial takes nothing today, so its card is saved and the
+    // subscription bills itself. Same return_url either way — the route reads
+    // whichever pair of query parameters Stripe sends back.
+    const confirmParams = { return_url: `${window.location.origin}/checkout/offer/complete` };
+    const { error: confirmError } =
+      res.mode === "payment"
+        ? await stripe.confirmPayment({ elements, clientSecret: res.clientSecret, confirmParams })
+        : await stripe.confirmSetup({ elements, clientSecret: res.clientSecret, confirmParams });
     // Only reached if confirmation didn't redirect (i.e. something failed).
-    if (setupError) setError(setupError.message ?? "Could not save your card");
+    if (confirmError) setError(confirmError.message ?? "Could not take payment");
     setBusy(false);
   }
 
