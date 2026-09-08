@@ -150,12 +150,23 @@ than a few days of grace. Only `canceled` removes access. If you just honour
 
 This call is **best-effort and never blocks the purchase.** If you return `500`,
 time out, or are down for deploy, the customer is still charged and still owns
-the product. We log it and move on.
+the product. We log it and queue the message for retry with backoff.
 
-**There is no retry queue today.** Recovery relies entirely on the handoff
-(§4) re-driving provisioning when the user first opens your app. That only
-works if your handoff endpoint provisions on arrival too. **Implement
-provisioning in both endpoints** — treat §4 as the safety net for §3.
+Because we retry, two rules follow:
+
+- **`occurredAt` is when the entitlement changed**, not when we sent it, and the
+  same value is carried through every retry of that message. Ignore anything
+  older than the last message you applied. You have to: a replayed old message
+  does not merely repeat work, it *undoes* newer state.
+- **Answer `2xx` even when you ignore a message.** Any other status, or a
+  redirect, is a failure to us and we queue it again. Do not put this endpoint
+  behind auth middleware that `307`s to a login page — we follow no redirects
+  precisely because a login page's `200` would otherwise read as delivered.
+
+**Still implement provisioning in the handoff (§4) as well.** A missed grant
+self-heals there the moment the user opens your app, which is faster than any
+retry schedule. A missed revoke has no such path — nothing brings that person
+back — which is why the queue exists and why `status` must be honoured.
 
 ### Minimal implementation (Node/Express)
 
