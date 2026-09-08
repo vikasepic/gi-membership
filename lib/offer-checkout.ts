@@ -1,6 +1,6 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getStoreId, getOffer } from "@/lib/store";
+import { getStoreId, getOffer, getStoreName } from "@/lib/store";
 import { isOfferEligible, immediateChargeCents, offerAtPrice, offerWithCouponTrial } from "@/lib/offers";
 import { livePrices, priceForChoice } from "@/lib/offer-prices";
 import { ownershipFor, fulfilOffer, grantOfferOwnership, customerForUser } from "@/lib/checkout";
@@ -20,7 +20,21 @@ import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupo
 // money path — a one-time charge and a trial are never one charge.
 
 export type StartResult =
-  | { ok: true; clientSecret: string; customerId: string }
+  | {
+      ok: true;
+      clientSecret: string;
+      customerId: string;
+      /**
+       * Which Stripe object the form must confirm.
+       *
+       * A one-time offer takes money today, so the buyer confirms a payment
+       * while they are present — no mandate is needed for a payment the
+       * cardholder is there for. A recurring offer takes nothing today (a
+       * trial is genuinely $0, and a $0 PaymentIntent is not a thing Stripe
+       * will make), so the card is saved and the subscription bills itself.
+       */
+      mode: "payment" | "setup";
+    }
   | { ok: false; error: string };
 
 /**
@@ -145,32 +159,66 @@ export async function startOfferCheckout(args: {
     coupon = res.coupon;
   }
 
+  // The offer as this checkout actually sells it — a code carrying trial_days
+  // replaces the price's own, and that is what has to decide whether today's
+  // intent is a charge or a save.
+  const sold = offerWithCouponTrial(
+    args.priceChoice !== undefined
+      ? offerAtPrice(offer, priceForChoice(shown, args.priceChoice)!)
+      : offer,
+    coupon,
+  );
+
+  // The metadata is identical on both objects: completeOfferCheckout reads the
+  // same keys back whichever kind came back, and it is written by US rather
+  // than copied out of the request.
+  const metadata = {
+    store_created: "true",
+    storeId,
+    userId: args.userId,
+    offerId: offer.id,
+    offerPriceId:
+      args.priceChoice !== undefined ? (priceForChoice(shown, args.priceChoice)?.id ?? "") : "",
+    // The code, not the discount. An amount written here would be an amount
+    // the browser could have influenced at preview time.
+    couponCode: coupon?.code ?? "",
+    // Whether THIS checkout created the account. Read on the way back to
+    // decide whether a session may be handed out — see mintOfferLogin.
+    newAccount: args.isNewAccount ? "true" : "false",
+  };
+  const description = `${offer.name} — ${await getStoreName()}`;
+
+  // A one-time offer is charged HERE, on-session, for the amount on the
+  // button. It used to save the card and charge it afterwards off-session,
+  // which Stripe refuses outright on a card issued in India without an RBI
+  // e-mandate — so the buyer was charged nothing and granted nothing, with no
+  // error anybody saw. `setup_future_usage` keeps the card on file, which is
+  // what the library's one-tap standing offer needs.
+  if (sold.billingType === "one_time") {
+    const gross = immediateChargeCents(sold);
+    const discount = coupon ? Math.min(coupon.discountCents, Math.max(0, gross - MIN_CHARGE_CENTS)) : 0;
+    const pi = await stripe().paymentIntents.create({
+      amount: gross - discount,
+      currency: sold.currency,
+      customer: customerId,
+      setup_future_usage: "off_session",
+      automatic_payment_methods: { enabled: true },
+      description,
+      metadata: { ...metadata, discountCents: String(discount) },
+    });
+    if (!pi.client_secret) return { ok: false, error: "Could not start checkout." };
+    return { ok: true, clientSecret: pi.client_secret, customerId, mode: "payment" };
+  }
+
   const si = await stripe().setupIntents.create({
     customer: customerId,
     usage: "off_session",
     automatic_payment_methods: { enabled: true },
-    // The price id is written by US, from a list we rebuilt — not copied out
-    // of the request — so completeOfferCheckout can charge the right one on the
-    // way back without trusting anything the browser said.
-    metadata: {
-      storeId,
-      userId: args.userId,
-      offerId: offer.id,
-      offerPriceId:
-        args.priceChoice !== undefined
-          ? (priceForChoice(shown, args.priceChoice)?.id ?? "")
-          : "",
-      // The code, not the discount. An amount written here would be an amount
-      // the browser could have influenced at preview time; the code is re-priced
-      // on the way back against whatever the coupon is worth then.
-      couponCode: coupon?.code ?? "",
-      // Whether THIS checkout created the account. Read on the way back to
-      // decide whether a session may be handed out — see mintOfferLogin.
-      newAccount: args.isNewAccount ? "true" : "false",
-    },
+    description,
+    metadata,
   });
   if (!si.client_secret) return { ok: false, error: "Could not start checkout." };
-  return { ok: true, clientSecret: si.client_secret, customerId };
+  return { ok: true, clientSecret: si.client_secret, customerId, mode: "setup" };
 }
 
 // Called on return from Stripe. Idempotent: the eligibility re-check short-

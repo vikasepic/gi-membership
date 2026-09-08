@@ -26,7 +26,7 @@ export async function startOffer(
   couponCode?: string | null,
   /** Only read when nobody is signed in. */
   buyer?: { email?: string; fullName?: string },
-): Promise<{ ok: true; clientSecret: string } | { ok: false; error: string; code?: string }> {
+): Promise<{ ok: true; clientSecret: string; mode: "payment" | "setup" } | { ok: false; error: string; code?: string }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -48,7 +48,7 @@ export async function startOffer(
     isNewAccount: resolved.isNew,
   });
   if (!res.ok) return res;
-  return { ok: true, clientSecret: res.clientSecret };
+  return { ok: true, clientSecret: res.clientSecret, mode: res.mode };
 }
 
 /**

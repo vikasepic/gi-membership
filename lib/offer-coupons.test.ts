@@ -18,8 +18,18 @@ describe("the browser never decides what a discount is worth", () => {
   it("carries the code on the SetupIntent, not an amount", () => {
     // An amount written into metadata is an amount a tampered preview could
     // have influenced. The code is re-priced on the way back.
+    //
+    // Scoped to the SetupIntent call: a one-time offer's PaymentIntent also
+    // writes `discountCents`, but that charge happens synchronously in this
+    // same call from a coupon resolveCoupon() just re-priced server-side —
+    // it is a receipt of money already taken, not a number saved now for a
+    // later step to trust instead of recomputing.
+    const setupIntent = offerCheckout.slice(
+      offerCheckout.indexOf("stripe().setupIntents.create("),
+      offerCheckout.indexOf("if (!si.client_secret)"),
+    );
     expect(offerCheckout).toContain("couponCode: coupon?.code ?? \"\"");
-    expect(offerCheckout).not.toMatch(/metadata:[\s\S]{0,400}discountCents/);
+    expect(setupIntent).not.toContain("discountCents");
   });
 
   it("prices it again at fulfilment, from that stored code", () => {
