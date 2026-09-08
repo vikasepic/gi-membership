@@ -241,6 +241,53 @@ export async function grantOfferAccess(args: {
 }
 
 /**
+ * Grant several things to one person, in one go.
+ *
+ * The data model always allowed it — a person can own any number of products
+ * and offers — but both actions read a single `grant` field, so the screens
+ * could only ever express one. Comping somebody two things meant adding them,
+ * then finding them in the list, twice.
+ *
+ * Keeps going after a failure and reports each one. The old code returned on
+ * the first error, which with three ticked meant two successful grants went
+ * unmentioned and the whole thing read as though nothing had happened.
+ *
+ * `deps` exists so the dispatch and the tallying can be tested without a
+ * database. Nothing in the app passes it.
+ */
+export async function applyGrants(
+  args: { userId: string; ids: string[]; grantedBy: string },
+  deps: {
+    grantProduct: (a: { userId: string; productId: string; grantedBy: string }) => Promise<{ ok: boolean; error?: string }>;
+    grantOfferAccess: (a: { userId: string; offerId: string; grantedBy: string }) => Promise<{ ok: boolean; error?: string }>;
+  } = { grantProduct, grantOfferAccess },
+): Promise<{ granted: number; failed: { id: string; error: string }[] }> {
+  let granted = 0;
+  const failed: { id: string; error: string }[] = [];
+
+  for (const raw of args.ids) {
+    const id = raw.trim();
+    const sep = id.indexOf(":");
+    const kind = sep === -1 ? "" : id.slice(0, sep);
+    const target = sep === -1 ? "" : id.slice(sep + 1);
+    // A shape we do not recognise is refused rather than guessed at. Guessing
+    // here would grant somebody a thing nobody chose.
+    if (!target || (kind !== "product" && kind !== "offer")) {
+      failed.push({ id: raw, error: "That is not something the store can grant." });
+      continue;
+    }
+    const out =
+      kind === "offer"
+        ? await deps.grantOfferAccess({ userId: args.userId, offerId: target, grantedBy: args.grantedBy })
+        : await deps.grantProduct({ userId: args.userId, productId: target, grantedBy: args.grantedBy });
+    if (out.ok) granted += 1;
+    else failed.push({ id: raw, error: out.error ?? "The grant failed." });
+  }
+
+  return { granted, failed };
+}
+
+/**
  * Take access away.
  *
  * A product row is deleted; an app row is marked canceled and the app is told,

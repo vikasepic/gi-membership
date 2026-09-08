@@ -3,14 +3,28 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin, isAdminEmail } from "@/lib/admin-guard";
 import {
+  applyGrants,
   cancelSubscription,
   createMember,
   deleteMember,
-  grantProduct,
-  grantOfferAccess,
   revokeOwnership,
   setMemberAdmin,
 } from "@/lib/members";
+
+/**
+ * One sentence for any mix of outcomes.
+ *
+ * A failure used to be returned on its own, so with three ticked the two that
+ * worked went unmentioned — and the admin reasonably concluded none of it had
+ * happened and did it again.
+ */
+function grantSummary(r: { granted: number; failed: { error: string }[] }): string {
+  if (r.granted === 0 && r.failed.length === 0) return "";
+  if (r.failed.length === 0) return ` and granted ${r.granted}`;
+  const total = r.granted + r.failed.length;
+  const why = r.failed.map((f) => f.error).join("; ");
+  return ` and granted ${r.granted} of ${total} — the rest failed: ${why}`;
+}
 
 // Every action here re-checks requireAdmin(). The middleware gate is
 // convenience; this is the security boundary, and a server action is reachable
@@ -32,7 +46,9 @@ export async function addMemberAction(
   const admin = await requireAdmin();
   const email = String(formData.get("email") ?? "").trim();
   const fullName = String(formData.get("fullName") ?? "").trim();
-  const grantId = String(formData.get("grant") ?? "").trim();
+  // getAll, not get: the form posts one value per ticked box, and `get` would
+  // silently take the first and drop the rest.
+  const grantIds = formData.getAll("grant").map((v) => String(v).trim()).filter(Boolean);
 
   if (!email) return { error: "Enter an email address." };
 
@@ -41,17 +57,12 @@ export async function addMemberAction(
 
   // "Add and grant" in one step — the common case is comping someone, and
   // splitting it across two screens invites forgetting the second.
-  let granted = "";
-  if (grantId) {
-    const [kind, id] = grantId.split(":");
-    const by = admin.email ?? "admin";
-    const out =
-      kind === "offer"
-        ? await grantOfferAccess({ userId: res.userId, offerId: id, grantedBy: by })
-        : await grantProduct({ userId: res.userId, productId: id, grantedBy: by });
-    if (!out.ok) return { error: `Member added, but the grant failed: ${out.error}` };
-    granted = " and granted access";
-  }
+  //
+  // A grant that fails no longer fails the whole action. The account exists by
+  // this point, and reporting it as an error would have the admin add somebody
+  // who is already there.
+  const out = await applyGrants({ userId: res.userId, ids: grantIds, grantedBy: admin.email ?? "admin" });
+  const granted = grantSummary(out);
 
   revalidatePath("/admin/members");
   return {
@@ -67,19 +78,18 @@ export async function grantAccessAction(
 ): Promise<MemberActionState> {
   const admin = await requireAdmin();
   const userId = String(formData.get("userId") ?? "");
-  const grantId = String(formData.get("grant") ?? "");
-  if (!userId || !grantId) return { error: "Pick something to grant." };
+  const grantIds = formData.getAll("grant").map((v) => String(v).trim()).filter(Boolean);
+  if (!userId || grantIds.length === 0) return { error: "Pick something to grant." };
 
-  const [kind, id] = grantId.split(":");
-  const by = admin.email ?? "admin";
-  const out =
-    kind === "offer"
-      ? await grantOfferAccess({ userId, offerId: id, grantedBy: by })
-      : await grantProduct({ userId, productId: id, grantedBy: by });
-  if (!out.ok) return { error: out.error };
+  const out = await applyGrants({ userId, ids: grantIds, grantedBy: admin.email ?? "admin" });
+  if (out.granted === 0) return { error: out.failed.map((f) => f.error).join("; ") };
 
   revalidatePath("/admin/members");
-  return { message: "Access granted." };
+  return {
+    message: out.failed.length
+      ? `Granted ${out.granted} of ${out.granted + out.failed.length} — the rest failed: ${out.failed.map((f) => f.error).join("; ")}`
+      : `Granted ${out.granted}.`,
+  };
 }
 
 export async function revokeAccessAction(formData: FormData) {
