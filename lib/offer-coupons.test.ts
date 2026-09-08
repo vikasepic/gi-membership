@@ -104,7 +104,14 @@ describe("a subscription is discounted by Stripe, not by us", () => {
     // of a discounted expression rather than the whole booked figure.
     const complete = offerCheckout.slice(offerCheckout.indexOf("export async function completeOfferCheckout"));
     expect(complete).toMatch(/\?[\s\S]{0,160}:\s*chargeNow\s*[;,)]/);
-    expect(offerCheckout).toContain("subtotal_cents: gross");
+    // subtotal_cents books subtotalCents now, not a bare `gross` — a bump
+    // riding the same PaymentIntent (task 10) adds its own money to what the
+    // order claims was sold, alongside the host. Still never net of the
+    // discount: `gross + bumpNowCents`, not `gross - discount`, is what feeds
+    // it, so the invariant this test has always checked — a subscription's
+    // booked subtotal is undiscounted — survives the bump unchanged.
+    expect(offerCheckout).toContain("subtotal_cents: subtotalCents");
+    expect(offerCheckout).toMatch(/const subtotalCents = .*gross \+ bumpNowCents/);
   });
 
   it("prices the order from the offer as the COUPON sells it", () => {

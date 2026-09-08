@@ -3,7 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getOffer, getStoreName } from "@/lib/store";
 import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerWithCouponTrial } from "@/lib/offers";
 import { livePrices, priceForChoice, shownPrices } from "@/lib/offer-prices";
-import { ownershipFor, fulfilOffer, grantOfferOwnership, customerForUser } from "@/lib/checkout";
+import { ownershipFor, fulfilOffer, fulfilBump, grantOfferOwnership, customerForUser } from "@/lib/checkout";
 import { stripe, stripeMode } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
 import { ensureUserProfile } from "@/lib/users";
@@ -396,21 +396,48 @@ export async function completeOfferCheckout(
       ? Math.min(coupon.discountCents, Math.max(0, gross - MIN_CHARGE_CENTS))
       : 0;
   const chargeNow = gross - discount;
+
+  // The bump's own charge-now figure, resolved the SAME WAY startOfferCheckout
+  // resolved it: from THIS HOST's placement (raw.bumpPriceIds), never the bump
+  // offer's own headline. A host may place its bump at a price other than that
+  // offer's headline one — getOffer(bumpOfferId) alone returns the headline —
+  // so reading immediateChargeCents straight off it here would book a figure
+  // the buyer was never actually shown or charged.
+  const bumpOfferId = si.metadata?.bumpOfferId ?? "";
+  let bumpNowCents = 0;
+  if (bumpOfferId) {
+    const bumpRaw = await getOffer(bumpOfferId);
+    // Mirrors fulfilBump's own guard below: a bump withdrawn since checkout
+    // gets no order line from fulfilBump, so the ledger must not book one either.
+    if (bumpRaw?.active) {
+      const bumpPrice = shownPrices(bumpRaw.prices, raw.bumpPriceIds ?? [])[0] ?? null;
+      bumpNowCents = immediateChargeCents(offerAtPrice(bumpRaw, bumpPrice));
+    }
+  }
+
   // What the card was actually charged. On the paid path that is the intent's
-  // own amount, never the `chargeNow` just recomputed above — a coupon that
-  // died between opening the form and paying would otherwise book a total the
-  // card was never charged. `si.object` is the discriminant Stripe puts on
-  // both types (checking it rather than `paid` narrows `si` for the `.amount`
-  // read below with no cast needed — and by the time we're here `paid` true
-  // implies this anyway, since a mismatched retrieve would already have
-  // thrown). The setup path takes nothing today, so `chargeNow` (today's
+  // own amount, never `chargeNow`/`gross` recomputed above — a coupon that died
+  // or a price that moved between opening the form and paying would otherwise
+  // book a total the card was never charged. `si.object` is the discriminant
+  // Stripe puts on both types (checking it rather than `paid` narrows `si` for
+  // the `.amount` read below with no cast needed — and by the time we're here
+  // `paid` true implies this anyway, since a mismatched retrieve would already
+  // have thrown). The setup path takes nothing today, so `chargeNow` (today's
   // genuine figure — often $0, on a trial) is the honest number there.
   const totalCents = si.object === "payment_intent" ? si.amount : chargeNow;
+  // The host's price plus the bump's — same shape as the product checkout's
+  // subtotal_cents (lib/checkout.ts, `listCents + bumpNowCents`). Never below
+  // what was actually charged, so a price cut between opening the form and
+  // paying cannot turn into a negative discount just below.
+  const subtotalCents = paid ? Math.max(gross + bumpNowCents, totalCents) : gross + bumpNowCents;
   // Recomputed from the real charge, not from the coupon, so the row still
-  // adds up (subtotal - discount = total) even when the intent and `gross`
+  // adds up (subtotal - discount = total) even when the intent and `subtotal`
   // disagree. Using the coupon's own `discount` here on the paid path would
-  // leave that gap silently unaccounted for on the order and on the receipt.
-  const discountCents = paid ? gross - totalCents : discount;
+  // leave that gap silently unaccounted for on the order and on the receipt —
+  // and, before `subtotal` above accounted for the bump, this was `gross -
+  // totalCents`: negative on every bumped purchase, since totalCents included
+  // the bump's money and gross alone never did.
+  const discountCents = paid ? subtotalCents - totalCents : discount;
   const { data: inserted, error: orderErr } = await db
     .from("orders")
     .insert({
@@ -423,7 +450,7 @@ export async function completeOfferCheckout(
       email,
       status: "paid",
       currency: offer.currency,
-      subtotal_cents: gross,
+      subtotal_cents: subtotalCents,
       total_cents: totalCents,
       coupon_code: coupon?.code ?? null,
       discount_cents: discountCents,
@@ -537,14 +564,33 @@ export async function completeOfferCheckout(
       kind: "oto",
       offer_id: offer.id,
       description: offer.name,
-      // Same figure as the order's own total_cents — see the comment there.
-      // On every path that reaches here except the paid one, `totalCents` IS
-      // `chargeNow`, so this is a no-op rename for the setup/recurring path and
-      // the fix for the paid one.
-      amount_cents: totalCents,
+      // The HOST's share alone, not the combined total — fulfilBump just below
+      // writes the bump's own line at its own amount, and the two must sum to
+      // total_cents. Equal to totalCents whenever bumpNowCents is 0 (no bump,
+      // on every path except a bumped paid one), so this is a no-op rename
+      // everywhere except the purchase this task exists to fix.
+      amount_cents: totalCents - bumpNowCents,
       stripe_subscription_id: result.subscriptionId ?? null,
       stripe_payment_intent_id: result.paymentIntentId ?? null,
     });
+
+    // The bump the buyer ticked, whose money is already in the intent above.
+    // fulfilBump is the same function the product checkout uses — it grants,
+    // writes exactly one order line however many times it runs, and charges
+    // nothing when prepaid.
+    if (bumpOfferId) {
+      await fulfilBump({
+        orderId,
+        storeId,
+        userId,
+        email,
+        stripeCustomerId: customerId,
+        offerId: bumpOfferId,
+        paymentMethodId: pm,
+        prepaid: si.metadata?.bumpPrepaid === "true",
+        paidByIntentId: paid ? si.id : null,
+      });
+    }
   } catch {
     // The card saved (and may already be charged or subscribed) but
     // fulfilment did not finish — granting access or recording the line can

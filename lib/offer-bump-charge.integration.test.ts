@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from "vitest";
-import { startOfferCheckout } from "@/lib/offer-checkout";
+import { startOfferCheckout, completeOfferCheckout } from "@/lib/offer-checkout";
 import { stripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
@@ -199,10 +199,90 @@ describe.skipIf(!canRun)("a bump on an offer's checkout (integration)", () => {
   });
 });
 
+describe.skipIf(!canRun)("completing a bumped offer checkout (integration)", () => {
+  it("books a subtotal/discount/total that add up, one line each, two grants, one charge — and a refresh doubles nothing", async () => {
+    const bumpId = await offerOf(2900);
+    const hostId = await offerOf(4700, { bump_offer_id: bumpId });
+    const { userId, email } = await member();
+
+    const start = await startOfferCheckout({ userId, email, offerId: hostId, bumpChoice: 0 });
+    expect(start.ok).toBe(true);
+    if (!start.ok) return;
+    const piId = start.clientSecret.split("_secret_")[0];
+
+    // One on-session confirmation — the whole point of folding the bump into
+    // the host's own intent instead of a second, off-session charge.
+    await stripe().paymentIntents.confirm(piId, {
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/checkout/offer/complete",
+    });
+
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+
+    const db = createServiceClient();
+    const orders = await db
+      .from("orders")
+      .select("id, subtotal_cents, discount_cents, total_cents")
+      .eq("user_id", userId);
+    expect(orders.data).toHaveLength(1);
+    const order = orders.data![0] as {
+      id: string;
+      subtotal_cents: number;
+      discount_cents: number;
+      total_cents: number;
+    };
+
+    // THE bug this task exists to fix: before the fix, subtotal_cents booked
+    // the host alone (4700) and discount_cents was gross - total (4700 - 7600
+    // = -2900) — negative on every bumped purchase, never mind a coupon.
+    expect(order.subtotal_cents).toBe(7600); // 4700 host + 2900 bump
+    expect(order.discount_cents).toBe(0); // never negative — no coupon here
+    expect(order.total_cents).toBe(7600); // what the card was actually charged
+    expect(order.subtotal_cents - order.discount_cents).toBe(order.total_cents);
+
+    const items = await db
+      .from("order_items")
+      .select("kind, amount_cents")
+      .eq("order_id", order.id);
+    expect(items.data).toHaveLength(2);
+    const sum = (items.data ?? []).reduce((s, i) => s + (i.amount_cents as number), 0);
+    expect(sum).toBe(order.total_cents); // the two lines add up to what was charged
+    const oto = items.data!.find((i) => i.kind === "oto");
+    const bump = items.data!.find((i) => i.kind === "bump");
+    expect(oto?.amount_cents).toBe(4700); // the host's share alone, not the combined total
+    expect(bump?.amount_cents).toBe(2900);
+
+    const own = await db.from("ownership").select("id").eq("user_id", userId);
+    expect(own.data).toHaveLength(2); // the host's grant and the bump's, separately
+
+    // Exactly one succeeded PaymentIntent for this purchase — fulfilBump must
+    // not have opened a second, off-session charge for a card that (per the
+    // global constraint here) may be Indian and refuse one outright.
+    const allPis = await stripe().paymentIntents.list({ customer: start.customerId, limit: 10 });
+    expect(allPis.data.filter((p) => p.status === "succeeded")).toHaveLength(1);
+
+    // A refresh of the return page (the sequential re-entry the eligibility
+    // check guards) must not double the order, its lines, or the grants.
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+    const ordersAgain = await db.from("orders").select("id").eq("user_id", userId);
+    expect(ordersAgain.data).toHaveLength(1);
+    const itemsAgain = await db.from("order_items").select("id").eq("order_id", order.id);
+    expect(itemsAgain.data).toHaveLength(2);
+    const ownAgain = await db.from("ownership").select("id").eq("user_id", userId);
+    expect(ownAgain.data).toHaveLength(2);
+  });
+});
+
 afterAll(async () => {
   if (!canRun) return;
   const db = createServiceClient();
   for (const id of users) {
+    // orders/order_items reference the user and the offers above; both must
+    // go before those FKs are torn down, or the fixture cleanup itself fails
+    // and leaves every row behind for the next run to trip over.
+    const { data: orders } = await db.from("orders").select("id").eq("user_id", id);
+    for (const o of orders ?? []) await db.from("order_items").delete().eq("order_id", o.id as string);
+    await db.from("orders").delete().eq("user_id", id);
     await db.from("ownership").delete().eq("user_id", id);
     await db.from("users").delete().eq("id", id);
     await db.auth.admin.deleteUser(id);
