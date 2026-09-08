@@ -61,4 +61,24 @@ describe.skipIf(!canRun)("a prepaid one-time offer (integration)", () => {
     expect(res.paymentIntentId).toBeUndefined();
     expect(after.data.length).toBe(before.data.length);
   });
+
+  it("refuses a prepaid offer that resolves recurring, rather than stacking a subscription on the charge", async () => {
+    // No order or Stripe customer needed: this must throw before either is
+    // touched, from the billingType alone — that's the point of the guard.
+    await expect(
+      fulfilOffer({
+        order: { id: "00000000-0000-0000-0000-000000000000", stripeCustomerId: "cus_doesnotmatter" },
+        offer: {
+          id: "00000000-0000-0000-0000-0000000000f3",
+          name: "zz prepaid-recurring fixture",
+          billingType: "recurring",
+          priceCents: 4700,
+          currency: "usd",
+          trialDays: null,
+        } as never,
+        paymentMethodId: "pm_card_visa",
+        prepaid: true,
+      }),
+    ).rejects.toThrow(/prepaid/i);
+  });
 });

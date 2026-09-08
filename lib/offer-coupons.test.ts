@@ -88,7 +88,22 @@ describe("a subscription is discounted by Stripe, not by us", () => {
     // offer's on-session PaymentIntent does — so `chargeNow` is still what a
     // recurring sale books.)
     expect(offerCheckout).toContain('sold.billingType !== "recurring"');
-    expect(offerCheckout).toContain("total_cents: paid ? (si as Stripe.PaymentIntent).amount : chargeNow");
+    // Pinned to the behaviour, not the exact source text: what decides the
+    // paid branch is free to change (it once needed a cast to narrow the
+    // union of Stripe's two intent types; fix round 1 replaced that with an
+    // `si.object` discriminant check instead, dropping the word "paid" from
+    // this exact expression) as long as this invariant holds — there is a
+    // real branch, and whatever is booked on the side that ISN'T the paid,
+    // on-session one (which is every recurring sale; see above) still falls
+    // back to the undiscounted `chargeNow`. Fails if that fallback is ever
+    // dropped or swapped for a discounted figure; passes through any
+    // reasonable reformat of the condition itself.
+    // Terminator-anchored (`chargeNow` followed only by `;`, `,` or `)`, not
+    // by more expression) so this cannot be satisfied by a regression like
+    // `: chargeNow - coupon.discountCents` — chargeNow appearing as the START
+    // of a discounted expression rather than the whole booked figure.
+    const complete = offerCheckout.slice(offerCheckout.indexOf("export async function completeOfferCheckout"));
+    expect(complete).toMatch(/\?[\s\S]{0,160}:\s*chargeNow\s*[;,)]/);
     expect(offerCheckout).toContain("subtotal_cents: gross");
   });
 

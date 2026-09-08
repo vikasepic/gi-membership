@@ -1,5 +1,4 @@
 import "server-only";
-import type Stripe from "stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getOffer, getStoreName } from "@/lib/store";
 import { isOfferEligible, immediateChargeCents, offerAtPrice, offerWithCouponTrial } from "@/lib/offers";
@@ -223,10 +222,11 @@ export async function startOfferCheckout(args: {
 }
 
 // Called on return from Stripe. Idempotent: the eligibility re-check short-
-// circuits a refresh, and the fulfilment key is derived from the SetupIntent so
-// Stripe itself refuses to create a second subscription even under a race.
+// circuits a refresh, and the fulfilment key is derived from the intent id
+// (whichever kind — see below), so Stripe itself refuses to create a second
+// subscription even under a race.
 export async function completeOfferCheckout(
-  setupIntentId: string,
+  intentId: string,
   country?: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   // Either kind. A one-time offer is paid for on-session, so the money is
@@ -234,19 +234,19 @@ export async function completeOfferCheckout(
   // a card and its subscription is created below. Anything else is refused
   // rather than guessed at — a wrong retrieve would throw on a completed
   // purchase, which is the worst outcome available.
-  const paid = setupIntentId.startsWith("pi_");
-  if (!paid && !setupIntentId.startsWith("seti_")) {
+  const paid = intentId.startsWith("pi_");
+  if (!paid && !intentId.startsWith("seti_")) {
     return { ok: false, error: "unknown_intent" };
   }
   const si = paid
-    ? await stripe().paymentIntents.retrieve(setupIntentId)
-    : await stripe().setupIntents.retrieve(setupIntentId);
+    ? await stripe().paymentIntents.retrieve(intentId)
+    : await stripe().setupIntents.retrieve(intentId);
   if (si.status !== "succeeded") return { ok: false, error: "card_not_saved" };
 
   const userId = si.metadata?.userId;
   const offerId = si.metadata?.offerId;
   const storeId = si.metadata?.storeId;
-  if (!userId || !offerId || !storeId) return { ok: false, error: "unknown_setup_intent" };
+  if (!userId || !offerId || !storeId) return { ok: false, error: "unknown_intent_metadata" };
 
   const raw = await getOffer(offerId);
   if (!raw || !raw.active) return { ok: false, error: "unavailable" };
@@ -321,6 +321,21 @@ export async function completeOfferCheckout(
       ? Math.min(coupon.discountCents, Math.max(0, gross - MIN_CHARGE_CENTS))
       : 0;
   const chargeNow = gross - discount;
+  // What the card was actually charged. On the paid path that is the intent's
+  // own amount, never the `chargeNow` just recomputed above — a coupon that
+  // died between opening the form and paying would otherwise book a total the
+  // card was never charged. `si.object` is the discriminant Stripe puts on
+  // both types (checking it rather than `paid` narrows `si` for the `.amount`
+  // read below with no cast needed — and by the time we're here `paid` true
+  // implies this anyway, since a mismatched retrieve would already have
+  // thrown). The setup path takes nothing today, so `chargeNow` (today's
+  // genuine figure — often $0, on a trial) is the honest number there.
+  const totalCents = si.object === "payment_intent" ? si.amount : chargeNow;
+  // Recomputed from the real charge, not from the coupon, so the row still
+  // adds up (subtotal - discount = total) even when the intent and `gross`
+  // disagree. Using the coupon's own `discount` here on the paid path would
+  // leave that gap silently unaccounted for on the order and on the receipt.
+  const discountCents = paid ? gross - totalCents : discount;
   const { data: order, error: orderErr } = await db
     .from("orders")
     .insert({
@@ -334,19 +349,15 @@ export async function completeOfferCheckout(
       status: "paid",
       currency: offer.currency,
       subtotal_cents: gross,
-      // What the card was actually charged, not what it would cost if bought
-      // again this second. The intent is the receipt; a recomputed figure can
-      // drift from it when a coupon dies between opening the form and paying.
-      // Cast: `si` is a PaymentIntent whenever `paid` is true — that's the very
-      // condition that chose paymentIntents.retrieve over setupIntents.retrieve
-      // above — but the two Stripe types share no discriminant TS can see.
-      total_cents: paid ? (si as Stripe.PaymentIntent).amount : chargeNow,
+      total_cents: totalCents,
       coupon_code: coupon?.code ?? null,
-      discount_cents: discount,
+      discount_cents: discountCents,
       stripe_customer_id: customerId,
-      // Which object took the money, so the ledger points at the real charge.
+      // The payment that took the money, so purchaseSummary can find this
+      // order by it. NOT the SetupIntent: that column is uniquely indexed
+      // (0055) and this function mints a fresh order per visit, so recording
+      // it would make a retry after a failed fulfilment collide for ever.
       stripe_payment_intent_id: paid ? si.id : null,
-      stripe_setup_intent_id: paid ? null : si.id,
       buyer_country: normalizeCountry(country) ?? null,
     })
     .select("id")
@@ -362,7 +373,7 @@ export async function completeOfferCheckout(
       coupon: coupon
         ? { promotionCodeId: coupon.promotionCodeId, discountCents: coupon.discountCents, trialDays: coupon.trialDays }
         : null,
-      idempotencyKey: `offerco_${setupIntentId}_${offer.id}`,
+      idempotencyKey: `offerco_${intentId}_${offer.id}`,
       // The money is in the intent the buyer just confirmed.
       prepaid: paid,
     });
@@ -383,7 +394,11 @@ export async function completeOfferCheckout(
     kind: "oto",
     offer_id: offer.id,
     description: offer.name,
-    amount_cents: chargeNow,
+    // Same figure as the order's own total_cents — see the comment there.
+    // On every path that reaches here except the paid one, `totalCents` IS
+    // `chargeNow`, so this is a no-op rename for the setup/recurring path and
+    // the fix for the paid one.
+    amount_cents: totalCents,
     stripe_subscription_id: result.subscriptionId ?? null,
     stripe_payment_intent_id: result.paymentIntentId ?? null,
   });

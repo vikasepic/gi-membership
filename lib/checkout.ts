@@ -701,6 +701,22 @@ export async function fulfilOffer(args: {
 }): Promise<{ subscriptionId?: string; paymentIntentId?: string }> {
   const { order, offer, paymentMethodId } = args;
   const coupon = args.coupon ?? null;
+
+  // A prepaid caller has already taken the money in the order's own intent —
+  // see the `prepaid` doc above. If the offer resolves recurring by the time
+  // we get here, creating a subscription below would stack it on top of that
+  // completed charge: a double bill. Reachable with no code bug, not just in
+  // theory — prices carry their own billingType, so a buyer can pick a
+  // one-time price, have an admin archive it mid-checkout, and land back here
+  // with `offer` recomputed from the headline recurring price while the
+  // PaymentIntent they already confirmed sits there paid. One guard here
+  // covers every prepaid caller, present and future, rather than trusting
+  // each call site to re-derive the same check. The caller's catch turns this
+  // into a voided order — better that than a subscription nobody agreed to.
+  if (args.prepaid && offer.billingType === "recurring") {
+    throw new Error("fulfilOffer: prepaid is only valid for a one-time offer, not a recurring one");
+  }
+
   // The code goes in the key. Without it, applying a coupon to an offer someone
   // had already tried to buy without one would return Stripe's cached
   // subscription from the first attempt — at full price, with no error.
