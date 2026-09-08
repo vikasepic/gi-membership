@@ -23,6 +23,31 @@ vi.mock("@/lib/stripe", async (orig) => ({
   }),
 }));
 
+// Lets one case force grantOfferOwnership to throw for a chosen userId, to
+// cover the catch block that voids the order when granting (not just
+// fulfilOffer itself) fails after the claim — see Important 2 of fix round
+// 3 in task-4-5-report.md. Every other export, and every OTHER call to
+// grantOfferOwnership, runs the real implementation; the flag is consumed
+// (deleted) on use so the very next call — the retry the test makes itself —
+// goes through untouched.
+const { grantOfferOwnershipShouldThrow } = vi.hoisted(() => ({
+  grantOfferOwnershipShouldThrow: new Set<string>(),
+}));
+vi.mock("@/lib/checkout", async (orig) => {
+  const real = await orig<typeof import("@/lib/checkout")>();
+  return {
+    ...real,
+    grantOfferOwnership: async (...args: Parameters<typeof real.grantOfferOwnership>) => {
+      const [, userId] = args;
+      if (grantOfferOwnershipShouldThrow.has(userId)) {
+        grantOfferOwnershipShouldThrow.delete(userId);
+        throw new Error("simulated grantOfferOwnership failure");
+      }
+      return real.grantOfferOwnership(...args);
+    },
+  };
+});
+
 import { completeOfferCheckout } from "@/lib/offer-checkout";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
@@ -233,5 +258,154 @@ describe.skipIf(!canRun)("completeOfferCheckout's claim on a race (0070)", () =>
       .eq("user_id", userId)
       .eq("offer_id", fixtureOfferId);
     expect(owned).toHaveLength(1);
+  });
+
+  it("two callers racing an already-failed row book exactly one order_items row", async () => {
+    const db = createServiceClient();
+    const { userId, email } = await buyer("racefailed");
+    const storeId = await getStoreId();
+    const piId = `pi_racefailed_${crypto.randomUUID()}`;
+
+    // Stands in for an even earlier attempt that claimed this row and then
+    // had fulfilOffer throw — reachable with three or more calls for one
+    // intent (a claim-then-fail, then a webhook redelivery racing the buyer
+    // reloading the return URL). The two calls below are the SECOND and
+    // THIRD against this same intent, both landing on a row that is already
+    // "failed" — unlike the concurrency test above, which races two FRESH
+    // inserts and so only ever sends one caller down the reclaim branch at
+    // all.
+    const { data: voided } = await db
+      .from("orders")
+      .insert({
+        livemode: false,
+        store_id: storeId,
+        user_id: userId,
+        email,
+        status: "failed",
+        currency: "usd",
+        subtotal_cents: PRICE_CENTS,
+        total_cents: PRICE_CENTS,
+        stripe_customer_id: `cus_racefailed_${crypto.randomUUID()}`,
+        stripe_payment_intent_id: piId,
+      })
+      .select("id")
+      .single();
+    if (!voided) throw new Error("failed to seed the voided-order fixture");
+    orderIds.push(voided.id as string);
+
+    PI_RESPONSES.set(piId, {
+      id: piId,
+      object: "payment_intent",
+      status: "succeeded",
+      amount: PRICE_CENTS,
+      customer: `cus_racefailed_${crypto.randomUUID()}`,
+      payment_method: `pm_racefailed_${crypto.randomUUID()}`,
+      metadata: {
+        userId,
+        offerId: fixtureOfferId,
+        storeId,
+        offerPriceId: "",
+        couponCode: "",
+        newAccount: "false",
+      },
+    });
+
+    // Promise.all, same reason as the fresh-insert race above: both callers
+    // have to actually overlap at the DB, not just run one after the other.
+    const [a, b] = await Promise.all([completeOfferCheckout(piId), completeOfferCheckout(piId)]);
+    expect(a).toEqual({ ok: true });
+    expect(b).toEqual({ ok: true });
+
+    const { data: orders } = await db.from("orders").select("id, status").eq("user_id", userId);
+    expect(orders).toHaveLength(1);
+    expect(orders![0].id).toBe(voided.id); // reclaimed the seeded row, not a second one
+    expect(orders![0].status).toBe("paid");
+
+    // The assertion an unguarded reclaim update fails: both racers used to
+    // see "failed" and both would fall through into fulfilment, appending
+    // their own order_items line to the one real order.
+    const { data: items } = await db.from("order_items").select("id").eq("order_id", voided.id as string);
+    expect(items).toHaveLength(1);
+
+    const { data: owned } = await db
+      .from("ownership")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("offer_id", fixtureOfferId);
+    expect(owned).toHaveLength(1);
+  });
+
+  it("a grant failure after the claim voids the order instead of leaving it paid forever, and a later call then delivers", async () => {
+    const db = createServiceClient();
+    const { userId } = await buyer("grantfail");
+    const storeId = await getStoreId();
+    const piId = `pi_grantfail_${crypto.randomUUID()}`;
+    PI_RESPONSES.set(piId, {
+      id: piId,
+      object: "payment_intent",
+      status: "succeeded",
+      amount: PRICE_CENTS,
+      customer: `cus_grantfail_${crypto.randomUUID()}`,
+      payment_method: `pm_grantfail_${crypto.randomUUID()}`,
+      metadata: {
+        userId,
+        offerId: fixtureOfferId,
+        storeId,
+        offerPriceId: "",
+        couponCode: "",
+        newAccount: "false",
+      },
+    });
+
+    // The claim succeeds (fresh insert, no conflict) and fulfilOffer is a
+    // no-op on this prepaid one-time offer, so the only way this call can
+    // fail is grantOfferOwnership itself — forced here rather than found,
+    // since every real ownership/product fixture in this file satisfies its
+    // own foreign keys by construction.
+    grantOfferOwnershipShouldThrow.add(userId);
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: false, error: "charge_failed" });
+
+    const { data: firstPass } = await db.from("orders").select("id, status").eq("user_id", userId);
+    expect(firstPass).toHaveLength(1);
+    // The order this catches — not left "paid" with nothing granted, which
+    // is what every later delivery would have read as a done deal.
+    expect(firstPass![0].status).toBe("failed");
+    orderIds.push(firstPass![0].id as string);
+
+    const { data: noOwnership } = await db
+      .from("ownership")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("offer_id", fixtureOfferId);
+    expect(noOwnership).toHaveLength(0);
+
+    const { data: noItems } = await db
+      .from("order_items")
+      .select("id")
+      .eq("order_id", firstPass![0].id as string);
+    expect(noItems).toHaveLength(0);
+
+    // grantOfferOwnershipShouldThrow was consumed by the call above — this
+    // one gets the real implementation. Reclaims the same "failed" row
+    // (Important 1's own guarded update) and this time the grant lands.
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+
+    const { data: secondPass } = await db.from("orders").select("id, status").eq("user_id", userId);
+    expect(secondPass).toHaveLength(1);
+    expect(secondPass![0].id).toBe(firstPass![0].id); // same row, not a second one
+    expect(secondPass![0].status).toBe("paid");
+
+    const { data: owned } = await db
+      .from("ownership")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("offer_id", fixtureOfferId);
+    expect(owned).toHaveLength(1);
+
+    const { data: items } = await db
+      .from("order_items")
+      .select("id")
+      .eq("order_id", firstPass![0].id as string);
+    expect(items).toHaveLength(1);
   });
 });

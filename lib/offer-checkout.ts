@@ -391,11 +391,27 @@ export async function completeOfferCheckout(
       // page). Nothing to undo first — ownership and order_items are only
       // written after fulfilOffer succeeds, so the voided attempt granted
       // nothing.
-      const { error: reclaimErr } = await db
+      //
+      // The reclaim itself has to be its own claim, not a bare update: with
+      // three or more calls for one intent (a claim-then-fail, then two
+      // redeliveries racing each other — a webhook retry against the buyer
+      // reloading the return page, say) both could read "failed" here
+      // before either writes "paid". An unguarded update would let both
+      // fall through into fulfilment for the one order — order_items has no
+      // unique constraint the way the orders insert above does, so that's a
+      // duplicate line on one real charge, not just a duplicate row that
+      // gets cleaned up. Scoped to "failed" and read back via .select("id"):
+      // only the caller whose update actually matched a row goes on to
+      // fulfil. The other lost the race and stops here, exactly like the
+      // already-paid branch above.
+      const { data: reclaimed, error: reclaimErr } = await db
         .from("orders")
         .update({ status: "paid" })
-        .eq("id", existing.id as string);
+        .eq("id", existing.id as string)
+        .eq("status", "failed")
+        .select("id");
       if (reclaimErr) return { ok: false, error: "order_failed" };
+      if (!reclaimed || reclaimed.length === 0) return { ok: true }; // someone else reclaimed it first
       orderId = existing.id as string;
     } else {
       return { ok: false, error: "order_failed" };
@@ -405,9 +421,8 @@ export async function completeOfferCheckout(
     orderId = inserted.id as string;
   }
 
-  let result: { subscriptionId?: string; paymentIntentId?: string };
   try {
-    result = await fulfilOffer({
+    const result = await fulfilOffer({
       order: { id: orderId, stripeCustomerId: customerId },
       offer: sold,
       paymentMethodId: pm,
@@ -418,30 +433,52 @@ export async function completeOfferCheckout(
       // The money is in the intent the buyer just confirmed.
       prepaid: paid,
     });
+
+    // Granting and the ledger line live inside the SAME try as the charge/
+    // subscription, not after it. grantOfferOwnership really can throw — a
+    // non-23505 ownership error, or (for a subscription grant) the network
+    // push to a connected app — and it used to sit outside this catch: a
+    // throw there left the order "paid" for ever with no ownership row, and
+    // every later delivery (a webhook redelivery, the buyer reloading the
+    // return page) hit the already-paid branch above and returned
+    // { ok: true } without ever retrying the grant. Told success, and never
+    // got it.
+    //
+    // Safe to void even though fulfilOffer already ran: on the paid path it
+    // was a no-op (the money moved in the buyer's own PaymentIntent, not
+    // here), and on the recurring path it created the subscription under an
+    // idempotency key derived from the intent id, so calling it again on
+    // retry hands back the SAME subscription rather than a second one.
+    // Nothing after the order_items insert lives inside this try, so a
+    // purchase that actually finished (grant done, line written) can never
+    // be the one this catches — only one where that work did not complete.
+    await grantOfferOwnership(storeId, userId, sold, "grant", result.subscriptionId ?? null, {
+      email,
+      stripeCustomerId: customerId,
+    });
+    await db.from("order_items").insert({
+      store_id: storeId,
+      order_id: orderId,
+      kind: "oto",
+      offer_id: offer.id,
+      description: offer.name,
+      // Same figure as the order's own total_cents — see the comment there.
+      // On every path that reaches here except the paid one, `totalCents` IS
+      // `chargeNow`, so this is a no-op rename for the setup/recurring path and
+      // the fix for the paid one.
+      amount_cents: totalCents,
+      stripe_subscription_id: result.subscriptionId ?? null,
+      stripe_payment_intent_id: result.paymentIntentId ?? null,
+    });
   } catch {
-    // The card saved but the charge/subscription didn't take. Void the order so
-    // it can't read as a completed purchase.
+    // The card saved (and may already be charged or subscribed) but
+    // fulfilment did not finish — granting access or recording the line can
+    // be what failed just as much as the charge itself. Void the order so
+    // it can't read as a completed purchase; the reclaim branch above picks
+    // a "failed" row back up and runs this whole block again, which is safe
+    // for the reasons above.
     await db.from("orders").update({ status: "failed" }).eq("id", orderId);
     return { ok: false, error: "charge_failed" };
   }
-
-  await grantOfferOwnership(storeId, userId, sold, "grant", result.subscriptionId ?? null, {
-    email,
-    stripeCustomerId: customerId,
-  });
-  await db.from("order_items").insert({
-    store_id: storeId,
-    order_id: orderId,
-    kind: "oto",
-    offer_id: offer.id,
-    description: offer.name,
-    // Same figure as the order's own total_cents — see the comment there.
-    // On every path that reaches here except the paid one, `totalCents` IS
-    // `chargeNow`, so this is a no-op rename for the setup/recurring path and
-    // the fix for the paid one.
-    amount_cents: totalCents,
-    stripe_subscription_id: result.subscriptionId ?? null,
-    stripe_payment_intent_id: result.paymentIntentId ?? null,
-  });
   return { ok: true };
 }
