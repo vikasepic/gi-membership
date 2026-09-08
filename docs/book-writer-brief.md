@@ -221,14 +221,27 @@ Steps 1–4 need nothing from us. Step 6 is where we are involved.
 
 ## 8. What we still need from you
 
-- Your production URL confirmed as `https://book.greaterinside.com` — a
-  per-commit preview URL is not one, and if your host has deployment protection
-  enabled it returns a `401` that looks exactly like a wrong shared secret.
 - A shout when steps 1-5 are done, so we can activate and test together.
 
 Answered already, recorded here so nobody re-asks: same Stripe account (§2),
-`user_access.source` is plain text (§4.2), and the store offer is a one-time
-$47 payment (§9).
+`user_access.source` is plain text (§4.2), the store offer is a one-time $47
+payment (§9), and the base URL is `https://book.greaterinside.com` — registered.
+
+**Your routing is already clear for this.** We probed it before registering:
+
+```
+GET /                      200
+GET /login                 200
+GET /auth/store-handoff    404
+GET /api/store/provision   404
+```
+
+Both endpoints answer a plain `404`, not a `307` to `/login`. That matters more
+than it looks: the store follows no redirects, precisely because a login page's
+`200` would read as "delivered" and a failed provision would look like a
+successful one. Whatever sends the root on to Stripe runs in the browser, not in
+middleware, so it will not stand in front of what you build. Keep it that way —
+if these two paths ever start redirecting, our calls silently stop arriving.
 
 ---
 
