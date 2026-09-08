@@ -242,6 +242,13 @@ export type OfferInput = {
   imageUrl: string | null;
   acceptLabel: string;
   pageAltOfferId?: string | null;
+  /**
+   * Validated in saveOffer (bumpSlotError) but NOT written by toOfferRow.
+   * Today's offer form has no control for it, so every save would otherwise
+   * carry `null` and silently clear a value nothing here ever set on
+   * purpose. The admin picker task wires the write alongside the input.
+   */
+  bumpOfferId?: string | null;
   activecampaignTagId?: string | null;
   adEventName?: string | null;
   activecampaignTrialTagId?: string | null;

@@ -217,3 +217,23 @@ export function altSaving(
   if (months < 1) return null;
   return `${months} month${months === 1 ? "" : "s"} free`;
 }
+
+/**
+ * Whether an offer may sit in another offer's bump slot.
+ *
+ * Checked when the admin saves rather than when a buyer pays. A slot that can
+ * only fail is a slot that fails in front of a customer with a card in their
+ * hand, and the message they would see explains nothing.
+ */
+export function bumpSlotError(
+  bump: { id: string; billingType: string; active: boolean } | null,
+  hostId: string,
+): string | null {
+  if (!bump) return null;
+  if (bump.id === hostId) return "An offer cannot bump itself.";
+  if (!bump.active) return "That offer is not active, so it cannot be offered as a bump.";
+  if (bump.billingType !== "one_time") {
+    return "A bump must be a one-time offer. A recurring one would have to be charged after the payment, which cards issued in India refuse.";
+  }
+  return null;
+}
