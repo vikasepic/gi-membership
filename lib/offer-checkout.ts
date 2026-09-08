@@ -159,7 +159,10 @@ export async function startOfferCheckout(args: {
     // take it in. Refusing beats silently taking the tickbox and then
     // charging (and granting) nothing for it.
     if (priced.billingType !== "one_time") {
-      return { ok: false, error: "That add-on can't be added to this purchase." };
+      return {
+        ok: false,
+        error: "That add-on can't be added with this price. Choose the one-time price, or untick the add-on to continue.",
+      };
     }
     const shownBump = await getOffer(offer.bumpOfferId);
     // The options come from THIS offer's placement, never from the request.
@@ -186,7 +189,7 @@ export async function startOfferCheckout(args: {
     // Belt and braces: saveOffer refuses a recurring offer into the bump slot,
     // but this one may have been one-time when placed and changed since.
     if (asSold.billingType !== "one_time") {
-      return { ok: false, error: "That add-on can't be bought here." };
+      return { ok: false, error: "That add-on can't be bought here. Untick it to continue." };
     }
     bumpOffer = asSold;
   }
@@ -258,9 +261,24 @@ export async function startOfferCheckout(args: {
         ...metadata,
         discountCents: String(discount),
         bumpOfferId: bumpOffer?.id ?? "",
-        // Its money is in THIS intent, so fulfilment grants it and charges
-        // nothing. Written by us, read by us.
-        bumpPrepaid: bumpNowCents > 0 ? "true" : "",
+        // The bump's own name, not just its id. There is no second intent on
+        // this path to carry it — without this a bump riding the host's
+        // charge is indistinguishable from a host-only sale of the same total
+        // in the dashboard, in exports, and in Zapier (which can only filter
+        // on what Stripe holds). Same reason productTitle/offerName ride
+        // alongside their own ids in lib/checkout.ts, the product side of
+        // this same checkout.
+        bumpOfferName: bumpOffer?.name ?? "",
+        // Whether a bump was resolved, not whether it cost anything — a
+        // genuinely $0 bump (a free add-on) is still fully paid for by THIS
+        // intent, because there is nothing left to take. Keying this off
+        // `bumpNowCents > 0` instead left a $0 bump indistinguishable from no
+        // bump at all, and fulfilment is meant to read bumpPrepaid === "true"
+        // to skip its own off-session charge for it — the exact off_session
+        // PaymentIntent this checkout exists to avoid (Stripe refuses it
+        // outright on an India-issued card with no e-mandate). Written by us
+        // now, for that reader to trust later.
+        bumpPrepaid: bumpOffer ? "true" : "",
       },
     });
     if (!pi.client_secret) return { ok: false, error: "Could not start checkout." };

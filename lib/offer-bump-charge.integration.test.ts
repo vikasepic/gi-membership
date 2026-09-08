@@ -52,6 +52,30 @@ async function offerOf(cents: number, extra: Record<string, unknown> = {}) {
   return id;
 }
 
+/**
+ * A second price on an existing bump offer, so a test can put one price where
+ * the placement points and a different one where it doesn't. Every other
+ * fixture in this file gives the bump exactly one price with an empty
+ * `bump_price_ids`, where `shownPrices(prices, ids)` and `livePrices(prices)`
+ * return the identical list — this is the shape that tells them apart. Same
+ * insert shape as `lib/duplicate.integration.test.ts`'s own multi-price
+ * fixtures: an explicit id, no reliance on `offer_prices_sync` (that trigger
+ * only mirrors the FIRST live price onto `offers`, which already exists).
+ */
+async function addBumpPrice(offerId: string, cents: number, sortOrder: number): Promise<string> {
+  const db = createServiceClient();
+  const id = crypto.randomUUID();
+  const { error } = await db.from("offer_prices").insert({
+    id,
+    offer_id: offerId,
+    billing_type: "one_time",
+    price_cents: cents,
+    sort_order: sortOrder,
+  });
+  if (error) throw new Error(`fixture second price: ${error.message}`);
+  return id;
+}
+
 async function member() {
   const db = createServiceClient();
   const email = `bc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}@example.test`;
@@ -76,6 +100,9 @@ describe.skipIf(!canRun)("a bump on an offer's checkout (integration)", () => {
     expect(pi.amount).toBe(7600);
     expect(pi.metadata.bumpOfferId).toBe(bumpId);
     expect(pi.metadata.bumpPrepaid).toBe("true");
+    // Readable alongside the id: this account is shared with five other apps,
+    // and a bare uuid can't be told apart from theirs in the Stripe dashboard.
+    expect(pi.metadata.bumpOfferName).toBe("zz bump-charge fixture");
   });
 
   it("charges the offer alone when the bump is declined", async () => {
@@ -115,6 +142,60 @@ describe.skipIf(!canRun)("a bump on an offer's checkout (integration)", () => {
     const { userId, email } = await member();
     const res = await startOfferCheckout({ userId, email, offerId: hostId, bumpChoice: 0 });
     expect(res.ok).toBe(false);
+  });
+
+  // Every case above gives the bump exactly ONE price with an empty
+  // bump_price_ids — a shape where shownPrices(prices, ids) and
+  // livePrices(prices) return the identical list, so a resolution silently
+  // swapped from the former to the latter would still pass all four. This is
+  // the shape that tells them apart: a SECOND price on the bump offer, with
+  // the placement naming only that one.
+  it("buys the price the placement named, not any live price on the bump offer", async () => {
+    const bumpId = await offerOf(1500); // the bump's own headline price, sort_order 0 — NOT placed here
+    const placedId = await addBumpPrice(bumpId, 2900, 1); // the ONLY price this host placed
+    const hostId = await offerOf(4700, { bump_offer_id: bumpId, bump_price_ids: [placedId] });
+    const { userId, email } = await member();
+
+    // bumpChoice: 0 is the only option shownPrices returns for this
+    // placement — the SECOND price on the bump (2900), not its headline
+    // (1500). Swap shownPrices(shownBump.prices, offer.bumpPriceIds ?? [])
+    // for livePrices(shownBump.prices) and this list becomes both of the
+    // bump's prices in the bump's own order, making index 0 the 1500 one — a
+    // buyer reaching a price this host never placed.
+    const bought = await startOfferCheckout({ userId, email, offerId: hostId, bumpChoice: 0 });
+    expect(bought.ok).toBe(true);
+    if (bought.ok) {
+      const pi = await stripe().paymentIntents.retrieve(bought.clientSecret.split("_secret_")[0]);
+      expect(pi.amount).toBe(4700 + 2900);
+      expect(pi.metadata.bumpOfferId).toBe(bumpId);
+    }
+
+    // bumpChoice: 1 is out of range for what was actually placed — one price
+    // — so it refuses. Under the same livePrices swap, the two-item list
+    // would make index 1 resolve to the placed price and wrongly succeed.
+    const refused = await startOfferCheckout({ userId, email, offerId: hostId, bumpChoice: 1 });
+    expect(refused.ok).toBe(false);
+  });
+
+  // MINOR 2 regression: a bump can genuinely cost $0 (a free add-on, one-time,
+  // price_cents 0) and still be a resolved bump whose "money" — none — is
+  // already accounted for in this intent. bumpPrepaid used to be keyed off
+  // bumpNowCents > 0, which wrote "" for a free bump exactly like a bump that
+  // was never chosen at all — and a later task's fulfilment is meant to read
+  // bumpPrepaid === "true" to decide whether to skip its own off-session
+  // charge for it.
+  it("marks a free bump prepaid too, not just a paid one", async () => {
+    const bumpId = await offerOf(0);
+    const hostId = await offerOf(4700, { bump_offer_id: bumpId });
+    const { userId, email } = await member();
+
+    const res = await startOfferCheckout({ userId, email, offerId: hostId, bumpChoice: 0 });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const pi = await stripe().paymentIntents.retrieve(res.clientSecret.split("_secret_")[0]);
+    expect(pi.amount).toBe(4700); // the free bump adds nothing to the charge
+    expect(pi.metadata.bumpOfferId).toBe(bumpId);
+    expect(pi.metadata.bumpPrepaid).toBe("true"); // not "" — its $0 is still already "taken"
   });
 });
 
