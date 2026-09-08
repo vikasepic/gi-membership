@@ -336,7 +336,7 @@ export async function completeOfferCheckout(
   // disagree. Using the coupon's own `discount` here on the paid path would
   // leave that gap silently unaccounted for on the order and on the receipt.
   const discountCents = paid ? gross - totalCents : discount;
-  const { data: order, error: orderErr } = await db
+  const { data: inserted, error: orderErr } = await db
     .from("orders")
     .insert({
       // Which Stripe mode this was made in. Without it a test purchase is a
@@ -354,20 +354,61 @@ export async function completeOfferCheckout(
       discount_cents: discountCents,
       stripe_customer_id: customerId,
       // The payment that took the money, so purchaseSummary can find this
-      // order by it. NOT the SetupIntent: that column is uniquely indexed
-      // (0055) and this function mints a fresh order per visit, so recording
-      // it would make a retry after a failed fulfilment collide for ever.
+      // order by it — and, on the paid path, the claim this insert races on
+      // below (orders_payment_intent_idx, 0070) when the webhook and the
+      // return route land at once. NOT the SetupIntent: that column is
+      // uniquely indexed (0055) and this function mints a fresh order per
+      // visit, so recording it would make a retry after a failed fulfilment
+      // collide for ever.
       stripe_payment_intent_id: paid ? si.id : null,
       buyer_country: normalizeCountry(country) ?? null,
     })
     .select("id")
     .single();
-  if (orderErr || !order) return { ok: false, error: "order_failed" };
+
+  // The claim. The webhook and the return route both reach this insert for
+  // the same PaymentIntent — Stripe fires them independently, not in
+  // sequence — and the eligibility check above only guards SEQUENTIAL
+  // re-entry, not this. orders_payment_intent_idx (0070) turns the loser's
+  // insert into a 23505 instead of a second `orders` row for one charge; only
+  // the paid path sets stripe_payment_intent_id, so only it can collide here.
+  let orderId: string;
+  if (orderErr) {
+    if (orderErr.code === "23505" && paid) {
+      const { data: existing, error: readErr } = await db
+        .from("orders")
+        .select("id, status")
+        .eq("stripe_payment_intent_id", si.id)
+        .single();
+      if (readErr || !existing) return { ok: false, error: "order_failed" };
+      if (existing.status === "paid") return { ok: true }; // the winner already booked this purchase
+      if (existing.status !== "failed") return { ok: false, error: "order_failed" };
+      // The winner claimed this row, then fulfilOffer threw and the catch
+      // below voided it, before this call ever reached the insert. Reclaim
+      // and retry rather than refuse: a unique index paired with a voided
+      // row that can never be retried is exactly the bug an earlier task on
+      // this branch shipped (order_failed for ever, buyer sees a blank
+      // page). Nothing to undo first — ownership and order_items are only
+      // written after fulfilOffer succeeds, so the voided attempt granted
+      // nothing.
+      const { error: reclaimErr } = await db
+        .from("orders")
+        .update({ status: "paid" })
+        .eq("id", existing.id as string);
+      if (reclaimErr) return { ok: false, error: "order_failed" };
+      orderId = existing.id as string;
+    } else {
+      return { ok: false, error: "order_failed" };
+    }
+  } else {
+    if (!inserted) return { ok: false, error: "order_failed" };
+    orderId = inserted.id as string;
+  }
 
   let result: { subscriptionId?: string; paymentIntentId?: string };
   try {
     result = await fulfilOffer({
-      order: { id: order.id as string, stripeCustomerId: customerId },
+      order: { id: orderId, stripeCustomerId: customerId },
       offer: sold,
       paymentMethodId: pm,
       coupon: coupon
@@ -380,7 +421,7 @@ export async function completeOfferCheckout(
   } catch {
     // The card saved but the charge/subscription didn't take. Void the order so
     // it can't read as a completed purchase.
-    await db.from("orders").update({ status: "failed" }).eq("id", order.id);
+    await db.from("orders").update({ status: "failed" }).eq("id", orderId);
     return { ok: false, error: "charge_failed" };
   }
 
@@ -390,7 +431,7 @@ export async function completeOfferCheckout(
   });
   await db.from("order_items").insert({
     store_id: storeId,
-    order_id: order.id,
+    order_id: orderId,
     kind: "oto",
     offer_id: offer.id,
     description: offer.name,
