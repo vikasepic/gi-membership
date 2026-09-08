@@ -2,6 +2,7 @@ import { describe, it, expect, afterAll } from "vitest";
 import { startOfferCheckout } from "@/lib/offer-checkout";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
+import { stripe } from "@/lib/stripe";
 
 const canRun =
   !!process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") &&
@@ -60,6 +61,11 @@ describe.skipIf(!canRun)("which intent an offer checkout opens (integration)", (
     if (!res.ok) return;
     expect(res.mode).toBe("payment");
     expect(res.clientSecret.startsWith("pi_")).toBe(true);
+    // This change exists to authorise a specific amount — pin it, not just
+    // the intent kind, so a wrong gross/discount calculation that still
+    // returns a well-formed pi_ secret fails here.
+    const pi = await stripe().paymentIntents.retrieve(res.clientSecret.split("_secret_")[0]);
+    expect(pi.amount).toBe(4700);
   });
 
   it("still saves a card for a trial, because $0 cannot be a payment", async () => {

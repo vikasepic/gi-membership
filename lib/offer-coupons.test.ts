@@ -19,17 +19,27 @@ describe("the browser never decides what a discount is worth", () => {
     // An amount written into metadata is an amount a tampered preview could
     // have influenced. The code is re-priced on the way back.
     //
-    // Scoped to the SetupIntent call: a one-time offer's PaymentIntent also
-    // writes `discountCents`, but that charge happens synchronously in this
-    // same call from a coupon resolveCoupon() just re-priced server-side —
-    // it is a receipt of money already taken, not a number saved now for a
-    // later step to trust instead of recomputing.
-    const setupIntent = offerCheckout.slice(
-      offerCheckout.indexOf("stripe().setupIntents.create("),
-      offerCheckout.indexOf("if (!si.client_secret)"),
+    // Scoped to the metadata object itself, not the SetupIntent call: the
+    // call site only spells the shorthand `metadata,` — a `discountCents`
+    // added straight to `const metadata = {...}` would reach the SetupIntent
+    // without that key ever appearing in the call text. The object is shared
+    // by both call sites, so this one slice covers both: a one-time offer's
+    // PaymentIntent also writes `discountCents` (checked separately below),
+    // but that charge happens synchronously in this same call from a coupon
+    // resolveCoupon() just re-priced server-side — it is a receipt of money
+    // already taken, not a number saved now for a later step to trust
+    // instead of recomputing.
+    const metadataBlock = offerCheckout.slice(
+      offerCheckout.indexOf("const metadata = {"),
+      offerCheckout.indexOf("const description"),
     );
+    // Fails closed: if either anchor above stops matching (a rename, a
+    // reformat), indexOf returns -1 and slice(-1, ...) silently yields "" —
+    // and `not.toContain` on "" passes forever. This positive assertion
+    // proves the slice actually captured the object, not nothing.
+    expect(metadataBlock).toContain("storeId,");
     expect(offerCheckout).toContain("couponCode: coupon?.code ?? \"\"");
-    expect(setupIntent).not.toContain("discountCents");
+    expect(metadataBlock).not.toContain("discountCents");
   });
 
   it("prices it again at fulfilment, from that stored code", () => {
