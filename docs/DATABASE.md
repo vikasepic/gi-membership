@@ -184,6 +184,17 @@ too.
 
 ---
 
+### Built-in app tables
+
+`pb_sessions`, `pb_messages`, `pb_documents` (Micro-Product Builder) and
+`hook_generations` (Viral Hook Generator) were added in migration 0075 and
+are documented there and in [`builtin-apps.md`](./builtin-apps.md). Same
+conventions as every table here: `store_id` on every row, `user_id` to
+`users`, RLS on with no policies, service role only. Access to the apps is
+not in these tables; it is the `ownership` row for the app.
+
+---
+
 ### `checkout_leads`
 
 *18 rows · 96 kB · RLS enabled*
