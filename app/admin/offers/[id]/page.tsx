@@ -122,7 +122,20 @@ export default async function EditOfferPage({
           </a>
         </div>
       </div>
-      <OfferForm offer={offer} products={products} apps={apps} offers={offers} usage={usage} />
+      {/* Keyed on the row's own updated_at so a save remounts the form against
+          what was STORED. Every field inside is uncontrolled, and React ignores
+          `defaultValue` on re-render — so saveOffer's own corrections (channels
+          the granting app does not declare are dropped; a refused bump) would
+          otherwise sit on screen looking saved. Keyed on the row rather than a
+          counter, so a FAILED save leaves what they typed alone. */}
+      <OfferForm
+        key={offer.updatedAt}
+        offer={offer}
+        products={products}
+        apps={apps}
+        offers={offers}
+        usage={usage}
+      />
 
       {/* Beside the destructive control at the foot of the form above, not
           the everyday fields inside it — duplicating an offer is rare enough

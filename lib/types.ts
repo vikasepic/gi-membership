@@ -141,6 +141,16 @@ export type Offer = {
   prices: OfferPrice[];
   /** Which of its own prices the offer's page shows. Empty = the headline one. */
   pagePriceIds: string[];
+  /**
+   * When the row last changed.
+   *
+   * Read so the admin form can key its remount on it. The form is
+   * uncontrolled — every field is `defaultValue`, which React ignores on
+   * re-render — so without a key that moves, a save that CORRECTED the input
+   * leaves the corrected field showing what was typed instead of what was
+   * stored, and nothing says so.
+   */
+  updatedAt: string;
   /** An offer shown as a tickbox on this offer's checkout. */
   bumpOfferId: string | null;
   /** Which of the bump offer's prices this placement shows. Empty = headline. */
