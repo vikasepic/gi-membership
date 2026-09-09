@@ -624,6 +624,7 @@ function BlockCanvasField({
   owner,
   onSave,
   ownerOfferId,
+  store,
 }: {
   row: SectionRow;
   title: string;
@@ -633,6 +634,16 @@ function BlockCanvasField({
   /** Passed through to the tray: the storefront blocks are one page's only. */
   owner: OwnerType;
   ownerOfferId?: string;
+  /**
+   * The real catalogue and memberships, for the canvas inside the builder.
+   *
+   * It arrived here and went no further: declared, never destructured, never
+   * handed to BlockEditor — so CanvasStore held undefined and Catalogue,
+   * Memberships and Featured drew nothing the moment you pressed Edit blocks.
+   * The section preview below this launcher renders the same blocks from the
+   * same payload and drew them fine, so a band read "1 block" beside a picture
+   * of its content and opened onto an empty canvas.
+   */
   store?: StoreRender;
   onSave: () => Promise<void>;
 }) {
@@ -705,6 +716,7 @@ function BlockCanvasField({
           onClose={() => setOpen(false)}
           onSave={onSave}
           preview={preview}
+          store={store}
           owner={owner}
           ownerOfferId={ownerOfferId}
           globals={globals}

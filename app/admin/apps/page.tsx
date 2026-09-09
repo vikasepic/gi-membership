@@ -1,11 +1,21 @@
+import Link from "next/link";
 import { listApps } from "@/lib/apps";
+import { appKindFrom, appKindTabs, appsOfKind } from "@/lib/app-kind-filter";
 import { planNameBackfill } from "@/lib/app-backfill";
 import { ResendNames } from "@/components/admin/resend-names";
 import { builtinApp } from "@/lib/builtin-apps/registry";
 
-export default async function AdminAppsPage() {
-  const apps = await listApps();
+export default async function AdminAppsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const all = await listApps();
+  const filter = appKindFrom(await searchParams);
+  const tabs = appKindTabs(all);
+  const apps = appsOfKind(all, filter);
   // Counted here so the button can state what it would do before it does it.
+  // Indexed against the FILTERED list, since that is what is rendered.
   const plans = await Promise.all(apps.map((a) => planNameBackfill(a.id)));
 
   return (
@@ -19,6 +29,26 @@ export default async function AdminAppsPage() {
           reads the ownership row directly — nothing is sent anywhere.
         </p>
       </div>
+
+      {tabs.length > 0 && (
+        <nav aria-label="App kind" className="flex flex-wrap items-center gap-2">
+          {tabs.map((t) => (
+            <Link
+              key={t.key}
+              href={t.key === "all" ? "/admin/apps" : `/admin/apps?kind=${t.key}`}
+              aria-current={filter === t.key ? "page" : undefined}
+              className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${
+                filter === t.key
+                  ? "border-primary bg-primary/10 font-medium text-primary"
+                  : "border-border text-muted hover:border-fg hover:text-fg"
+              }`}
+            >
+              {t.label}
+              <span className="tabular-nums opacity-70">{t.count}</span>
+            </Link>
+          ))}
+        </nav>
+      )}
 
       <div className="flex flex-col gap-4">
         {apps.map((a, i) => (
@@ -56,7 +86,11 @@ export default async function AdminAppsPage() {
             )}
           </div>
         ))}
-        {apps.length === 0 && <p className="text-muted">No apps registered.</p>}
+        {apps.length === 0 && (
+          <p className="text-muted">
+            {all.length === 0 ? "No apps registered." : "None of this kind."}
+          </p>
+        )}
       </div>
     </div>
   );
