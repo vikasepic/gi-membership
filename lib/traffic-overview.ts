@@ -105,7 +105,12 @@ export function applyOverview(rows: OverviewRow[], filter: OverviewFilter): Over
   const q = filter.q.toLowerCase();
   const kept = rows.filter((r) => {
     if (filter.kind !== "all" && r.kind !== filter.kind) return false;
-    if (filter.source && r.topSource?.source !== filter.source) return false;
+    // No `source` clause: the caller (app/admin/traffic/page.tsx) restricts
+    // the raw counts to one source and reshapes the funnels from that alone
+    // before `rows` ever reaches this function, so every row already IS that
+    // source's data by construction. Re-filtering on `topSource` here would
+    // be a second, different filter — the one that used to drop a page a
+    // source drove but did not dominate.
     if (q && !`${r.title} ${r.path}`.toLowerCase().includes(q)) return false;
     return true;
   });

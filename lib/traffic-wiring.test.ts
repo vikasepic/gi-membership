@@ -85,3 +85,26 @@ describe("an offer's funnel is counted at every step", () => {
     expect(src).toMatch(/orderFunnelKey|hostOfferKey/);
   });
 });
+
+describe("the overview's source filter recomputes the funnels, it does not hide rows", () => {
+  // The composition itself — restrict counts, then buildFunnels — is proven
+  // by lib/traffic-funnel.test.ts. What can only be checked here, by reading
+  // the page rather than rendering it against a database, is the ORDER: the
+  // select's options have to be read off the window before it is narrowed.
+  it("derives the select's options before the counts are narrowed by source", () => {
+    const src = readFileSync("app/admin/traffic/page.tsx", "utf8");
+    const sourcesIdx = src.indexOf("sourcesIn(rows)");
+    const filterIdx = src.indexOf("counts.filter(");
+    expect(sourcesIdx).toBeGreaterThan(-1);
+    expect(filterIdx).toBeGreaterThan(sourcesIdx);
+  });
+
+  it("restricts the raw counts, then reshapes — not a filter over the shaped rows", () => {
+    // The bug this replaces filtered `rows` (already-shaped OverviewRows) by
+    // topSource, which could only ever hide a row, never recompute its
+    // numbers. The fix filters `counts` and feeds the result straight back
+    // into buildFunnels.
+    const src = readFileSync("app/admin/traffic/page.tsx", "utf8");
+    expect(src).toContain("buildFunnels(counts.filter(");
+  });
+});

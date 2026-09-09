@@ -135,6 +135,42 @@ describe("building the funnel", () => {
   });
 });
 
+describe("a source filter recomputes the funnel rather than hiding rows", () => {
+  // app/admin/traffic/page.tsx answers a source filter by restricting the
+  // raw counts to that source BEFORE calling buildFunnels, rather than
+  // shaping every source and filtering the shaped rows afterward. These
+  // fixtures are what that restricted array looks like; the tests below
+  // prove buildFunnels shapes it honestly from that alone.
+  const COUNTS: CountRow[] = [
+    row({ path: "/p/validator", source: "meta", hits: 60 }),
+    row({ path: "/p/validator", source: "direct", hits: 40 }),
+    row({ path: "/checkout", product: "validator", source: "meta", hits: 15 }),
+    row({ path: "/checkout", product: "validator", source: "direct", hits: 20 }),
+    // meta drives carousels SECOND, behind direct — its busiest source is
+    // direct, so a filter that only kept rows whose busiest source matched
+    // would drop this page from a "meta" filter entirely, despite meta
+    // sending it ten real views.
+    row({ path: "/p/carousels", product: "carousels", source: "direct", hits: 90 }),
+    row({ path: "/p/carousels", product: "carousels", source: "meta", hits: 10 }),
+  ];
+
+  it("gives a funnel step counts from one source's rows alone", () => {
+    const meta = buildFunnels(COUNTS.filter((c) => c.source === "meta"), [], NAMES, DAYS);
+    const validator = meta.funnels.find((f) => f.key === "validator");
+    // All-source this funnel is 100/35; meta alone is 60/15 — proving the
+    // steps are recomputed from meta's rows, not merely selected because
+    // meta happens to be this funnel's busiest source.
+    expect(validator?.steps.map((s) => s.count)).toEqual([60, 15, 0, 0]);
+  });
+
+  it("keeps a page the source drove but did not dominate", () => {
+    const meta = buildFunnels(COUNTS.filter((c) => c.source === "meta"), [], NAMES, DAYS);
+    const carousels = meta.funnels.find((f) => f.key === "carousels");
+    expect(carousels).toBeDefined();
+    expect(carousels?.steps[0].count).toBe(10);
+  });
+});
+
 describe("the days in a range", () => {
   it("ends on today and runs back the requested number of days", () => {
     const days = daysInRange({ start: "2026-09-03", end: "2026-09-05" });

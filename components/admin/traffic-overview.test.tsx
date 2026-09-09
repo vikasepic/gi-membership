@@ -57,7 +57,14 @@ describe("the traffic table", () => {
     mount();
     expect(text()).toContain("Book Writer");
     expect(text()).toContain("/o/book-writer");
-    expect(text()).toContain("/");
+    // The assertion above already implies the document contains "/" — it's
+    // a substring of "/o/book-writer" — so it proves nothing on its own.
+    // What "a plain page in the same list" actually claims is that the
+    // funnel-less page is its own row, with its path standing in as its
+    // title (it has no funnel, so it has no other name).
+    const rows = [...document.querySelectorAll("tbody tr")];
+    expect(rows).toHaveLength(2);
+    expect(rows[1].querySelector("td span")!.textContent).toBe("/");
   });
 
   it("drills into a funnel and leaves a plain page unlinked", () => {

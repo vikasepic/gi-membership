@@ -52,12 +52,26 @@ export default async function AdminTrafficPage({
     ...offers.map((o) => ({ key: o.key, title: o.name, kind: "offer" as const })),
   ];
   const days = daysInRange(range);
-  const view = buildFunnels(counts, [...bought, ...boughtOffers], owners, days);
+  const boughtRows = [...bought, ...boughtOffers];
+  const view = buildFunnels(counts, boughtRows, owners, days);
 
   const filter = overviewFilterFrom(params);
   const rows = overviewRows(view);
+  // The select's options always come from the WHOLE window: deriving them
+  // from a source-narrowed set of rows would leave the chosen source as the
+  // only option, with no way back to any other one.
   const sources = sourcesIn(rows);
-  const shown = applyOverview(rows, filter);
+  // Job 3 of the source filter is not hiding rows — it recomputes the three
+  // view steps, the trend and the totals from that source's rows alone. So
+  // the raw counts are restricted to that source BEFORE the funnels are
+  // shaped, and the funnels are shaped again from that alone. `bought`
+  // carries no source anywhere in this store, so it stays whole either way;
+  // the table blanks Bought under a filter regardless of what number is
+  // underneath.
+  const sourceView = filter.source
+    ? buildFunnels(counts.filter((c) => c.source === filter.source), boughtRows, owners, days)
+    : view;
+  const shown = applyOverview(overviewRows(sourceView), filter);
 
   return (
     <div className="flex flex-col gap-6 py-4">

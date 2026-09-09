@@ -76,7 +76,8 @@ describe("sorting", () => {
 
   it("puts the worst leak first, which is what the screen is for", () => {
     const sorted = applyOverview(rows, { ...base, sort: "drop", dir: "desc" });
-    // Book Writer loses 80% at the checkout; the Validator's worst is 33%.
+    // Book Writer loses 80% at the checkout; the Validator's worst is 50%
+    // (20 -> 10 from the upsell to the sale).
     expect(sorted[0].title).toBe("Book Writer");
   });
 
