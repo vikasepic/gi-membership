@@ -409,6 +409,31 @@ export function OfferForm({
           </select>
         </Field>
 
+        {/* Its own copy and presentation (banner, bullets, accent) live on the
+            Order bump screen linked at the top of this page — this is only
+            which offer fills the slot. Restricted to one-time offers because a
+            bump rides the host's own payment; a recurring one could only be
+            charged afterwards, off-session, which cards issued in India
+            refuse outright (see bumpSlotError). The filter here is a
+            convenience so the list only ever shows something sellable —
+            saveOffer refuses the same cases again regardless of what this
+            posts. */}
+        <Field
+          label="Bump on this offer's checkout"
+          hint="Shown as a tickbox on this offer's checkout and charged in the same payment as it. One-time offers only."
+        >
+          <select name="bumpOfferId" defaultValue={offer?.bumpOfferId ?? ""} className={input}>
+            <option value="">&mdash; none, no bump &mdash;</option>
+            {offers
+              .filter((o) => o.id !== offer?.id && o.active && o.billingType === "one_time")
+              .map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name} — {money(o.priceCents, o.currency)}
+                </option>
+              ))}
+          </select>
+        </Field>
+
       </Section>
       </TabPanel>
 
