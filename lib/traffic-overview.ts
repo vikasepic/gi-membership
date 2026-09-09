@@ -1,0 +1,135 @@
+import { biggestDrop, type DayPoint, type FunnelView } from "@/lib/traffic-funnel";
+
+/**
+ * The traffic screen as one list.
+ *
+ * Pure, and deliberately not `server-only`: the table component's test imports
+ * it, and lib/traffic.ts (which is server-only) may not be pulled into jsdom.
+ * Same split, and the same reason, as lib/traffic-funnel.ts.
+ *
+ * Every page is a row, funnel or not. A separate section for the pages with no
+ * funnel is what hid /o/book-writer — the busiest page in the store — under
+ * fourteen cards.
+ */
+
+export type OverviewRow = {
+  /** The funnel this row drills into, or null for a page that owns none. */
+  key: string | null;
+  title: string;
+  path: string;
+  kind: "product" | "offer" | "other";
+  /** Four for a funnel; one (views) for anything else. */
+  steps: number[];
+  drop: { from: number; percent: number } | null;
+  daily: DayPoint[];
+  topSource: { source: string; hits: number } | null;
+};
+
+export type Sort = "page" | "views" | "checkout" | "upsell" | "bought" | "drop" | "source";
+export type Dir = "asc" | "desc";
+export type Kind = "all" | "product" | "offer" | "other";
+
+export type OverviewFilter = { kind: Kind; source: string; q: string; sort: Sort; dir: Dir };
+
+const SORTS: readonly Sort[] = ["page", "views", "checkout", "upsell", "bought", "drop", "source"];
+const KINDS: readonly Kind[] = ["all", "product", "offer", "other"];
+
+const one = (v: string | string[] | undefined): string | undefined =>
+  typeof v === "string" ? v : Array.isArray(v) ? v[0] : undefined;
+
+/**
+ * The filter off the URL.
+ *
+ * Whitelisted like every other admin filter: `sort` and `dir` select a
+ * comparator, and an unrecognised value has to pick one rather than render
+ * nothing. `q` and `source` are compared in memory, never interpolated into a
+ * query.
+ */
+export function overviewFilterFrom(
+  params: Record<string, string | string[] | undefined>,
+): OverviewFilter {
+  const sort = one(params.sort);
+  const dir = one(params.dir);
+  const kind = one(params.kind);
+  return {
+    kind: KINDS.includes(kind as Kind) ? (kind as Kind) : "all",
+    source: (one(params.source) ?? "").trim(),
+    q: (one(params.q) ?? "").trim(),
+    sort: SORTS.includes(sort as Sort) ? (sort as Sort) : "views",
+    dir: dir === "asc" ? "asc" : "desc",
+  };
+}
+
+const pathOf = (kind: "product" | "offer", key: string) =>
+  kind === "product" ? `/p/${key}` : `/o/${key}`;
+
+export function overviewRows(view: FunnelView): OverviewRow[] {
+  const funnels: OverviewRow[] = view.funnels.map((f) => ({
+    key: f.key,
+    title: f.title,
+    path: pathOf(f.kind, f.key),
+    kind: f.kind,
+    steps: f.steps.map((s) => s.count),
+    drop: biggestDrop(f.steps),
+    daily: f.daily,
+    topSource: f.sources[0] ?? null,
+  }));
+
+  const others: OverviewRow[] = view.others.map((o) => ({
+    key: null,
+    title: o.path,
+    path: o.path,
+    kind: "other" as const,
+    steps: [o.hits],
+    drop: null,
+    daily: [],
+    topSource: o.sources[0] ?? null,
+  }));
+
+  return [...funnels, ...others];
+}
+
+/** Every source present, busiest first — the options for the select. */
+export function sourcesIn(rows: OverviewRow[]): string[] {
+  const total = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.topSource) continue;
+    total.set(r.topSource.source, (total.get(r.topSource.source) ?? 0) + r.topSource.hits);
+  }
+  return [...total.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([s]) => s);
+}
+
+const at = (row: OverviewRow, i: number): number => row.steps[i] ?? 0;
+
+export function applyOverview(rows: OverviewRow[], filter: OverviewFilter): OverviewRow[] {
+  const q = filter.q.toLowerCase();
+  const kept = rows.filter((r) => {
+    if (filter.kind !== "all" && r.kind !== filter.kind) return false;
+    if (filter.source && r.topSource?.source !== filter.source) return false;
+    if (q && !`${r.title} ${r.path}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const sign = filter.dir === "asc" ? 1 : -1;
+  return [...kept].sort((a, b) => {
+    switch (filter.sort) {
+      case "page":
+        return sign * a.title.localeCompare(b.title);
+      case "source":
+        return sign * (a.topSource?.source ?? "").localeCompare(b.topSource?.source ?? "");
+      case "drop": {
+        // A page with no drop sorts LAST whichever way the column is pointed:
+        // "nothing to lose" is not the answer to "what is leaking worst", and
+        // it is not the answer to "what is leaking least" either.
+        if (!a.drop && !b.drop) return a.title.localeCompare(b.title);
+        if (!a.drop) return 1;
+        if (!b.drop) return -1;
+        return sign * (a.drop.percent - b.drop.percent) || a.title.localeCompare(b.title);
+      }
+      default: {
+        const i = { views: 0, checkout: 1, upsell: 2, bought: 3 }[filter.sort]!;
+        return sign * (at(a, i) - at(b, i)) || a.title.localeCompare(b.title);
+      }
+    }
+  });
+}

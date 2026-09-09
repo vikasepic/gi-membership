@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatCount as n, sparklinePath, type DayPoint, type OtherPage, type Funnel, PRESETS, type Preset } from "@/lib/traffic-funnel";
+import { formatCount as n, sparklinePath, type DayPoint, type Funnel, PRESETS, type Preset } from "@/lib/traffic-funnel";
 
 /**
  * The traffic page's furniture.
@@ -206,43 +206,5 @@ export function PresetTabs({ preset }: { preset: Preset }) {
         </Link>
       ))}
     </nav>
-  );
-}
-
-/**
- * Everything no funnel claimed.
- *
- * Deliberately not a card: a bare list under a rule, because these are pages
- * with a view count and nothing else — no steps, no orders, no funnel. Giving
- * them the same chrome as a product would imply a comparison that does not
- * exist. Nothing at all when there are none.
- */
-export function OtherPages({ pages }: { pages: OtherPage[] }) {
-  if (pages.length === 0) return null;
-  return (
-    <section className="flex flex-col gap-3 border-t border-border pt-5">
-      <div className="flex flex-col gap-0.5">
-        <h2 className="kicker text-muted">Other pages</h2>
-        <p className="text-sm text-muted">
-          Views outside any product funnel — offer pages, the storefront, and pages counted before
-          they carried a product. Totals only; there are no steps behind these.
-        </p>
-      </div>
-      <ul className="flex flex-col divide-y divide-border">
-        {pages.map((p) => (
-          <li key={p.path} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2">
-            <span className="text-sm text-fg">{p.path}</span>
-            <span className="flex flex-wrap gap-x-2 text-xs text-muted">
-              {p.sources.map((s) => (
-                <span key={s.source}>
-                  {s.source} <span className="tabular-nums">{n(s.hits)}</span>
-                </span>
-              ))}
-            </span>
-            <span className="ml-auto font-display text-sm tabular-nums">{n(p.hits)}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }

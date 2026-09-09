@@ -14,7 +14,9 @@ import {
   rangeOf,
   type FunnelOwner,
 } from "@/lib/traffic-funnel";
-import { FunnelCard, PresetTabs, OtherPages } from "@/components/admin/traffic-funnel";
+import { overviewFilterFrom, overviewRows, applyOverview, sourcesIn } from "@/lib/traffic-overview";
+import { PresetTabs } from "@/components/admin/traffic-funnel";
+import { TrafficOverview } from "@/components/admin/traffic-overview";
 import { CoverageNote } from "@/components/admin/traffic-table";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +26,11 @@ export default async function AdminTrafficPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const preset = presetFrom(await searchParams);
+  // Captured once: awaiting the same promise twice in one render is a latent
+  // bug even where it happens to work, and both presetFrom and
+  // overviewFilterFrom need the same params.
+  const params = await searchParams;
+  const preset = presetFrom(params);
   // One clock read for the whole request. Reading it again after the awaits
   // lets a request that crosses UTC midnight build a chart one day short of
   // the totals beside it — the disagreement b481969 closed.
@@ -47,6 +53,11 @@ export default async function AdminTrafficPage({
   ];
   const days = daysInRange(range);
   const view = buildFunnels(counts, [...bought, ...boughtOffers], owners, days);
+
+  const filter = overviewFilterFrom(params);
+  const rows = overviewRows(view);
+  const sources = sourcesIn(rows);
+  const shown = applyOverview(rows, filter);
 
   return (
     <div className="flex flex-col gap-6 py-4">
@@ -87,12 +98,7 @@ export default async function AdminTrafficPage({
             conversion rate.
           </p>
           <CoverageNote counted={view.counted} consented={consented} />
-          <div className="flex flex-col gap-4">
-            {view.funnels.map((f) => (
-              <FunnelCard key={f.key} funnel={f} />
-            ))}
-          </div>
-          <OtherPages pages={view.others} />
+          <TrafficOverview rows={shown} filter={{ ...filter, preset }} sources={sources} />
         </>
       )}
     </div>
