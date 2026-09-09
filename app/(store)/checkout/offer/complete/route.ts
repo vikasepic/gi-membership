@@ -78,11 +78,16 @@ export async function GET(request: Request) {
   // serve — the recurring case is the whole point of this feature. See
   // resolveOtoForOfferOrder's own comment for the rest.
   //
-  // Gated on `result.orderId` rather than just `result.ok`: it is absent on
-  // the eligibility short-circuit inside completeOfferCheckout (a refresh of
-  // this route after the purchase already completed) — that visit already
-  // got its own chance at the OTO on the FIRST trip through here, so simply
-  // continuing to /library on a refresh is a lost re-prompt, not a lost sale.
+  // Gated on `result.orderId` rather than just `result.ok`: it is absent on a
+  // RECURRING offer's eligibility short-circuit inside completeOfferCheckout
+  // (that path never races a webhook, so by the time that short-circuit is
+  // reachable this visit is a refresh and already had its one chance at the
+  // OTO on the trip that created the subscription). A PAID offer's
+  // short-circuit hands the id back instead: the Stripe webhook calls
+  // completeOfferCheckout for every offer PaymentIntent too, and when it
+  // lands first, THIS is the buyer's only visit here, not a refresh — the id
+  // lets it still resolve the OTO.
+  //
   // When it IS present, the order it names is not guaranteed to already carry
   // its own host order_items row (two of completeOfferCheckout's success
   // returns hand back an order whose winning caller may still be mid-

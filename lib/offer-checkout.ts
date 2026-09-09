@@ -5,6 +5,7 @@ import { getStoreId, getOffer, getStoreName } from "@/lib/store";
 import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerWithCouponTrial } from "@/lib/offers";
 import { livePrices, priceForChoice, shownPrices } from "@/lib/offer-prices";
 import { ownershipFor, fulfilOffer, fulfilBump, grantOfferOwnership, customerForUser } from "@/lib/checkout";
+import { orderForPaymentIntent } from "@/lib/orders";
 import { stripe, stripeMode } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
 import { ensureUserProfile } from "@/lib/users";
@@ -353,9 +354,10 @@ export async function startOfferCheckout(args: {
 // here: a recurring offer's order carries neither stripe_payment_intent_id
 // nor stripe_setup_intent_id (see the order insert below for why the latter
 // is never written), so that lookup always came back empty for exactly the
-// case an upsell exists to serve. Present on every ok:true return EXCEPT the
-// eligibility short-circuit just below, which creates or reclaims no order
-// this call — there is nothing here to hand back on that path.
+// case an upsell exists to serve. Present on every ok:true return, including
+// the eligibility short-circuit just below on the PAID path — see the comment
+// there for why that path needs it too. Absent only for a recurring offer's
+// short-circuit, which has no PaymentIntent to look an order up by.
 export async function completeOfferCheckout(
   intentId: string,
   country?: string,
@@ -388,9 +390,26 @@ export async function completeOfferCheckout(
   const chosen = chosenId ? raw.prices.find((p) => p.id === chosenId && !p.archived) : null;
   const offer = chosen ? offerAtPrice(raw, chosen) : raw;
 
-  // A refresh of the return page lands here again — by then they own it.
+  // A refresh of the return page lands here again — by then they own it. So
+  // does the Stripe webhook: it calls this same function for every offer
+  // PaymentIntent (route.ts), racing the buyer's own trip back through
+  // /checkout/offer/complete. When the webhook wins that race, THIS call is
+  // the buyer's only visit here, not a refresh of an earlier one — so on the
+  // paid path, resolve the order the webhook already wrote (findable by
+  // intent id, same as finalizeOrder's callers use) and hand its id back so
+  // the caller still gets its shot at the OTO. Without this the upsell was
+  // silently lost every time the webhook happened to land first.
+  //
+  // The recurring (SetupIntent) path never races a webhook — no PaymentIntent
+  // means the webhook's `if (pi.metadata?.offerId)` branch never runs for it
+  // — so there is nothing to look up there and no id is returned; that path's
+  // OTO chance is still the one grant on the call that actually created the
+  // subscription, same as before.
   const owned = await ownershipFor(userId);
-  if (!isOfferEligible(offer, owned)) return { ok: true };
+  if (!isOfferEligible(offer, owned)) {
+    const existing = paid ? await orderForPaymentIntent(intentId) : null;
+    return { ok: true, orderId: existing?.id };
+  }
 
   const customerId = typeof si.customer === "string" ? si.customer : si.customer?.id;
   const pm = typeof si.payment_method === "string" ? si.payment_method : si.payment_method?.id;

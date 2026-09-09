@@ -1651,22 +1651,28 @@ export async function resolveOtoForOrder(intentId: string): Promise<string | nul
  */
 export async function resolveOtoForOfferOrder(orderId: string): Promise<string | null> {
   const db = createServiceClient();
-  const { data: order } = await db
+  const { data: order, error: orderErr } = await db
     .from("orders")
     .select("store_id, user_id")
     .eq("id", orderId)
     .maybeSingle();
+  // Logged, not swallowed — same pattern as hostOfferIdFor and otoBounceHref
+  // just above: a transient DB error used to read exactly like "no such
+  // order", collapsing into the same silent null. Still fails CLOSED either
+  // way — null here always means "no OTO", never a guess at one.
+  if (orderErr) console.error("[resolveOtoForOfferOrder] order lookup failed:", orderErr);
   const userId = order?.user_id as string | undefined;
   if (!order || !userId) return null;
 
   const hostOfferId = await hostOfferIdFor(orderId);
   if (!hostOfferId) return null; // no host row yet (still mid-fulfilment) or none ever written
 
-  const { data: host } = await db
+  const { data: host, error: hostErr } = await db
     .from("offers")
     .select("upsell_offer_id")
     .eq("id", hostOfferId)
     .maybeSingle();
+  if (hostErr) console.error("[resolveOtoForOfferOrder] host offer lookup failed:", hostErr);
   const upsellOfferId = host?.upsell_offer_id as string | null | undefined;
   if (!upsellOfferId) return null; // empty slot → skip
 

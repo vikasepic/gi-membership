@@ -164,10 +164,11 @@ describe.skipIf(!canRun)("setting an offer's bump from the admin form (integrati
     const { data: own } = await db.from("ownership").select("offer_id").eq("user_id", userId);
     expect(own).toHaveLength(2);
 
-    // A refresh of the return page must not grant or bill again. No orderId
-    // on this shape: the eligibility short-circuit that makes a refresh a
-    // no-op returns before this call creates or reclaims any order of its own.
-    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+    // A refresh of the return page must not grant or bill again. orderId is
+    // still on this shape, even on the short-circuit — this is the PAID
+    // path, findable by intent id, and that's what lets a webhook-wins race
+    // still resolve its OTO (see completeOfferCheckout's own comment).
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true, orderId: orders![0].id });
     const { data: again } = await db.from("order_items").select("id").eq("order_id", orders![0].id as string);
     expect(again).toHaveLength(2);
   });

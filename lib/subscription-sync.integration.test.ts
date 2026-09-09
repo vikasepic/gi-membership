@@ -3,6 +3,7 @@ import { createCheckoutIntent, finalizeOrder } from "@/lib/checkout";
 import { revokeOwnershipForPaymentIntent, syncSubscriptionOwnership } from "@/lib/subscription-sync";
 import { stripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/server";
+import { getStoreId } from "@/lib/store";
 
 // Real money-path hardening test: local Supabase + Stripe TEST mode.
 // Skips when either isn't configured so unit-only runs stay green.
@@ -169,6 +170,128 @@ describe.skipIf(!canRun)("OTO token vs failed charge (integration)", () => {
     // The token must NOT be burned — presenting it again is not "used".
     const second = await acceptOto(token);
     expect(second).not.toEqual({ ok: false, error: "used" });
+  });
+
+  it("releases the single-use token when fulfilOffer ITSELF throws (a declined off-session charge), so the buyer can retry", async () => {
+    // The test above only ever reaches acceptOto's `!pm` guard, one function
+    // up from fulfilOffer's own catch — savedPaymentMethodFor fails first, so
+    // fulfilOffer is never even called. That guard is real and worth keeping,
+    // but it is not the guarantee this describe block's title claims: a
+    // release when the CHARGE itself fails. Proved by hand, not assumed:
+    // commenting out fulfilOffer's own catch release (the block below, not
+    // the `!pm` one above) left this test — and only this test — red; every
+    // other test in the file, this one's own first assertion included,
+    // stayed green.
+    //
+    // Needs its OWN one-time offer fixture rather than reusing "placeholder-
+    // offer"'s upsell (Content Engine): that one carries a 7-day trial, and a
+    // TRIALING subscription.create() attempts no charge at all — Stripe
+    // accepts it regardless of whether the card can ever be charged, which is
+    // exactly why this test cannot just plug a bad card into the existing
+    // fixture the way the test above does. Namespaced to this run (random
+    // stamp in every slug/key) and torn down below, rather than mutating
+    // "placeholder-offer" itself or leaving new rows behind — this store is
+    // shared with every other suite that can run in parallel.
+    const db = createServiceClient();
+    const store_id = await getStoreId();
+    const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    const { data: granted, error: grantedErr } = await db
+      .from("products")
+      .insert({ store_id, slug: `otofail2-granted-${stamp}`, title: "OTO fail granted", type: "pdf", price_cents: 1900, status: "published" })
+      .select("id")
+      .single();
+    if (grantedErr) throw new Error(`granted product: ${grantedErr.message}`);
+
+    const { data: offer, error: offerErr } = await db
+      .from("offers")
+      .insert({
+        store_id, key: `otofail2-upsell-${stamp}`, name: "OTO fail upsell",
+        grant_type: "product", grant_product_id: granted!.id as string,
+        billing_type: "one_time", price_cents: 3900, currency: "usd",
+        headline: "Test upsell", active: true,
+      })
+      .select("id")
+      .single();
+    if (offerErr) throw new Error(`upsell offer: ${offerErr.message}`);
+
+    const { data: host, error: hostErr } = await db
+      .from("products")
+      .insert({
+        store_id, slug: `otofail2-host-${stamp}`, title: "OTO fail host", type: "pdf",
+        price_cents: 2700, status: "published", upsell_offer_id: offer!.id as string,
+      })
+      .select("id, slug")
+      .single();
+    if (hostErr) throw new Error(`host product: ${hostErr.message}`);
+
+    try {
+      const email = `otofail2_${stamp}@example.com`;
+      createdEmails.push(email);
+      const res = await createCheckoutIntent({
+        productSlug: host!.slug as string,
+        email,
+        fullName: "Test Buyer",
+        bumpChoice: "none", // no bump configured on this fixture either way
+      });
+      if (!res.ok) throw new Error(res.error);
+      const piId = res.clientSecret.split("_secret_")[0];
+      await stripe().paymentIntents.confirm(piId, {
+        payment_method: "pm_card_visa",
+        return_url: "http://localhost:3000/checkout/complete",
+      });
+      await finalizeOrder(piId);
+
+      // A fixture this test built and controls end to end — unlike the
+      // ambient "placeholder-offer" the test above reads, there is no
+      // "not configured in this environment" case to shrug off here.
+      const token = await resolveOtoForOrder(piId);
+      expect(token).toBeTruthy();
+
+      // savedPaymentMethodFor must SUCCEED here, unlike the test above —
+      // Stripe's own fixture for exactly this shape (verified by hand against
+      // the real test-mode API, not assumed: pm_card_chargeDeclined and its
+      // siblings all fail at attach() itself, which would only ever reach the
+      // SAME `!pm` guard as the test above): pm_card_chargeCustomerFail
+      // attaches and sets as default cleanly, so savedPaymentMethodFor finds
+      // a real card, but any attempt to actually CHARGE it is declined.
+      const { data: order } = await db
+        .from("orders")
+        .select("stripe_customer_id")
+        .eq("stripe_payment_intent_id", piId)
+        .single();
+      const customerId = order!.stripe_customer_id as string;
+      // attach() returns a real pm_... id of its own — distinct from the
+      // fixture token passed in — so THAT id, not the token string, is what
+      // has to be set as the default.
+      const badCard = await stripe().paymentMethods.attach("pm_card_chargeCustomerFail", {
+        customer: customerId,
+      });
+      await stripe().customers.update(customerId, {
+        invoice_settings: { default_payment_method: badCard.id },
+      });
+
+      const first = await acceptOto(token!);
+      expect(first).toEqual({ ok: false, error: "charge_failed" });
+
+      // The token must NOT be burned — presenting it again is not "used".
+      const second = await acceptOto(token!);
+      expect(second).not.toEqual({ ok: false, error: "used" });
+    } finally {
+      // oto_tokens.offer_id is ON DELETE RESTRICT (0001) — the two acceptOto
+      // calls above mint/claim one such row, and it must go before the offer
+      // it points at or that delete is silently blocked (found out the hard
+      // way: a first pass at this cleanup left the offer AND the granted
+      // product behind, restrict on restrict). offers.upsell_offer_id and
+      // products.grant_product_id both FK back to the offer too — the former
+      // ON DELETE SET NULL (harmless either order), the latter ON DELETE
+      // RESTRICT like oto_tokens, which is why the offer goes before the
+      // granted product as well.
+      await db.from("oto_tokens").delete().eq("offer_id", offer!.id as string);
+      await db.from("offers").delete().eq("id", offer!.id as string);
+      await db.from("products").delete().eq("id", host!.id as string);
+      await db.from("products").delete().eq("id", granted!.id as string);
+    }
   });
 });
 

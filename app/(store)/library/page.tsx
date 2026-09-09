@@ -143,7 +143,10 @@ export default async function LibraryPage({
       {offerStatus && OFFER_STATUS[offerStatus] && (
         <p
           className={`rounded-xl border px-4 py-3 text-sm ${
-            offerStatus === "added"
+            // "accepted" follows a real second charge or a new subscription —
+            // the same kind of event "added" already is — not a decline/
+            // expiry/error, which is what the alert tone below is for.
+            offerStatus === "added" || offerStatus === "accepted"
               ? "border-navy/30 bg-navy/5 text-navy"
               : "border-primary/30 bg-primary/5 text-fg"
           }`}

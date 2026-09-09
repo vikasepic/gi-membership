@@ -72,8 +72,10 @@ describe.skipIf(!canRun)("buying a one-time offer (integration)", () => {
     // The buyer refreshes the return page. This is prevented by the sequential
     // guarantee (eligibility re-check); the concurrent race (webhook + return route
     // landing at once) is covered separately by Promise.all tests in
-    // offer-checkout-complete.integration.test.ts.
-    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+    // offer-checkout-complete.integration.test.ts. orderId still comes back on
+    // this PAID path's short-circuit (findable by intent id) — that's what lets
+    // a webhook-wins race still resolve its OTO on the buyer's own trip here.
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true, orderId: expect.any(String) });
     const again = await db.from("ownership").select("id").eq("user_id", userId);
     expect(again.data).toHaveLength(1);
 

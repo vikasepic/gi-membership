@@ -276,8 +276,11 @@ describe.skipIf(!canRun)("completing a bumped offer checkout (integration)", () 
     expect(allPis.data.filter((p) => p.status === "succeeded")).toHaveLength(1);
 
     // A refresh of the return page (the sequential re-entry the eligibility
-    // check guards) must not double the order, its lines, or the grants.
-    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+    // check guards) must not double the order, its lines, or the grants. This
+    // is the PAID path, so the short-circuit still names the order it found
+    // (findable by intent id) — see completeOfferCheckout's own comment on
+    // why, and orderId is what lets a webhook-wins race still resolve its OTO.
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true, orderId: order.id });
     const ordersAgain = await db.from("orders").select("id").eq("user_id", userId);
     expect(ordersAgain.data).toHaveLength(1);
     const itemsAgain = await db.from("order_items").select("id").eq("order_id", order.id);

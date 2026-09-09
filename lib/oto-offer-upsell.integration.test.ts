@@ -351,12 +351,21 @@ describe.skipIf(!canRun)("an offer's own checkout can carry an upsell", () => {
     it("the OLD mechanism genuinely cannot find this order — pins WHY resolveOtoForOfferOrder had to exist", async () => {
       // Not a fake/unlucky id: THIS order was never given an intent id to
       // match in the first place (see its own fixture comment), so no string
-      // passed here — real or invented — could ever succeed. Also guards
-      // against reintroducing an offer branch into resolveOtoForOrder, which
-      // the product path is the only caller of on purpose.
-      for (const k of Object.keys(META)) delete META[k];
-      Object.assign(META, { offerId: HOST_OFFER_RECURRING, userId: USER });
+      // passed here — real or invented — could ever succeed.
       expect(await resolveOtoForOrder("seti_matches_no_order_because_none_was_ever_recorded")).toBeNull();
+    });
+
+    it("resolveOtoForOrder ignores offerId metadata — guards against an offer branch sneaking back in", async () => {
+      // A REAL, findable order this time (ORDER_PRODUCT via PI_PRODUCT), so
+      // this actually passes the order lookup and reaches the metadata read —
+      // unlike the fake-id test just above, which returns null before
+      // metadata is ever touched and so cannot prove this on its own. offerId
+      // with no productId is the shape an offer's own intent carries; if
+      // resolveOtoForOrder ever grew a branch that read it, this assertion
+      // would go from null to truthy.
+      for (const k of Object.keys(META)) delete META[k];
+      Object.assign(META, { offerId: HOST_OFFER_RECURRING, userId: USER }); // no productId, on purpose
+      expect(await resolveOtoForOrder(PI_PRODUCT)).toBeNull();
     });
   });
 
