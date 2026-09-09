@@ -22,6 +22,7 @@ import { checkoutDesignVars } from "@/lib/checkout-design";
 import { publicCoverUrl } from "@/lib/media";
 import { productDisplay } from "@/lib/courses";
 import { buildBumpView } from "@/lib/bump";
+import { recordPageHit } from "@/lib/traffic";
 import type { BumpSummary } from "@/components/checkout/checkout-types";
 
 export const metadata = NOINDEX;
@@ -66,6 +67,11 @@ export default async function OfferCheckoutPage({
     ? await ownershipFor(user.id)
     : { productIds: new Set<string>(), appIds: new Set<string>(), appChannels: new Map<string, Set<string>>() };
   if (user?.id && !isOfferEligible(offer, owned)) redirect("/library?offer=already_owned");
+
+  // Not awaited — a count is worth less than a page load. After the guards:
+  // somebody bounced to their library never reached a checkout, and counting
+  // them would put a step above the sales page it came from.
+  void recordPageHit("/checkout/offer", offer.key);
 
   // The bump this offer places, priced from its own placement — the same
   // helpers and the same rule the product checkout uses (see

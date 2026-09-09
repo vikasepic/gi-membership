@@ -60,3 +60,28 @@ describe("the funnel pages count their own views", () => {
     );
   });
 });
+
+describe("an offer's funnel is counted at every step", () => {
+  it("counts the offer's own checkout, under the offer's key", () => {
+    // Without this the second step of every offer funnel is permanently zero.
+    const src = readFileSync("app/(store)/checkout/offer/page.tsx", "utf8");
+    expect(src).toContain('void recordPageHit("/checkout/offer", offer.key)');
+  });
+
+  it("counts it AFTER the guards, so a bounced visitor is not a checkout", () => {
+    const src = readFileSync("app/(store)/checkout/offer/page.tsx", "utf8");
+    const hit = src.indexOf('recordPageHit("/checkout/offer"');
+    const bounce = src.indexOf("offer=already_owned");
+    expect(bounce).toBeGreaterThan(-1);
+    expect(hit).toBeGreaterThan(bounce);
+  });
+
+  it("files an offer-originated upsell view under the host offer", () => {
+    // recordOtoPageHit resolves the order's BASE PRODUCT. An offer order has
+    // none, so the hit was written with an empty product and belonged to no
+    // funnel at all — 24 such rows in production on 9 Sep 2026.
+    const src = readFileSync("lib/traffic.ts", "utf8");
+    expect(src).toContain("host_offer_id");
+    expect(src).toMatch(/orderFunnelKey|hostOfferKey/);
+  });
+});

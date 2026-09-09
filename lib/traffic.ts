@@ -91,15 +91,19 @@ export async function recordPageHit(path: string, product = ""): Promise<void> {
 }
 
 /**
- * The base product an order was for.
+ * The funnel key an order belongs to: its base product, or its host offer.
+ *
+ * `kind = 'product'` is the base row — a bump or an accepted upsell is an
+ * offer, not what was bought first. An order that came from an OFFER's
+ * checkout has no such row at all, so this used to return "" and the upsell
+ * view it names was filed under no funnel; 24 such rows were sitting in
+ * production on 9 Sep 2026. `orders.host_offer_id` names that offer.
  *
  * Two queries rather than a PostgREST embed: the embed's shape depends on how
  * the relationship is detected, and this runs behind a fire-and-forget count
- * where a silently-wrong shape would never surface. `kind = 'product'` is the
- * base row — a bump or an accepted upsell is an offer, not what was bought
- * first.
+ * where a silently-wrong shape would never surface.
  */
-async function orderProductSlug(orderId: string): Promise<string> {
+async function orderFunnelKey(orderId: string): Promise<string> {
   const db = createServiceClient();
   const { data: items } = await db
     .from("order_items")
@@ -109,13 +113,28 @@ async function orderProductSlug(orderId: string): Promise<string> {
     .not("product_id", "is", null)
     .limit(1);
   const productId = items?.[0]?.product_id as string | undefined;
-  if (!productId) return "";
-  const { data: product } = await db
-    .from("products")
-    .select("slug")
-    .eq("id", productId)
+  if (productId) {
+    const { data: product } = await db
+      .from("products")
+      .select("slug")
+      .eq("id", productId)
+      .maybeSingle();
+    if (product?.slug) return product.slug as string;
+  }
+
+  const { data: order } = await db
+    .from("orders")
+    .select("host_offer_id")
+    .eq("id", orderId)
     .maybeSingle();
-  return (product?.slug as string) ?? "";
+  const offerId = order?.host_offer_id as string | null | undefined;
+  if (!offerId) return "";
+  const { data: offer } = await db
+    .from("offers")
+    .select("key")
+    .eq("id", offerId)
+    .maybeSingle();
+  return (offer?.key as string) ?? "";
 }
 
 /**
@@ -128,7 +147,7 @@ async function orderProductSlug(orderId: string): Promise<string> {
  */
 export async function recordOtoPageHit(orderId: string): Promise<void> {
   try {
-    await recordPageHit("/checkout/oto", await orderProductSlug(orderId));
+    await recordPageHit("/checkout/oto", await orderFunnelKey(orderId));
   } catch {
     // Deliberately silent, like everything else in this file.
   }
