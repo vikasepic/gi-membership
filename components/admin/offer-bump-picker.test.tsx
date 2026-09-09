@@ -83,14 +83,17 @@ describe("the bump picker's current-value safety net", () => {
     expect(bumpSelect().value).toBe("stale-bump");
   });
 
-  it("keeps a current bump that turned recurring, labelled distinctly from inactive", () => {
-    mount("turned-recurring", [option({ id: "turned-recurring", name: "Was One-Time", billingType: "recurring" })]);
-    expect(optionEl("turned-recurring")?.textContent).toContain("(no longer one-time)");
-    expect(optionEl("turned-recurring")?.textContent).not.toContain("no longer active");
-    expect(bumpSelect().value).toBe("turned-recurring");
+  it("offers a recurring bump plainly — it is no longer disqualified", () => {
+    // This used to assert a "(no longer one-time)" label. A recurring bump is
+    // now allowed: it takes nothing today and bills on its own subscription,
+    // the way the product checkout's bump always has. Nothing about it is
+    // wrong, so nothing should be flagged.
+    mount("a-subscription", [option({ id: "a-subscription", name: "Was One-Time", billingType: "recurring" })]);
+    expect(optionEl("a-subscription")?.textContent).not.toContain("no longer");
+    expect(bumpSelect().value).toBe("a-subscription");
   });
 
-  it("still excludes an inactive or recurring offer that ISN'T the current bump", () => {
+  it("still excludes an INACTIVE offer, but no longer a recurring one", () => {
     mount("valid-bump", [
       option({ id: "valid-bump", name: "Fresh Bump" }),
       option({ id: "some-draft", name: "Some Draft", active: false }),
@@ -98,7 +101,10 @@ describe("the bump picker's current-value safety net", () => {
     ]);
     expect(optionEl("valid-bump")).toBeTruthy();
     expect(optionEl("some-draft")).toBeNull();
-    expect(optionEl("some-sub")).toBeNull();
+    // Offerable now. The one impossible combination — a ONE-TIME bump on a
+    // recurring host price — depends on which price the buyer picks, so it is
+    // refused in startOfferCheckout rather than hidden from the admin here.
+    expect(optionEl("some-sub")).toBeTruthy();
     expect(bumpSelect().value).toBe("valid-bump");
   });
 

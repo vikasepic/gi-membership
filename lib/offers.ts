@@ -233,9 +233,6 @@ export function bumpSlotError(
   if (!bump) return null;
   if (bump.id === hostId) return "An offer cannot bump itself.";
   if (!bump.active) return "That offer is not active, so it cannot be offered as a bump.";
-  if (bump.billingType !== "one_time") {
-    return "A bump must be a one-time offer. A recurring one would have to be charged after the payment, which cards issued in India refuse.";
-  }
   // The bump's cents are added straight into an amount charged in the HOST's
   // currency (startOfferCheckout: gross - discount + bumpNowCents, one single
   // PaymentIntent) — nothing downstream converts between currencies, so a

@@ -439,17 +439,18 @@ export function OfferForm({
             {offers
               .filter(
                 (o) =>
-                  o.id !== offer?.id &&
-                  ((o.active && o.billingType === "one_time") || o.id === offer?.bumpOfferId),
+                  // No billing-type filter: a RECURRING bump is allowed — it
+                  // takes nothing today and bills on its own subscription, the
+                  // way the product checkout's bump always has. Only a
+                  // one-time bump on a recurring host price is impossible, and
+                  // that depends on which price the BUYER picks, so it is
+                  // refused at checkout rather than hidden here.
+                  o.id !== offer?.id && (o.active || o.id === offer?.bumpOfferId),
               )
               .map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name} — {money(o.priceCents, o.currency)}
-                  {!o.active
-                    ? " (no longer active)"
-                    : o.billingType !== "one_time"
-                      ? " (no longer one-time)"
-                      : ""}
+                  {!o.active ? " (no longer active)" : ""}
                 </option>
               ))}
           </select>

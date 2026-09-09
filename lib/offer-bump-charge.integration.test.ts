@@ -388,6 +388,33 @@ describe.skipIf(!canRun)("completing a bumped offer checkout (integration)", () 
   });
 });
 
+  it("takes nothing today for a RECURRING bump, and leaves it to its own subscription", async () => {
+    // This used to be refused outright. It should not have been: a recurring
+    // bump contributes 0 to the payment and bills on its own subscription at
+    // fulfilment, exactly as the product checkout's bump always has. What must
+    // NOT happen is its price folding into the intent — immediateChargeCents
+    // returns the full price for a no-trial recurring offer, so a buyer would
+    // pay a period here AND again on the subscription.
+    const bumpId = await offerOf(2900, {
+      billing_type: "recurring",
+      interval: "month",
+      trial_days: null,
+    });
+    const hostId = await offerOf(4700, { bump_offer_id: bumpId });
+    const { userId, email } = await member();
+
+    const res = await startOfferCheckout({ userId, email, offerId: hostId, bumpChoice: 0 });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    const pi = await stripe().paymentIntents.retrieve(res.clientSecret.split("_secret_")[0]);
+    expect(pi.amount).toBe(4700);
+    expect(pi.metadata.bumpOfferId).toBe(bumpId);
+    // Not prepaid: nothing was taken for it, so fulfilment must create the
+    // subscription rather than skip the charge as already-paid.
+    expect(pi.metadata.bumpPrepaid).toBe("");
+  });
+
 afterAll(async () => {
   if (!canRun) return;
   const db = createServiceClient();

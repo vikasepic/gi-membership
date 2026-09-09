@@ -12,12 +12,17 @@ describe("what may sit in an offer's bump slot", () => {
     expect(bumpSlotError(null, "host", "usd")).toBeNull();
   });
 
-  it("refuses a recurring offer, and says why", () => {
-    // A recurring bump means creating a subscription from a saved card after
-    // the fact — off-session, which Stripe refuses on an Indian card. Better
-    // refused in the form than at the till.
-    const msg = bumpSlotError({ id: "b1", billingType: "recurring", active: true, currency: "usd" }, "host", "usd");
-    expect(msg).toMatch(/one-time/i);
+  it("ALLOWS a recurring offer — it bills on its own subscription", () => {
+    // This used to be refused, on the grounds that a recurring bump would need
+    // an off-session charge afterwards. That was wrong: a recurring bump takes
+    // nothing today and creates its own subscription at fulfilment, which is
+    // exactly what the product checkout has always done with one. The only
+    // impossible combination is a ONE-TIME bump on a recurring host price,
+    // which depends on the price the buyer picks and so is refused in
+    // startOfferCheckout, not here.
+    expect(
+      bumpSlotError({ id: "b1", billingType: "recurring", active: true, currency: "usd" }, "host", "usd"),
+    ).toBeNull();
   });
 
   it("refuses an offer that is not on sale", () => {

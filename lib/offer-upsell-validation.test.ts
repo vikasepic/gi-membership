@@ -24,15 +24,17 @@ describe("what may sit in an offer's upsell slot", () => {
     expect(upsellSlotError({ ...one, currency: "eur" }, "host", "usd")).toMatch(/currency/i);
   });
 
-  it("allows a RECURRING offer — unlike a bump, an upsell is never folded into the host's own payment", () => {
+  it("allows a RECURRING offer, as the bump slot now does too", () => {
     // An upsell is charged (or subscribed) on its own, off the saved card, by
     // acceptOto — exactly as buying that offer any other way would. There is
     // no off-session-at-checkout problem for a recurring price to create here,
     // so upsellSlotError must not carry bumpSlotError's billing-type refusal.
     const recurring = { id: "u1", billingType: "recurring", active: true, currency: "usd" };
     expect(upsellSlotError(recurring, "host", "usd")).toBeNull();
-    // The exact same shape DOES refuse as a bump — proving the two functions
-    // genuinely disagree on this case, not just that neither happens to check it.
-    expect(bumpSlotError(recurring, "host", "usd")).toMatch(/one-time/i);
+    // This used to also assert that bumpSlotError REFUSED the same shape, to
+    // prove the two functions genuinely disagreed. They agree now — the bump
+    // slot takes a recurring offer too — so that half is gone rather than
+    // inverted: asserting both return null proves nothing about either.
+    expect(bumpSlotError(recurring, "host", "usd")).toBeNull();
   });
 });

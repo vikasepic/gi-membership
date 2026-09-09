@@ -165,17 +165,6 @@ export async function startOfferCheckout(args: {
   // completion reads back which one, instead of assuming the first.
   let bumpPriceId: string | null = null;
   if (args.bumpChoice !== undefined && args.bumpChoice !== "none" && offer.bumpOfferId) {
-    // A bump's money only has an on-session PaymentIntent to ride. A recurring
-    // offer opens a SetupIntent instead, which takes no money today, so there
-    // is nothing to fold the bump's charge into and no on-session moment to
-    // take it in. Refusing beats silently taking the tickbox and then
-    // charging (and granting) nothing for it.
-    if (priced.billingType !== "one_time") {
-      return {
-        ok: false,
-        error: "That add-on can't be added with this price. Choose the one-time price, or untick the add-on to continue.",
-      };
-    }
     const shownBump = await getOffer(offer.bumpOfferId);
     // The options come from THIS offer's placement, never from the request.
     const options = shownBump ? shownPrices(shownBump.prices, offer.bumpPriceIds ?? []) : [];
@@ -199,10 +188,18 @@ export async function startOfferCheckout(args: {
         error: "You already have the add-on you selected, so it can't be added again. Untick it to continue.",
       };
     }
-    // Belt and braces: saveOffer refuses a recurring offer into the bump slot,
-    // but this one may have been one-time when placed and changed since.
-    if (asSold.billingType !== "one_time") {
-      return { ok: false, error: "That add-on can't be bought here. Untick it to continue." };
+    // Only ONE combination is impossible: a one-time bump on a recurring host.
+    // The bump's money would have nowhere to ride — a recurring host opens a
+    // SetupIntent, which takes nothing today — so it would need its own
+    // off-session charge afterwards, the thing this checkout exists to avoid.
+    // A RECURRING bump is fine on either host: it takes nothing today and
+    // bills on its own subscription, which is what the product checkout has
+    // always done with one.
+    if (asSold.billingType === "one_time" && priced.billingType !== "one_time") {
+      return {
+        ok: false,
+        error: "That add-on can't be added with this price. Choose the one-time price, or untick the add-on to continue.",
+      };
     }
     bumpOffer = asSold;
   }
@@ -262,7 +259,13 @@ export async function startOfferCheckout(args: {
     // afterwards is what Stripe refuses on an India-issued card without an
     // e-mandate — and it would also mean the figure the buyer agreed to and
     // the figure their card saw were never the same number.
-    const bumpNowCents = bumpOffer ? immediateChargeCents(bumpOffer) : 0;
+    // Zero for a RECURRING bump: it takes nothing today and bills on its own
+    // subscription, so there is nothing to fold in. Same rule as the product
+    // checkout's own bump. immediateChargeCents would return the full price
+    // for a no-trial recurring offer, which would charge a whole period here
+    // AND again on the subscription.
+    const bumpNowCents =
+      bumpOffer && bumpOffer.billingType === "one_time" ? immediateChargeCents(bumpOffer) : 0;
     const amount = gross - discount + bumpNowCents;
     // Stripe refuses a PaymentIntent below its own minimum outright — and
     // book-launch-system is priced 0 in production right now. Left unchecked,
@@ -316,7 +319,7 @@ export async function startOfferCheckout(args: {
           // PaymentIntent this checkout exists to avoid (Stripe refuses it
           // outright on an India-issued card with no e-mandate). Written by us
           // now, for that reader to trust later.
-          bumpPrepaid: bumpOffer ? "true" : "",
+          bumpPrepaid: bumpOffer && bumpOffer.billingType === "one_time" ? "true" : "",
         },
       });
     } catch (e) {
@@ -506,7 +509,10 @@ export async function completeOfferCheckout(
         (wantBumpPriceId ? bumpOptions.find((p) => p.id === wantBumpPriceId && !p.archived) : null) ??
         bumpOptions[0] ??
         null;
-      bumpNowCents = immediateChargeCents(offerAtPrice(bumpRaw, bumpPrice));
+      // Same rule as at start: a recurring bump contributed nothing to the
+      // intent, so it must contribute nothing to the order's arithmetic either.
+      const bumpSold = offerAtPrice(bumpRaw, bumpPrice);
+      bumpNowCents = bumpSold.billingType === "one_time" ? immediateChargeCents(bumpSold) : 0;
     }
   }
   // Paid for (bumpPrepaid, above) but not resolvable any more — an admin

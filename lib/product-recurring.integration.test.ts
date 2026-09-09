@@ -290,7 +290,14 @@ afterAll(async () => {
     await db.from("order_items").delete().eq("store_id", await getStoreId()).is("order_id", null);
   }
   for (const id of createdOfferIds) {
-    await db.from("offers").delete().eq("id", id);
+    // Tokens first: oto_tokens.offer_id is ON DELETE RESTRICT, so an offer that
+    // ever minted one cannot be deleted while it exists — and this delete does
+    // not check its error, so the failure was silent. Left alone it leaked one
+    // live `zz-` offer per run into the local store every suite shares, which is
+    // how an unrelated checkout test ended up buying a throwaway fixture.
+    await db.from("oto_tokens").delete().eq("offer_id", id);
+    const { error } = await db.from("offers").delete().eq("id", id);
+    if (error) console.error(`[product-recurring cleanup] offer ${id}: ${error.message}`);
   }
   for (const id of createdProductIds) {
     const { data: orders } = await db.from("orders").select("id").eq("store_id", await getStoreId());
