@@ -196,22 +196,32 @@ export function Curriculum({
                   }}
                 />
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setRenaming(ch.id)}
-                  title="Rename"
-                  className={`min-w-0 truncate text-left font-medium ${isUntitled(ch.title) ? "italic text-muted" : ""}`}
+                <Link
+                  href={`/admin/courses/${courseId}/items/${ch.id}`}
+                  className={`min-w-0 truncate border-b border-border text-left font-medium hover:border-fg ${
+                    isUntitled(ch.title) ? "italic text-muted" : ""
+                  }`}
                 >
                   {ch.title}
-                </button>
+                </Link>
               )}
 
               <span className={ch.isPublished ? PILL.live : PILL.draft}>{ch.isPublished ? "Live" : "Draft"}</span>
               <span className="text-xs text-muted">
                 {ch.children.length} {ch.children.length === 1 ? lesson : `${lesson}s`}
               </span>
+              {contents(ch).length > 0 && (
+                <span className="text-xs text-muted">{contents(ch).join(" · ")}</span>
+              )}
 
               <span className="ml-auto flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setRenaming(ch.id)}
+                  className="rounded-full border border-border px-3 py-1 text-xs transition-colors hover:border-fg"
+                >
+                  Rename
+                </button>
                 <button
                   type="button"
                   onClick={() => run(addLessonAction, { parentId: ch.id, title: `New ${lessonLabel}` })}
@@ -247,8 +257,17 @@ export function Curriculum({
             {!folded[ch.id] &&
               (ch.children.length === 0 ? (
                 <p className="border-t border-border px-3 py-3 pl-10 text-sm text-muted">
-                  Nothing in this {chapter} yet
-                  {ch.isPublished ? " — and it is live, so a buyer opens it and finds nothing." : "."}
+                  {contents(ch).length > 0 ? (
+                    <>
+                      No {lesson}s — this {chapter} holds the {contents(ch).join(" · ")} itself. Open it
+                      to edit.
+                    </>
+                  ) : (
+                    <>
+                      Nothing in this {chapter} yet
+                      {ch.isPublished ? " — and it is live, so a buyer opens it and finds nothing." : "."}
+                    </>
+                  )}
                 </p>
               ) : (
                 <ul className="flex flex-col">

@@ -28,6 +28,14 @@ export function isUntitled(title: string): boolean {
   return /^new (chapter|lesson|section|item)$/i.test(title.trim());
 }
 
+/**
+ * True when a published chapter is a dead end: no lessons under it, and
+ * nothing on the chapter itself either.
+ */
+export function chapterIsHollow(node: CurriculumNode): boolean {
+  return node.isPublished && node.children.length === 0 && lessonIsEmpty(node);
+}
+
 export type CourseHealth = {
   chapters: number;
   lessons: number;
@@ -36,7 +44,15 @@ export type CourseHealth = {
   empty: number;
   /** Chapters and lessons still carrying the title the editor generated. */
   untitled: number;
-  /** Published chapters with nothing inside — a buyer opens them and finds nothing. */
+  /**
+   * Published chapters that hold nothing at all.
+   *
+   * "No lessons" is not the same as "nothing in it". A chapter row is a
+   * course_item like any other and can carry the whole deliverable itself —
+   * the Book Launch System is one published chapter holding a 674 KB PDF and
+   * its write-up, with no lessons under it by design. Counting children alone
+   * called that empty and told the owner buyers were opening a dead end.
+   */
   hollowChapters: number;
   /** Published lessons that are empty. The worst case: paid for, and blank. */
   publishedEmpty: number;
@@ -57,7 +73,7 @@ export function courseHealth(nodes: CurriculumNode[]): CourseHealth {
     published: lessons.filter((l) => l.isPublished).length,
     empty: empties.length,
     untitled: [...nodes, ...lessons].filter((i) => isUntitled(i.title)).length,
-    hollowChapters: nodes.filter((n) => n.isPublished && n.children.length === 0).length,
+    hollowChapters: nodes.filter(chapterIsHollow).length,
     publishedEmpty: empties.filter((l) => l.isPublished).length,
   };
 }
