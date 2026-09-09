@@ -485,7 +485,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
     if (!si.client_secret) return { ok: false, error: "No client secret" };
 
     const visitor = await visitorFor(db, storeId, input.anonId);
-    const { error: orderErr } = await db.from("orders").insert({
+    const { data: order, error: orderErr } = await db.from("orders").insert({
       // Which Stripe mode this was made in. Without it a test purchase is a
       // real paid row nobody can tell from a real one — which is exactly how
       // two of them ended up counting towards revenue.
@@ -511,8 +511,30 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       stripe_customer_id: customerId,
       stripe_setup_intent_id: si.id,
       visitor_id: visitor,
+    })
+      .select("id")
+      .single();
+    if (orderErr || !order) return { ok: false, error: `order: ${orderErr?.message}` };
+
+    // The same line the one-time branch writes below. Without it a subscription
+    // order had NO order_items at all, so its receipt listed nothing, its
+    // welcome email said "your purchase" instead of the product's name, and
+    // anything asking "what is this order for?" had to infer it from the
+    // intent's metadata instead of reading the ledger.
+    //
+    // Booked at what is charged TODAY, matching total_cents beside it — zero
+    // during a trial, which is the honest figure: Stripe raises the first real
+    // invoice on its own schedule and that is where the money appears.
+    await db.from("order_items").insert({
+      store_id: storeId,
+      order_id: order.id,
+      kind: "product",
+      product_id: product.id,
+      product_price_id: chosen.id,
+      description: product.title,
+      amount_cents: chargeNowFor(chosen),
     });
-    if (orderErr) return { ok: false, error: `order: ${orderErr.message}` };
+
     return { ok: true, clientSecret: si.client_secret, mode: "setup" };
   }
 

@@ -135,6 +135,28 @@ describe.skipIf(!canRun)("a product sold on a recurring price (integration)", ()
     const siId = res.clientSecret.split("_secret_")[0];
     expect(siId.startsWith("seti_")).toBe(true);
 
+    // And it books its own line. A subscription order used to carry NO
+    // order_items at all — the insert lived in the one-time branch, after this
+    // one had already returned — so the receipt listed nothing and the welcome
+    // email said "your purchase" rather than the product's name. $0 because
+    // that is what today costs on a trial, matching the order's total beside it.
+    {
+      const db2 = createServiceClient();
+      const { data: order } = await db2
+        .from("orders")
+        .select("id")
+        .eq("stripe_setup_intent_id", siId)
+        .single();
+      const { data: items } = await db2
+        .from("order_items")
+        .select("kind, product_id, amount_cents")
+        .eq("order_id", order!.id);
+      expect(items).toHaveLength(1);
+      expect(items![0].kind).toBe("product");
+      expect(items![0].product_id).toBe(product.id);
+      expect(items![0].amount_cents).toBe(0);
+    }
+
     // Confirm with a test card, the equivalent of the Element flow.
     await stripe().setupIntents.confirm(siId, {
       payment_method: "pm_card_visa",
