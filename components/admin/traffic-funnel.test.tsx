@@ -63,6 +63,16 @@ describe("a product's funnel card", () => {
     expect(html).toContain("meta");
     expect(html).toContain("direct");
   });
+
+  it("shows an offer's own path, not a product's", () => {
+    // A later task renders this same card on a page whose own heading reads
+    // /o/…; a hardcoded /p/ here would contradict the heading right above it.
+    const html = renderToStaticMarkup(
+      <FunnelCard funnel={{ ...PRODUCT, key: "book-writer", kind: "offer" }} />,
+    );
+    expect(html).toContain("/o/book-writer");
+    expect(html).not.toContain("/p/");
+  });
 });
 
 describe("the sparkline", () => {

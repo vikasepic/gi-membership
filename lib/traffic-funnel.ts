@@ -87,8 +87,18 @@ export function buildFunnels(
   owners: FunnelOwner[],
   days: string[],
 ): FunnelView {
-  const ownerOf = new Map(owners.map((o) => [o.key, o]));
-  const boughtOf = new Map(bought.map((b) => [b.product, b.orders]));
+  // A `Map` built straight from these arrays keeps the LAST entry for a
+  // duplicate key, not the first — so a colliding key would silently go to
+  // whichever list got concatenated last, the opposite of what page.tsx's
+  // "products first" comment promises. Loop and skip a key already claimed
+  // instead: first occurrence wins, explicitly, for both maps, so the next
+  // person who concatenates a third list of owners (or bought rows) still
+  // gets the right winner without having to know Map's constructor rules.
+  const ownerOf = new Map<string, FunnelOwner>();
+  for (const o of owners) if (!ownerOf.has(o.key)) ownerOf.set(o.key, o);
+
+  const boughtOf = new Map<string, number>();
+  for (const b of bought) if (!boughtOf.has(b.product)) boughtOf.set(b.product, b.orders);
 
   const sales = new Map<string, number>();
   const checkout = new Map<string, number>();

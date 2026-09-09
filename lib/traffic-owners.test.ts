@@ -85,6 +85,31 @@ describe("an offer is a funnel like a product is", () => {
   });
 });
 
+describe("when a product slug and an offer key collide", () => {
+  it("lets the first owner win the key, not the last", () => {
+    // A `Map` built from `[...products, ...offers]` keeps the LAST entry for
+    // a duplicate key — the opposite of what page.tsx's "products first"
+    // comment promises. This pins the product as the winner no matter which
+    // list buildFunnels is handed last.
+    const owners: FunnelOwner[] = [
+      { key: "collide", title: "Collide Product", kind: "product" },
+      { key: "collide", title: "Collide Offer", kind: "offer" },
+    ];
+    const view = buildFunnels(
+      [hit({ path: "/checkout", product: "collide", hits: 12 })],
+      [],
+      owners,
+      DAYS,
+    );
+    const funnel = view.funnels.find((f) => f.key === "collide");
+    expect(funnel?.kind).toBe("product");
+    // If the offer had won instead, this funnel would look for its checkout
+    // step at `/checkout/offer`; this `/checkout` hit would match nothing,
+    // and the whole funnel — not just this step — would vanish into others.
+    expect(funnel?.steps[1].count).toBe(12);
+  });
+});
+
 describe("the biggest drop, which the table sorts on", () => {
   const steps = (...counts: number[]) =>
     counts.map((count, i) => ({ label: ["a", "b", "c", "d"][i], count }));
