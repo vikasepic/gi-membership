@@ -247,3 +247,37 @@ export function bumpSlotError(
   }
   return null;
 }
+
+/**
+ * Whether an offer may sit in another offer's UPSELL slot.
+ *
+ * Deliberately NOT bumpSlotError with a flag: a bump rides the host's own
+ * single PaymentIntent (its cents are added straight into that amount), so a
+ * recurring one would need a subscription created off-session right after —
+ * which Stripe refuses on an India-issued card with no e-mandate. An upsell is
+ * never folded into another payment: acceptOto charges or subscribes the saved
+ * card on its own, the same as buying that offer any other way, so there is no
+ * off-session-at-checkout failure mode for a recurring one to create here. If
+ * a future edit "harmonises" these two functions by sharing the billing-type
+ * check, it will refuse the exact case this feature exists to allow.
+ *
+ * Currency is still checked, even though the mechanism differs from a bump's:
+ * an upsell is its own separate Stripe object in its own currency, so nothing
+ * downstream would fail on a mismatch. It is refused anyway because every
+ * placement in this store assumes one currency across a single buyer's
+ * checkout, and a buyer charged in USD who is then upsold in EUR moments later
+ * is a confusing storefront, not a technical one.
+ */
+export function upsellSlotError(
+  upsell: { id: string; active: boolean; currency: string } | null,
+  hostId: string,
+  hostCurrency: string,
+): string | null {
+  if (!upsell) return null;
+  if (upsell.id === hostId) return "An offer cannot upsell itself.";
+  if (!upsell.active) return "That offer is not active, so it cannot be offered as an upsell.";
+  if (upsell.currency !== hostCurrency) {
+    return "An upsell must be priced in the same currency as this offer.";
+  }
+  return null;
+}

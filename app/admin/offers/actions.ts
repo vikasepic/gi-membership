@@ -10,7 +10,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createOffer, updateOffer, updateOfferKey, deleteOffer, type OfferInput } from "@/lib/admin";
 import { requireAdmin } from "@/lib/admin-guard";
-import { altOfferIdFor, bumpSlotError } from "@/lib/offers";
+import { altOfferIdFor, bumpSlotError, upsellSlotError } from "@/lib/offers";
 import { getOffer } from "@/lib/store";
 import { OFFER_KEY, offerKeyProblem } from "@/lib/offer-key";
 
@@ -54,6 +54,10 @@ const schema = z
     // no bump. Validated below with bumpSlotError rather than here, because
     // the check needs a database read (does the id resolve, is it active).
     bumpOfferId: z.string().trim().optional().default(""),
+    // The one-time-offer page shown after THIS offer's own checkout. Empty
+    // means none. Validated below with upsellSlotError, same reason as the
+    // bump — and unlike the bump, a recurring offer is fine here.
+    upsellOfferId: z.string().trim().optional().default(""),
     // The ads team's own name for this offer's sale event. Bounded because
     // Meta drops a custom event name over 40 characters without saying so, and
     // from inside an ad account that is indistinguishable from broken tracking.
@@ -172,6 +176,26 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     }
   }
 
+  // Same "only re-validate a CHANGED id" shape as the bump above, and for the
+  // same reason: the picker keeps an already-saved upsell visible even once it
+  // stops qualifying (deactivated by an edit to THAT offer), so an unrelated
+  // save of THIS offer re-posts that same id unchanged. Re-running the guard
+  // against a no-op re-post would turn that unrelated save into a hard failure
+  // over a problem it did not create.
+  if (v.upsellOfferId) {
+    const current = v.id ? await getOffer(v.id) : null;
+    if (v.upsellOfferId !== current?.upsellOfferId) {
+      const upsell = await getOffer(v.upsellOfferId);
+      const problem = upsellSlotError(
+        upsell ? { id: upsell.id, active: upsell.active, currency: upsell.currency } : null,
+        v.id ?? "",
+        v.currency,
+      );
+      if (!upsell) return { error: "That upsell offer no longer exists." };
+      if (problem) return { error: problem };
+    }
+  }
+
   const input: OfferInput = {
     key: v.key,
     name: v.name,
@@ -193,6 +217,7 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     pageAltOfferId: altOfferIdFor(v.pageAltOfferId, v.id),
     // Self and billing/active are already refused above; nothing left to strip.
     bumpOfferId: v.bumpOfferId || null,
+    upsellOfferId: v.upsellOfferId || null,
     adEventName: v.adEventName?.trim() || null,
     activecampaignTagId: v.activecampaignTagId?.trim() || null,
     activecampaignTrialTagId: v.activecampaignTrialTagId?.trim() || null,

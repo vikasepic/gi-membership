@@ -69,7 +69,7 @@ export async function SectionsOto({
           // The upsell is the one page with somewhere to decline TO, so it is
           // the one page that hands the block a decline. The same destination
           // the built-in layout uses, and the offer's own wording.
-          declineHref: "/checkout/thank-you?oto=declined",
+          declineHref: view.declineHref,
           declineLabel: offer.declineLabel,
         }}
         // The band's own ink goes with it: the second price is an outlined
@@ -101,6 +101,8 @@ export async function SectionsOto({
         subLine={view.recurringNote ? `${view.recurringNote}. Cancel any time.` : null}
         expiresAt={view.expiresAt}
         optionCount={optionCount}
+        declineHref={view.declineHref}
+        expiredHref={view.expiredHref}
       />
       )}
     </div>

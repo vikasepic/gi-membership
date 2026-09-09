@@ -455,6 +455,34 @@ export function OfferForm({
           </select>
         </Field>
 
+        {/* The one-time-offer page shown after THIS offer's own checkout —
+            unlike the bump above, a RECURRING offer is a perfectly good
+            upsell (see upsellSlotError): it is never folded into another
+            payment, so there is no off-session-at-checkout problem for a
+            recurring one to create. No one-time filter here on purpose.
+
+            Same current-value safety net as the bump select, and for the
+            same reason: dropping a disqualified value from the list drops it
+            from defaultValue too, and the next unrelated save would silently
+            erase it. saveOffer only re-validates an upsell when this posts a
+            different id than the one already saved. */}
+        <Field
+          label="Upsell after this offer's checkout"
+          hint="Shown as a one-time-offer page once this offer is paid for. Any active offer, including a recurring one."
+        >
+          <select name="upsellOfferId" defaultValue={offer?.upsellOfferId ?? ""} className={input}>
+            <option value="">&mdash; none, no upsell &mdash;</option>
+            {offers
+              .filter((o) => o.id !== offer?.id && (o.active || o.id === offer?.upsellOfferId))
+              .map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name} — {money(o.priceCents, o.currency)}
+                  {!o.active ? " (no longer available)" : ""}
+                </option>
+              ))}
+          </select>
+        </Field>
+
       </Section>
       </TabPanel>
 

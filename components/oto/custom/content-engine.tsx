@@ -702,6 +702,8 @@ export function ContentEngineOto({ view }: { view: OtoView }) {
         priceLine={priceLine}
         subLine={view.recurringNote ? `${view.recurringNote}. Cancel any time.` : null}
         expiresAt={view.expiresAt}
+        declineHref={view.declineHref}
+        expiredHref={view.expiredHref}
       />
     </div>
   );

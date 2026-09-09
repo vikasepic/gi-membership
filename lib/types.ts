@@ -155,6 +155,18 @@ export type Offer = {
   bumpOfferId: string | null;
   /** Which of the bump offer's prices this placement shows. Empty = headline. */
   bumpPriceIds: string[];
+  /**
+   * The one-time-offer page shown after THIS offer's own checkout.
+   *
+   * Unlike bumpOfferId, may be a recurring offer — see upsellSlotError. There
+   * is no `upsellPriceIds` selector on this offer's own form (offer-form.tsx
+   * mirrors the bump picker, which has none either): the placement always
+   * shows the upsell's headline price, same as a product's slot does before
+   * an admin ticks specific prices for it.
+   */
+  upsellOfferId: string | null;
+  /** Which of the upsell offer's prices this placement shows. Empty = headline. */
+  upsellPriceIds: string[];
   /** Applied when a trial starts. Kept if they cancel before ever paying. */
   activecampaignTrialTagId: string | null;
   /** Applied when access ends. Never removed. */

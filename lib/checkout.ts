@@ -1579,15 +1579,34 @@ export async function resolveOtoForOrder(intentId: string): Promise<string | nul
     : await stripe().paymentIntents.retrieve(intentId);
   const pi = intent as unknown as { metadata: Record<string, string> };
   const productId = pi.metadata.productId;
+  // The standalone offer checkout's intent carries offerId and no productId at
+  // all (startOfferCheckout, lib/offer-checkout.ts) — the two are mutually
+  // exclusive on every intent this app writes, so productId being present is
+  // an unambiguous "this was the product checkout", never a guess.
+  const hostOfferId = pi.metadata.offerId;
   const userId = pi.metadata.userId;
-  if (!productId || !userId) return null;
+  if (!userId || (!productId && !hostOfferId)) return null;
 
-  const { data: prod } = await db
-    .from("products")
-    .select("upsell_offer_id")
-    .eq("id", productId)
-    .maybeSingle();
-  if (!prod?.upsell_offer_id) return null; // empty slot → skip
+  // Which table names the upsell slot depends on which checkout this was —
+  // a product's own upsell_offer_id column, or (added in 0072, alongside its
+  // bump) the HOST OFFER's column of the same name.
+  let upsellOfferId: string | null | undefined;
+  if (productId) {
+    const { data: prod } = await db
+      .from("products")
+      .select("upsell_offer_id")
+      .eq("id", productId)
+      .maybeSingle();
+    upsellOfferId = prod?.upsell_offer_id as string | null | undefined;
+  } else {
+    const { data: host } = await db
+      .from("offers")
+      .select("upsell_offer_id")
+      .eq("id", hostOfferId)
+      .maybeSingle();
+    upsellOfferId = host?.upsell_offer_id as string | null | undefined;
+  }
+  if (!upsellOfferId) return null; // empty slot → skip
 
   // Whether they took the bump decides NOTHING here. Ownership does.
   //
@@ -1613,7 +1632,7 @@ export async function resolveOtoForOrder(intentId: string): Promise<string | nul
   // same id as the bump" test would be worse: it would also kill the second
   // chance in row two, and it would hide a bug in ownership rather than expose
   // one.
-  const offer = await getOffer(prod.upsell_offer_id as string);
+  const offer = await getOffer(upsellOfferId);
   const owned = await ownershipFor(userId);
   if (!offer || !shouldShowOffer(offer, owned)) return null;
 
@@ -1923,6 +1942,57 @@ export async function acceptOto(
   return { ok: true };
 }
 
+/**
+ * Where a bounce OUT of the OTO page or its accept action belongs.
+ *
+ * Every one of those routes pre-dates an offer having an upsell of its own,
+ * and all of them sent a declined/expired/failed/deleted-offer buyer to
+ * /checkout/thank-you — a page built to greet someone who just bought a
+ * PRODUCT. An order placed through the standalone offer checkout has no such
+ * page (see app/(store)/checkout/offer/complete/route.ts, which has always
+ * sent that buyer to /library instead), so this decides which of the two an
+ * order actually belongs to and every one of those call sites asks it rather
+ * than hard-coding thank-you.
+ *
+ * Takes the ORDER id, resolved server-side from an already-verified token —
+ * never a query parameter or any other caller-supplied value. A page reachable
+ * by a bare GET that redirects wherever a request tells it to is an open
+ * redirect; this always looks the order up itself.
+ *
+ * `orderId` is null exactly where no token has verified yet (missing,
+ * malformed, bad signature) — there is no order to ask. That is not a gap this
+ * leaves open: a token that fails to verify carries no payload at all (see
+ * VerifyResult's `{ ok: false, reason }` in lib/oto-token.ts), so there is
+ * nothing here TO look up, and every one of these paths has always defaulted
+ * to thank-you in that case.
+ *
+ * `reason`, when given, becomes the destination's OWN status query param —
+ * thank-you reads `oto=`, library reads `offer=` — so a token both
+ * vocabularies define (`charge_failed`) reads with the right words on either,
+ * and one only the OTO vocabulary has (declined/expired/used/invalid) shows no
+ * banner on library rather than a query string it was never built to read.
+ */
+export async function otoBounceHref(orderId: string | null, reason?: string): Promise<string> {
+  let base: "/checkout/thank-you" | "/library" = "/checkout/thank-you";
+  if (orderId) {
+    const db = createServiceClient();
+    // Same signal upsellPricesFor/upsellAltFor key off below: a "product" kind
+    // order_item is the one row that ever carries product_id, so its presence
+    // (existence only — the value itself is not needed here) says this order
+    // came through the product checkout rather than the standalone offer one.
+    const { data } = await db
+      .from("order_items")
+      .select("id")
+      .eq("order_id", orderId)
+      .not("product_id", "is", null)
+      .limit(1)
+      .maybeSingle();
+    if (!data) base = "/library";
+  }
+  if (!reason) return base;
+  return `${base}?${base === "/library" ? "offer" : "oto"}=${encodeURIComponent(reason)}`;
+}
+
 // ---------------------------------------------------------------------------
 // The second price, resolved from the placement
 // ---------------------------------------------------------------------------
@@ -1942,6 +2012,34 @@ export async function orderEmailFor(orderId: string): Promise<string | null> {
 }
 
 /**
+ * The HOST offer of an order placed through the standalone offer checkout —
+ * as opposed to one it later added by accepting an upsell.
+ *
+ * completeOfferCheckout books the purchase itself as an order_items row with
+ * `kind: "oto"` and its own offer_id (there is no product on this order to
+ * hang a "product" kind row off of) — and acceptOto books an ACCEPTED upsell
+ * exactly the same way. So an order that has gone on to accept an upsell holds
+ * TWO "oto" rows, and `kind = "oto"` alone cannot say which one was the actual
+ * purchase. completeOfferCheckout always writes its row before any upsell can
+ * exist — there is nothing to accept until the order that would carry it is
+ * real — so the EARLIEST by created_at is always the host, never an accepted
+ * upsell. Ordering by kind or by id would not have that guarantee.
+ */
+async function hostOfferIdFor(orderId: string): Promise<string | null> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("order_items")
+    .select("offer_id")
+    .eq("order_id", orderId)
+    .eq("kind", "oto")
+    .not("offer_id", "is", null)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return (data?.offer_id as string | null) ?? null;
+}
+
+/**
  * The ways to pay the upsell for THIS order shows.
  *
  * Resolved from the order's product, never from the request — the same
@@ -1957,18 +2055,37 @@ export async function upsellPricesFor(orderId: string): Promise<OfferPrice[]> {
     .eq("order_id", orderId)
     .not("product_id", "is", null);
   const productId = items?.[0]?.product_id as string | undefined;
-  if (!productId) return [];
-  const { data: product } = await db
-    .from("products")
-    .select("upsell_offer_id, upsell_price_ids")
-    .eq("id", productId)
-    .maybeSingle();
-  const offerId = product?.upsell_offer_id as string | null | undefined;
+
+  let offerId: string | null | undefined;
+  let priceIds: unknown;
+  if (productId) {
+    const { data: product } = await db
+      .from("products")
+      .select("upsell_offer_id, upsell_price_ids")
+      .eq("id", productId)
+      .maybeSingle();
+    offerId = product?.upsell_offer_id as string | null | undefined;
+    priceIds = product?.upsell_price_ids;
+  } else {
+    // No product line: a standalone offer-checkout order. Its slot lives on
+    // the HOST OFFER instead of a product — see hostOfferIdFor for why that
+    // must be resolved from the EARLIEST "oto" order_item, not just any row
+    // of that kind.
+    const hostId = await hostOfferIdFor(orderId);
+    if (hostId) {
+      const { data: host } = await db
+        .from("offers")
+        .select("upsell_offer_id, upsell_price_ids")
+        .eq("id", hostId)
+        .maybeSingle();
+      offerId = host?.upsell_offer_id as string | null | undefined;
+      priceIds = host?.upsell_price_ids;
+    }
+  }
   if (!offerId) return [];
   const offer = await getOffer(offerId);
   if (!offer) return [];
-  const ids = product?.upsell_price_ids;
-  return shownPrices(offer.prices, Array.isArray(ids) ? (ids as string[]) : []);
+  return shownPrices(offer.prices, Array.isArray(priceIds) ? (priceIds as string[]) : []);
 }
 
 export async function upsellAltFor(orderId: string): Promise<Offer | null> {
@@ -1979,6 +2096,12 @@ export async function upsellAltFor(orderId: string): Promise<Offer | null> {
     .eq("order_id", orderId)
     .not("product_id", "is", null);
   const productId = items?.[0]?.product_id as string | undefined;
+  // Also covers an order placed through the standalone offer checkout, which
+  // has no product line at all. That is deliberate, not an omission: offers
+  // have no upsell_alt_offer_id column (unlike products, which kept theirs
+  // only for placements not yet moved onto price lists — see upsellPriceIds'
+  // own comment in lib/types.ts) and never will, so there is no second column
+  // to invent a lookup for. null is the honest answer here.
   if (!productId) return null;
   const { data: product } = await db
     .from("products")

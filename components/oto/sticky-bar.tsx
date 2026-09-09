@@ -42,6 +42,8 @@ export function OtoStickyBar({
   subLine,
   expiresAt,
   optionCount = 1,
+  declineHref,
+  expiredHref,
 }: {
   token: string;
   acceptLabel: string;
@@ -51,6 +53,10 @@ export function OtoStickyBar({
   expiresAt?: number;
   /** How many ways to pay this page is showing. More than one and the button scrolls. */
   optionCount?: number;
+  /** Thank-you for a product order, /library for a standalone offer one. See OtoView.declineHref. */
+  declineHref: string;
+  /** Same idea, for the countdown reaching zero. See OtoView.expiredHref. */
+  expiredHref: string;
 }) {
   // Starts null so the server render and the first client render agree; a
   // clock rendered on the server is wrong the moment it reaches the browser.
@@ -95,7 +101,7 @@ export function OtoStickyBar({
 
         {expired ? (
           <Link
-            href="/checkout/thank-you?oto=expired"
+            href={expiredHref}
             className="rounded-full border border-white/30 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-white/10"
           >
             Continue to your library
@@ -122,7 +128,7 @@ export function OtoStickyBar({
             </form>
             )}
             <Link
-              href="/checkout/thank-you?oto=declined"
+              href={declineHref}
               className="hidden text-sm text-white/60 underline underline-offset-4 transition-colors hover:text-white sm:block"
             >
               {declineLabel}

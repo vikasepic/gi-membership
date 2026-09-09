@@ -1,10 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { acceptOto } from "@/lib/checkout";
+import { acceptOto, otoBounceHref } from "@/lib/checkout";
+import { verifyOtoToken } from "@/lib/oto-token";
+import { otoSigningSecret } from "@/lib/env";
 
 // POST-only accept (a server action is always POST). Single-use is enforced in
-// acceptOto; any failure path lands on thank-you without a double charge.
+// acceptOto; any failure path lands on thank-you (or, for an offer-checkout
+// order, /library) without a double charge.
 export async function acceptOtoAction(formData: FormData) {
   const token = formData.get("token");
   // Which way to pay was chosen: an INDEX into the list this order's upsell
@@ -22,7 +25,16 @@ export async function acceptOtoAction(formData: FormData) {
         : undefined;
   if (typeof token === "string" && token) {
     const res = await acceptOto(token, choice);
-    redirect(`/checkout/thank-you?oto=${res.ok ? "accepted" : res.error}`);
+    // Verified again purely to learn WHICH ORDER this was, for otoBounceHref —
+    // acceptOto's own return type stays exactly what it already is, since
+    // downstream callers (and this file's other bounce below) rely on that.
+    // Cheap and side-effect-free: a signature/expiry check on a string,
+    // nothing here trusts it for anything but the order id inside it, and
+    // acceptOto has already done the one thing that actually matters (the
+    // single-use claim) before this ever runs.
+    const verified = verifyOtoToken(token, otoSigningSecret());
+    const orderId = verified.ok ? verified.payload.orderId : null;
+    redirect(await otoBounceHref(orderId, res.ok ? "accepted" : res.error));
   }
-  redirect("/checkout/thank-you");
+  redirect(await otoBounceHref(null));
 }

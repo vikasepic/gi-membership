@@ -70,6 +70,11 @@ export default async function OtoPreviewFrame({
             offer.trialDays ? ` after your ${offer.trialDays}-day trial` : ""
           }`
         : null,
+    // No real order behind a preview (token is the literal string "preview"),
+    // so there is nothing for otoBounceHref to look up — these are only ever
+    // rendered inside the admin's iframe, never actually followed by a buyer.
+    declineHref: "/checkout/thank-you?oto=declined",
+    expiredHref: "/checkout/thank-you?oto=expired",
   };
 
   // The sections layout reads its content from the database, which a

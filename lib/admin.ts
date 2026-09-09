@@ -250,6 +250,8 @@ export type OfferInput = {
    * every unrelated save rather than preserving one nothing here changed.
    */
   bumpOfferId?: string | null;
+  /** Validated in saveOffer (upsellSlotError) and written by toOfferRow below. */
+  upsellOfferId?: string | null;
   activecampaignTagId?: string | null;
   adEventName?: string | null;
   activecampaignTrialTagId?: string | null;
@@ -337,6 +339,7 @@ function toOfferRow(input: OfferInput, storeId: string) {
     accept_label: input.acceptLabel,
     page_alt_offer_id: input.pageAltOfferId ?? null,
     bump_offer_id: input.bumpOfferId ?? null,
+    upsell_offer_id: input.upsellOfferId ?? null,
     ad_event_name: input.adEventName?.trim() || null,
     activecampaign_tag_id: input.activecampaignTagId ?? null,
     activecampaign_trial_tag_id: input.activecampaignTrialTagId ?? null,

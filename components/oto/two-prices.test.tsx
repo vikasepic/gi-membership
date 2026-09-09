@@ -42,6 +42,8 @@ const view = (alt: Offer | null) => ({
   token: "tok",
   chargeNowCents: 0,
   recurringNote: null,
+  declineHref: "/checkout/thank-you?oto=declined",
+  expiredHref: "/checkout/thank-you?oto=expired",
 });
 
 const render = (alt: Offer | null) => renderToStaticMarkup(<OtoActions view={view(alt)} />);

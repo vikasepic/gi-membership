@@ -1,4 +1,5 @@
 import { completeOfferCheckout } from "@/lib/offer-checkout";
+import { resolveOtoForOrder } from "@/lib/checkout";
 import { mintOfferLogin } from "@/lib/post-purchase";
 import { createClient } from "@/lib/supabase/server";
 
@@ -64,6 +65,35 @@ export async function GET(request: Request) {
     // Not fatal. They can still sign in with a link the ordinary way, and the
     // thing they bought is already theirs.
     console.error("[offer complete] auto sign-in failed:", e);
+  }
+
+  // An upsell for the offer just bought — resolveOtoForOrder now knows a
+  // standalone offer checkout's own upsell slot (0072) the same way it has
+  // always known a product's.
+  //
+  // Gated on the grant having actually succeeded, unlike the product route's
+  // call just below the equivalent point (which runs whether or not
+  // finalizeOrder threw): there, a partial failure only leaves the bought
+  // PRODUCT's own grant for the webhook to retry, which an unrelated upsell
+  // doesn't touch either way. Here, a failed completeOfferCheckout voids the
+  // order back to status "failed" WITHOUT ever writing the host's own
+  // order_items row (kind "oto") — and upsellPricesFor/hostOfferIdFor
+  // identify the host as the EARLIEST such row on the order. Resolving an
+  // upsell (and someone accepting it) on an order with no host row yet would
+  // leave that accepted row the ONLY "oto" line — mistaken for the host
+  // itself. Skipping here is what keeps that row's absence meaning "not
+  // written yet", never "written, but not the host".
+  //
+  // Wrapped exactly as the product route wraps its own call: the money (if
+  // any) has already moved by this point, so a lookup failure must send the
+  // buyer onward, never turn a completed purchase into an error page.
+  if (result.ok) {
+    try {
+      const token = await resolveOtoForOrder(intentId);
+      if (token) return go(`/checkout/oto?token=${encodeURIComponent(token)}`);
+    } catch (e) {
+      console.error("[offer complete] OTO lookup failed, sending to library:", e);
+    }
   }
 
   return go(`/library?offer=${result.ok ? "added" : result.error}`);

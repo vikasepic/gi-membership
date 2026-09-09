@@ -50,6 +50,16 @@ export type OtoView = {
    */
   expiresAt?: number;
   /**
+   * Where "No thanks" goes: thank-you for a product order, /library for one
+   * placed through the standalone offer checkout, which has no thank-you page
+   * of its own. Resolved server-side, once, in oto/page.tsx — see
+   * otoBounceHref in lib/checkout.ts. Every decline link on every template
+   * reads this rather than hard-coding a destination.
+   */
+  declineHref: string;
+  /** Same idea, for the sticky bar's countdown running out. */
+  expiredHref: string;
+  /**
    * True in the admin preview only.
    *
    * The approved design carries marked placeholder blocks for the sections
@@ -281,7 +291,7 @@ export function OtoActions({
           and refunds twice. */}
       <TrackClick event="UpsellDeclined" params={{ ...reportParams, content_name: view.offer.name }}>
         <Link
-          href="/checkout/thank-you?oto=declined"
+          href={view.declineHref}
           className={`text-sm underline underline-offset-4 transition-colors ${align === "start" ? "" : "text-center"} ${
             onBand ? "text-white/60 hover:text-white" : "text-muted hover:text-fg"
           }`}

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { verifyOtoToken } from "@/lib/oto-token";
 import { otoSigningSecret } from "@/lib/env";
 import { getOffer } from "@/lib/store";
-import { upsellAltFor, upsellPricesFor, orderEmailFor } from "@/lib/checkout";
+import { upsellAltFor, upsellPricesFor, orderEmailFor, otoBounceHref } from "@/lib/checkout";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { immediateChargeCents } from "@/lib/offers";
 import { otoComponentFor } from "@/components/oto/registry";
@@ -32,13 +32,18 @@ export default async function OtoPage({
 }) {
   const { token } = await searchParams;
   // A missing/invalid/expired token just bypasses to thank-you — never an error
-  // page, never a charge.
-  if (!token) redirect("/checkout/thank-you");
+  // page, never a charge. No order is known yet at either point (a token that
+  // fails to verify carries no payload — see otoBounceHref), so this is the
+  // same thank-you default these two have always used.
+  if (!token) redirect(await otoBounceHref(null));
   const verified = verifyOtoToken(token, otoSigningSecret());
-  if (!verified.ok) redirect("/checkout/thank-you?oto=" + verified.reason);
+  if (!verified.ok) redirect(await otoBounceHref(null, verified.reason));
 
   const shown = await getOffer(verified.payload.offerId);
-  if (!shown) redirect("/checkout/thank-you");
+  // The order IS known here, so an offer-checkout buyer whose upsell offer was
+  // deleted out from under them lands on /library instead of a product's
+  // thank-you page.
+  if (!shown) redirect(await otoBounceHref(verified.payload.orderId));
 
   // After every guard, not right after the token verifies: a valid token
   // whose offer has since been deleted also bounces to thank-you, and that is
@@ -71,6 +76,12 @@ export default async function OtoPage({
             offer.trialDays ? ` after your ${offer.trialDays}-day trial` : ""
           }`
         : null,
+    // Computed here, once, rather than hard-coded in every template: an
+    // offer-checkout buyer's "No thanks" (or a sticky bar's countdown running
+    // out) belongs on /library, not on a product's thank-you page. See
+    // otoBounceHref.
+    declineHref: await otoBounceHref(verified.payload.orderId, "declined"),
+    expiredHref: await otoBounceHref(verified.payload.orderId, "expired"),
   };
 
   // The purchase is reported HERE, not on thank-you.

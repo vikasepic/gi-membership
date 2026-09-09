@@ -150,8 +150,12 @@ describe("the add-on decisions are reported", () => {
   it("keeps the upsell's decline a real link", () => {
     // Wrapped, not replaced: middle-click and open-in-new-tab still work, and
     // the event is a side effect of the click rather than a condition of it.
+    // The destination itself is resolved per-order since 0072 (an offer
+    // buyer's decline belongs on /library, not a product's thank-you page —
+    // see otoBounceHref in lib/checkout.ts) — what this test still has to
+    // prove is that it is a real `href`, not a JS-only handler.
     const shell = readFileSync("components/oto/shell.tsx", "utf8");
-    expect(shell).toContain('href="/checkout/thank-you?oto=declined"');
+    expect(shell).toContain("href={view.declineHref}");
   });
 });
 

@@ -29,8 +29,9 @@ export async function purchaseForTracking(paymentIntentId: string): Promise<Trac
  *
  * The upsell page needs this. A buyer who is shown one never reaches the
  * thank-you page carrying a payment_intent — /checkout/complete sends them to
- * /checkout/oto, and every way out of that page lands on /checkout/thank-you
- * with an `oto` result and nothing else. So the browser's copy of Purchase
+ * /checkout/oto, and every way out of that page lands on thank-you (or, for an
+ * offer bought through the standalone checkout, /library — see otoBounceHref)
+ * with an `oto`/`offer` result and nothing else. So the browser's copy of Purchase
  * never fired for anybody who was offered an upsell, which on this store is
  * everybody buying the product that has one. Only the server copy arrived, so
  * every ad-blocked buyer in that flow was invisible.
