@@ -50,8 +50,3 @@ export function builtinApp(key: string): BuiltinApp | null {
 export function builtinAppRoute(key: string): string | null {
   return builtinApp(key)?.route ?? null;
 }
-
-/** The offer page an app is sold on — where someone without access is sent. */
-export function builtinAppOfferPath(key: string): string {
-  return `/o/${key}`;
-}

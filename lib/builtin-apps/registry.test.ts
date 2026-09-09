@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import {
   BUILTIN_APPS,
   builtinApp,
-  builtinAppOfferPath,
   builtinAppRoute,
   isBuiltinAppKey,
 } from "@/lib/builtin-apps/registry";
@@ -34,10 +33,6 @@ describe("built-in app registry", () => {
     expect(builtinAppRoute("nope")).toBeNull();
     // A prototype key is not an app.
     expect(isBuiltinAppKey("constructor")).toBe(false);
-  });
-
-  it("sends someone without access to the offer that sells it", () => {
-    expect(builtinAppOfferPath("hook-generator")).toBe("/o/hook-generator");
   });
 
   it("matches the keys the migration registers", () => {

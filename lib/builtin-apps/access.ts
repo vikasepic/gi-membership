@@ -1,11 +1,11 @@
 import "server-only";
 import { redirect, notFound } from "next/navigation";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
-import { getStoreId } from "@/lib/store";
+import { getStoreId, offerSellingApp } from "@/lib/store";
 import { APP_COLUMNS, type AppRow } from "@/lib/apps";
 import { camelize } from "@/lib/case";
 import { subscribedToApp } from "@/lib/library";
-import { BUILTIN_APPS, builtinAppOfferPath, type BuiltinAppKey } from "@/lib/builtin-apps/registry";
+import { BUILTIN_APPS, type BuiltinAppKey } from "@/lib/builtin-apps/registry";
 
 /**
  * Who may use an internal app: the one question every page and route of it
@@ -60,6 +60,11 @@ export async function internalAppAccess(key: BuiltinAppKey): Promise<InternalApp
  * The answer as a redirect, for pages. Signed out goes to login and comes
  * back here; an app the store does not sell is a 404; someone who does not
  * own it is sent to the page that sells it, the only useful place to land.
+ *
+ * That page is the offer whose grant is this app — looked up, because its key
+ * is whatever the admin named it and need not match the app's. When no offer
+ * sells the app yet, the library: a page that exists, where a 404 would say
+ * the app itself was missing.
  */
 export async function requireInternalApp(key: BuiltinAppKey): Promise<InternalAppViewer> {
   const access = await internalAppAccess(key);
@@ -68,7 +73,8 @@ export async function requireInternalApp(key: BuiltinAppKey): Promise<InternalAp
   if (access.reason === "signed_out") {
     redirect(`/login?next=${encodeURIComponent(BUILTIN_APPS[key].route)}`);
   }
-  redirect(builtinAppOfferPath(key));
+  const offer = access.app ? await offerSellingApp(access.app.id) : null;
+  redirect(offer ? `/o/${offer.key}` : "/library");
 }
 
 /** The HTTP status a route handler answers with when access is refused. */

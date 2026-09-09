@@ -142,6 +142,32 @@ export async function getOffer(id: string): Promise<Offer | null> {
 }
 
 /** By its slug, for the offer's own public sales page at /o/[key]. */
+/**
+ * The active offer that grants an app, if any.
+ *
+ * An internal app's page sends a member who does not own it here — to the
+ * page that sells it. That page is a row to look up, not a URL to build from
+ * the app's key: in production the Micro-Product Builder is sold at
+ * /o/the-micro-product-builder, and guessing /o/micro-product-builder landed
+ * every non-owner on the 404 page. Earliest first when several sell it, the
+ * same rule getStandingOffer settled on so two reads cannot disagree.
+ */
+export async function offerSellingApp(appId: string): Promise<{ key: string } | null> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("offers")
+    .select("key")
+    .eq("store_id", await getStoreId())
+    .eq("grant_app_id", appId)
+    .eq("active", true)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(1);
+  if (error) throw new Error(`offerSellingApp: ${error.message}`);
+  const row = data?.[0];
+  return row ? { key: row.key as string } : null;
+}
+
 export async function getOfferByKey(key: string): Promise<Offer | null> {
   const db = createServiceClient();
   const { data, error } = await db
