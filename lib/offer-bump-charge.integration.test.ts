@@ -386,7 +386,6 @@ describe.skipIf(!canRun)("completing a bumped offer checkout (integration)", () 
     const sum = (items ?? []).reduce((s, i) => s + (i.amount_cents as number), 0);
     expect(sum).toBe(order?.total_cents);
   });
-});
 
   it("takes nothing today for a RECURRING bump, and leaves it to its own subscription", async () => {
     // This used to be refused outright. It should not have been: a recurring
@@ -414,6 +413,7 @@ describe.skipIf(!canRun)("completing a bumped offer checkout (integration)", () 
     // subscription rather than skip the charge as already-paid.
     expect(pi.metadata.bumpPrepaid).toBe("");
   });
+});
 
 afterAll(async () => {
   if (!canRun) return;
