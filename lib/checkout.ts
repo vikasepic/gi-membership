@@ -580,7 +580,16 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       // bump's own headline. finalizeOrder has only the id by the time it runs
       // fulfilBump, so this is how the placement price survives to that call
       // instead of fulfilBump re-deriving the (possibly different) headline.
-      bumpAmountCents: String(bumpNowCents),
+      //
+      // Blank, not "0", for a RECURRING bump: bumpNowCents is 0 there because
+      // nothing is charged TODAY (see the comment above it), not because the
+      // placement priced it at zero — a recurring bump can still bill its
+      // first period immediately, off-session, once fulfilled. Writing "0"
+      // made that real charge book as a $0 order line: the read-back in
+      // finalizeOrder tests string truthiness, and a truthy "0" stopped its
+      // `?? immediateChargeCents(offer)` fallback from ever running. Same
+      // guard shape as bumpPrepaid just below.
+      bumpAmountCents: bumpNowCents > 0 ? String(bumpNowCents) : "",
       // Already paid for in THIS intent, so fulfilment grants it without
       // charging again. Written by us, read by us.
       bumpPrepaid: bumpNowCents > 0 ? "true" : "",
@@ -1114,9 +1123,10 @@ export async function finalizeOrder(intentId: string): Promise<void> {
         prepaid: pi.metadata.bumpPrepaid === "true",
         paidByIntentId: pi.id,
         // Resolved once at checkout time, from the product's own placement —
-        // see createCheckoutIntent. Missing only for an intent written before
-        // this field existed, where the headline fallback inside fulfilBump
-        // takes over.
+        // see createCheckoutIntent. Blank for a RECURRING bump (nothing was
+        // charged today, so there is no placement figure to carry) and for
+        // an intent written before this field existed — both fall through to
+        // the headline fallback inside fulfilBump.
         amountCents: pi.metadata.bumpAmountCents ? Number(pi.metadata.bumpAmountCents) : undefined,
       });
     } catch (e) {

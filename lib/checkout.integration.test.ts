@@ -7,6 +7,7 @@ import {
 } from "@/lib/checkout";
 import { stripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/server";
+import { getStoreId } from "@/lib/store";
 
 // Real money-path test: local Supabase + Stripe TEST mode. Skips if either
 // isn't configured (so unit-only / CI-without-services runs stay green).
@@ -153,6 +154,106 @@ afterAll(async () => {
       await db.auth.admin.deleteUser(user.id);
     }
   }
+});
+
+// --- A recurring bump that bills its first period immediately -------------
+//
+// createCheckoutIntent folds a bump's money into TODAY's charge only when it
+// is one_time — bumpNowCents is deliberately 0 for any recurring bump, even
+// one (like this fixture) with no trial that bills in FULL, off-session, the
+// moment fulfilBump creates its subscription. The seeded placeholder-offer
+// bump (Content Engine, 7-day trial) can't tell a fix from the regression it
+// exists to catch: immediateChargeCents is 0 for a trial either way, so a
+// no-trial fixture is the only shape where "booked $0" and "booked the
+// headline" actually differ.
+describe.skipIf(!canRun)("a recurring bump with no trial (integration)", () => {
+  const email = `it_rb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@example.com`;
+  let productId = "";
+  let offerId = "";
+
+  it("books the bump's headline on the order line, not $0", async () => {
+    const db = createServiceClient();
+    const storeId = await getStoreId();
+
+    offerId = crypto.randomUUID();
+    const { error: offerErr } = await db.from("offers").insert({
+      id: offerId,
+      store_id: storeId,
+      key: `zz-recurring-bump-${offerId}`,
+      name: "zz recurring bump (no trial)",
+      grant_type: "subscription",
+      grant_app_id: "00000000-0000-0000-0000-0000000000a1", // seeded Content Engine app
+      grant_entitlement_key: "content-engine",
+      billing_type: "recurring",
+      interval: "month",
+      interval_count: 1,
+      trial_days: 0,
+      price_cents: 1500,
+      currency: "usd",
+      headline: "zz recurring bump",
+      description: "fixture",
+      active: true,
+    });
+    if (offerErr) throw new Error(`fixture offer: ${offerErr.message}`);
+
+    productId = crypto.randomUUID();
+    const productSlug = `zz-recurring-bump-host-${productId}`;
+    const { error: productErr } = await db.from("products").insert({
+      id: productId,
+      store_id: storeId,
+      slug: productSlug,
+      title: "zz recurring-bump host",
+      price_cents: 2700,
+      status: "published",
+      bump_offer_id: offerId,
+    });
+    if (productErr) throw new Error(`fixture product: ${productErr.message}`);
+
+    const res = await createCheckoutIntent({
+      productSlug,
+      email,
+      fullName: "Test Buyer",
+      bumpChoice: "main",
+    });
+    if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
+    const piId = res.clientSecret.split("_secret_")[0];
+    await stripe().paymentIntents.confirm(piId, {
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/checkout/complete",
+    });
+    await finalizeOrder(piId);
+
+    const { data: order } = await db
+      .from("orders")
+      .select("id")
+      .eq("stripe_payment_intent_id", piId)
+      .single();
+    const { data: items } = await db
+      .from("order_items")
+      .select("kind, amount_cents")
+      .eq("order_id", order!.id as string);
+    const bump = items!.find((i) => i.kind === "bump");
+    // THE bug this test exists to catch: bumpAmountCents used to be written
+    // as the string "0" (bumpNowCents — correctly 0, nothing is charged
+    // TODAY as part of the base intent) and read back as a truthy value, so
+    // fulfilBump's `args.amountCents ?? immediateChargeCents(offer)` kept
+    // that 0 rather than falling back — even though the subscription was
+    // just charged 1500 off-session, in full, no trial.
+    expect(bump?.amount_cents).toBe(1500);
+  });
+
+  afterAll(async () => {
+    if (!canRun) return;
+    const db = createServiceClient();
+    const { data: user } = await db.from("users").select("id").eq("email", email).maybeSingle();
+    await db.from("orders").delete().eq("email", email); // cascades order_items
+    if (user) {
+      await db.from("users").delete().eq("id", user.id); // cascades ownership
+      await db.auth.admin.deleteUser(user.id);
+    }
+    if (productId) await db.from("products").delete().eq("id", productId);
+    if (offerId) await db.from("offers").delete().eq("id", offerId);
+  });
 });
 
 // --- Signed-in members buy without signing up again -----------------------

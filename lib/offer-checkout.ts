@@ -687,25 +687,24 @@ export async function completeOfferCheckout(
     // — so a human sees "this order's host line includes money for a bump
     // that was never granted" instead of a clean-looking order that quietly
     // absorbed it.
+    //
+    // LOG-ONLY: no jobKind/jobPayload. recordError only queues a retry when
+    // BOTH are given. The offer is inactive BY DEFINITION in this branch, and
+    // fulfilBump returns quietly rather than throwing on an inactive offer
+    // (its own "nothing here a retry can fix" guard) — so a queued copy of
+    // this would reach the sweep, throw nothing, and get stamped
+    // resolved_at within a minute, exactly as if it had succeeded. That
+    // erases the one thing this record exists to do: stay on the admin's
+    // unresolved list until a human looks at it. Everything a retry payload
+    // would have carried is folded into the message/context below instead,
+    // since a log-only row keeps no job_payload to hold it.
     await recordError({
       source: "bump_charge",
-      message: `Could not resolve the order bump: offer ${bumpOfferId} is no longer active`,
-      context: { orderId, offerId: bumpOfferId },
-      jobKind: "bump_charge",
-      jobPayload: {
-        orderId,
-        storeId,
-        userId,
-        email,
-        stripeCustomerId: customerId,
-        offerId: bumpOfferId,
-        paymentMethodId: pm,
-        prepaid: bumpPrepaid,
-        paidByIntentId: paid ? si.id : null,
-        // No reliable figure to replay: the ledger never priced this bump (it
-        // was never active here), so a future retry — should the offer come
-        // back — falls back to its headline rather than booking $0.
-      },
+      message:
+        `Could not resolve the order bump: offer ${bumpOfferId} is no longer active. ` +
+        `Buyer ${email} was already charged ${totalCents / 100} ${offer.currency.toUpperCase()} total, ` +
+        `which silently absorbed whatever the bump should have cost — grant it by hand or refund the difference.`,
+      context: { orderId, offerId: bumpOfferId, email, totalCents, currency: offer.currency },
     });
   }
 

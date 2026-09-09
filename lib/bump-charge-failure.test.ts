@@ -20,6 +20,7 @@ import { readFileSync } from "node:fs";
 const checkout = readFileSync("lib/checkout.ts", "utf8");
 const retry = readFileSync("lib/retry.ts", "utf8");
 const errors = readFileSync("lib/errors.ts", "utf8");
+const offerCheckout = readFileSync("lib/offer-checkout.ts", "utf8");
 
 /** The body of a named function, to the next top-level `export`. */
 function bodyOf(src: string, name: string): string {
@@ -113,5 +114,51 @@ describe("the job kind", () => {
     // Record<JobKind, Runner> makes this a compile error rather than a runtime
     // one, which is the reason the union is worth keeping narrow.
     expect(errors).toContain('"bump_charge"');
+  });
+});
+
+// The offer checkout's own two bump-failure records — a different function
+// (completeOfferCheckout, lib/offer-checkout.ts) from finalizeOrder above, and
+// the two records inside it must NOT be handled alike: one is a genuine
+// fulfilBump failure that a retry can fix, the other is a bump that was paid
+// for but can never be resolved (the offer is inactive BY DEFINITION in that
+// branch) — queueing THAT one would let the sweep "resolve" it on its first
+// pass, since fulfilBump returns rather than throws on an inactive offer.
+describe("the offer checkout's own bump failures", () => {
+  const complete = bodyOf(offerCheckout, "completeOfferCheckout");
+  // Genuine failure: the fulfilBump call that can actually throw, up to (not
+  // including) the branch below it.
+  const genuineFailure = complete.slice(
+    complete.indexOf("if (bumpOfferId && bumpRaw?.active)"),
+    complete.indexOf("else if (bumpUnresolved)"),
+  );
+  // The unresolvable-but-paid-for branch, from the recordError CALL itself
+  // (not the comment above it, which spells out "jobKind"/"jobPayload" in
+  // prose to explain their absence — a substring check from there would
+  // trip on the explanation rather than the code) to the end of the function
+  // — its last branch, so this is also the end of the sliced body.
+  const unresolvable = complete.slice(complete.indexOf("await recordError({", complete.indexOf("else if (bumpUnresolved)")));
+
+  it("still queues a retry for a fulfilBump that actually threw", () => {
+    // This one CAN succeed on replay, so it must stay retryable.
+    expect(genuineFailure).toContain('jobKind: "bump_charge"');
+    expect(genuineFailure).toContain("jobPayload: {");
+  });
+
+  it("only logs a paid bump that can never be resolved — never queues it", () => {
+    // recordError queues a retry only when BOTH jobKind and jobPayload are
+    // given (see lib/errors.ts). Neither may appear in the call here, or the
+    // sweep would run this "job", see fulfilBump no-op without throwing, and
+    // mark it resolved within a minute — erasing the visibility this record
+    // exists to give.
+    expect(unresolvable).not.toContain("jobKind");
+    expect(unresolvable).not.toContain("jobPayload");
+  });
+
+  it("still names the offer, the buyer, and what was paid", () => {
+    // The only place left to carry this once jobPayload is gone.
+    expect(unresolvable).toContain("offerId: bumpOfferId");
+    expect(unresolvable).toMatch(/\bemail\b/);
+    expect(unresolvable).toMatch(/\btotalCents\b/);
   });
 });
