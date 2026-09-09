@@ -293,7 +293,7 @@ start/end dates are a form and a validator, not a rework.
 ## Files
 
 **Migration**
-- Create `supabase/migrations/0076_orders_host_offer.sql` — §1c.
+- Create `supabase/migrations/0077_orders_host_offer.sql` — §1c.
 
 **Counting**
 - `app/(store)/checkout/offer/page.tsx` — record the hit (§1a).
