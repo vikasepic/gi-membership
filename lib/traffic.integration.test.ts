@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
-import { bumpPageCountOrThrow, pageCountsSince, paidByProduct, productNames, todayUtc } from "@/lib/traffic";
+import { bumpPageCountOrThrow, pageCountsSince, paidByProduct, paidByOffer, productNames, todayUtc } from "@/lib/traffic";
 import { rangeOf } from "@/lib/traffic-funnel";
 
 const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -116,5 +117,104 @@ describe.skipIf(!canRun)("counting page views (integration)", () => {
       await db.from("order_items").delete().in("order_id", [live, test]);
       await db.from("orders").delete().in("id", [live, test]);
     }
+  });
+});
+
+describe.skipIf(!canRun)("what an offer sold (integration)", () => {
+  const KEY = `zz-paidbyoffer-${Date.now()}`;
+  const made: { orders: string[]; offerId: string; userId: string } = {
+    orders: [],
+    offerId: "",
+    userId: "",
+  };
+
+  beforeAll(async () => {
+    const db = createServiceClient();
+    const storeId = await getStoreId();
+
+    // grant_type: "product" requires grant_product_id (offers_check) — an
+    // existing product from the seed, same as this file's other fixture
+    // (below) already leans on one existing. Not this fixture's to create.
+    const { data: product } = await db
+      .from("products")
+      .select("id")
+      .eq("store_id", storeId)
+      .limit(1)
+      .single();
+    if (!product) throw new Error("offer fixture: no product to grant");
+
+    const { data: offer, error: offerErr } = await db
+      .from("offers")
+      .insert({
+        store_id: storeId,
+        key: KEY,
+        name: "Paid-by-offer fixture",
+        grant_type: "product",
+        grant_product_id: product.id,
+        billing_type: "one_time",
+        price_cents: 1000,
+        headline: "Fixture",
+      })
+      .select("id")
+      .single();
+    if (offerErr) throw new Error(`offer fixture: ${offerErr.message}`);
+    made.offerId = offer!.id as string;
+
+    made.userId = randomUUID();
+    const { error: userErr } = await db
+      .from("users")
+      .insert({ id: made.userId, store_id: storeId, email: `${KEY}@example.com`, username: KEY });
+    if (userErr) throw new Error(`user fixture: ${userErr.message}`);
+
+    const order = async (created: string, livemode: boolean, host: string | null) => {
+      const { data, error } = await db
+        .from("orders")
+        .insert({
+          store_id: storeId,
+          user_id: made.userId,
+          email: `${KEY}@example.com`,
+          status: "paid",
+          currency: "usd",
+          subtotal_cents: 1000,
+          total_cents: 1000,
+          livemode,
+          host_offer_id: host,
+          created_at: created,
+        })
+        .select("id")
+        .single();
+      if (error) throw new Error(`order fixture: ${error.message}`);
+      made.orders.push(data!.id as string);
+    };
+
+    // The window under test is 2026-05-10 .. 2026-05-12, inclusive.
+    await order("2026-05-10T00:00:00.000Z", true, made.offerId); // first midnight — counts
+    await order("2026-05-12T23:59:59.000Z", true, made.offerId); // last day, late — counts
+    await order("2026-05-09T23:59:59.000Z", true, made.offerId); // a second early — out
+    await order("2026-05-13T00:00:00.000Z", true, made.offerId); // next midnight — out
+    await order("2026-05-11T00:00:00.000Z", false, made.offerId); // test mode — out
+    await order("2026-05-11T00:00:00.000Z", true, null); // a product order — out
+  });
+
+  afterAll(async () => {
+    const db = createServiceClient();
+    // Orders reference the user and the offer, so they go first or the FKs
+    // block the rest and every row is left behind for the next run.
+    for (const id of made.orders) await db.from("orders").delete().eq("id", id);
+    if (made.userId) await db.from("users").delete().eq("id", made.userId);
+    if (made.offerId) await db.from("offers").delete().eq("id", made.offerId);
+  });
+
+  it("counts an offer's own sales, once per order, live mode only", async () => {
+    // The fourth step of an offer's funnel. An offer sold on its own page and
+    // one taken as an upsell write the same order_items kind, so this counts
+    // the order's host_offer_id instead.
+    const rows = await paidByOffer({ start: "2026-05-10", end: "2026-05-12" });
+    expect(rows.find((r) => r.product === KEY)?.orders).toBe(2);
+  });
+
+  it("counts nothing for a window the orders miss entirely", async () => {
+    const rows = await paidByOffer({ start: "2026-06-01", end: "2026-06-30" });
+    expect(rows.find((r) => r.product === KEY)).toBeUndefined();
   });
 });

@@ -329,6 +329,62 @@ export async function paidByProduct(range: DayRange): Promise<BoughtRow[]> {
 }
 
 /**
+ * How many orders each OFFER sold, keyed by the offer's key.
+ *
+ * The fourth step of an offer's funnel. `paidByProduct` counts base-product
+ * order lines, and an offer has none — the line it writes carries the same
+ * kind ('oto') an accepted upsell does, so the two are indistinguishable
+ * there. `orders.host_offer_id` says which offer the order was opened for,
+ * which is exactly the question the funnel asks.
+ *
+ * Same window arithmetic, `livemode` filter and paging as paidByProduct, for
+ * the reasons its comments give.
+ */
+export async function paidByOffer(range: DayRange): Promise<BoughtRow[]> {
+  try {
+    const db = createServiceClient();
+    const store = await getStoreId();
+    const since = `${range.start}T00:00:00.000Z`;
+
+    const orders = await allRows<{ id: string; host_offer_id: string }>((from, to) =>
+      db
+        .from("orders")
+        .select("id, host_offer_id")
+        .eq("store_id", store)
+        .eq("status", "paid")
+        .eq("livemode", true)
+        .not("host_offer_id", "is", null)
+        .gte("created_at", since)
+        .lt("created_at", endExclusive(range))
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+    if (orders.length === 0) return [];
+
+    const { data: offers } = await db
+      .from("offers")
+      .select("id, key")
+      .eq("store_id", store);
+    const keyOf = new Map((offers ?? []).map((o) => [o.id as string, o.key as string]));
+
+    // Distinct ORDERS per offer. One order has one host offer, so this is a
+    // count rather than a dedup — but it is written as a set for the same
+    // reason paidByProduct is: a paged read can hand back a row twice.
+    const seen = new Map<string, Set<string>>();
+    for (const o of orders) {
+      const key = keyOf.get(o.host_offer_id);
+      if (!key) continue;
+      const set = seen.get(key) ?? new Set<string>();
+      set.add(o.id);
+      seen.set(key, set);
+    }
+    return [...seen.entries()].map(([product, ids]) => ({ product, orders: ids.size }));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Every product in the catalogue, published or not.
  *
  * Unpublished ones are included on purpose: a product that sold and was then
