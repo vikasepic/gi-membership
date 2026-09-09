@@ -11,12 +11,21 @@ import type { ReactNode } from "react";
 // startOfferCheckout can only refuse. Source-text tests (offer-bump-render,
 // offer-elements-mode) pin the SHAPE of the fix; this file mounts the real
 // component to prove the NUMBERS it produces are the ones the story requires.
+//
+// A later review round added two more ways this fails quietly: a coupon
+// reaching into the bump's own price (the client and server formulas are
+// `... + bumpNowCents` — added AFTER any discount — so a bump folded inside
+// the discounted figure would show a total nobody is actually charged), and a
+// bump ticked, then orphaned by a switch to a recurring price, still reaching
+// the server if the pay button is hit before the clearing effect is trusted
+// rather than proven.
 
 const startOffer = vi.hoisted(() => vi.fn());
 const elementsUpdate = vi.hoisted(() => vi.fn(async () => {}));
+const previewCoupon = vi.hoisted(() => vi.fn());
 vi.mock("@/app/(store)/checkout/offer/actions", () => ({
   startOffer,
-  previewOfferCouponAction: vi.fn(),
+  previewOfferCouponAction: previewCoupon,
 }));
 // Stripe's Elements would fetch js.stripe.com and mount an iframe; neither has
 // anything to do with what the bump does to a total.
@@ -86,6 +95,7 @@ afterEach(() => {
   if (r) act(() => r.unmount());
   startOffer.mockReset();
   elementsUpdate.mockClear();
+  previewCoupon.mockReset();
 });
 
 function mount() {
@@ -120,6 +130,23 @@ function mount() {
 const radios = (host: HTMLElement) => [...host.querySelectorAll<HTMLInputElement>('input[name="offer-price"]')];
 const bumpBox = (host: HTMLElement) => host.querySelector<HTMLInputElement>('input[type="checkbox"]');
 const totalText = (host: HTMLElement) => host.querySelector(".font-display.text-2xl")?.textContent ?? "";
+
+// Same mock-and-apply pattern offer-price-switch.test.tsx already established
+// for this component family — reused rather than reinvented.
+const byText = (host: HTMLElement, text: string) =>
+  [...host.querySelectorAll("button")].find((b) => b.textContent?.includes(text))!;
+
+async function applyCode(host: HTMLElement, code: string) {
+  await act(async () => byText(host, "Have a discount code?").click());
+  const field = host.querySelector<HTMLInputElement>('input[aria-label="Discount code"]')!;
+  // React tracks the last value it wrote, so a plain assignment is invisible
+  // to it — go through the prototype setter the way React's own tests do.
+  Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!.call(field, code);
+  await act(async () => {
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => byText(host, "Apply").click());
+}
 
 describe("the bump's effect on an offer checkout's total", () => {
   it("adds to the total undiscounted, on top of the host's own price", async () => {
@@ -165,5 +192,63 @@ describe("the bump's effect on an offer checkout's total", () => {
     await act(async () => radios(host)[0].click());
     expect(bumpBox(host)?.checked).toBe(false);
     expect(totalText(host)).toBe("$47");
+  });
+
+  // The constraint is "a stale tick cannot be SUBMITTED", not just "hidden" —
+  // the test above only ever reads the screen. This reads the argument the
+  // server actually receives, which is the thing the constraint is about.
+  it("cannot submit a stale tick once the price is recurring", async () => {
+    startOffer.mockResolvedValue({ ok: true, clientSecret: "seti_x", mode: "setup" });
+    const host = mount();
+    await act(async () => bumpBox(host)!.click());
+    await act(async () => radios(host)[1].click()); // switch to recurring
+
+    const form = host.querySelector("form")!;
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(startOffer).toHaveBeenCalledWith("offer-1", 1, null, undefined, "none");
+  });
+
+  it("discounts only the host when a coupon and the bump are both applied", async () => {
+    previewCoupon.mockResolvedValue({
+      ok: true,
+      label: "SAVE10 — $10 off",
+      discountCents: 1000,
+      clamped: false,
+      recurringDiscount: false,
+      trialDays: null,
+    });
+    const host = mount();
+    await applyCode(host, "SAVE10");
+    await act(async () => bumpBox(host)!.click());
+    // 4700 - 1000 (host, discounted) + 2900 (bump, whole and undiscounted) —
+    // a coupon reaching into the bump's own price, or applying to the summed
+    // figure, would show $56 instead.
+    expect(totalText(host)).toBe("$66");
+  });
+
+  it("floors the host at the minimum charge and still adds the bump whole", async () => {
+    previewCoupon.mockResolvedValue({
+      ok: true,
+      label: "FREE100 — 100% off",
+      // The host's entire price, off — unambiguously past the 50c floor.
+      // (Not $46.50, the brief's own number: $47.00 - $46.50 leaves exactly
+      // 50c, the floor's own value, so Math.max(50, 50) reads the same
+      // whether the bump is added before or after the clamp — proven with
+      // `node -e` before writing this, not assumed. That value can only ever
+      // exercise the clamp's boundary, never the bug this case exists to
+      // catch; 100% off exercises the clamp itself.)
+      discountCents: 4700,
+      clamped: true,
+      recurringDiscount: false,
+      trialDays: null,
+    });
+    const host = mount();
+    await applyCode(host, "FREE100");
+    await act(async () => bumpBox(host)!.click());
+    // Host floors at 50c (never zero, never negative), bump rides in whole:
+    // 50 + 2900 = 2950.
+    expect(totalText(host)).toBe("$29.50");
   });
 });
