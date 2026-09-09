@@ -54,7 +54,7 @@ describe.skipIf(!canRun)("buying a one-time offer (integration)", () => {
       return_url: "http://localhost:3000/checkout/offer/complete",
     });
 
-    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true, orderId: expect.any(String) });
 
     const own = await db.from("ownership").select("status").eq("user_id", userId);
     expect(own.data).toHaveLength(1);

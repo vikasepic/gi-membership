@@ -45,7 +45,7 @@ describe.skipIf(!canRun)("standalone offer checkout (integration)", () => {
       return_url: "http://localhost:3000/checkout/offer/complete",
     });
 
-    expect(await completeOfferCheckout(siId)).toEqual({ ok: true });
+    expect(await completeOfferCheckout(siId)).toEqual({ ok: true, orderId: expect.any(String) });
 
     const db = createServiceClient();
     const subsAfterFirst = await db
@@ -55,7 +55,9 @@ describe.skipIf(!canRun)("standalone offer checkout (integration)", () => {
     expect(subsAfterFirst.data).toHaveLength(1);
     expect(subsAfterFirst.data![0].status).toBe("trialing");
 
-    // Refreshing the return page must not grant or bill a second time.
+    // Refreshing the return page must not grant or bill a second time. No
+    // orderId on this shape — the eligibility short-circuit that makes a
+    // refresh a no-op returns before creating or reclaiming any order.
     expect(await completeOfferCheckout(siId)).toEqual({ ok: true });
     const after = await db.from("ownership").select("app_id").eq("user_id", userId);
     expect(after.data).toHaveLength(1);

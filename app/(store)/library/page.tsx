@@ -65,6 +65,37 @@ const OFFER_STATUS: Record<string, string> = {
   // know either.
   unknown:
     "Something went wrong and we couldn’t tell what happened. If you were charged, please don’t pay again — contact us and we’ll sort it out.",
+
+  // Everything below arrives via otoBounceHref (lib/checkout.ts), not via
+  // completeOfferCheckout's own error above — the outcome of the UPSELL shown
+  // after an offer-checkout purchase, not of the purchase itself (which was
+  // already paid for, and already said "added", before the OTO page ever
+  // showed). Same vocabulary otoNote() reads on the product side's thank-you
+  // page (app/(store)/checkout/thank-you/page.tsx) — acceptOto's own
+  // OtoAcceptResult errors, plus verifyOtoToken's "expired"/"invalid" when the
+  // token itself never made it that far.
+  //
+  // "accepted" is the one entry here silence was never an option for: it
+  // follows a REAL second charge (or a new subscription) that just went
+  // through, and the offer checkout's fixed ?offer=added a few lines above it
+  // says nothing about it at all.
+  accepted: "Your add-on is active too — it’s in your library now.",
+  // Declining is an ordinary choice, not a failure — the sibling thank-you
+  // page shows nothing at all for it. This page still names it (rather than
+  // silently rendering no banner) because arriving here happened BY that
+  // choice, not as a side effect of it, and a page that reacts to a click with
+  // total silence reads as though the click did nothing.
+  declined: "No problem — the add-on wasn’t added. The rest of your purchase is all set.",
+  // acceptOto's own replay guard: the single-use token was already spent
+  // (a double submit, the back button, a reload of the accept page).
+  used: "That add-on was already on your account, so it wasn’t added twice.",
+  // The one-time-offer window closed before they acted on it.
+  expired: "That one-time offer had expired, so nothing was added.",
+  // verifyOtoToken failed the signature/shape check, or acceptOto's own
+  // after-the-fact checks did (offer withdrawn, a tampered price choice) —
+  // grouped under one message the same way thank-you's otoNote() groups them,
+  // since a buyer has no way to act differently on one versus the other.
+  invalid: "That one-time offer link wasn’t valid, so nothing was added.",
 };
 import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";

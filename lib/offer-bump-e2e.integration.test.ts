@@ -132,7 +132,7 @@ describe.skipIf(!canRun)("setting an offer's bump from the admin form (integrati
       payment_method: "pm_card_visa",
       return_url: "http://localhost:3000/checkout/offer/complete",
     });
-    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true, orderId: expect.any(String) });
 
     // One charge for both — never a second, off-session charge for the bump.
     const pi = await stripe().paymentIntents.retrieve(piId);
@@ -164,7 +164,9 @@ describe.skipIf(!canRun)("setting an offer's bump from the admin form (integrati
     const { data: own } = await db.from("ownership").select("offer_id").eq("user_id", userId);
     expect(own).toHaveLength(2);
 
-    // A refresh of the return page must not grant or bill again.
+    // A refresh of the return page must not grant or bill again. No orderId
+    // on this shape: the eligibility short-circuit that makes a refresh a
+    // no-op returns before this call creates or reclaims any order of its own.
     expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
     const { data: again } = await db.from("order_items").select("id").eq("order_id", orders![0].id as string);
     expect(again).toHaveLength(2);

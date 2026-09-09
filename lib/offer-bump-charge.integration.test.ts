@@ -231,7 +231,7 @@ describe.skipIf(!canRun)("completing a bumped offer checkout (integration)", () 
       return_url: "http://localhost:3000/checkout/offer/complete",
     });
 
-    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true, orderId: expect.any(String) });
 
     const db = createServiceClient();
     const orders = await db
@@ -307,7 +307,7 @@ describe.skipIf(!canRun)("completing a bumped offer checkout (integration)", () 
       payment_method: "pm_card_visa",
       return_url: "http://localhost:3000/checkout/offer/complete",
     });
-    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true, orderId: expect.any(String) });
 
     const db = createServiceClient();
     const { data: order } = await db
@@ -358,7 +358,7 @@ describe.skipIf(!canRun)("completing a bumped offer checkout (integration)", () 
       payment_method: "pm_card_visa",
       return_url: "http://localhost:3000/checkout/offer/complete",
     });
-    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true, orderId: expect.any(String) });
 
     const db = createServiceClient();
     const { data: order } = await db

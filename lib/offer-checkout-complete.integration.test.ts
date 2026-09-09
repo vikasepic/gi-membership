@@ -175,8 +175,13 @@ describe.skipIf(!canRun)("completeOfferCheckout's claim on a race (0070)", () =>
     // of completeOfferCheckout (which already handled that case before this
     // fix) rather than the insert-level claim this test exists to cover.
     const [a, b] = await Promise.all([completeOfferCheckout(piId), completeOfferCheckout(piId)]);
-    expect(a).toEqual({ ok: true });
-    expect(b).toEqual({ ok: true });
+    // Both racers hand back an orderId — the winner from its own fresh
+    // insert, the loser from the 23505 branch's read of the row the winner
+    // just claimed. Not asserted to be the SAME id here (the length-1 checks
+    // below already prove there is only one order); expect.any(String) is
+    // enough to prove each caller actually named one.
+    expect(a).toEqual({ ok: true, orderId: expect.any(String) });
+    expect(b).toEqual({ ok: true, orderId: expect.any(String) });
 
     const { data: orders } = await db.from("orders").select("id, status").eq("user_id", userId);
     expect(orders).toHaveLength(1);
@@ -242,7 +247,8 @@ describe.skipIf(!canRun)("completeOfferCheckout's claim on a race (0070)", () =>
       },
     });
 
-    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+    // orderId names the reclaimed row itself, not just some order.
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true, orderId: voided.id });
 
     const { data: orders } = await db.from("orders").select("id, status").eq("user_id", userId);
     expect(orders).toHaveLength(1);
@@ -313,8 +319,11 @@ describe.skipIf(!canRun)("completeOfferCheckout's claim on a race (0070)", () =>
     // Promise.all, same reason as the fresh-insert race above: both callers
     // have to actually overlap at the DB, not just run one after the other.
     const [a, b] = await Promise.all([completeOfferCheckout(piId), completeOfferCheckout(piId)]);
-    expect(a).toEqual({ ok: true });
-    expect(b).toEqual({ ok: true });
+    // Both name the seeded row itself — the winner via the reclaim's own
+    // orderId assignment, the loser via the "someone else reclaimed it
+    // first" branch's read of the same `existing.id`.
+    expect(a).toEqual({ ok: true, orderId: voided.id });
+    expect(b).toEqual({ ok: true, orderId: voided.id });
 
     const { data: orders } = await db.from("orders").select("id, status").eq("user_id", userId);
     expect(orders).toHaveLength(1);
@@ -391,8 +400,9 @@ describe.skipIf(!canRun)("completeOfferCheckout's claim on a race (0070)", () =>
 
     // grantOfferOwnershipShouldThrow was consumed by the call above — this
     // one gets the real implementation. Reclaims the same "failed" row
-    // (Important 1's own guarded update) and this time the grant lands.
-    expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
+    // (Important 1's own guarded update) and this time the grant lands, all
+    // the way to the end of the function — so orderId names that same row.
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: true, orderId: firstPass![0].id });
 
     const { data: secondPass } = await db.from("orders").select("id, status").eq("user_id", userId);
     expect(secondPass).toHaveLength(1);

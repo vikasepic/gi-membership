@@ -123,7 +123,7 @@ afterAll(async () => {
 import { resolveOtoForOrder, acceptOto } from "@/lib/checkout";
 
 describe.skipIf(!canRun)("OTO token vs failed charge (integration)", () => {
-  it("releases the single-use token when the charge fails, so the buyer can retry", async () => {
+  it("releases the single-use token when the saved card cannot be charged, so the buyer can retry", async () => {
     const email = `otofail_${Date.now()}@example.com`;
     createdEmails.push(email);
     const res = await createCheckoutIntent({
@@ -143,8 +143,20 @@ describe.skipIf(!canRun)("OTO token vs failed charge (integration)", () => {
     const token = await resolveOtoForOrder(piId);
     if (!token) return; // no OTO configured here — nothing to assert
 
-    // Force the off-session charge to fail the way a declined card would, by
-    // pointing the order at a customer Stripe does not have.
+    // Force acceptOto to find no usable card, by pointing the order at a
+    // customer Stripe has no record of. savedPaymentMethodFor asks Stripe for
+    // THIS customer directly (never the order's own stale PaymentIntent —
+    // see its own comment in lib/checkout.ts on why: a recurring host offer's
+    // order has no PaymentIntent to read one off at all), gets nothing back,
+    // and acceptOto reports "invalid" — the same code it already used for
+    // "no payment method found" before this fix, just reached by a more
+    // direct route now. This used to report "charge_failed" here instead:
+    // the OLD code read the payment method off the ORIGINAL purchase's own
+    // PaymentIntent, which stayed valid regardless of what stripe_customer_id
+    // said, so the failure only surfaced once fulfilOffer tried to bill the
+    // fake customer id and Stripe rejected THAT call. The error code changed;
+    // the one thing this test exists to prove — the claimed token is
+    // released, not burned, on this dead end — did not.
     const db = createServiceClient();
     await db
       .from("orders")
@@ -152,7 +164,7 @@ describe.skipIf(!canRun)("OTO token vs failed charge (integration)", () => {
       .eq("stripe_payment_intent_id", piId);
 
     const first = await acceptOto(token);
-    expect(first).toEqual({ ok: false, error: "charge_failed" });
+    expect(first).toEqual({ ok: false, error: "invalid" });
 
     // The token must NOT be burned — presenting it again is not "used".
     const second = await acceptOto(token);

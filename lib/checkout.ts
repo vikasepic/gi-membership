@@ -1579,34 +1579,15 @@ export async function resolveOtoForOrder(intentId: string): Promise<string | nul
     : await stripe().paymentIntents.retrieve(intentId);
   const pi = intent as unknown as { metadata: Record<string, string> };
   const productId = pi.metadata.productId;
-  // The standalone offer checkout's intent carries offerId and no productId at
-  // all (startOfferCheckout, lib/offer-checkout.ts) — the two are mutually
-  // exclusive on every intent this app writes, so productId being present is
-  // an unambiguous "this was the product checkout", never a guess.
-  const hostOfferId = pi.metadata.offerId;
   const userId = pi.metadata.userId;
-  if (!userId || (!productId && !hostOfferId)) return null;
+  if (!productId || !userId) return null;
 
-  // Which table names the upsell slot depends on which checkout this was —
-  // a product's own upsell_offer_id column, or (added in 0072, alongside its
-  // bump) the HOST OFFER's column of the same name.
-  let upsellOfferId: string | null | undefined;
-  if (productId) {
-    const { data: prod } = await db
-      .from("products")
-      .select("upsell_offer_id")
-      .eq("id", productId)
-      .maybeSingle();
-    upsellOfferId = prod?.upsell_offer_id as string | null | undefined;
-  } else {
-    const { data: host } = await db
-      .from("offers")
-      .select("upsell_offer_id")
-      .eq("id", hostOfferId)
-      .maybeSingle();
-    upsellOfferId = host?.upsell_offer_id as string | null | undefined;
-  }
-  if (!upsellOfferId) return null; // empty slot → skip
+  const { data: prod } = await db
+    .from("products")
+    .select("upsell_offer_id")
+    .eq("id", productId)
+    .maybeSingle();
+  if (!prod?.upsell_offer_id) return null; // empty slot → skip
 
   // Whether they took the bump decides NOTHING here. Ownership does.
   //
@@ -1632,11 +1613,71 @@ export async function resolveOtoForOrder(intentId: string): Promise<string | nul
   // same id as the bump" test would be worse: it would also kill the second
   // chance in row two, and it would hide a bug in ownership rather than expose
   // one.
-  const offer = await getOffer(upsellOfferId);
+  const offer = await getOffer(prod.upsell_offer_id as string);
   const owned = await ownershipFor(userId);
   if (!offer || !shouldShowOffer(offer, owned)) return null;
 
   return mintOtoToken(order.id, order.store_id as string, offer.id, userId);
+}
+
+/**
+ * The upsell for an order placed through the STANDALONE OFFER checkout —
+ * resolved from the order id `completeOfferCheckout` already has in hand,
+ * never by asking Stripe to retrieve an intent and reading its metadata.
+ *
+ * `resolveOtoForOrder` above finds its order by matching an intent id against
+ * `stripe_payment_intent_id` OR `stripe_setup_intent_id`. That works for a
+ * PRODUCT order because `createCheckoutIntent` writes one or the other onto
+ * every order it creates. It does NOT work here: `completeOfferCheckout`
+ * writes `stripe_payment_intent_id` for a one-time offer, but a RECURRING
+ * offer's order carries NEITHER column — that function deliberately never
+ * records `stripe_setup_intent_id` (see its own comment: that column is
+ * uniquely indexed by 0055, and this function mints a fresh order per visit,
+ * so recording it would make a retry after a failed fulfilment collide for
+ * ever). So every recurring offer's order was invisible to that lookup, and
+ * its upsell could never resolve — silently dead on exactly the case that
+ * distinguishes an upsell from a bump, which is the whole point of this
+ * feature.
+ *
+ * The fix is not a better guess at which Stripe object to retrieve for this
+ * path — it is to stop needing one. This resolves the slot straight from
+ * Postgres: the HOST offer this order bought (`hostOfferIdFor`), that offer's
+ * own `upsell_offer_id`, ownership, eligibility. No Stripe call anywhere in
+ * this function, and no intent id as an argument — there is nothing here for
+ * a missing SetupIntent id to break.
+ *
+ * The PRODUCT path is untouched: `resolveOtoForOrder` keeps doing exactly
+ * what it always did, for exactly the reason above — it already works there.
+ */
+export async function resolveOtoForOfferOrder(orderId: string): Promise<string | null> {
+  const db = createServiceClient();
+  const { data: order } = await db
+    .from("orders")
+    .select("store_id, user_id")
+    .eq("id", orderId)
+    .maybeSingle();
+  const userId = order?.user_id as string | undefined;
+  if (!order || !userId) return null;
+
+  const hostOfferId = await hostOfferIdFor(orderId);
+  if (!hostOfferId) return null; // no host row yet (still mid-fulfilment) or none ever written
+
+  const { data: host } = await db
+    .from("offers")
+    .select("upsell_offer_id")
+    .eq("id", hostOfferId)
+    .maybeSingle();
+  const upsellOfferId = host?.upsell_offer_id as string | null | undefined;
+  if (!upsellOfferId) return null; // empty slot → skip
+
+  // Same ownership-only rule as resolveOtoForOrder's product path above — see
+  // its own comment for why whether the host (or a bump riding it) was
+  // accepted decides nothing here, only whether the upsell is already owned.
+  const offer = await getOffer(upsellOfferId);
+  const owned = await ownershipFor(userId);
+  if (!offer || !shouldShowOffer(offer, owned)) return null;
+
+  return mintOtoToken(orderId, order.store_id as string, offer.id, userId);
 }
 
 async function mintOtoToken(
@@ -1790,6 +1831,13 @@ export async function acceptStandingOffer(
   if (!isOfferEligible(offer, owned)) return { ok: false, error: "already_owned" };
 
   const db = createServiceClient();
+  // Whichever order is currently newest — not necessarily the one this offer
+  // was ever shown against, and not one this function created. The order_items
+  // row this writes below (kind: "oto") lands on THAT order, whatever it turns
+  // out to be, which is exactly the ambiguity hostOfferIdFor's own docblock
+  // warns about: if this attach races a fresh completeOfferCheckout order
+  // becoming "the newest paid order" before ITS OWN "oto" row is written, this
+  // row can be mistaken for that order's host purchase.
   const { data: order } = await db
     .from("orders")
     .select("id, store_id, stripe_customer_id, stripe_payment_intent_id, email")
@@ -1866,7 +1914,7 @@ export async function acceptOto(
 
   const { data: order } = await db
     .from("orders")
-    .select("id, store_id, stripe_customer_id, stripe_payment_intent_id, email")
+    .select("id, store_id, stripe_customer_id, email")
     .eq("id", orderId)
     .maybeSingle();
   const shown = await getOffer(offerId);
@@ -1899,10 +1947,31 @@ export async function acceptOto(
   // — there is nothing here to refuse, only a trial not to hand out twice.
   const offer = await offerAsSoldTo(order.email as string, picked);
 
-  // Charge the same saved card the base order used.
-  const pi = await stripe().paymentIntents.retrieve(order.stripe_payment_intent_id as string);
-  const pm = typeof pi.payment_method === "string" ? pi.payment_method : pi.payment_method?.id;
-  if (!order.stripe_customer_id || !pm) return { ok: false, error: "invalid" };
+  // Charge the same saved card the base order used — asked of Stripe directly
+  // (savedPaymentMethodFor), NEVER read off order.stripe_payment_intent_id the
+  // way this used to. A RECURRING host offer's order has no PaymentIntent at
+  // all to retrieve — completeOfferCheckout saves its card via a SetupIntent
+  // instead (see that function's own comment on why the order never records
+  // it) — so `stripe().paymentIntents.retrieve(null)` threw here, AFTER the
+  // token above was already claimed: a buyer accepting the one case this
+  // feature exists to serve burned their one-time offer on an unhandled
+  // exception, with nothing charged and nothing left to retry.
+  // savedPaymentMethodFor also does the right thing for a one-time host that
+  // a stale PaymentIntent read would not: a card updated in the billing
+  // portal since checkout is charged on the CURRENT default, not whatever
+  // PaymentMethod happened to be on that old intent.
+  //
+  // Released on failure, same as the `!price` guard above and the
+  // `fulfilOffer` catch below: the claim already happened, so "no card to
+  // charge" must hand the token back rather than spend it on a dead end
+  // nobody can retry.
+  const pm = order.stripe_customer_id
+    ? await savedPaymentMethodFor(order.stripe_customer_id as string)
+    : null;
+  if (!order.stripe_customer_id || !pm) {
+    await db.from("oto_tokens").update({ status: "pending", consumed_at: null }).eq("token_hash", sha256(token));
+    return { ok: false, error: "invalid" };
+  }
 
   // The token is already claimed above — that is the replay guard, and it must
   // happen before charging so two concurrent accepts cannot both charge. But an
@@ -1971,23 +2040,53 @@ export async function acceptOto(
  * vocabularies define (`charge_failed`) reads with the right words on either,
  * and one only the OTO vocabulary has (declined/expired/used/invalid) shows no
  * banner on library rather than a query string it was never built to read.
+ *
+ * Product-or-offer is decided on TWO independent signals, either one enough to
+ * call an order a PRODUCT order — a "product" kind order_items row, OR the
+ * order's own `stripe_setup_intent_id`:
+ *
+ *   recurring product | stripe_setup_intent_id SET | no product item | product
+ *   one-time  product | null                       | product item    | product
+ *   one-time  offer   | null                       | no product item | offer
+ *   recurring offer   | null                       | no product item | offer
+ *
+ * A single product-item check alone is not enough: createCheckoutIntent's
+ * RECURRING branch (a subscription product) writes `stripe_setup_intent_id`
+ * onto the order but no order_items row at all — that insert lives only in
+ * the ONE-TIME branch (a pre-existing gap, unrelated to this feature). Missed
+ * here, a recurring product order reads exactly like an offer-checkout order:
+ * proven — it bounced to /library?offer=declined instead of
+ * /checkout/thank-you?oto=declined, and to /library?offer=accepted on
+ * acceptance, where /library has no "accepted" copy for a buyer who just
+ * paid. The second signal closes that gap without depending on the missing
+ * order_items row ever being fixed: completeOfferCheckout (the only writer of
+ * an offer-checkout order) never sets stripe_setup_intent_id either way — see
+ * its own comment — so "set" is unambiguously a product order.
  */
 export async function otoBounceHref(orderId: string | null, reason?: string): Promise<string> {
   let base: "/checkout/thank-you" | "/library" = "/checkout/thank-you";
   if (orderId) {
     const db = createServiceClient();
-    // Same signal upsellPricesFor/upsellAltFor key off below: a "product" kind
-    // order_item is the one row that ever carries product_id, so its presence
-    // (existence only — the value itself is not needed here) says this order
-    // came through the product checkout rather than the standalone offer one.
-    const { data } = await db
-      .from("order_items")
-      .select("id")
-      .eq("order_id", orderId)
-      .not("product_id", "is", null)
-      .limit(1)
-      .maybeSingle();
-    if (!data) base = "/library";
+    const [{ data: order, error: orderErr }, { data: item, error: itemErr }] = await Promise.all([
+      db.from("orders").select("stripe_setup_intent_id").eq("id", orderId).maybeSingle(),
+      db
+        .from("order_items")
+        .select("id")
+        .eq("order_id", orderId)
+        .not("product_id", "is", null)
+        .limit(1)
+        .maybeSingle(),
+    ]);
+    // Fails CLOSED to the pre-existing thank-you default rather than guessing
+    // — a transient DB error must never silently reroute a product buyer to
+    // /library. Before this check existed, an error here left `data`
+    // undefined and was read exactly like "no matching row", which is the
+    // wrong default for a product order specifically.
+    if (orderErr || itemErr) {
+      console.error("[otoBounceHref] order/order_items lookup failed:", orderErr ?? itemErr);
+    } else if (!item && !order?.stripe_setup_intent_id) {
+      base = "/library";
+    }
   }
   if (!reason) return base;
   return `${base}?${base === "/library" ? "offer" : "oto"}=${encodeURIComponent(reason)}`;
@@ -2015,19 +2114,49 @@ export async function orderEmailFor(orderId: string): Promise<string | null> {
  * The HOST offer of an order placed through the standalone offer checkout —
  * as opposed to one it later added by accepting an upsell.
  *
- * completeOfferCheckout books the purchase itself as an order_items row with
- * `kind: "oto"` and its own offer_id (there is no product on this order to
- * hang a "product" kind row off of) — and acceptOto books an ACCEPTED upsell
- * exactly the same way. So an order that has gone on to accept an upsell holds
- * TWO "oto" rows, and `kind = "oto"` alone cannot say which one was the actual
- * purchase. completeOfferCheckout always writes its row before any upsell can
+ * A HEURISTIC, not a guarantee: the EARLIEST "oto" order_items row by
+ * created_at. completeOfferCheckout books the purchase itself as such a row
+ * (there is no product on this order to hang a "product" kind row off of),
+ * and acceptOto books an ACCEPTED upsell exactly the same way — so an order
+ * that has gone on to accept an upsell holds TWO "oto" rows, and `kind =
+ * "oto"` alone cannot say which one was the actual purchase. The theory is
+ * that completeOfferCheckout always writes its row before any upsell can
  * exist — there is nothing to accept until the order that would carry it is
- * real — so the EARLIEST by created_at is always the host, never an accepted
- * upsell. Ordering by kind or by id would not have that guarantee.
+ * real — so a chronologically later row can only be an accepted upsell.
+ *
+ * That theory has a hole. THIRD writer this function does not fully account
+ * for: acceptStandingOffer (the library's one-tap accept) ALSO writes a
+ * `kind: "oto"` row, and attaches it to the buyer's CURRENT newest PAID
+ * order — one it did not create and has no way to know is (or isn't) the
+ * order this function will later be asked about. And completeOfferCheckout's
+ * own order row is inserted with status "paid" directly — not staged
+ * "pending" then flipped — so there is a real window, spanning fulfilOffer
+ * (a Stripe subscription-create round trip on the recurring path) and
+ * grantOfferOwnership, in which that order is already visible as "the
+ * buyer's newest paid order" but has not yet written its OWN "oto" row. An
+ * acceptStandingOffer call landing in that window writes a row that is
+ * chronologically EARLIER than the real host row still to come, and this
+ * function would return the standing offer's id as "the host" instead.
+ *
+ * The failure mode when that happens is not a crash or an empty result:
+ * upsellPricesFor reads a real offer's upsell_offer_id/upsell_price_ids —
+ * just the WRONG offer's — so a chained-upsell buyer can be shown a
+ * perfectly resolvable upsell at the wrong placement's price list. Right
+ * offer, wrong price, which is exactly the shape of bug that ships unnoticed.
+ *
+ * This has not been made airtight, on purpose, for this pass: doing that
+ * needs either a column that marks a row as "the purchase" independent of
+ * timing (order_items carries no such flag today — a migration) or
+ * serializing completeOfferCheckout's order creation against every writer of
+ * an "oto" row, and a one-line query is not the place to take on either.
+ * Ordering by kind or by id would not do better — kind is identical on both
+ * rows by construction, and ids are random UUIDs with no time signal at all.
+ * created_at remains the best available signal; it is simply not proof, and
+ * nothing above should be read as claiming otherwise.
  */
 async function hostOfferIdFor(orderId: string): Promise<string | null> {
   const db = createServiceClient();
-  const { data } = await db
+  const { data, error } = await db
     .from("order_items")
     .select("offer_id")
     .eq("order_id", orderId)
@@ -2036,6 +2165,11 @@ async function hostOfferIdFor(orderId: string): Promise<string | null> {
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
+  // Logged, not swallowed: a transient DB error and "no oto row exists yet"
+  // used to collapse into the same null, so a blip here silently hid a real
+  // upsell instead of surfacing anywhere. Still fails CLOSED either way —
+  // null means "no upsell shown", never a guess at the wrong one.
+  if (error) console.error("[hostOfferIdFor] lookup failed:", error);
   return (data?.offer_id as string | null) ?? null;
 }
 

@@ -88,7 +88,7 @@ describe.skipIf(!canRun)("a coupon's trial (integration)", () => {
       payment_method: "pm_card_visa",
       return_url: "http://localhost:3000/checkout/offer/complete",
     });
-    expect(await completeOfferCheckout(siId)).toEqual({ ok: true });
+    expect(await completeOfferCheckout(siId)).toEqual({ ok: true, orderId: expect.any(String) });
   }
 
   it("starts a trial the price does not have, and spends it", async () => {

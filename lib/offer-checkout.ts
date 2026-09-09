@@ -345,10 +345,21 @@ export async function startOfferCheckout(args: {
 // circuits a refresh, and the fulfilment key is derived from the intent id
 // (whichever kind — see below), so Stripe itself refuses to create a second
 // subscription even under a race.
+//
+// `orderId` rides the success return so the caller can resolve this order's
+// own upsell directly (resolveOtoForOfferOrder, lib/checkout.ts) rather than
+// asking Stripe to retrieve `intentId` again and read its metadata — the
+// mechanism resolveOtoForOrder uses for the PRODUCT path, which cannot work
+// here: a recurring offer's order carries neither stripe_payment_intent_id
+// nor stripe_setup_intent_id (see the order insert below for why the latter
+// is never written), so that lookup always came back empty for exactly the
+// case an upsell exists to serve. Present on every ok:true return EXCEPT the
+// eligibility short-circuit just below, which creates or reclaims no order
+// this call — there is nothing here to hand back on that path.
 export async function completeOfferCheckout(
   intentId: string,
   country?: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; orderId?: string } | { ok: false; error: string }> {
   // Either kind. A one-time offer is paid for on-session, so the money is
   // already taken by the time the buyer lands back here; a recurring one saved
   // a card and its subscription is created below. Anything else is refused
@@ -553,7 +564,14 @@ export async function completeOfferCheckout(
         .eq("stripe_payment_intent_id", si.id)
         .single();
       if (readErr || !existing) return { ok: false, error: "order_failed" };
-      if (existing.status === "paid") return { ok: true }; // the winner already booked this purchase
+      // The winner already booked this purchase. orderId is still handed
+      // back — it is a real, paid order — but its host order_items row is
+      // not GUARANTEED to exist yet: "paid" is set the instant the winner's
+      // insert lands, before that row is written (see hostOfferIdFor's own
+      // comment on the window this opens). resolveOtoForOfferOrder fails
+      // closed on that (no host row → no upsell shown) rather than guessing,
+      // so the worst case here is a missed upsell, never a wrong one.
+      if (existing.status === "paid") return { ok: true, orderId: existing.id as string };
       if (existing.status !== "failed") return { ok: false, error: "order_failed" };
       // The winner claimed this row, then fulfilOffer threw and the catch
       // below voided it, before this call ever reached the insert. Reclaim
@@ -583,7 +601,10 @@ export async function completeOfferCheckout(
         .eq("status", "failed")
         .select("id");
       if (reclaimErr) return { ok: false, error: "order_failed" };
-      if (!reclaimed || reclaimed.length === 0) return { ok: true }; // someone else reclaimed it first
+      // Someone else reclaimed it first, and is mid-fulfilment right now —
+      // same "host row may not exist yet" caveat as the already-paid branch
+      // above, for the same reason.
+      if (!reclaimed || reclaimed.length === 0) return { ok: true, orderId: existing.id as string };
       orderId = existing.id as string;
     } else {
       return { ok: false, error: "order_failed" };
@@ -764,5 +785,5 @@ export async function completeOfferCheckout(
     });
   }
 
-  return { ok: true };
+  return { ok: true, orderId };
 }

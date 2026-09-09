@@ -83,12 +83,24 @@ describe("the upsell picker's current-value safety net", () => {
     expect(upsellSelect().value).toBe("stale-upsell");
   });
 
-  it("includes a live RECURRING offer — no one-time filter, unlike the bump select", () => {
-    mount("valid-upsell", [option({ id: "valid-upsell", name: "Subscription upsell", billingType: "recurring" })]);
-    const opt = optionEl("valid-upsell");
+  it("includes a live RECURRING offer that is NOT the current value — no one-time filter, unlike the bump select", () => {
+    // The current value MUST be something else here. A recurring option that
+    // happens to also be the selected upsellOfferId would pass through the
+    // current-value escape hatch (the same one the "keeps a deactivated
+    // current upsell" test above exercises) whether or not a billing-type
+    // filter existed — proving nothing about the filter itself. Mounting with
+    // a DIFFERENT current value means the recurring option can only appear
+    // here because there genuinely is no billing-type filter on this select.
+    mount("current-upsell", [
+      option({ id: "current-upsell", name: "Current upsell" }),
+      option({ id: "recurring-upsell", name: "Subscription upsell", billingType: "recurring" }),
+    ]);
+    const opt = optionEl("recurring-upsell");
     expect(opt).toBeTruthy();
     expect(opt?.textContent).not.toContain("no longer");
-    expect(upsellSelect().value).toBe("valid-upsell");
+    // Still shows the actual current value, not silently swapped just because
+    // the recurring option is now in the list too.
+    expect(upsellSelect().value).toBe("current-upsell");
   });
 
   it("still excludes an inactive offer that ISN'T the current upsell", () => {

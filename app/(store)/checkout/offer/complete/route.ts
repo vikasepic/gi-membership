@@ -1,5 +1,5 @@
 import { completeOfferCheckout } from "@/lib/offer-checkout";
-import { resolveOtoForOrder } from "@/lib/checkout";
+import { resolveOtoForOfferOrder } from "@/lib/checkout";
 import { mintOfferLogin } from "@/lib/post-purchase";
 import { createClient } from "@/lib/supabase/server";
 
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
   // Everything from here is best-effort in the same sense the product route is:
   // the card is saved by now, so an exception would turn a completed purchase
   // into an error page — the worst outcome available.
-  let result: { ok: true } | { ok: false; error: string };
+  let result: { ok: true; orderId?: string } | { ok: false; error: string };
   try {
     result = await completeOfferCheckout(intentId);
   } catch (e) {
@@ -67,29 +67,34 @@ export async function GET(request: Request) {
     console.error("[offer complete] auto sign-in failed:", e);
   }
 
-  // An upsell for the offer just bought — resolveOtoForOrder now knows a
-  // standalone offer checkout's own upsell slot (0072) the same way it has
-  // always known a product's.
+  // An upsell for the offer just bought, resolved from the ORDER
+  // completeOfferCheckout just created or reclaimed — never by asking Stripe
+  // to retrieve `intentId` again and reading its metadata. That was the old
+  // mechanism (resolveOtoForOrder, still used unchanged by the PRODUCT route)
+  // and it cannot work here: a recurring offer's order carries neither
+  // stripe_payment_intent_id nor stripe_setup_intent_id (completeOfferCheckout
+  // deliberately never writes the latter — see its own comment), so that
+  // lookup always came back empty for exactly the case an upsell exists to
+  // serve — the recurring case is the whole point of this feature. See
+  // resolveOtoForOfferOrder's own comment for the rest.
   //
-  // Gated on the grant having actually succeeded, unlike the product route's
-  // call just below the equivalent point (which runs whether or not
-  // finalizeOrder threw): there, a partial failure only leaves the bought
-  // PRODUCT's own grant for the webhook to retry, which an unrelated upsell
-  // doesn't touch either way. Here, a failed completeOfferCheckout voids the
-  // order back to status "failed" WITHOUT ever writing the host's own
-  // order_items row (kind "oto") — and upsellPricesFor/hostOfferIdFor
-  // identify the host as the EARLIEST such row on the order. Resolving an
-  // upsell (and someone accepting it) on an order with no host row yet would
-  // leave that accepted row the ONLY "oto" line — mistaken for the host
-  // itself. Skipping here is what keeps that row's absence meaning "not
-  // written yet", never "written, but not the host".
+  // Gated on `result.orderId` rather than just `result.ok`: it is absent on
+  // the eligibility short-circuit inside completeOfferCheckout (a refresh of
+  // this route after the purchase already completed) — that visit already
+  // got its own chance at the OTO on the FIRST trip through here, so simply
+  // continuing to /library on a refresh is a lost re-prompt, not a lost sale.
+  // When it IS present, the order it names is not guaranteed to already carry
+  // its own host order_items row (two of completeOfferCheckout's success
+  // returns hand back an order whose winning caller may still be mid-
+  // fulfilment) — resolveOtoForOfferOrder fails closed on that itself, so
+  // nothing extra is checked here.
   //
   // Wrapped exactly as the product route wraps its own call: the money (if
   // any) has already moved by this point, so a lookup failure must send the
   // buyer onward, never turn a completed purchase into an error page.
-  if (result.ok) {
+  if (result.ok && result.orderId) {
     try {
-      const token = await resolveOtoForOrder(intentId);
+      const token = await resolveOtoForOfferOrder(result.orderId);
       if (token) return go(`/checkout/oto?token=${encodeURIComponent(token)}`);
     } catch (e) {
       console.error("[offer complete] OTO lookup failed, sending to library:", e);
