@@ -58,8 +58,15 @@ async function mk(cents: number): Promise<string> {
   return id;
 }
 
-/** What the real offer form posts when an admin points the picker at a bump. */
-function hostForm(hostId: string, cents: number, bumpOfferId: string): FormData {
+/**
+ * What the real offer form posts when an admin points the picker at a bump.
+ *
+ * `headline` is a parameter (not hardcoded) so a caller can prove an edit to
+ * some OTHER field still round-trips the same bumpOfferId — the picker keeps
+ * a disqualified current value selected (see the comment beside the select),
+ * so a save that touches nothing about the bump still posts its id unchanged.
+ */
+function hostForm(hostId: string, cents: number, bumpOfferId: string, headline = "fixture"): FormData {
   const fd = new FormData();
   fd.set("id", hostId);
   fd.set("key", `zz-e2e-${hostId}`); // unchanged — proving the bump slot, not a rename
@@ -67,7 +74,7 @@ function hostForm(hostId: string, cents: number, bumpOfferId: string): FormData 
   fd.set("grantType", "subscription");
   fd.set("grantAppId", APP);
   fd.set("grantEntitlementKey", "content-engine");
-  fd.set("headline", "fixture");
+  fd.set("headline", headline);
   fd.set(
     "prices",
     JSON.stringify([
@@ -143,7 +150,14 @@ describe.skipIf(!canRun)("setting an offer's bump from the admin form (integrati
       .select("kind, offer_id, amount_cents")
       .eq("order_id", orders![0].id as string);
     expect(items).toHaveLength(2);
-    expect(items!.some((i) => i.kind === "bump" && i.offer_id === bumpId)).toBe(true);
+    // Both lines identified by name (kind + offer_id), not by elimination —
+    // asserting only the bump line and "two items that sum to the total"
+    // would also pass if the host's own line were mislabelled or attributed
+    // to the wrong offer, as long as its amount happened to make the sum work.
+    const hostItem = items!.find((i) => i.kind === "oto" && i.offer_id === hostId);
+    const bumpItem = items!.find((i) => i.kind === "bump" && i.offer_id === bumpId);
+    expect(hostItem?.amount_cents).toBe(4700); // the host's own share, not the combined total
+    expect(bumpItem?.amount_cents).toBe(2900);
     const sum = items!.reduce((s, i) => s + (i.amount_cents as number), 0);
     expect(sum).toBe(orders![0].total_cents as number); // the lines add up to what was charged
 
@@ -154,6 +168,50 @@ describe.skipIf(!canRun)("setting an offer's bump from the admin form (integrati
     expect(await completeOfferCheckout(piId)).toEqual({ ok: true });
     const { data: again } = await db.from("order_items").select("id").eq("order_id", orders![0].id as string);
     expect(again).toHaveLength(2);
+  });
+
+  /**
+   * The reviewer's repro for the critical this task fixes: the picker's
+   * filter used to hide a bump the moment it stopped qualifying, with no
+   * clause keeping the CURRENTLY SELECTED one visible regardless. A host's
+   * edit page would then render a <select> whose defaultValue matched no
+   * <option>, the browser would silently fall back to "none", and the next
+   * save of the host for ANY reason — this test uses a headline tweak —
+   * posted an empty bumpOfferId that overwrote a bump nobody touched.
+   *
+   * `hostForm` here stands in for the browser: it posts bumpId unchanged,
+   * because that is what the FIXED <select> now actually submits (the
+   * disqualified option stays in the list — see the comment beside it in
+   * offer-form.tsx). That is also exactly the shape saveOffer must not choke
+   * on: bumpSlotError would refuse bumpId outright since the bump is now
+   * inactive, so saveOffer only re-applies that guard when the posted id
+   * actually differs from what is already stored (see the comment there).
+   */
+  it("keeps an unrelated save from silently erasing a bump that stopped qualifying", async () => {
+    const db = createServiceClient();
+    const bumpId = await mk(2900);
+    const hostId = await mk(4700);
+
+    const setup = await saveOffer({}, hostForm(hostId, 4700, bumpId));
+    expect(setup.error, setup.error).toBeFalsy();
+
+    // An edit to the BUMP, not the host — the host's own picker is never
+    // touched. Ordinary enough that it happens without anyone thinking about
+    // what else points at this offer.
+    const { error: deactivateErr } = await db.from("offers").update({ active: false }).eq("id", bumpId);
+    expect(deactivateErr).toBeNull();
+
+    // Only the headline is actually changing; bumpId is reposted unchanged.
+    const res = await saveOffer({}, hostForm(hostId, 4700, bumpId, "fixture, retitled"));
+    expect(res.error, res.error).toBeFalsy();
+
+    const { data: row } = await db
+      .from("offers")
+      .select("bump_offer_id, headline")
+      .eq("id", hostId)
+      .single();
+    expect(row?.headline).toBe("fixture, retitled"); // the edit that was actually asked for went through
+    expect(row?.bump_offer_id).toBe(bumpId); // and the untouched bump slot survived it
   });
 });
 

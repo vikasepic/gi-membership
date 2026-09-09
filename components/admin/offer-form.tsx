@@ -415,9 +415,21 @@ export function OfferForm({
             bump rides the host's own payment; a recurring one could only be
             charged afterwards, off-session, which cards issued in India
             refuse outright (see bumpSlotError). The filter here is a
-            convenience so the list only ever shows something sellable —
+            convenience so the list only ever offers something sellable —
             saveOffer refuses the same cases again regardless of what this
-            posts. */}
+            posts.
+
+            The CURRENT value stays in the list even when it fails that filter
+            — deactivated, or switched to recurring, by an edit to THAT offer,
+            not this one — and is labelled with what's now wrong. Dropping it
+            instead would drop it from defaultValue too: a <select> can't
+            select a value with no matching <option>, so the browser silently
+            falls back to "none", and the NEXT save of this offer for any
+            reason — a headline tweak — would then post that and erase a bump
+            nobody touched. saveOffer only re-validates a bump when this posts
+            a different id than the one already saved (see the comment there),
+            so a stale-but-unchanged id round-tripping through here doesn't
+            turn that unrelated save into a hard failure either. */}
         <Field
           label="Bump on this offer's checkout"
           hint="Shown as a tickbox on this offer's checkout and charged in the same payment as it. One-time offers only."
@@ -425,10 +437,19 @@ export function OfferForm({
           <select name="bumpOfferId" defaultValue={offer?.bumpOfferId ?? ""} className={input}>
             <option value="">&mdash; none, no bump &mdash;</option>
             {offers
-              .filter((o) => o.id !== offer?.id && o.active && o.billingType === "one_time")
+              .filter(
+                (o) =>
+                  o.id !== offer?.id &&
+                  ((o.active && o.billingType === "one_time") || o.id === offer?.bumpOfferId),
+              )
               .map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.name} — {money(o.priceCents, o.currency)}
+                  {!o.active
+                    ? " (no longer active)"
+                    : o.billingType !== "one_time"
+                      ? " (no longer one-time)"
+                      : ""}
                 </option>
               ))}
           </select>

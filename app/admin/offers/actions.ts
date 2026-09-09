@@ -148,15 +148,27 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
   const declared = v.grantAppId ? await appChannels(v.grantAppId) : [];
   v.grantChannels = v.grantChannels.filter((c) => declared.includes(c));
 
-  // Refuse a bump that could only fail when somebody tries to buy it.
+  // Refuse a bump that could only fail when somebody tries to buy it — but
+  // only when this save is actually CHOOSING it. The picker (offer-form.tsx)
+  // keeps an already-saved bump visible, labelled, even once it stops
+  // qualifying (deactivated, or switched to recurring, by an edit to THAT
+  // offer) rather than dropping it — so an unrelated save of THIS offer (a
+  // headline tweak) posts that same id back unchanged. Re-running the guard
+  // against a no-op re-post would turn that unrelated save into a hard
+  // failure over a problem it didn't create; comparing against what is
+  // already stored lets the unchanged id through while still refusing any
+  // save that actually PICKS a new, invalid bump.
   if (v.bumpOfferId) {
-    const bump = await getOffer(v.bumpOfferId);
-    const problem = bumpSlotError(
-      bump ? { id: bump.id, billingType: bump.billingType, active: bump.active } : null,
-      v.id ?? "",
-    );
-    if (!bump) return { error: "That bump offer no longer exists." };
-    if (problem) return { error: problem };
+    const current = v.id ? await getOffer(v.id) : null;
+    if (v.bumpOfferId !== current?.bumpOfferId) {
+      const bump = await getOffer(v.bumpOfferId);
+      const problem = bumpSlotError(
+        bump ? { id: bump.id, billingType: bump.billingType, active: bump.active } : null,
+        v.id ?? "",
+      );
+      if (!bump) return { error: "That bump offer no longer exists." };
+      if (problem) return { error: problem };
+    }
   }
 
   const input: OfferInput = {
