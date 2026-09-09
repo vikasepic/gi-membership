@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildFunnels,
+  biggestDrop,
   daysInRange,
   sparklinePath,
   presetFrom,
@@ -168,6 +169,43 @@ describe("a source filter recomputes the funnel rather than hiding rows", () => 
     const carousels = meta.funnels.find((f) => f.key === "carousels");
     expect(carousels).toBeDefined();
     expect(carousels?.steps[0].count).toBe(10);
+  });
+
+  it("has no fourth step, and none of the old cross-scope drop, once bought is []", () => {
+    // C2: app/admin/traffic/page.tsx passes `[]` for bought here, not the
+    // unfiltered boughtRows. A meta-only funnel with 100/90/80 views and 5
+    // orders from EVERY source combined used to render "94% at the sale" by
+    // dividing a meta-scoped upsell count by an all-source order count — a
+    // fall that never happened in meta's own numbers, sorted to the top of
+    // the column whose only job is finding the page that actually leaks.
+    const views: CountRow[] = [
+      row({ path: "/p/validator", hits: 100 }),
+      row({ path: "/checkout", hits: 90 }),
+      row({ path: "/checkout/oto", hits: 80 }),
+    ];
+    const buggy = buildFunnels(views, [{ product: "validator", orders: 5 }], NAMES, DAYS);
+    const fixed = buildFunnels(views, [], NAMES, DAYS);
+    expect(biggestDrop(buggy.funnels[0].steps)).toEqual({ from: 2, percent: 94 });
+
+    expect(fixed.funnels[0].steps[3].count).toBe(0);
+    // Whatever the fixed drop reports, it is never the old cross-scope 94% —
+    // a source filter cannot produce that number honestly, so it must not
+    // appear here either.
+    expect(biggestDrop(fixed.funnels[0].steps)).not.toEqual({ from: 2, percent: 94 });
+  });
+
+  it("drops an owner entirely once its only reason to appear was an unfiltered order", () => {
+    // The related Minor: an owner with a bought entry but no counted view
+    // under this source used to still get a funnel — "0 | 0 | 0 | 2" beneath
+    // a banner claiming to show this source's traffic, which the owner never
+    // actually sent any of. With bought `[]`, nothing puts its key in the
+    // funnel set, so it disappears instead of rendering a filtered funnel it
+    // does not have. Mirrors "keeps a product that sold without a single
+    // counted view" above, for the source-filtered call.
+    const buggy = buildFunnels([], [{ product: "carousels", orders: 2 }], NAMES, DAYS);
+    const fixed = buildFunnels([], [], NAMES, DAYS);
+    expect(buggy.funnels.map((f) => f.key)).toEqual(["carousels"]);
+    expect(fixed.funnels).toEqual([]);
   });
 });
 

@@ -107,4 +107,16 @@ describe("the overview's source filter recomputes the funnels, it does not hide 
     const src = readFileSync("app/admin/traffic/page.tsx", "utf8");
     expect(src).toContain("buildFunnels(counts.filter(");
   });
+
+  it("passes no bought rows into the source-filtered view", () => {
+    // Under a source filter there is no honest per-source order count —
+    // orders carry no source anywhere in this store. Passing the unfiltered
+    // `boughtRows` here, as this used to, lets a funnel's fourth step show an
+    // ALL-source order count beside three source-filtered view counts, and
+    // biggestDrop compute a real-looking percentage from a fall that never
+    // happened in this source's own numbers — sorted to the top of the
+    // column whose only job is finding the page that actually leaks.
+    const src = readFileSync("app/admin/traffic/page.tsx", "utf8");
+    expect(src).toContain("counts.filter((c) => c.source === filter.source), [], owners, days)");
+  });
 });

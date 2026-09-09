@@ -64,12 +64,19 @@ export default async function AdminTrafficPage({
   // Job 3 of the source filter is not hiding rows — it recomputes the three
   // view steps, the trend and the totals from that source's rows alone. So
   // the raw counts are restricted to that source BEFORE the funnels are
-  // shaped, and the funnels are shaped again from that alone. `bought`
-  // carries no source anywhere in this store, so it stays whole either way;
-  // the table blanks Bought under a filter regardless of what number is
-  // underneath.
+  // shaped, and the funnels are shaped again from that alone. `bought` is
+  // passed as `[]`, not `boughtRows`: orders carry no source anywhere in this
+  // store, so there is no honest source-scoped order count, and handing
+  // buildFunnels the unfiltered orders would let a funnel's fourth step show
+  // an ALL-source order count beside three source-filtered view counts —
+  // biggestDrop would then compute a real-looking percentage from a fall
+  // that never happened in this source's own numbers, in the one column
+  // whose job is finding the page that actually leaks. With `[]`, step four
+  // is 0 for every funnel here, matching the Bought cell the table already
+  // blanks under this filter, and an owner with nothing but an unfiltered
+  // order to its name no longer earns a funnel it does not have.
   const sourceView = filter.source
-    ? buildFunnels(counts.filter((c) => c.source === filter.source), boughtRows, owners, days)
+    ? buildFunnels(counts.filter((c) => c.source === filter.source), [], owners, days)
     : view;
   const shown = applyOverview(overviewRows(sourceView), filter);
 
