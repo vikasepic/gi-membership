@@ -8,8 +8,8 @@ import {
 } from "@/lib/traffic-funnel";
 
 const NAMES = [
-  { slug: "validator", title: "Product Validator" },
-  { slug: "carousels", title: "Viral Carousels" },
+  { key: "validator", title: "Product Validator", kind: "product" as const },
+  { key: "carousels", title: "Viral Carousels", kind: "product" as const },
 ];
 const DAYS = ["2026-09-03", "2026-09-04", "2026-09-05"];
 
@@ -29,9 +29,9 @@ describe("building the funnel", () => {
       NAMES,
       DAYS,
     );
-    expect(view.products).toHaveLength(1);
-    expect(view.products[0].steps.map((s) => s.count)).toEqual([100, 30, 12, 9]);
-    expect(view.products[0].title).toBe("Product Validator");
+    expect(view.funnels).toHaveLength(1);
+    expect(view.funnels[0].steps.map((s) => s.count)).toEqual([100, 30, 12, 9]);
+    expect(view.funnels[0].title).toBe("Product Validator");
   });
 
   it("renders a gap in the middle as a zero, not a missing step", () => {
@@ -43,19 +43,19 @@ describe("building the funnel", () => {
       NAMES,
       DAYS,
     );
-    expect(view.products[0].steps.map((s) => s.count)).toEqual([40, 0, 3, 0]);
+    expect(view.funnels[0].steps.map((s) => s.count)).toEqual([40, 0, 3, 0]);
   });
 
   it("keeps a product that sold without a single counted view", () => {
     // A direct link, or a sale that predates the counter. Dropping it would
     // hide revenue.
     const view = buildFunnels([], [{ product: "carousels", orders: 2 }], NAMES, DAYS);
-    expect(view.products.map((p) => p.slug)).toEqual(["carousels"]);
-    expect(view.products[0].steps[3].count).toBe(2);
+    expect(view.funnels.map((f) => f.key)).toEqual(["carousels"]);
+    expect(view.funnels[0].steps[3].count).toBe(2);
   });
 
   it("shows nothing for a product with neither views nor orders", () => {
-    expect(buildFunnels([], [], NAMES, DAYS).products).toEqual([]);
+    expect(buildFunnels([], [], NAMES, DAYS).funnels).toEqual([]);
   });
 
   it("sorts products by sales-page views, busiest first", () => {
@@ -68,7 +68,7 @@ describe("building the funnel", () => {
       NAMES,
       DAYS,
     );
-    expect(view.products.map((p) => p.slug)).toEqual(["carousels", "validator"]);
+    expect(view.funnels.map((f) => f.key)).toEqual(["carousels", "validator"]);
   });
 
   it("keeps an offer page out of the funnel and in the other-pages list", () => {
@@ -80,7 +80,7 @@ describe("building the funnel", () => {
       NAMES,
       DAYS,
     );
-    expect(view.products).toEqual([]);
+    expect(view.funnels).toEqual([]);
     expect(view.others).toEqual([
       { path: "/o/funnel-app", hits: 7, sources: [{ source: "direct", hits: 7 }] },
     ]);
@@ -90,7 +90,7 @@ describe("building the funnel", () => {
     // They carry product "" and belong to no funnel. They are still real
     // views; dropping them would make the page's total disagree with itself.
     const view = buildFunnels([row({ path: "/checkout", product: "", hits: 4 })], [], NAMES, DAYS);
-    expect(view.products).toEqual([]);
+    expect(view.funnels).toEqual([]);
     expect(view.others[0]).toMatchObject({ path: "/checkout", hits: 4 });
   });
 
@@ -104,7 +104,7 @@ describe("building the funnel", () => {
       NAMES,
       DAYS,
     );
-    expect(view.products[0].sources).toEqual([
+    expect(view.funnels[0].sources).toEqual([
       { source: "meta", hits: 80 },
       { source: "direct", hits: 20 },
     ]);
@@ -117,7 +117,7 @@ describe("building the funnel", () => {
       NAMES,
       DAYS,
     );
-    expect(view.products[0].daily).toEqual([
+    expect(view.funnels[0].daily).toEqual([
       { day: "2026-09-03", hits: 5 },
       { day: "2026-09-04", hits: 0 },
       { day: "2026-09-05", hits: 7 },

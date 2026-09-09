@@ -2,11 +2,12 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FunnelCard, Sparkline, PresetTabs, OtherPages } from "@/components/admin/traffic-funnel";
-import type { ProductFunnel } from "@/lib/traffic-funnel";
+import type { Funnel } from "@/lib/traffic-funnel";
 
-const PRODUCT: ProductFunnel = {
-  slug: "validator",
+const PRODUCT: Funnel = {
+  key: "validator",
   title: "Product Validator",
+  kind: "product",
   steps: [
     { label: "Saw the sales page", count: 412 },
     { label: "Reached the checkout", count: 88 },
@@ -27,7 +28,7 @@ const PRODUCT: ProductFunnel = {
 
 describe("a product's funnel card", () => {
   it("names the product and every step", () => {
-    const html = renderToStaticMarkup(<FunnelCard product={PRODUCT} />);
+    const html = renderToStaticMarkup(<FunnelCard funnel={PRODUCT} />);
     expect(html).toContain("Product Validator");
     expect(html).toContain("412");
     expect(html).toContain("88");
@@ -40,7 +41,7 @@ describe("a product's funnel card", () => {
     // the step reads as three stages and hides the thing worth knowing.
     const html = renderToStaticMarkup(
       <FunnelCard
-        product={{ ...PRODUCT, steps: PRODUCT.steps.map((s, i) => (i === 3 ? { ...s, count: 0 } : s)) }}
+        funnel={{ ...PRODUCT, steps: PRODUCT.steps.map((s, i) => (i === 3 ? { ...s, count: 0 } : s)) }}
       />,
     );
     expect(html).toContain("Bought");
@@ -51,14 +52,14 @@ describe("a product's funnel card", () => {
     // 21 views to 19 buyers is not a 10% drop — it is two different units,
     // and the percentage is the bit somebody would quote. The two
     // views-to-views transitions above it keep theirs (79%, 76%).
-    const html = renderToStaticMarkup(<FunnelCard product={PRODUCT} />);
+    const html = renderToStaticMarkup(<FunnelCard funnel={PRODUCT} />);
     expect(html).toContain("2 fewer");
     expect(html).not.toContain("10%");
     expect(html).toContain("%");
   });
 
   it("shows where the traffic came from", () => {
-    const html = renderToStaticMarkup(<FunnelCard product={PRODUCT} />);
+    const html = renderToStaticMarkup(<FunnelCard funnel={PRODUCT} />);
     expect(html).toContain("meta");
     expect(html).toContain("direct");
   });

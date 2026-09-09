@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatCount as n, sparklinePath, type DayPoint, type OtherPage, type ProductFunnel, PRESETS, type Preset } from "@/lib/traffic-funnel";
+import { formatCount as n, sparklinePath, type DayPoint, type OtherPage, type Funnel, PRESETS, type Preset } from "@/lib/traffic-funnel";
 
 /**
  * The traffic page's furniture.
@@ -63,24 +63,24 @@ export function Sparkline({ daily }: { daily: DayPoint[] }) {
  * top; the row-level unit is what stops somebody reading four numbers of the
  * same kind when the last one is a different kind.
  */
-export function FunnelCard({ product }: { product: ProductFunnel }) {
-  const steps = product.steps;
+export function FunnelCard({ funnel }: { funnel: Funnel }) {
+  const steps = funnel.steps;
   // Not steps[0]: an order can arrive against a product whose sales page was
   // never viewed in the window, and dividing by that zero would hide it.
   const top = Math.max(...steps.map((s) => s.count), 0);
-  const peak = Math.max(...product.daily.map((d) => d.hits), 0);
-  const totalSources = product.sources.reduce((sum, s) => sum + s.hits, 0);
+  const peak = Math.max(...funnel.daily.map((d) => d.hits), 0);
+  const totalSources = funnel.sources.reduce((sum, s) => sum + s.hits, 0);
 
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
         <div className="flex flex-col gap-0.5">
-          <h2 className="font-display text-lg leading-tight">{product.title}</h2>
-          <span className="text-xs text-muted">/p/{product.slug}</span>
+          <h2 className="font-display text-lg leading-tight">{funnel.title}</h2>
+          <span className="text-xs text-muted">/p/{funnel.key}</span>
         </div>
         {/* The line has no axis, so the number beside it is the scale. */}
         <div className="flex items-center gap-3">
-          <Sparkline daily={product.daily} />
+          <Sparkline daily={funnel.daily} />
           {peak > 0 && (
             <span className="whitespace-nowrap text-xs text-muted">
               busiest day <span className="tabular-nums text-fg">{n(peak)}</span>
@@ -127,10 +127,10 @@ export function FunnelCard({ product }: { product: ProductFunnel }) {
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-3 text-xs text-muted">
         <span className="kicker">Came from</span>
-        {product.sources.length === 0 ? (
+        {funnel.sources.length === 0 ? (
           <span>nothing recorded a source in this window.</span>
         ) : (
-          product.sources.map((s) => (
+          funnel.sources.map((s) => (
             <span
               key={s.source}
               className="rounded-full border border-border px-2 py-0.5 text-[0.7rem]"

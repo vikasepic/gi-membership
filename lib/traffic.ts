@@ -422,3 +422,17 @@ export async function productNames(): Promise<ProductName[]> {
     return [];
   }
 }
+
+/** Every offer's key and name, so an offer key can own a funnel. */
+export async function offerKeys(): Promise<{ key: string; name: string }[]> {
+  try {
+    const db = createServiceClient();
+    const { data } = await db
+      .from("offers")
+      .select("key, name")
+      .eq("store_id", await getStoreId());
+    return (data ?? []).map((o) => ({ key: o.key as string, name: o.name as string }));
+  } catch {
+    return [];
+  }
+}

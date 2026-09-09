@@ -27,20 +27,24 @@ export type SourceSplit = { source: string; hits: number };
 export type DayPoint = { day: string; hits: number };
 export type FunnelStep = { label: string; count: number };
 
-export type ProductFunnel = {
-  slug: string;
+/** What a recorded key belongs to. Products and offers both own funnels. */
+export type FunnelOwner = { key: string; title: string; kind: "product" | "offer" };
+
+export type Funnel = {
+  key: string;
   title: string;
+  kind: "product" | "offer";
   steps: FunnelStep[];
   sources: SourceSplit[];
   daily: DayPoint[];
-  /** Sales-page views, which is what the cards are ordered by. */
+  /** Sales-page views, the default order. */
   salesViews: number;
 };
 
 export type OtherPage = { path: string; hits: number; sources: SourceSplit[] };
 
 export type FunnelView = {
-  products: ProductFunnel[];
+  funnels: Funnel[];
   others: OtherPage[];
   /** Every counted view in the window, funnel or not. */
   counted: number;
@@ -69,20 +73,21 @@ function add(m: Map<string, number>, k: string, n: number): void {
 }
 
 /**
- * Every product with something to show, and every row that belonged to none.
+ * Every owner with something to show, and every row that belonged to none.
  *
- * A card exists for a slug only if that slug names a real product. That is
- * what keeps offer keys — `/o/<key>` writes its key as the product — and the
- * slugs of deleted products from inventing funnels; they fall through to
- * `others` with everything else nothing consumed.
+ * A funnel exists for a key only if some owner — a product or an offer —
+ * claims it. That is what keeps a deleted product's slug, and a deleted
+ * offer's key — `content-engine-monthly` is one, 7 hits and no offer row —
+ * from inventing a funnel; it falls through to `others` with everything else
+ * no owner consumed.
  */
 export function buildFunnels(
   counts: CountRow[],
   bought: BoughtRow[],
-  names: ProductName[],
+  owners: FunnelOwner[],
   days: string[],
 ): FunnelView {
-  const titleOf = new Map(names.map((n) => [n.slug, n.title]));
+  const ownerOf = new Map(owners.map((o) => [o.key, o]));
   const boughtOf = new Map(bought.map((b) => [b.product, b.orders]));
 
   const sales = new Map<string, number>();
@@ -103,24 +108,29 @@ export function buildFunnels(
   for (const r of counts) {
     counted += r.hits;
 
-    // A sales page names its product in the path; the other two carry it in
-    // the column. Either way it only counts if it is a product we have.
-    const salesSlug = r.path.startsWith("/p/") ? r.path.slice(3) : null;
-    const slug = salesSlug ?? r.product;
-    const known = titleOf.has(slug);
+    // A sales page names its owner in the path; the other steps carry it in
+    // the column. /p/<slug> is a product's page and /o/<key> an offer's.
+    const fromPath =
+      r.path.startsWith("/p/") ? r.path.slice(3) : r.path.startsWith("/o/") ? r.path.slice(3) : null;
+    const key = fromPath ?? r.product;
+    const owner = ownerOf.get(key);
 
-    if (known && salesSlug) {
-      add(sales, slug, r.hits);
-      add(per(sources, slug, () => new Map()), r.source, r.hits);
-      add(per(daily, slug, () => new Map()), r.day, r.hits);
+    if (owner && fromPath) {
+      add(sales, key, r.hits);
+      add(per(sources, key, () => new Map()), r.source, r.hits);
+      add(per(daily, key, () => new Map()), r.day, r.hits);
       continue;
     }
-    if (known && r.path === "/checkout") {
-      add(checkout, slug, r.hits);
+    // Each kind reaches its checkout by its own path, and both carry a key in
+    // the same column — so the path has to agree with the owner's kind, or an
+    // offer's checkout lands on a product's funnel.
+    const checkoutPath = owner?.kind === "offer" ? "/checkout/offer" : "/checkout";
+    if (owner && r.path === checkoutPath) {
+      add(checkout, key, r.hits);
       continue;
     }
-    if (known && r.path === "/checkout/oto") {
-      add(upsell, slug, r.hits);
+    if (owner && r.path === "/checkout/oto") {
+      add(upsell, key, r.hits);
       continue;
     }
 
@@ -132,41 +142,63 @@ export function buildFunnels(
     add(o.sources, r.source, r.hits);
   }
 
-  const slugs = new Set<string>([
+  const keys = new Set<string>([
     ...sales.keys(),
     ...checkout.keys(),
     ...upsell.keys(),
-    ...[...boughtOf.keys()].filter((s) => titleOf.has(s)),
+    ...[...boughtOf.keys()].filter((k) => ownerOf.has(k)),
   ]);
 
-  const products: ProductFunnel[] = [...slugs]
-    .map((slug) => {
-      const byDay = daily.get(slug) ?? new Map<string, number>();
+  const funnels: Funnel[] = [...keys]
+    .map((key) => {
+      const byDay = daily.get(key) ?? new Map<string, number>();
+      const owner = ownerOf.get(key)!;
       return {
-        slug,
-        title: titleOf.get(slug) ?? slug,
+        key,
+        title: owner.title,
+        kind: owner.kind,
         steps: [
-          sales.get(slug) ?? 0,
-          checkout.get(slug) ?? 0,
-          upsell.get(slug) ?? 0,
-          boughtOf.get(slug) ?? 0,
+          sales.get(key) ?? 0,
+          checkout.get(key) ?? 0,
+          upsell.get(key) ?? 0,
+          boughtOf.get(key) ?? 0,
         ].map((count, i) => ({ label: STEP_LABELS[i], count })),
-        sources: splitOf(sources.get(slug) ?? new Map()),
+        sources: splitOf(sources.get(key) ?? new Map()),
         // Dense: a line that skips the quiet days draws a plateau where there
         // was a gap.
         daily: days.map((day) => ({ day, hits: byDay.get(day) ?? 0 })),
-        salesViews: sales.get(slug) ?? 0,
+        salesViews: sales.get(key) ?? 0,
       };
     })
-    .sort((a, b) => b.salesViews - a.salesViews || a.slug.localeCompare(b.slug));
+    .sort((a, b) => b.salesViews - a.salesViews || a.key.localeCompare(b.key));
 
   return {
-    products,
+    funnels,
     others: [...others.entries()]
       .map(([path, o]) => ({ path, hits: o.hits, sources: splitOf(o.sources) }))
       .sort((a, b) => b.hits - a.hits),
     counted,
   };
+}
+
+/**
+ * The largest fall between two consecutive steps.
+ *
+ * `from` is the index of the step the fall happened AT, so the table can say
+ * "79% at checkout". Null when nothing fell, and null when the funnel had no
+ * traffic at all — a page nobody visited is not the page that is leaking, and
+ * sorting it to the top would bury the ones that are.
+ */
+export function biggestDrop(steps: FunnelStep[]): { from: number; percent: number } | null {
+  let best: { from: number; percent: number } | null = null;
+  for (let i = 0; i < steps.length - 1; i += 1) {
+    const before = steps[i].count;
+    const after = steps[i + 1].count;
+    if (before <= 0 || after >= before) continue;
+    const percent = Math.round(((before - after) / before) * 100);
+    if (!best || percent > best.percent) best = { from: i, percent };
+  }
+  return best;
 }
 
 /**
