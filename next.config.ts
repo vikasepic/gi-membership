@@ -1,4 +1,19 @@
 import type { NextConfig } from "next";
+import { execSync } from "node:child_process";
+
+/** A string unique to this build: the short commit if git can say, else the time. */
+function buildStamp(): string {
+  try {
+    const sha = execSync("git rev-parse --short=12 HEAD", { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+    if (/^[0-9a-f]{7,40}$/.test(sha)) return sha;
+  } catch {
+    // No git in the Docker build stage (alpine, and .git is not copied). The
+    // timestamp below is just as unique per build.
+  }
+  return `b${Date.now().toString(36)}`;
+}
 
 const nextConfig: NextConfig = {
   output: "standalone", // slim Docker image for Coolify/KVM
@@ -13,11 +28,23 @@ const nextConfig: NextConfig = {
    *
    * Telling Next which deployment it is stamps the asset requests, so a
    * mismatch is recognised as version skew and answered with a clean reload
-   * rather than a missing file. SOURCE_COMMIT is set by Coolify on every
-   * build; the fallback keeps local development working, where the dev server
-   * has no such problem.
+   * rather than a missing file.
+   *
+   * It was `process.env.SOURCE_COMMIT || undefined`, and in production it was
+   * always undefined: Coolify sets SOURCE_COMMIT on the running container but
+   * passes only COOLIFY_BUILD_SECRETS_HASH into `docker build`, so nothing
+   * reached `npm run build` and no asset was ever stamped. Found 9 Sep 2026
+   * after the Next 16 deploy, when every tab still open on the Next 15 client
+   * sent a router-state header the new server could not parse and landed on
+   * a 404 instead of reloading.
+   *
+   * So the id is minted HERE, at build time, and never left undefined: the
+   * commit when the build can read one, otherwise the moment of the build.
+   * Either is unique per build, which is all skew detection needs. It is
+   * baked into the standalone server at build, so the runtime sees the same
+   * value the assets were stamped with.
    */
-  deploymentId: process.env.SOURCE_COMMIT || undefined,
+  deploymentId: process.env.SOURCE_COMMIT || buildStamp(),
   reactStrictMode: true,
   poweredByHeader: false,
   experimental: {
