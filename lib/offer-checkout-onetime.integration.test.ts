@@ -82,6 +82,51 @@ describe.skipIf(!canRun)("buying a one-time offer (integration)", () => {
     expect(pi.amount).toBe(4700);
     expect(pi.status).toBe("succeeded");
   });
+
+  // book-launch-system is priced 0 in production today. Before this fix,
+  // paymentIntents.create threw on anything under Stripe's own floor, and
+  // nothing between there and the browser caught it: onSubmit awaits this
+  // server action with no try/catch of its own, so the throw became an
+  // unhandled rejection and setBusy(false) never ran — the button sat on
+  // "Processing" forever with no message. The whole point of this test is
+  // that the call below RESOLVES rather than rejects.
+  it("refuses a one-time offer priced below the minimum charge, rather than hanging with no message", async () => {
+    const db = createServiceClient();
+    const storeId = await getStoreId();
+
+    for (const priceCents of [0, 49]) {
+      const offerId = crypto.randomUUID();
+      made.push(offerId);
+      const { error } = await db.from("offers").insert({
+        id: offerId,
+        store_id: storeId,
+        key: `zz-toolow-${offerId}`,
+        name: "zz too-low fixture",
+        grant_type: "subscription",
+        grant_app_id: APP,
+        grant_entitlement_key: "content-engine",
+        grant_channels: [],
+        billing_type: "one_time",
+        trial_days: null,
+        price_cents: priceCents,
+        currency: "usd",
+        headline: "fixture",
+        description: "fixture",
+      });
+      if (error) throw new Error(`fixture offer: ${error.message}`);
+
+      const email = `toolow_${priceCents}_${Date.now()}@example.test`;
+      const created = await db.auth.admin.createUser({ email, email_confirm: true });
+      const userId = created.data.user!.id;
+      users.push(userId);
+      await db.from("users").insert({ id: userId, store_id: storeId, email });
+
+      const start = await startOfferCheckout({ userId, email, offerId });
+      expect(start.ok, `price_cents ${priceCents} should refuse, not throw`).toBe(false);
+      if (start.ok) continue;
+      expect(start.error.length).toBeGreaterThan(0); // a message, not blank
+    }
+  });
 });
 
 afterAll(async () => {

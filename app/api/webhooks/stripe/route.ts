@@ -44,7 +44,22 @@ export async function POST(req: Request) {
       // fulfilment's idempotency key is derived from the intent id — so this
       // racing the return route is safe.
       if (pi.metadata?.offerId) {
-        await completeOfferCheckout(pi.id);
+        const result = await completeOfferCheckout(pi.id);
+        // Redeliver ONLY a failure a second pass can actually heal.
+        // "order_failed" is a claim/DB hiccup that a retry can win, and
+        // "grant_failed" is completeOfferCheckout's own paid-path key — the
+        // PaymentIntent already succeeded, the order was voided for a retry,
+        // and returning 200 here would tell Stripe this event is handled
+        // while the buyer has no order and no ownership row. "unavailable"
+        // and "unknown_intent_metadata" are the opposite: permanent. No
+        // redelivery ever makes a withdrawn offer active again or grows
+        // metadata an old (or foreign) intent was never written with —
+        // throwing on those would have Stripe retry a failure forever for no
+        // gain. Same shape finalizeOrder already uses a few lines below
+        // (throwing out of this handler so Stripe's own retry redelivers).
+        if (!result.ok && (result.error === "order_failed" || result.error === "grant_failed")) {
+          throw new Error(`completeOfferCheckout: ${result.error}`);
+        }
       } else {
         await finalizeOrder(pi.id);
       }

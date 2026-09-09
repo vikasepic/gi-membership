@@ -1,4 +1,5 @@
 import "server-only";
+import type Stripe from "stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getOffer, getStoreName } from "@/lib/store";
 import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerWithCouponTrial } from "@/lib/offers";
@@ -9,7 +10,7 @@ import { normalizeCountry } from "@/lib/tax";
 import { ensureUserProfile } from "@/lib/users";
 import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
 import { offerAsSoldTo } from "@/lib/trial-history";
-import { recordError } from "@/lib/errors";
+import { recordError, messageOf } from "@/lib/errors";
 import type { Offer } from "@/lib/types";
 
 // Standalone checkout for a single offer, for a member who has no card on file
@@ -32,9 +33,14 @@ export type StartResult =
        *
        * A one-time offer takes money today, so the buyer confirms a payment
        * while they are present — no mandate is needed for a payment the
-       * cardholder is there for. A recurring offer takes nothing today (a
-       * trial is genuinely $0, and a $0 PaymentIntent is not a thing Stripe
-       * will make), so the card is saved and the subscription bills itself.
+       * cardholder is there for. A recurring offer opens a SetupIntent
+       * instead, whatever it charges today — a trial is genuinely $0, and a
+       * no-trial price bills its first period through the subscription
+       * itself rather than this intent, but either way a $0 PaymentIntent is
+       * not a thing Stripe will make, so the card is saved here regardless.
+       * Getting this wrong is how a no-trial recurring offer's Elements
+       * mismatch was written in the first place — see checkout-form.tsx's own
+       * comment on the same bug on the product side.
        */
       mode: "payment" | "setup";
     }
@@ -256,52 +262,81 @@ export async function startOfferCheckout(args: {
     // e-mandate — and it would also mean the figure the buyer agreed to and
     // the figure their card saw were never the same number.
     const bumpNowCents = bumpOffer ? immediateChargeCents(bumpOffer) : 0;
-    const pi = await stripe().paymentIntents.create({
-      amount: gross - discount + bumpNowCents,
-      currency: sold.currency,
-      customer: customerId,
-      setup_future_usage: "off_session",
-      automatic_payment_methods: { enabled: true },
-      description,
-      metadata: {
-        ...metadata,
-        discountCents: String(discount),
-        bumpOfferId: bumpOffer?.id ?? "",
-        // The bump's own name, not just its id. There is no second intent on
-        // this path to carry it — without this a bump riding the host's
-        // charge is indistinguishable from a host-only sale of the same total
-        // in the dashboard, in exports, and in Zapier (which can only filter
-        // on what Stripe holds). Same reason productTitle/offerName ride
-        // alongside their own ids in lib/checkout.ts, the product side of
-        // this same checkout.
-        bumpOfferName: bumpOffer?.name ?? "",
-        // The exact price they ticked — offerPriceId's counterpart for the
-        // bump. Without this, completion had no way to tell bumpChoice: 1 from
-        // bumpChoice: 0 and simply assumed the first price the placement shows.
-        bumpPriceId: bumpOffer ? (bumpPriceId ?? "") : "",
-        // Whether a bump was resolved, not whether it cost anything — a
-        // genuinely $0 bump (a free add-on) is still fully paid for by THIS
-        // intent, because there is nothing left to take. Keying this off
-        // `bumpNowCents > 0` instead left a $0 bump indistinguishable from no
-        // bump at all, and fulfilment is meant to read bumpPrepaid === "true"
-        // to skip its own off-session charge for it — the exact off_session
-        // PaymentIntent this checkout exists to avoid (Stripe refuses it
-        // outright on an India-issued card with no e-mandate). Written by us
-        // now, for that reader to trust later.
-        bumpPrepaid: bumpOffer ? "true" : "",
-      },
-    });
+    const amount = gross - discount + bumpNowCents;
+    // Stripe refuses a PaymentIntent below its own minimum outright — and
+    // book-launch-system is priced 0 in production right now. Left unchecked,
+    // `paymentIntents.create` below throws, and nothing between here and the
+    // browser catches it: the form's onSubmit awaits this server action with
+    // no try/catch of its own, so the throw becomes an unhandled rejection
+    // and `setBusy(false)` never runs — the button sits on "Processing"
+    // forever with no message on screen. Refusing here, before Stripe ever
+    // sees it, is the only version of this that tells the buyer anything.
+    if (amount < MIN_CHARGE_CENTS) {
+      return {
+        ok: false,
+        error: "This offer isn’t available to buy right now. Please contact us and we’ll sort it out.",
+      };
+    }
+    // Belt and braces beyond the floor check above: ANY Stripe error here
+    // (a network blip, a bad customer id, a rate limit) must come back as a
+    // result, not a throw, for exactly the reason above — there is nothing
+    // downstream of this server action that catches an exception.
+    let pi: Stripe.PaymentIntent;
+    try {
+      pi = await stripe().paymentIntents.create({
+        amount,
+        currency: sold.currency,
+        customer: customerId,
+        setup_future_usage: "off_session",
+        automatic_payment_methods: { enabled: true },
+        description,
+        metadata: {
+          ...metadata,
+          discountCents: String(discount),
+          bumpOfferId: bumpOffer?.id ?? "",
+          // The bump's own name, not just its id. There is no second intent on
+          // this path to carry it — without this a bump riding the host's
+          // charge is indistinguishable from a host-only sale of the same total
+          // in the dashboard, in exports, and in Zapier (which can only filter
+          // on what Stripe holds). Same reason productTitle/offerName ride
+          // alongside their own ids in lib/checkout.ts, the product side of
+          // this same checkout.
+          bumpOfferName: bumpOffer?.name ?? "",
+          // The exact price they ticked — offerPriceId's counterpart for the
+          // bump. Without this, completion had no way to tell bumpChoice: 1 from
+          // bumpChoice: 0 and simply assumed the first price the placement shows.
+          bumpPriceId: bumpOffer ? (bumpPriceId ?? "") : "",
+          // Whether a bump was resolved, not whether it cost anything — a
+          // genuinely $0 bump (a free add-on) is still fully paid for by THIS
+          // intent, because there is nothing left to take. Keying this off
+          // `bumpNowCents > 0` instead left a $0 bump indistinguishable from no
+          // bump at all, and fulfilment is meant to read bumpPrepaid === "true"
+          // to skip its own off-session charge for it — the exact off_session
+          // PaymentIntent this checkout exists to avoid (Stripe refuses it
+          // outright on an India-issued card with no e-mandate). Written by us
+          // now, for that reader to trust later.
+          bumpPrepaid: bumpOffer ? "true" : "",
+        },
+      });
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Could not start checkout." };
+    }
     if (!pi.client_secret) return { ok: false, error: "Could not start checkout." };
     return { ok: true, clientSecret: pi.client_secret, customerId, mode: "payment" };
   }
 
-  const si = await stripe().setupIntents.create({
-    customer: customerId,
-    usage: "off_session",
-    automatic_payment_methods: { enabled: true },
-    description,
-    metadata,
-  });
+  let si: Stripe.SetupIntent;
+  try {
+    si = await stripe().setupIntents.create({
+      customer: customerId,
+      usage: "off_session",
+      automatic_payment_methods: { enabled: true },
+      description,
+      metadata,
+    });
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Could not start checkout." };
+  }
   if (!si.client_secret) return { ok: false, error: "Could not start checkout." };
   return { ok: true, clientSecret: si.client_secret, customerId, mode: "setup" };
 }
@@ -611,7 +646,7 @@ export async function completeOfferCheckout(
       stripe_subscription_id: result.subscriptionId ?? null,
       stripe_payment_intent_id: result.paymentIntentId ?? null,
     });
-  } catch {
+  } catch (e) {
     // The card saved (and may already be charged or subscribed) but
     // fulfilment did not finish — granting access or recording the line can
     // be what failed just as much as the charge itself. Void the order so
@@ -619,7 +654,28 @@ export async function completeOfferCheckout(
     // a "failed" row back up and runs this whole block again, which is safe
     // for the reasons above.
     await db.from("orders").update({ status: "failed" }).eq("id", orderId);
-    return { ok: false, error: "charge_failed" };
+    // LOG-ONLY: no jobKind/jobPayload, exactly as the bump's own unresolvable
+    // branch below does it — there is no sweep job for "retry this order's
+    // fulfilment". The retry IS this function running again: the webhook
+    // route throws on the paid-path failure key below so Stripe redelivers,
+    // and the reclaim branch above picks the "failed" row back up when it
+    // does. What was missing was not a retry mechanism but an ALERT — on the
+    // paid path the card is already charged by the time this catch runs, so a
+    // silent void here was money taken with no order, no ownership, and
+    // nothing on the admin's unresolved-errors badge. Unlike the two bump
+    // failure paths below, which both call recordError, this one never did.
+    await recordError({
+      source: "offer_checkout",
+      message: `Offer fulfilment failed after the order was claimed, voided for a retry to reclaim: ${messageOf(e)}`,
+      context: { intentId, orderId, userId, amountCents: totalCents },
+    });
+    // The setup path (a saved card, usually not yet charged — see the trial
+    // comment at the top of this file) keeps saying so; this branch did not
+    // touch it. The paid path gets its own key: by the time this catch can
+    // run, the PaymentIntent above has already succeeded, so "nothing was
+    // charged" is no longer true and must never be shown to someone who has,
+    // in fact, just paid.
+    return { ok: false, error: paid ? "grant_failed" : "charge_failed" };
   }
 
   // The bump the buyer ticked, whose money is already in the intent above.

@@ -592,7 +592,25 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       bumpAmountCents: bumpNowCents > 0 ? String(bumpNowCents) : "",
       // Already paid for in THIS intent, so fulfilment grants it without
       // charging again. Written by us, read by us.
-      bumpPrepaid: bumpNowCents > 0 ? "true" : "",
+      //
+      // Keyed on billingType, NOT on bumpNowCents > 0 — bumpNowCents is also 0
+      // for a FREE one-time bump (nothing left to charge, but it IS fully
+      // covered by this intent) and for a RECURRING one (nothing due today,
+      // but it still needs its own subscription). Amount alone cannot tell
+      // those apart; a free one-time bump read as not-prepaid took the
+      // off_session, confirm: true path fulfilOffer falls through to below —
+      // the exact India refusal this branch exists to delete.
+      //
+      // The offer checkout's own version of this line (offer-checkout.ts,
+      // startOfferCheckout) is correctly just `bumpOffer ? "true" : ""` —
+      // DO NOT "harmonise" the two. There, bumpOffer is never set unless it
+      // resolved one-time (startOfferCheckout refuses the pairing outright
+      // for a recurring bump), so the billingType check would be redundant.
+      // Here, createCheckoutIntent places no such restriction — a product may
+      // pair its bump slot with a recurring offer — so bumpOffer can genuinely
+      // be recurring, and marking THAT prepaid would stop its subscription
+      // ever being created.
+      bumpPrepaid: bumpOffer && bumpOffer.billingType === "one_time" ? "true" : "",
       taxCalculationId: tax.calculationId ?? "",
       newAccount,
     },
@@ -878,6 +896,20 @@ export async function fulfilBump(args: {
   // creation and confirmation. Returning rather than throwing — there is
   // nothing here for a retry to fix.
   if (!offer?.active) return;
+
+  // fulfilOffer has its own prepaid/recurring guard a few lines up in this
+  // file — but that guard never runs for a prepaid bump, because the branch
+  // right below skips calling fulfilOffer AT ALL when prepaid is set. "One
+  // guard covers every prepaid caller" was true of every other caller, not
+  // this one. Reachable with no code bug: a bump ticked while its host offer
+  // priced it one-time, whose own first live price flips to recurring before
+  // this runs (the same admin-archives-mid-checkout race fulfilOffer's guard
+  // exists for) would otherwise be granted here with no subscription ever
+  // created and no charge ever taken — free access, indefinitely. Refusing
+  // beats silently dropping.
+  if (args.prepaid && offer.billingType !== "one_time") {
+    throw new Error("fulfilBump: prepaid is only valid for a one-time offer, not a recurring one");
+  }
 
   // Prepaid takes no money and creates no subscription: a one-time bump paid
   // for in the order's own PaymentIntent is already settled, and the only work

@@ -163,8 +163,9 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     if (v.bumpOfferId !== current?.bumpOfferId) {
       const bump = await getOffer(v.bumpOfferId);
       const problem = bumpSlotError(
-        bump ? { id: bump.id, billingType: bump.billingType, active: bump.active } : null,
+        bump ? { id: bump.id, billingType: bump.billingType, active: bump.active, currency: bump.currency } : null,
         v.id ?? "",
+        v.currency,
       );
       if (!bump) return { error: "That bump offer no longer exists." };
       if (problem) return { error: problem };

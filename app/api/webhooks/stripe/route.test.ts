@@ -33,7 +33,12 @@ vi.mock("@/lib/checkout", async (orig) => ({
   finalizeOrder,
 }));
 
-const completeOfferCheckout = vi.fn(async () => ({ ok: true }) as const);
+// Typed as the real completeOfferCheckout's return shape (not narrowed via
+// `as const`) — the redelivery tests below need to hand back `{ ok: false,
+// error }` from individual cases via mockResolvedValueOnce.
+const completeOfferCheckout = vi.fn(
+  async (): Promise<{ ok: true } | { ok: false; error: string }> => ({ ok: true }),
+);
 vi.mock("@/lib/offer-checkout", async (orig) => ({
   ...(await orig<typeof import("@/lib/offer-checkout")>()),
   completeOfferCheckout,
@@ -86,5 +91,65 @@ describe("payment_intent.succeeded routing", () => {
     await post();
     expect(finalizeOrder).toHaveBeenCalledWith("pi_product_1");
     expect(completeOfferCheckout).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Whether a failed completeOfferCheckout gets Stripe to redeliver.
+ *
+ * The webhook is the only server-side backstop for a buyer who closed the tab
+ * after confirming — see the routing describe above. That backstop is no use
+ * if a failure it CAN heal on a second pass returns 200 anyway: Stripe only
+ * retries a webhook that did not answer with a 2xx, so a swallowed failure
+ * here means money taken, no order, no ownership, and nothing that ever tries
+ * again. Equally, throwing on a PERMANENT failure (an inactive offer, a
+ * foreign intent's metadata) would have Stripe hammer this endpoint for up to
+ * three days over something no redelivery can ever fix.
+ */
+describe("payment_intent.succeeded / an offer failure that can heal on retry", () => {
+  beforeEach(() => {
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+    finalizeOrder.mockClear();
+    completeOfferCheckout.mockClear();
+  });
+
+  afterAll(() => {
+    if (ORIGINAL_SECRET === undefined) delete process.env.STRIPE_WEBHOOK_SECRET;
+    else process.env.STRIPE_WEBHOOK_SECRET = ORIGINAL_SECRET;
+  });
+
+  it.each(["order_failed", "grant_failed"])(
+    "throws so Stripe redelivers when completeOfferCheckout returns %s",
+    async (error) => {
+      fakeEvent = {
+        type: "payment_intent.succeeded",
+        data: { object: { id: "pi_offer_retryable", metadata: { offerId: "offer_1" } } },
+      };
+      completeOfferCheckout.mockResolvedValueOnce({ ok: false, error });
+      await expect(post()).rejects.toThrow();
+    },
+  );
+
+  it.each(["unavailable", "unknown_intent_metadata"])(
+    "answers 200 (no redelivery) when completeOfferCheckout returns the permanent failure %s",
+    async (error) => {
+      fakeEvent = {
+        type: "payment_intent.succeeded",
+        data: { object: { id: "pi_offer_permanent", metadata: { offerId: "offer_1" } } },
+      };
+      completeOfferCheckout.mockResolvedValueOnce({ ok: false, error });
+      const res = await post();
+      expect(res.status).toBe(200);
+    },
+  );
+
+  it("answers 200 on success, same as always", async () => {
+    fakeEvent = {
+      type: "payment_intent.succeeded",
+      data: { object: { id: "pi_offer_ok", metadata: { offerId: "offer_1" } } },
+    };
+    completeOfferCheckout.mockResolvedValueOnce({ ok: true });
+    const res = await post();
+    expect(res.status).toBe(200);
   });
 });

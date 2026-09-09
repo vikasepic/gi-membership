@@ -363,7 +363,11 @@ describe.skipIf(!canRun)("completeOfferCheckout's claim on a race (0070)", () =>
     // since every real ownership/product fixture in this file satisfies its
     // own foreign keys by construction.
     grantOfferOwnershipShouldThrow.add(userId);
-    expect(await completeOfferCheckout(piId)).toEqual({ ok: false, error: "charge_failed" });
+    // grant_failed, not charge_failed: the PaymentIntent above has already
+    // succeeded by the time this call is made, so "nothing was charged" would
+    // be false. charge_failed keeps that meaning for the setup/off-session
+    // paths that never take this branch — see lib/offer-checkout.ts.
+    expect(await completeOfferCheckout(piId)).toEqual({ ok: false, error: "grant_failed" });
 
     const { data: firstPass } = await db.from("orders").select("id, status").eq("user_id", userId);
     expect(firstPass).toHaveLength(1);
