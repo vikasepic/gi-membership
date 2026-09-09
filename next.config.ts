@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { execSync } from "node:child_process";
+import { join } from "node:path";
 
 /** A string unique to this build: the short commit if git can say, else the time. */
 function buildStamp(): string {
@@ -47,6 +48,25 @@ const nextConfig: NextConfig = {
   deploymentId: process.env.SOURCE_COMMIT || buildStamp(),
   reactStrictMode: true,
   poweredByHeader: false,
+  /**
+   * This repo is worked from more than one `git worktree` at a time, and
+   * each one keeps its own `node_modules` as a symlink into the primary
+   * checkout rather than a real install per worktree. Turbopack refuses to
+   * resolve packages through a symlink that points outside whatever
+   * directory it auto-detects as the project root —
+   * "Symlink [project]/node_modules is invalid, it points out of the
+   * filesystem root" — because its root detection stops at the nearest
+   * lockfile, which every worktree has its own copy of.
+   *
+   * The parent directory holds every worktree, so it is the smallest root
+   * that still contains both this project and the real `node_modules` its
+   * symlink points to — exactly what the Turbopack docs prescribe for a
+   * linked dependency outside the project root. In the Docker image this
+   * repo actually deploys from there is no symlink and no sibling worktree,
+   * so this only ever widens an otherwise-correct boundary by one level; it
+   * changes nothing about what gets bundled.
+   */
+  turbopack: { root: join(__dirname, "..") },
   experimental: {
     // Uploads go through server actions, and Next caps a server action body at
     // 1MB by default. That cap rejects the request BEFORE the action runs, so
