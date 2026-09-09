@@ -14,7 +14,13 @@ import {
   rangeOf,
   type FunnelOwner,
 } from "@/lib/traffic-funnel";
-import { overviewFilterFrom, overviewRows, applyOverview, sourcesIn } from "@/lib/traffic-overview";
+import {
+  overviewFilterFrom,
+  overviewRows,
+  applyOverview,
+  sourcesIn,
+  type LinkFilter,
+} from "@/lib/traffic-overview";
 import { PresetTabs } from "@/components/admin/traffic-funnel";
 import { TrafficOverview } from "@/components/admin/traffic-overview";
 import { CoverageNote } from "@/components/admin/traffic-table";
@@ -56,6 +62,9 @@ export default async function AdminTrafficPage({
   const view = buildFunnels(counts, boughtRows, owners, days);
 
   const filter = overviewFilterFrom(params);
+  // Carries the preset alongside the rest of the filter so PresetTabs and
+  // TrafficOverview build every link from one shared shape.
+  const linkFilter: LinkFilter = { ...filter, preset };
   const rows = overviewRows(view);
   // The select's options always come from the WHOLE window: deriving them
   // from a source-narrowed set of rows would leave the chosen source as the
@@ -90,7 +99,7 @@ export default async function AdminTrafficPage({
             and GA4 never see. Expect it to read higher than theirs.
           </p>
         </div>
-        <PresetTabs preset={preset} />
+        <PresetTabs filter={linkFilter} />
       </div>
 
       {/*
@@ -119,7 +128,7 @@ export default async function AdminTrafficPage({
             conversion rate.
           </p>
           <CoverageNote counted={view.counted} consented={consented} />
-          <TrafficOverview rows={shown} filter={{ ...filter, preset }} sources={sources} />
+          <TrafficOverview rows={shown} filter={linkFilter} sources={sources} />
         </>
       )}
     </div>

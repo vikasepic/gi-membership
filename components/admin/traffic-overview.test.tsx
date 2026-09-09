@@ -67,9 +67,16 @@ describe("the traffic table", () => {
     expect(rows[1].querySelector("td span")!.textContent).toBe("/");
   });
 
-  it("drills into a funnel and leaves a plain page unlinked", () => {
-    mount();
-    expect(hrefs()).toContain("/admin/traffic/book-writer");
+  it("drills into a funnel, carrying the state, and leaves a plain page unlinked", () => {
+    // I1: the row link used to drop the query string entirely — reading a
+    // 7-day, offers-only table and clicking through landed on an unfiltered
+    // 30-day funnel with nothing on the destination saying the window
+    // changed. `mount()` with no overrides can't catch that: every field is
+    // already at its default, so the link is `/admin/traffic/book-writer`
+    // either way. Non-default state is what makes this assertion able to
+    // fail.
+    mount({ preset: "7", kind: "offer" });
+    expect(hrefs()).toContain("/admin/traffic/book-writer?preset=7&kind=offer");
     expect(hrefs().some((h) => h.startsWith("/admin/traffic/") && h.endsWith("/"))).toBe(false);
   });
 
@@ -88,6 +95,11 @@ describe("the traffic table", () => {
       expect(h).toContain("preset=7");
       expect(h).toContain("kind=offer");
     }
+    // The row link carries the same state, even though it never sorts —
+    // filtering on `sort=` is how the loop above finds the header links, and
+    // that filter would silently skip the row link forever if it were the
+    // only check in this file.
+    expect(hrefs()).toContain("/admin/traffic/book-writer?preset=7&kind=offer");
   });
 
   it("flips the direction of the column already sorted", () => {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { formatCount } from "@/lib/traffic-funnel";
 import { Sparkline } from "@/components/admin/traffic-funnel";
-import type { OverviewFilter, OverviewRow, Sort } from "@/lib/traffic-overview";
+import { trafficUrl, type LinkFilter, type OverviewRow, type Sort } from "@/lib/traffic-overview";
 
 const STEP_AT = ["the sales page", "the checkout", "the upsell", "the sale"];
 
@@ -22,23 +22,6 @@ const KINDS = [
   { key: "other", label: "Other" },
 ] as const;
 
-type LinkFilter = OverviewFilter & { preset: string };
-
-/** Every link keeps the whole state: dropping the preset would silently change
- *  the window under the numbers being sorted. */
-function href(filter: LinkFilter, over: Partial<OverviewFilter>): string {
-  const f = { ...filter, ...over };
-  const q = new URLSearchParams();
-  if (f.preset && f.preset !== "30") q.set("preset", f.preset);
-  if (f.kind !== "all") q.set("kind", f.kind);
-  if (f.source) q.set("source", f.source);
-  if (f.q) q.set("q", f.q);
-  if (f.sort !== "views") q.set("sort", f.sort);
-  if (f.dir !== "desc") q.set("dir", f.dir);
-  const s = q.toString();
-  return s ? `/admin/traffic?${s}` : "/admin/traffic";
-}
-
 export function TrafficOverview({
   rows,
   filter,
@@ -55,7 +38,7 @@ export function TrafficOverview({
         {KINDS.map((k) => (
           <Link
             key={k.key}
-            href={href(filter, { kind: k.key })}
+            href={trafficUrl("/admin/traffic", filter, { kind: k.key })}
             aria-current={filter.kind === k.key ? "page" : undefined}
             className={`rounded-full border px-3 py-1 text-xs transition-colors ${
               filter.kind === k.key
@@ -123,7 +106,7 @@ export function TrafficOverview({
                 return (
                   <th key={c.key} className={`px-4 py-3 font-medium ${c.right ? "text-right" : ""}`}>
                     <Link
-                      href={href(filter, { sort: c.key, dir })}
+                      href={trafficUrl("/admin/traffic", filter, { sort: c.key, dir })}
                       aria-current={active ? "page" : undefined}
                       className={active ? "text-fg" : "hover:text-fg"}
                     >
@@ -141,7 +124,13 @@ export function TrafficOverview({
               <tr key={r.path} className="border-b border-border/60 last:border-b-0">
                 <td className="px-4 py-3">
                   {r.key ? (
-                    <Link href={`/admin/traffic/${r.key}`} className="font-medium hover:underline">
+                    // Carries the whole state, same as every other link here:
+                    // a row clicked from a 7-day, offers-only, drop-sorted
+                    // table must not land on an unfiltered 30-day funnel.
+                    <Link
+                      href={trafficUrl(`/admin/traffic/${r.key}`, filter)}
+                      className="font-medium hover:underline"
+                    >
                       {r.title}
                     </Link>
                   ) : (

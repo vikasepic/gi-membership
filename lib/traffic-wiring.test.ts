@@ -76,14 +76,12 @@ describe("an offer's funnel is counted at every step", () => {
     expect(hit).toBeGreaterThan(bounce);
   });
 
-  it("files an offer-originated upsell view under the host offer", () => {
-    // recordOtoPageHit resolves the order's BASE PRODUCT. An offer order has
-    // none, so the hit was written with an empty product and belonged to no
-    // funnel at all — 24 such rows in production on 9 Sep 2026.
-    const src = readFileSync("lib/traffic.ts", "utf8");
-    expect(src).toContain("host_offer_id");
-    expect(src).toMatch(/orderFunnelKey|hostOfferKey/);
-  });
+  // The behavioural version of "files an offer-originated upsell view under
+  // the host offer" lives in lib/traffic.integration.test.ts, against a real
+  // order and a real page_counts row. A source-reading version of that
+  // assertion could only ever check that `host_offer_id` and
+  // `orderFunnelKey` appear somewhere in the file — both also appear in
+  // paidByOffer, so it would keep passing with the fallback deleted.
 });
 
 describe("the overview's source filter recomputes the funnels, it does not hide rows", () => {

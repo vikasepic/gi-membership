@@ -30,10 +30,18 @@ describe("the drill-in page", () => {
     expect(src).toContain("FunnelCard");
   });
 
-  it("keeps the window on the way back", () => {
-    // Landing back on a 30-day table after drilling in from a 7-day one is
-    // the kind of quiet lie this whole screen is meant to stop telling.
-    expect(src).toMatch(/href=\{`\/admin\/traffic\$\{|\/admin\/traffic\?preset=/);
+  it("keeps the window AND the filters on the way back", () => {
+    // Landing back on a 30-day table after drilling in from a 7-day,
+    // offers-only, drop-sorted one is the kind of quiet lie this whole
+    // screen is meant to stop telling. The old assertion here matched the
+    // substring `/admin/traffic?preset=` anywhere in the file, which stayed
+    // true of a back link rebuilt from `preset` alone — dropping sort, dir,
+    // kind, source and q — so it passed on exactly the bug it existed to
+    // catch. `overviewFilterFrom(sp)` is what makes this version able to
+    // fail: a back link built from `preset` by itself, or from anything but
+    // the request's own searchParams, does not call it.
+    expect(src).toContain("overviewFilterFrom(sp)");
+    expect(src).toMatch(/trafficUrl\(\s*"\/admin\/traffic"/);
   });
 
   it("is dynamic, like every other admin page that reads live counts", () => {

@@ -31,6 +31,11 @@ export type Kind = "all" | "product" | "offer" | "other";
 
 export type OverviewFilter = { kind: Kind; source: string; q: string; sort: Sort; dir: Dir };
 
+/** The filter plus the preset, which is read and whitelisted separately (`presetFrom`, in
+ *  `lib/traffic-funnel.ts`) but has to ride along on every link this screen and its
+ *  drill-in build. */
+export type LinkFilter = OverviewFilter & { preset: string };
+
 const SORTS: readonly Sort[] = ["page", "views", "checkout", "upsell", "bought", "drop", "source"];
 const KINDS: readonly Kind[] = ["all", "product", "offer", "other"];
 
@@ -58,6 +63,33 @@ export function overviewFilterFrom(
     sort: SORTS.includes(sort as Sort) ? (sort as Sort) : "views",
     dir: dir === "asc" ? "asc" : "desc",
   };
+}
+
+/**
+ * A traffic URL for `path`, from the full filter state plus an override.
+ *
+ * Every link on this screen and its drill-in keeps the whole state: dropping
+ * even the preset would silently change the window under the numbers being
+ * sorted, and dropping a filter would silently change what a sorted link is
+ * sorting. One helper, used by the table's row links, its own sort and kind
+ * links, the preset tabs, and the drill-in's back link, so each cannot forget
+ * a different field the way three of them once did.
+ *
+ * `path` is a parameter rather than a constant because the row link points at
+ * `/admin/traffic/<key>`, not `/admin/traffic` — the only thing every caller
+ * shares is the query string, not the base.
+ */
+export function trafficUrl(path: string, filter: LinkFilter, over: Partial<LinkFilter> = {}): string {
+  const f = { ...filter, ...over };
+  const q = new URLSearchParams();
+  if (f.preset && f.preset !== "30") q.set("preset", f.preset);
+  if (f.kind !== "all") q.set("kind", f.kind);
+  if (f.source) q.set("source", f.source);
+  if (f.q) q.set("q", f.q);
+  if (f.sort !== "views") q.set("sort", f.sort);
+  if (f.dir !== "desc") q.set("dir", f.dir);
+  const s = q.toString();
+  return s ? `${path}?${s}` : path;
 }
 
 const pathOf = (kind: "product" | "offer", key: string) =>

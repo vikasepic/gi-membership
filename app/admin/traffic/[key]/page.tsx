@@ -15,6 +15,7 @@ import {
   rangeOf,
   type FunnelOwner,
 } from "@/lib/traffic-funnel";
+import { overviewFilterFrom, trafficUrl } from "@/lib/traffic-overview";
 import { FunnelCard } from "@/components/admin/traffic-funnel";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +64,13 @@ export default async function TrafficFunnelPage({
   const funnel = view.funnels.find((f) => f.key === key);
   if (!funnel) notFound();
 
-  const back = preset === "30" ? "/admin/traffic" : `/admin/traffic?preset=${preset}`;
+  // The full incoming state, not just the preset the range needed: the old
+  // version rebuilt this link from `preset` alone and silently dropped sort,
+  // dir, kind, source and q on the way back — a filtered, sorted table
+  // reverted to its defaults the moment somebody drilled into one row and
+  // clicked back. `sp` is the request's own searchParams, whitelisted the
+  // same way the overview reads them, never rebuilt from one field.
+  const back = trafficUrl("/admin/traffic", { ...overviewFilterFrom(sp), preset });
 
   return (
     <div className="flex flex-col gap-6 py-4">

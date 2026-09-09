@@ -1,12 +1,15 @@
 import Link from "next/link";
-import { formatCount as n, sparklinePath, type DayPoint, type Funnel, PRESETS, type Preset } from "@/lib/traffic-funnel";
+import { formatCount as n, sparklinePath, type DayPoint, type Funnel, PRESETS } from "@/lib/traffic-funnel";
+import { trafficUrl, type LinkFilter } from "@/lib/traffic-overview";
 
 /**
  * The traffic page's furniture.
  *
- * Types and arithmetic come from `lib/traffic-funnel.ts`, never from
- * `lib/traffic.ts` — that one starts with `import "server-only"` and a jsdom
- * component test that reaches it throws.
+ * Types and arithmetic come from `lib/traffic-funnel.ts`, and link-building
+ * from `lib/traffic-overview.ts` — never from `lib/traffic.ts`, which starts
+ * with `import "server-only"` and a jsdom component test that reaches it
+ * throws. Neither of the other two carries that import, which is why
+ * `PresetTabs` can build a URL through the same `trafficUrl` the table uses.
  *
  * Everything here is a server component. No `"use client"`, no chart library:
  * the only chart is a polyline whose geometry `sparklinePath` computes.
@@ -187,17 +190,24 @@ function Drop({ from, to, share }: { from: number; to: number; share: boolean })
  *
  * Links and not buttons: the range lives in the URL, so a view can be sent to
  * somebody, kept in a tab, and walked back with the back button.
+ *
+ * Takes the whole filter, not just the preset it switches: a tab that only
+ * knew the preset had to build its `href` from that one field, which is
+ * exactly what silently cleared the sort, the type chip, the source filter
+ * and the search box on every window change — this is the page's most-used
+ * control, so that was the most-hit version of the bug `trafficUrl` exists to
+ * close.
  */
-export function PresetTabs({ preset }: { preset: Preset }) {
+export function PresetTabs({ filter }: { filter: LinkFilter }) {
   return (
     <nav aria-label="Date range" className="flex flex-wrap items-center gap-2">
       {PRESETS.map((p) => (
         <Link
           key={p.key}
-          href={p.key === "30" ? "/admin/traffic" : `/admin/traffic?preset=${p.key}`}
-          aria-current={p.key === preset ? "page" : undefined}
+          href={trafficUrl("/admin/traffic", filter, { preset: p.key })}
+          aria-current={p.key === filter.preset ? "page" : undefined}
           className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-            p.key === preset
+            p.key === filter.preset
               ? "border-primary bg-primary/10 font-medium text-primary"
               : "border-border text-muted hover:border-fg hover:text-fg"
           }`}

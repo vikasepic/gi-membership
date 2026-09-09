@@ -93,10 +93,26 @@ describe("the sparkline", () => {
 });
 
 describe("the range control", () => {
+  const FILTER = { kind: "all" as const, source: "", q: "", sort: "views" as const, dir: "desc" as const, preset: "30" };
+
   it("offers each preset as a link so a view can be sent to somebody", () => {
-    const html = renderToStaticMarkup(<PresetTabs preset="30" />);
+    const html = renderToStaticMarkup(<PresetTabs filter={FILTER} />);
     expect(html).toContain("/admin/traffic?preset=7");
     expect(html).toContain("/admin/traffic?preset=90");
     expect(html).toContain("href");
+  });
+
+  it("keeps the rest of the filter when switching windows", () => {
+    // I3: PresetTabs used to build its href from the preset alone, so
+    // switching 30 days -> 7 days silently cleared the sort, the type chip,
+    // the source filter and the search box — on the page's most-used
+    // control, resetting the rest of the screen's state on every click.
+    const html = renderToStaticMarkup(
+      <PresetTabs filter={{ ...FILTER, kind: "offer", sort: "drop", dir: "asc" }} />,
+    );
+    expect(html).toContain("preset=7");
+    expect(html).toContain("kind=offer");
+    expect(html).toContain("sort=drop");
+    expect(html).toContain("dir=asc");
   });
 });

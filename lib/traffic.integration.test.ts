@@ -1,9 +1,30 @@
-import { describe, it, expect, beforeEach, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
-import { bumpPageCountOrThrow, pageCountsSince, paidByProduct, paidByOffer, productNames, todayUtc } from "@/lib/traffic";
+import {
+  bumpPageCountOrThrow,
+  pageCountsSince,
+  paidByProduct,
+  paidByOffer,
+  productNames,
+  recordOtoPageHit,
+  todayUtc,
+} from "@/lib/traffic";
 import { rangeOf } from "@/lib/traffic-funnel";
+
+// recordOtoPageHit -> recordPageHit reads next/headers, which throws outside
+// a real request ("headers was called outside a request scope") — why every
+// OTHER test in this file calls bumpPageCountOrThrow directly instead. This
+// one has to go through recordOtoPageHit itself, since that is where the
+// host-offer fallback under test lives, so it feeds headers() a fixture.
+// cookies() — used by lib/supabase/server.ts's createClient, never by the
+// createServiceClient this file uses — passes through the real module
+// untouched.
+vi.mock("next/headers", async (orig) => ({
+  ...(await orig<typeof import("next/headers")>()),
+  headers: async () => new Headers({ "user-agent": "Mozilla/5.0 (vitest fixture)" }),
+}));
 
 const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -203,6 +224,25 @@ describe.skipIf(!canRun)("what an offer sold (integration)", () => {
     for (const id of made.orders) await db.from("orders").delete().eq("id", id);
     if (made.userId) await db.from("users").delete().eq("id", made.userId);
     if (made.offerId) await db.from("offers").delete().eq("id", made.offerId);
+    // recordOtoPageHit's own row, filed under this fixture's zz- key — no
+    // other suite could produce one.
+    await db.from("page_counts").delete().eq("product", KEY);
+  });
+
+  it("files an offer-originated upsell view under the host offer, not an empty product", async () => {
+    // T1: orderFunnelKey resolves the order's BASE PRODUCT first. This order
+    // has no such order_items row, so before the host_offer_id fallback
+    // existed the hit was written with product "" and belonged to no funnel
+    // at all — 24 such rows were sitting in production on 9 Sep 2026. A
+    // source-reading test could only check that `host_offer_id` and
+    // `orderFunnelKey` appear somewhere in lib/traffic.ts, and both still
+    // would with the fallback deleted, because paidByOffer also names them.
+    // This calls the real function against the real database instead.
+    await recordOtoPageHit(made.orders[0]);
+    const today = todayUtc();
+    const rows = await pageCountsSince({ start: today, end: today });
+    const row = rows.find((r) => r.path === "/checkout/oto" && r.product === KEY);
+    expect(row?.hits).toBeGreaterThan(0);
   });
 
   it("counts an offer's own sales, once per order, live mode only", async () => {
