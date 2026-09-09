@@ -1,6 +1,6 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
-import { BUILD_MODEL, anthropic, anthropicConfigured, anthropicErrorCode } from "@/lib/anthropic";
+import { BUILD_MODEL, anthropicConfigured, anthropicErrorCode, anthropicFor } from "@/lib/anthropic";
 import { sseResponse, type Emit } from "./sse";
 import { stripDashes } from "./text";
 import { shapeText, transcriptText } from "./format";
@@ -15,6 +15,7 @@ import type { DocumentKind } from "./types";
 // runs as a long-lived Node process, so nothing here has a time limit but
 // the proxy in front of it.
 
+const APP = "micro-product-builder" as const;
 const KINDS: DocumentKind[] = ["guide", "pack"];
 const MAX_CONTINUATIONS = 2;
 
@@ -31,7 +32,7 @@ export async function buildDocument(input: {
 }): Promise<Response> {
   const { userId, sessionId, kind } = input;
   if (!sessionId) return json("bad_request", 400);
-  if (!anthropicConfigured()) return json("server_misconfigured", 500);
+  if (!anthropicConfigured(APP)) return json("server_misconfigured", 500);
 
   const session = await loadOwnedSession(sessionId, userId);
   if (!session) return json("not_found", 404);
@@ -61,7 +62,7 @@ export async function buildDocument(input: {
 
     try {
       for (let round = 0; round <= MAX_CONTINUATIONS; round++) {
-        const stream = anthropic().messages.stream({
+        const stream = anthropicFor(APP).messages.stream({
           model: BUILD_MODEL,
           max_tokens: 96000,
           output_config: { effort: "high" },

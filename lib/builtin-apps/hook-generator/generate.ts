@@ -1,7 +1,7 @@
 import "server-only";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import { COACH_MODEL, anthropic, anthropicConfigured, anthropicErrorCode } from "@/lib/anthropic";
+import { HOOK_MODEL, anthropicConfigured, anthropicErrorCode, anthropicFor } from "@/lib/anthropic";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { HOOK_SYSTEM_PROMPT } from "./prompt";
@@ -10,6 +10,7 @@ import type { GenerationRecord, GenerationResult, HookFormat } from "./types";
 // One generation: the post idea goes to the model with a structured output
 // schema, six hooks come back, and the result is kept as history.
 
+const APP = "hook-generator" as const;
 export const POST_IDEA_MAX = 1500;
 const FIELD_MAX = 200;
 
@@ -82,12 +83,12 @@ export type GenerateOutcome =
   | { ok: false; error: string; status: number };
 
 export async function generateHooks(userId: string, input: GenerateInput): Promise<GenerateOutcome> {
-  if (!anthropicConfigured()) return { ok: false, error: "server_misconfigured", status: 500 };
+  if (!anthropicConfigured(APP)) return { ok: false, error: "server_misconfigured", status: 500 };
 
   let result: GenerationResult | null = null;
   try {
-    const response = await anthropic().messages.parse({
-      model: COACH_MODEL,
+    const response = await anthropicFor(APP).messages.parse({
+      model: HOOK_MODEL,
       max_tokens: 16000,
       output_config: { effort: "low", format: zodOutputFormat(HooksOutput) },
       system: HOOK_SYSTEM_PROMPT,

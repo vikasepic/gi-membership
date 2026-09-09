@@ -1,7 +1,7 @@
 import "server-only";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
-import { COACH_MODEL, anthropic } from "@/lib/anthropic";
+import { COACH_MODEL, anthropicFor } from "@/lib/anthropic";
 import { transcriptText } from "./format";
 import type { Stage } from "./stages";
 import type { MessageRecord, Shape } from "./types";
@@ -11,6 +11,7 @@ import type { MessageRecord, Shape } from "./types";
 // when the coach forgot its stage marker, in which case the extraction's
 // reading of the current step stands in for it.
 
+const APP = "micro-product-builder" as const;
 const Str = z.string();
 const ShapeSchema = z.object({
   narrow: z
@@ -80,7 +81,7 @@ export async function extractShape(
   messages: MessageRecord[],
 ): Promise<{ shape: Shape; currentStage: Stage } | null> {
   try {
-    const response = await anthropic().messages.parse({
+    const response = await anthropicFor(APP).messages.parse({
       model: COACH_MODEL,
       max_tokens: 8000,
       output_config: {

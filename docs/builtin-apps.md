@@ -42,7 +42,7 @@ app/(apps)/builtin-apps.css                    chat, document and print styles, 
 app/(apps)/apps/<key>/                         the app's pages, behind requireInternalApp
 app/api/product-builder/{sessions,coach,build} the Product Builder's routes
 app/api/hook-generator/generate                the Hook Generator's route
-lib/anthropic.ts                               one model client, Claude Sonnet 5
+lib/anthropic.ts                               one model client per app, each on its own key
 lib/builtin-apps/access.ts                     who may use an internal app
 lib/builtin-apps/registry.ts                   which keys this build implements
 lib/builtin-apps/product-builder/              prompts, stages, coach turn, build, sessions
@@ -64,11 +64,17 @@ Two rules, both because the store runs in the same process:
 
 ## Environment
 
+Each app bills to its own Anthropic account, so each has its own key. There
+is no shared fallback on purpose: a missing key fails that app's requests with
+a message naming the variable, rather than quietly charging the other app's
+account. `lib/anthropic.ts` is the only place the names are read.
+
 | Variable | Where | Note |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Coolify runtime environment | The only new secret. Every model call in both apps. |
-| `ANTHROPIC_WORKSPACE_ID` | optional | Only for identity-linked keys. |
-| `COACH_MODEL`, `BUILD_MODEL` | optional | Default `claude-sonnet-5`. |
+| `ANTHROPIC_API_KEY_PRODUCT_BUILDER` | Coolify runtime environment | Every model call in Micro-Product Builder: coach, shape extraction, build. |
+| `ANTHROPIC_API_KEY_HOOK_GENERATOR` | Coolify runtime environment | Every model call in the Viral Hook Generator. |
+| `ANTHROPIC_WORKSPACE_ID_PRODUCT_BUILDER`, `ANTHROPIC_WORKSPACE_ID_HOOK_GENERATOR` | optional | Only for identity-linked keys. |
+| `COACH_MODEL`, `BUILD_MODEL`, `HOOK_MODEL` | optional | Default `claude-sonnet-5`. |
 
 Nothing public, nothing at build time.
 
@@ -76,7 +82,7 @@ Nothing public, nothing at build time.
 
 1. **Apply 0074 and 0075** to production by hand, like every migration. 0074
    inserts the two internal rows, active, for every store.
-2. **Set `ANTHROPIC_API_KEY`** in Coolify and redeploy.
+2. **Set both keys** (`ANTHROPIC_API_KEY_PRODUCT_BUILDER`, `ANTHROPIC_API_KEY_HOOK_GENERATOR`) in Coolify and redeploy.
 3. **Prove a full build survives the proxy.** A guide build streams for 4 to 6
    minutes. Node has no limit; the reverse proxy in front of the container has
    a response timeout that is not visible from this repo. Grant yourself the

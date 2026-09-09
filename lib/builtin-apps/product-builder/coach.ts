@@ -1,6 +1,6 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
-import { COACH_MODEL, anthropic, anthropicConfigured, anthropicErrorCode } from "@/lib/anthropic";
+import { COACH_MODEL, anthropicConfigured, anthropicErrorCode, anthropicFor } from "@/lib/anthropic";
 import { sseResponse, type Emit } from "./sse";
 import { stripDashes } from "./text";
 import { extractShape } from "./shape";
@@ -34,6 +34,7 @@ import type { MessageRecord } from "./types";
 export const KICKOFF =
   '(The session has just started. Give me your opening, exactly as described under "To start".)';
 
+const APP = "micro-product-builder" as const;
 const STAGE_MARKER = /^\s*<<\s*stage\s*:\s*([A-Z]+)\s*>>[ \t]*\r?\n?/;
 
 /**
@@ -140,7 +141,7 @@ export async function coachTurn(input: CoachInput): Promise<Response> {
 
   if (!sessionId) return json("session_id is required", 400);
   if (typed.length > MAX_MESSAGE_CHARS) return json("message_too_long", 400);
-  if (!anthropicConfigured()) return json("server_misconfigured", 500);
+  if (!anthropicConfigured(APP)) return json("server_misconfigured", 500);
 
   const session = await loadOwnedSession(sessionId, userId);
   if (!session) return json("not_found", 404);
@@ -210,7 +211,7 @@ export async function coachTurn(input: CoachInput): Promise<Response> {
 
     let stopReason: string | null = null;
     try {
-      const stream = anthropic().messages.stream({
+      const stream = anthropicFor(APP).messages.stream({
         model: COACH_MODEL,
         max_tokens: 8000,
         output_config: { effort: "medium" },
