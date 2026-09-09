@@ -7,7 +7,7 @@ import { createServerClient } from "@supabase/ssr";
 // - Ensures a first-party anon id cookie so attribution can be captured on
 //   landing (events don't send until phase 6, but the id must exist now or
 //   early traffic is permanently unattributable).
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   // The path, forwarded to the server components. A layout cannot read the URL
   // any other way, and the store layout needs it to keep pasted snippets off

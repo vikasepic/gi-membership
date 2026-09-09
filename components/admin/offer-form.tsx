@@ -215,7 +215,9 @@ export function OfferForm({
             >
               <option value="">— none —</option>
               {apps.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
+                <option key={a.id} value={a.id}>
+                  {a.name} ({a.kind === "internal" ? "built in" : "connected"})
+                </option>
               ))}
             </select>
           </Field>

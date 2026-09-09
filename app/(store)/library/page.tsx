@@ -210,7 +210,7 @@ export default async function LibraryPage({
         <section className="flex flex-col gap-5">
           <div className="flex items-baseline justify-between border-b border-border pb-4">
             <h2 className="text-xl">Your apps</h2>
-            <span className="kicker text-muted">Included with your subscription</span>
+            <span className="kicker text-muted">Included with your purchase</span>
           </div>
           {/* The same grid and the same card shape as the courses above. An
               app is a thing they bought; a full-width bar under a wall of
@@ -274,12 +274,30 @@ export default async function LibraryPage({
                       {a.host && <span className="truncate text-xs text-muted">{a.host}</span>}
                     </div>
 
-                    <form action={openAppAction} className="mt-2 border-t border-border pt-3">
-                      <button className="text-sm font-medium text-primary hover:underline">
-                        Open the app &rarr;
-                      </button>
-                      <input type="hidden" name="appId" value={a.id} />
-                    </form>
+                    {/* An internal app is a page on this site: a link, and
+                        the session cookie does the rest. External apps go
+                        through the signed handoff as before. */}
+                    {a.kind === "internal" ? (
+                      a.route ? (
+                        <Link
+                          href={a.route}
+                          className="mt-2 border-t border-border pt-3 text-sm font-medium text-primary hover:underline"
+                        >
+                          Open &rarr;
+                        </Link>
+                      ) : (
+                        <span className="mt-2 border-t border-border pt-3 text-xs text-muted">
+                          Not available yet
+                        </span>
+                      )
+                    ) : (
+                      <form action={openAppAction} className="mt-2 border-t border-border pt-3">
+                        <button className="text-sm font-medium text-primary hover:underline">
+                          Open the app &rarr;
+                        </button>
+                        <input type="hidden" name="appId" value={a.id} />
+                      </form>
+                    )}
                   </div>
                 </div>
               );

@@ -55,7 +55,7 @@ describe("the funnel pages count their own views", () => {
     // not receive searchParams, so the header is the only way the source is
     // knowable. It would fail silently — the counts would look fine and every
     // ad click would be filed as direct traffic.
-    expect(readFileSync("middleware.ts", "utf8")).toContain(
+    expect(readFileSync("proxy.ts", "utf8")).toContain(
       'withPath.set("x-search", req.nextUrl.search.slice(0, 2048))',
     );
   });

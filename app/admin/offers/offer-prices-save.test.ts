@@ -16,6 +16,11 @@ const created = vi.fn(async (_input: unknown) => "new-id");
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({ redirect: () => {} }));
 vi.mock("@/lib/admin-guard", () => ({ requireAdmin: async () => {} }));
+// The form below always names an app, and saveOffer asks that app which
+// channels it has before saving — a real database read. Both channels the
+// store knows, so the filter it feeds is a no-op and the test stays about
+// what is SENT, not what the apps table holds.
+vi.mock("@/lib/apps", () => ({ appChannels: async () => ["instagram", "linkedin"] }));
 vi.mock("@/lib/admin", () => ({
   createOffer: (i: unknown) => created(i),
   updateOffer: (id: string, i: unknown) => updated(id, i),

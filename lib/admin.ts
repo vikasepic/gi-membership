@@ -274,6 +274,8 @@ export type AppOption = {
   id: string;
   key: string;
   name: string;
+  /** internal runs in this codebase; external is reached through the bridge. */
+  kind: "internal" | "external";
   /** What this app can grant inside itself. Empty means it has no channels. */
   channels: string[];
 };
@@ -311,7 +313,7 @@ export async function listAppOptions(): Promise<AppOption[]> {
   const db = createServiceClient();
   const { data, error } = await db
     .from("apps")
-    .select("id, key, name, channels")
+    .select("id, key, name, kind, channels")
     .eq("store_id", await getStoreId())
     .order("created_at", { ascending: true });
   if (error) throw new Error(`listAppOptions: ${error.message}`);

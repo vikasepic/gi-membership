@@ -94,7 +94,7 @@ describe("where they are checked", () => {
     // here. In middleware it would cost a settings read on every request to
     // every working page, to answer a question almost always answered "no".
     expect(src).toContain("matchRedirect");
-    const mw = readFileSync("middleware.ts", "utf8");
+    const mw = readFileSync("proxy.ts", "utf8");
     expect(mw).not.toContain("matchRedirect");
   });
 

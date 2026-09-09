@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 // remembering it on every page added under it.
 export const metadata = NOINDEX;
 
-// Admin access is gated in middleware.ts (ADMIN_EMAILS); mutating actions also
+// Admin access is gated in proxy.ts (ADMIN_EMAILS); mutating actions also
 // call requireAdmin() as defense in depth.
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const [counts, settings] = await Promise.all([navCounts(), getSettings()]);

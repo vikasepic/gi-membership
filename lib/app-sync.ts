@@ -278,7 +278,10 @@ export async function appForSecret(presented: string | null): Promise<AppRow | n
     // disagreed about what an app is.
     .select(APP_COLUMNS)
     .eq("store_id", await getStoreId())
-    .eq("active", true);
+    .eq("active", true)
+    // Internal apps have no secret, and a null must never match a presented
+    // header. They also never call this: they sell nothing on their own.
+    .eq("kind", "external");
 
   const a = Buffer.from(presented, "utf8");
   for (const row of data ?? []) {

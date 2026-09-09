@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { acceptStandingOffer } from "@/lib/checkout";
 import { setProductProgress, ownsProduct, subscribedToApp } from "@/lib/library";
-import { getAppById, buildHandoffUrl } from "@/lib/apps";
+import { getAppById, buildHandoffUrl, isInternalApp } from "@/lib/apps";
+import { builtinAppRoute } from "@/lib/builtin-apps/registry";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 
@@ -34,6 +35,9 @@ export async function openAppAction(formData: FormData) {
   if (!(await subscribedToApp(user.id, appId))) redirect("/library");
   const app = await getAppById(appId);
   if (!app) redirect("/library");
+  // An internal app has no handoff; the card links to it directly and never
+  // posts here. A request that does anyway goes to the same place.
+  if (isInternalApp(app)) redirect(builtinAppRoute(app.key) ?? "/library");
   // The name goes with them. Handoff is what creates the session in the app,
   // so for anyone who lands there before a provision call it is the only place
   // the app can learn what to call them.

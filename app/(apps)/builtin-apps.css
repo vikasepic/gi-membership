@@ -1,0 +1,206 @@
+/* Styles the built-in apps need beyond the store's utilities: the chat and
+   document panes, the coach's light markdown, the built guide rendered like a
+   printed page, and the print rules. Every colour and face comes from the
+   store's own variables, so an admin's brand changes reach these pages too.
+   Scoped under .builtin-app so nothing here touches the storefront. */
+
+.builtin-app .scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.builtin-app .scroll-thin::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--navy) 18%, transparent);
+  border-radius: 8px;
+}
+
+.builtin-app :focus-visible:not(.no-focus-ring) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@keyframes builtin-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.builtin-app .spinner {
+  animation: builtin-spin 800ms linear infinite;
+}
+
+@keyframes builtin-msg-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.builtin-app .msg-fade {
+  animation: builtin-msg-fade 400ms ease-out both;
+}
+
+@keyframes builtin-overlay-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes builtin-modal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.builtin-app .modal-overlay {
+  animation: builtin-overlay-fade 180ms ease-out both;
+}
+.builtin-app .modal-card {
+  animation: builtin-modal-pop 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Coach replies: light markdown (bold labels, numbered lists) */
+.builtin-app .prose-coach p {
+  margin: 0.45rem 0;
+}
+.builtin-app .prose-coach p:first-child {
+  margin-top: 0;
+}
+.builtin-app .prose-coach p:last-child {
+  margin-bottom: 0;
+}
+.builtin-app .prose-coach ol,
+.builtin-app .prose-coach ul {
+  margin: 0.45rem 0 0.45rem 1.35rem;
+}
+.builtin-app .prose-coach ol {
+  list-style: decimal;
+}
+.builtin-app .prose-coach ul {
+  list-style: disc;
+}
+.builtin-app .prose-coach li {
+  margin: 0.2rem 0;
+}
+.builtin-app .prose-coach strong {
+  font-weight: 600;
+  color: var(--navy);
+}
+
+/* The built guide, rendered like a printed page */
+.prose-guide {
+  font-size: 1.02rem;
+  line-height: 1.7;
+  color: var(--fg);
+}
+.prose-guide h1 {
+  font-family: var(--font-heading, var(--font-inter), system-ui, sans-serif);
+  font-size: 2.3rem;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  color: var(--navy);
+  margin: 0 0 1rem;
+}
+.prose-guide h2 {
+  font-family: var(--font-heading, var(--font-inter), system-ui, sans-serif);
+  font-size: 1.6rem;
+  line-height: 1.2;
+  color: var(--navy);
+  margin: 2.4rem 0 0.9rem;
+}
+.prose-guide h3 {
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--plum);
+  margin: 1.9rem 0 0.5rem;
+}
+.prose-guide h4 {
+  font-weight: 600;
+  margin: 1.4rem 0 0.4rem;
+}
+.prose-guide p {
+  margin: 0.8rem 0;
+}
+.prose-guide ol,
+.prose-guide ul {
+  margin: 0.8rem 0 0.8rem 1.5rem;
+}
+.prose-guide ol {
+  list-style: decimal;
+}
+.prose-guide ul {
+  list-style: disc;
+}
+.prose-guide li {
+  margin: 0.35rem 0;
+  padding-left: 0.2rem;
+}
+.prose-guide blockquote {
+  border-left: 3px solid color-mix(in srgb, var(--plum) 35%, transparent);
+  padding-left: 1rem;
+  margin: 1rem 0;
+  color: color-mix(in srgb, var(--fg) 75%, transparent);
+}
+.prose-guide hr {
+  border: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--navy) 25%, transparent);
+  margin: 2.6rem 0;
+}
+.prose-guide strong {
+  font-weight: 600;
+}
+.prose-guide em {
+  font-style: italic;
+}
+.prose-guide a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Print: only the document, page breaks at rules */
+@media print {
+  @page {
+    margin: 22mm 20mm;
+  }
+  body {
+    background: #fff !important;
+  }
+  .print-hide {
+    display: none !important;
+  }
+  .prose-guide {
+    font-size: 11pt;
+    line-height: 1.55;
+  }
+  .prose-guide h1 {
+    font-size: 26pt;
+  }
+  .prose-guide h2 {
+    font-size: 17pt;
+    break-after: avoid;
+  }
+  .prose-guide h3 {
+    break-after: avoid;
+  }
+  .prose-guide hr {
+    border: 0;
+    margin: 0;
+    break-after: page;
+    page-break-after: always;
+  }
+  .prose-guide p,
+  .prose-guide li {
+    orphans: 3;
+    widows: 3;
+  }
+}

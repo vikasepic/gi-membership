@@ -1,5 +1,10 @@
 # Connecting a new app — the runbook
 
+> This is for an app that runs **elsewhere** and is reached through the HTTP
+> bridge. An app that runs inside this codebase is a built-in app: see
+> [`builtin-apps.md`](./builtin-apps.md). Both kinds share the `apps` table,
+> told apart by `apps.kind`.
+
 The repeatable sequence for wiring a new connected app to the store. Followed
 for Content Engine and the Funnel App; follow it again rather than reinventing
 the order.
