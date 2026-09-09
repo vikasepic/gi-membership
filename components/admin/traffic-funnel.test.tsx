@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { FunnelCard, Sparkline, RangeTabs, OtherPages } from "@/components/admin/traffic-funnel";
+import { FunnelCard, Sparkline, PresetTabs, OtherPages } from "@/components/admin/traffic-funnel";
 import type { ProductFunnel } from "@/lib/traffic-funnel";
 
 const PRODUCT: ProductFunnel = {
@@ -82,10 +82,10 @@ describe("the sparkline", () => {
 });
 
 describe("the range control", () => {
-  it("offers all three as links so a view can be sent to somebody", () => {
-    const html = renderToStaticMarkup(<RangeTabs range={30} />);
-    expect(html).toContain("/admin/traffic?range=7");
-    expect(html).toContain("/admin/traffic?range=90");
+  it("offers each preset as a link so a view can be sent to somebody", () => {
+    const html = renderToStaticMarkup(<PresetTabs preset="30" />);
+    expect(html).toContain("/admin/traffic?preset=7");
+    expect(html).toContain("/admin/traffic?preset=90");
     expect(html).toContain("href");
   });
 });

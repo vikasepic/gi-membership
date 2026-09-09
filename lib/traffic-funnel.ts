@@ -169,14 +169,6 @@ export function buildFunnels(
   };
 }
 
-/** Every ISO date in the window, oldest first, ending on `today`. */
-export function daysInRange(days: number, today: string): string[] {
-  const end = Date.parse(`${today}T00:00:00Z`);
-  return Array.from({ length: days }, (_, i) =>
-    new Date(end - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10),
-  );
-}
-
 /**
  * The polyline for a sparkline, or nothing.
  *
@@ -198,18 +190,94 @@ export function sparklinePath(daily: DayPoint[], width: number, height: number):
     .join(" ");
 }
 
-const RANGES = [7, 30, 90] as const;
-export type Range = (typeof RANGES)[number];
+/**
+ * A window, as two inclusive UTC calendar days.
+ *
+ * It used to be a day count. "Last month" is not a count of days back, and
+ * neither is "this month", so the count could not express them — every reader
+ * takes the pair now. Inclusive at both ends: `page_counts.day` is a date, and
+ * a half-open range on dates reads as an off-by-one to everybody who maintains
+ * it later.
+ */
+export type DayRange = { start: string; end: string };
+
+const DAY_MS = 86_400_000;
+
+/** UTC midnight of an ISO date, as epoch ms. */
+function dayMs(day: string): number {
+  return Date.parse(`${day}T00:00:00Z`);
+}
+
+/** An epoch ms back to an ISO date. */
+function isoDay(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+export const PRESETS = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "7", label: "7 days" },
+  { key: "30", label: "30 days" },
+  { key: "90", label: "90 days" },
+  { key: "this-month", label: "This month" },
+  { key: "last-month", label: "Last month" },
+] as const;
+
+export type Preset = (typeof PRESETS)[number]["key"];
+
+const DEFAULT_PRESET: Preset = "30";
 
 /**
- * The range off the URL, refusing anything not on the list.
+ * The preset off the URL, refusing anything not on the list.
  *
- * It reaches a query, so it is a whitelist rather than a parse: an unbounded
- * number here would be a request for the whole table.
+ * A whitelist rather than a parse: the value becomes a date bound on a query,
+ * and an unbounded one here would be a request for the whole table.
  */
-export function rangeFrom(params: Record<string, string | string[] | undefined>): Range {
-  const raw = params.range;
+export function presetFrom(params: Record<string, string | string[] | undefined>): Preset {
+  const raw = params.preset;
   const one = typeof raw === "string" ? raw : Array.isArray(raw) ? raw[0] : undefined;
-  const n = Number(one);
-  return (RANGES as readonly number[]).includes(n) ? (n as Range) : 30;
+  return PRESETS.some((p) => p.key === one) ? (one as Preset) : DEFAULT_PRESET;
+}
+
+/**
+ * What a preset covers, on a given UTC day.
+ *
+ * `today` is a parameter rather than a clock read for the reason every reader
+ * in lib/traffic.ts gives: one page render resolves a range once and hands the
+ * same pair to four queries and a chart, and a request that crosses UTC
+ * midnight between two clock reads gets a chart a day short of its own totals.
+ */
+export function rangeOf(preset: Preset, today: string): DayRange {
+  const end = dayMs(today);
+  const back = (n: number) => isoDay(end - n * DAY_MS);
+  const firstOfMonth = (d: Date) =>
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
+
+  switch (preset) {
+    case "today":
+      return { start: today, end: today };
+    case "yesterday":
+      return { start: back(1), end: back(1) };
+    case "7":
+    case "30":
+    case "90":
+      // Counting back INCLUDES today, so "7 days" is six days back plus today.
+      return { start: back(Number(preset) - 1), end: today };
+    case "this-month":
+      return { start: firstOfMonth(new Date(end)), end: today };
+    case "last-month": {
+      const firstThis = dayMs(firstOfMonth(new Date(end)));
+      const lastPrev = firstThis - DAY_MS;
+      return { start: firstOfMonth(new Date(lastPrev)), end: isoDay(lastPrev) };
+    }
+  }
+}
+
+/** Every ISO day in the window, oldest first, both ends included. */
+export function daysInRange(range: DayRange): string[] {
+  const start = dayMs(range.start);
+  const end = dayMs(range.end);
+  if (end < start) return [];
+  const n = Math.round((end - start) / DAY_MS) + 1;
+  return Array.from({ length: n }, (_, i) => isoDay(start + i * DAY_MS));
 }

@@ -5,8 +5,8 @@ import {
   consentedVisitorCount,
   todayUtc,
 } from "@/lib/traffic";
-import { buildFunnels, daysInRange, rangeFrom } from "@/lib/traffic-funnel";
-import { FunnelCard, RangeTabs, OtherPages } from "@/components/admin/traffic-funnel";
+import { buildFunnels, daysInRange, presetFrom, rangeOf } from "@/lib/traffic-funnel";
+import { FunnelCard, PresetTabs, OtherPages } from "@/components/admin/traffic-funnel";
 import { CoverageNote } from "@/components/admin/traffic-table";
 
 export const dynamic = "force-dynamic";
@@ -16,18 +16,19 @@ export default async function AdminTrafficPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const range = rangeFrom(await searchParams);
+  const preset = presetFrom(await searchParams);
   // One clock read for the whole request. Reading it again after the awaits
   // lets a request that crosses UTC midnight build a chart one day short of
   // the totals beside it — the disagreement b481969 closed.
   const today = todayUtc();
+  const range = rangeOf(preset, today);
   const [counts, bought, names, consented] = await Promise.all([
-    pageCountsSince(range, today),
-    paidByProduct(range, today),
+    pageCountsSince(range),
+    paidByProduct(range),
     productNames(),
-    consentedVisitorCount(range, today),
+    consentedVisitorCount(range),
   ]);
-  const days = daysInRange(range, today);
+  const days = daysInRange(range);
   const view = buildFunnels(counts, bought, names, days);
 
   return (
@@ -40,7 +41,7 @@ export default async function AdminTrafficPage({
             and GA4 never see. Expect it to read higher than theirs.
           </p>
         </div>
-        <RangeTabs range={range} />
+        <PresetTabs preset={preset} />
       </div>
 
       {/*

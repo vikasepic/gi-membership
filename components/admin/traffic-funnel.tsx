@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { formatCount as n, sparklinePath, type DayPoint, type OtherPage, type ProductFunnel, type Range } from "@/lib/traffic-funnel";
+import { formatCount as n, sparklinePath, type DayPoint, type OtherPage, type ProductFunnel, PRESETS, type Preset } from "@/lib/traffic-funnel";
 
 /**
  * The traffic page's furniture.
@@ -11,8 +11,6 @@ import { formatCount as n, sparklinePath, type DayPoint, type OtherPage, type Pr
  * Everything here is a server component. No `"use client"`, no chart library:
  * the only chart is a polyline whose geometry `sparklinePath` computes.
  */
-
-const RANGES: Range[] = [7, 30, 90];
 
 /** The sparkline's box. The same numbers go to `sparklinePath`, so the path fits. */
 const SPARK_W = 132;
@@ -181,26 +179,26 @@ function Drop({ from, to, share }: { from: number; to: number; share: boolean })
 }
 
 /**
- * The window, as three links.
+ * The window, as a row of links.
  *
  * Links and not buttons: the range lives in the URL, so a view can be sent to
  * somebody, kept in a tab, and walked back with the back button.
  */
-export function RangeTabs({ range }: { range: Range }) {
+export function PresetTabs({ preset }: { preset: Preset }) {
   return (
-    <nav aria-label="Date range" className="flex items-center gap-2">
-      {RANGES.map((r) => (
+    <nav aria-label="Date range" className="flex flex-wrap items-center gap-2">
+      {PRESETS.map((p) => (
         <Link
-          key={r}
-          href={`/admin/traffic?range=${r}`}
-          aria-current={r === range ? "page" : undefined}
-          className={`rounded-full border px-3 py-1 text-xs tabular-nums transition-colors ${
-            r === range
+          key={p.key}
+          href={p.key === "30" ? "/admin/traffic" : `/admin/traffic?preset=${p.key}`}
+          aria-current={p.key === preset ? "page" : undefined}
+          className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+            p.key === preset
               ? "border-primary bg-primary/10 font-medium text-primary"
               : "border-border text-muted hover:border-fg hover:text-fg"
           }`}
         >
-          {r} days
+          {p.label}
         </Link>
       ))}
     </nav>

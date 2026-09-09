@@ -3,7 +3,7 @@ import {
   buildFunnels,
   daysInRange,
   sparklinePath,
-  rangeFrom,
+  presetFrom,
   type CountRow,
 } from "@/lib/traffic-funnel";
 
@@ -137,12 +137,15 @@ describe("building the funnel", () => {
 
 describe("the days in a range", () => {
   it("ends on today and runs back the requested number of days", () => {
-    const days = daysInRange(3, "2026-09-05");
+    const days = daysInRange({ start: "2026-09-03", end: "2026-09-05" });
     expect(days).toEqual(["2026-09-03", "2026-09-04", "2026-09-05"]);
   });
 
   it("crosses a month boundary", () => {
-    expect(daysInRange(2, "2026-09-01")).toEqual(["2026-08-31", "2026-09-01"]);
+    expect(daysInRange({ start: "2026-08-31", end: "2026-09-01" })).toEqual([
+      "2026-08-31",
+      "2026-09-01",
+    ]);
   });
 });
 
@@ -180,18 +183,18 @@ describe("the sparkline", () => {
 
 describe("the range on the url", () => {
   it("defaults to thirty days", () => {
-    expect(rangeFrom({})).toBe(30);
+    expect(presetFrom({})).toBe("30");
   });
 
   it("takes one it recognises", () => {
-    expect(rangeFrom({ range: "7" })).toBe(7);
-    expect(rangeFrom({ range: "90" })).toBe(90);
+    expect(presetFrom({ preset: "7" })).toBe("7");
+    expect(presetFrom({ preset: "90" })).toBe("90");
   });
 
   it("refuses anything else", () => {
     // The value reaches a query. Anything not on the list is not a range.
-    expect(rangeFrom({ range: "3650" })).toBe(30);
-    expect(rangeFrom({ range: ["7", "90"] })).toBe(7);
-    expect(rangeFrom({ range: "; drop table" })).toBe(30);
+    expect(presetFrom({ preset: "3650" })).toBe("30");
+    expect(presetFrom({ preset: ["7", "90"] })).toBe("7");
+    expect(presetFrom({ preset: "; drop table" })).toBe("30");
   });
 });

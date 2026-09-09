@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
-import { bumpPageCountOrThrow, pageCountsSince, paidByProduct, productNames } from "@/lib/traffic";
+import { bumpPageCountOrThrow, pageCountsSince, paidByProduct, productNames, todayUtc } from "@/lib/traffic";
+import { rangeOf } from "@/lib/traffic-funnel";
 
 const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -13,7 +14,7 @@ describe.skipIf(!canRun)("counting page views (integration)", () => {
 
   it("counts a view", async () => {
     await bumpPageCountOrThrow("/p/thing", "meta", "thing");
-    const rows = await pageCountsSince(7);
+    const rows = await pageCountsSince(rangeOf("7", todayUtc()));
     expect(rows).toContainEqual(
       expect.objectContaining({ path: "/p/thing", source: "meta", product: "thing", hits: 1 }),
     );
@@ -25,7 +26,7 @@ describe.skipIf(!canRun)("counting page views (integration)", () => {
     await bumpPageCountOrThrow("/p/thing", "meta", "thing");
     await bumpPageCountOrThrow("/p/thing", "meta", "thing");
     await bumpPageCountOrThrow("/p/thing", "meta", "thing");
-    const rows = (await pageCountsSince(7)).filter((r) => r.path === "/p/thing");
+    const rows = (await pageCountsSince(rangeOf("7", todayUtc()))).filter((r) => r.path === "/p/thing");
     expect(rows).toHaveLength(1);
     expect(rows[0].hits).toBe(3);
   });
@@ -33,7 +34,7 @@ describe.skipIf(!canRun)("counting page views (integration)", () => {
   it("keeps sources apart on the same page", async () => {
     await bumpPageCountOrThrow("/p/thing", "meta", "thing");
     await bumpPageCountOrThrow("/p/thing", "direct", "thing");
-    const rows = (await pageCountsSince(7)).filter((r) => r.path === "/p/thing");
+    const rows = (await pageCountsSince(rangeOf("7", todayUtc()))).filter((r) => r.path === "/p/thing");
     expect(rows).toHaveLength(2);
   });
 
@@ -42,7 +43,7 @@ describe.skipIf(!canRun)("counting page views (integration)", () => {
     // "/checkout" and there was no way to know whose checkout it was.
     await bumpPageCountOrThrow("/checkout", "meta", "validator");
     await bumpPageCountOrThrow("/checkout", "meta", "carousels");
-    const rows = (await pageCountsSince(7)).filter((r) => r.path === "/checkout");
+    const rows = (await pageCountsSince(rangeOf("7", todayUtc()))).filter((r) => r.path === "/checkout");
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => r.product).sort()).toEqual(["carousels", "validator"]);
   });
@@ -50,13 +51,13 @@ describe.skipIf(!canRun)("counting page views (integration)", () => {
   it("still increments now the key has five columns", async () => {
     await bumpPageCountOrThrow("/checkout", "meta", "validator");
     await bumpPageCountOrThrow("/checkout", "meta", "validator");
-    const rows = (await pageCountsSince(7)).filter((r) => r.path === "/checkout");
+    const rows = (await pageCountsSince(rangeOf("7", todayUtc()))).filter((r) => r.path === "/checkout");
     expect(rows).toHaveLength(1);
     expect(rows[0].hits).toBe(2);
   });
 
   it("returns nothing rather than throwing when there is no traffic", async () => {
-    expect(await pageCountsSince(7)).toEqual([]);
+    expect(await pageCountsSince(rangeOf("7", todayUtc()))).toEqual([]);
   });
 
   it("names the store's products", async () => {
@@ -87,7 +88,7 @@ describe.skipIf(!canRun)("counting page views (integration)", () => {
     const live = crypto.randomUUID();
     const test = crypto.randomUUID();
     const countFor = async () =>
-      (await paidByProduct(90)).find((b) => b.product === product!.slug)?.orders ?? 0;
+      (await paidByProduct(rangeOf("90", todayUtc()))).find((b) => b.product === product!.slug)?.orders ?? 0;
 
     // A delta, not an absolute: the seed's own orders are not this test's to
     // pin down, but the number of ITS OWN orders that get counted is.
