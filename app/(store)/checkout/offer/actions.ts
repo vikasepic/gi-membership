@@ -1,8 +1,19 @@
 "use server";
 
+import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { previewOfferCoupon, startOfferCheckout } from "@/lib/offer-checkout";
 import { resolveBuyer } from "@/lib/checkout";
+
+// An index into the list the page built, or "none" — never an id, and never
+// the legacy alt/main/boolean shapes the product checkout's own schema still
+// carries for clients that pre-date its bump list (see actions.ts there).
+// This action is new; nothing has ever posted those to it. A server action's
+// arguments cross the network like any other request body, so the TS type on
+// `bumpChoice` below is a hint for a well-behaved caller, not a guarantee
+// about what actually arrives here — startOfferCheckout fails closed on a
+// non-integer too, but that is not a reason to skip checking at the door.
+const bumpChoiceSchema = z.union([z.literal("none"), z.number().int().min(0)]).optional();
 
 /**
  * Start the offer checkout — for a member, or for a stranger.
@@ -26,7 +37,14 @@ export async function startOffer(
   couponCode?: string | null,
   /** Only read when nobody is signed in. */
   buyer?: { email?: string; fullName?: string },
+  /** Which of the bump's prices was ticked — an index into the list the page drew. */
+  bumpChoice?: number | "none",
 ): Promise<{ ok: true; clientSecret: string; mode: "payment" | "setup" } | { ok: false; error: string; code?: string }> {
+  const parsedBump = bumpChoiceSchema.safeParse(bumpChoice);
+  if (!parsedBump.success) {
+    return { ok: false, error: "That add-on option is no longer available. Choose another and try again." };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -46,6 +64,7 @@ export async function startOffer(
     priceChoice,
     couponCode,
     isNewAccount: resolved.isNew,
+    bumpChoice: parsedBump.data,
   });
   if (!res.ok) return res;
   return { ok: true, clientSecret: res.clientSecret, mode: res.mode };

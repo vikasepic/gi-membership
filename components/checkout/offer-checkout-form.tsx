@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { startOffer } from "@/app/(store)/checkout/offer/actions";
+import { OrderBump } from "@/components/checkout/order-bump";
+import type { BumpChoice } from "@/lib/bump";
 
 export type OfferSummary = {
   id: string;
@@ -31,7 +33,7 @@ export type OfferSummary = {
 import { money } from "@/lib/money";
 import { suggestEmail } from "@/lib/email-hint";
 import { priceLabel, priceTerms, chargeNowCents, type OfferPrice } from "@/lib/offer-prices";
-import { MIN_CHARGE_CENTS_CLIENT } from "@/components/checkout/checkout-types";
+import { MIN_CHARGE_CENTS_CLIENT, type BumpSummary } from "@/components/checkout/checkout-types";
 import { previewOfferCouponAction } from "@/app/(store)/checkout/offer/actions";
 import { CheckoutSlots, type CheckoutSlotValue } from "@/components/checkout/slots";
 import { usePublishTrialDays } from "@/components/checkout/trial";
@@ -46,6 +48,7 @@ export function OfferCheckoutForm({
   publishableKey,
   prices = [],
   chosen = -1,
+  bumpOptions = [],
   skin = "v1",
   termsUrl,
   design,
@@ -58,6 +61,8 @@ export function OfferCheckoutForm({
   prices?: OfferPrice[];
   /** Preselected from the sales page. -1 when they arrived without choosing. */
   chosen?: number;
+  /** Every way to buy the bump, in the order the placement stored them. */
+  bumpOptions?: BumpSummary[];
   /** Which arrangement. See lib/checkout-skin.ts — v1 unless asked for. */
   skin?: CheckoutSkin;
   termsUrl?: string;
@@ -78,7 +83,16 @@ export function OfferCheckoutForm({
         appearance: stripeAppearance(skin, design?.buttonColor),
       }}
     >
-      <Inner offer={offer} signedInEmail={signedInEmail} prices={prices} chosen={chosen} skin={skin} termsUrl={termsUrl} design={design} />
+      <Inner
+        offer={offer}
+        signedInEmail={signedInEmail}
+        prices={prices}
+        chosen={chosen}
+        bumpOptions={bumpOptions}
+        skin={skin}
+        termsUrl={termsUrl}
+        design={design}
+      />
     </Elements>
   );
 }
@@ -88,6 +102,7 @@ function Inner({
   signedInEmail,
   prices,
   chosen,
+  bumpOptions,
   skin,
   termsUrl,
   design,
@@ -96,6 +111,8 @@ function Inner({
   signedInEmail: string | null;
   prices: OfferPrice[];
   chosen: number;
+  /** Every way to buy the bump, in the order the placement stored them. */
+  bumpOptions: BumpSummary[];
   skin: CheckoutSkin;
   termsUrl?: string;
   design?: CheckoutDesign;
@@ -105,6 +122,10 @@ function Inner({
   // should not be stuck with it either.
   const [pick, setPick] = useState<number>(chosen >= 0 ? chosen : prices.length === 1 ? 0 : -1);
   const picked = pick >= 0 ? (prices[pick] ?? null) : null;
+  // "none" until they tick it. An index once they have — the same shape the
+  // price switch posts, because the server reads both as positions in a list
+  // it rebuilt rather than as anything the browser named.
+  const [bumpPick, setBumpPick] = useState<number | "none">("none");
   const stripe = useStripe();
   const elements = useElements();
   const [error, setError] = useState<string | null>(null);
@@ -175,6 +196,40 @@ function Inner({
   // effect exists to prevent.
   const isRecurring = picked ? picked.billingType === "recurring" : Boolean(offer.recurring);
 
+  // A bump can only ride a one-time host's own PaymentIntent — a recurring
+  // price opens a SetupIntent instead, which takes no money today, and
+  // startOfferCheckout refuses the pairing outright. Offering a tickbox that
+  // can only end in that refusal is worse than not offering one.
+  const bumpAllowed = bumpOptions.length > 0 && !isRecurring;
+
+  // Cleared, not just hidden — switching to a recurring price and back must
+  // not resurrect a tick the buyer never re-confirmed on the price now
+  // showing.
+  useEffect(() => {
+    if (isRecurring) setBumpPick("none");
+  }, [isRecurring]);
+
+  // order-bump answers "main" for a single-option bump reached through the
+  // redesign's slot (its legacy alt/main pairing takes over whenever there is
+  // only one option to show — see OrderBumpSlot in slots.tsx) and a plain
+  // index everywhere else, including this file's own render below, which
+  // always hands it the full list. Offers have no second slot for "alt" to
+  // mean anything, so both answers collapse to the position they actually
+  // name.
+  function chooseBump(next: BumpChoice) {
+    setBumpPick(typeof next === "number" ? next : next === "main" ? 0 : "none");
+  }
+
+  // "none" whenever the bump cannot actually be bought — the pay-time
+  // backstop to the effect above, so a tick made under a one-time price can
+  // never ride a switch to recurring into what gets shown as chosen or
+  // posted to the server.
+  const bumpChoice = bumpAllowed ? bumpPick : "none";
+  const chosenBump = typeof bumpChoice === "number" ? (bumpOptions[bumpChoice] ?? null) : null;
+  // Undiscounted: startOfferCheckout adds the bump AFTER discounting the
+  // host, never before — see dueNow below.
+  const bumpNowCents = chosenBump?.chargeNowCents ?? 0;
+
   // What is taken today, after any discount that applies today.
   //
   // On a subscription the coupon lands on the first REAL invoice — Stripe
@@ -200,8 +255,14 @@ function Inner({
         trialDays ? ` after your ${trialDays}-day trial` : ""
       }. Cancel anytime.`
     : null;
+  // The bump rides in AFTER the host's own clamp, exactly how
+  // startOfferCheckout builds the PaymentIntent's amount
+  // (gross - discount + bumpNowCents) — a coupon that reached into the
+  // bump's price here would show a total the server would never charge.
   const dueNow =
-    coupon && !isRecurring ? Math.max(MIN_CHARGE_CENTS_CLIENT, grossNow - coupon.discountCents) : grossNow;
+    (coupon && !isRecurring
+      ? Math.max(MIN_CHARGE_CENTS_CLIENT, grossNow - coupon.discountCents)
+      : grossNow) + bumpNowCents;
 
   /**
    * Keep Stripe's idea of the checkout in step with the page's — the same
@@ -224,6 +285,11 @@ function Inner({
    * works out for what a PaymentIntent should ask for, and it is what "Due
    * today" already prints below — a second calculation here is how the two
    * end up disagreeing.
+   *
+   * `dueNow` already carries the bump. Ticking it changes what Apple Pay and
+   * Google Pay quote and can change which methods Stripe offers at all, so
+   * the amount here has to move the instant the tick does — this effect
+   * already depends on `dueNow`, so nothing further had to change for that.
    */
   useEffect(() => {
     if (!elements) return;
@@ -261,6 +327,7 @@ function Inner({
       // identity comes from the session, so nothing typed here can buy in
       // somebody else's name.
       signedInEmail ? undefined : { email: email.trim(), fullName: fullName.trim() },
+      bumpChoice,
     );
     if (!res.ok) {
       setError(res.error);
@@ -291,8 +358,9 @@ function Inner({
    * ONE arrangement serve both halves of the store instead of two that drift.
    *
    * The fields an offer has no answer for are honestly empty: there is no
-   * bump here, no name to type and no email to collect, and every slot that
-   * asks for those draws nothing when they are absent.
+   * name to type and no email to collect for a signed-in buyer, and every
+   * slot that asks for those draws nothing when they are absent. The bump is
+   * a real answer now, not an absent one — see bumpAllowed above.
    */
   const slots: CheckoutSlotValue = {
     product: {
@@ -326,13 +394,14 @@ function Inner({
     prices,
     pricePick: pick >= 0 ? pick : null,
     setPricePick: choosePrice,
-    bump: null,
+    // No separate "alt" slot for an offer's bump — see chooseBump above.
+    bump: bumpAllowed ? (bumpOptions[0] ?? null) : null,
     bumpAlt: null,
-    bumpOptions: [],
-    bumpChoice: "none",
-    setBumpChoice: () => {},
+    bumpOptions,
+    bumpChoice,
+    setBumpChoice: chooseBump,
     bumpRef: { current: null },
-    chosenBump: null,
+    chosenBump,
     bumpUnanswered: false,
     coupon,
     couponInput,
@@ -414,6 +483,17 @@ function Inner({
         </fieldset>
       )}
 
+      {/* Before the summary and well before the card: how you are buying the
+          thing decides what the add-on beside it costs, and a decision that
+          changes the total has to come before the total. Same placement the
+          redesign's own OrderBumpSlot uses — see slots.tsx. */}
+      {bumpAllowed && (
+        <div className="flex flex-col gap-2">
+          <span className="kicker text-muted">One more thing</span>
+          <OrderBump view={bumpOptions[0]} options={bumpOptions} choice={bumpChoice} onChoose={chooseBump} />
+        </div>
+      )}
+
       {/* The same summary the product checkout carries, in the same place.
           It was missing here entirely, so the one page where somebody is
           confirming a subscription showed a total with nothing above it saying
@@ -451,6 +531,17 @@ function Inner({
             <span className="shrink-0 text-navy">
               −{money(coupon.discountCents, offer.currency)}
             </span>
+          </div>
+        )}
+
+        {/* The bump's own line, named rather than folded silently into the
+            total — same reason the coupon gets one. The NAME, not the pitch:
+            an order line is a record of what is being bought, not the advert
+            for it (see buildBumpView's own `name` field). */}
+        {chosenBump && (
+          <div className="flex items-center justify-between gap-4 text-sm">
+            <span className="min-w-0 text-muted">{chosenBump.name}</span>
+            <span className="shrink-0">{money(chosenBump.chargeNowCents, offer.currency)}</span>
           </div>
         )}
 

@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import type { OfferPrice } from "@/lib/offer-prices";
+import { buildBumpView } from "@/lib/bump";
 
 /**
  * The offer checkout, on the redesign.
@@ -128,6 +129,68 @@ describe("an offer bought on the redesign", () => {
     // Still a complete checkout.
     expect(el.querySelector('[data-testid="payment-element"]')).not.toBeNull();
     expect(el.querySelector("button[type=submit]")).not.toBeNull();
+  });
+
+  it("shows the bump through the same slot the product checkout uses, and hides it once the price is recurring", () => {
+    // The redesign gets the bump for free through OrderBumpSlot — nothing in
+    // v2/layout.tsx changed for this feature — so what has to be proved here
+    // is that OfferCheckoutForm feeds it the right values, not that the slot
+    // itself renders (that is the product checkout's own coverage).
+    const bump = buildBumpView({
+      name: "Vault",
+      headline: "Add the Vault",
+      description: null,
+      bumpHeadline: null,
+      bumpDescription: null,
+      bumpBanner: "",
+      bumpBullets: [],
+      bumpNote: null,
+      bumpAccent: "#b0532f",
+      currency: "usd",
+      compareAtCents: null,
+      billingType: "one_time",
+      interval: null,
+      priceCents: 2900,
+      trialDays: null,
+    } as never);
+    const onceAndMonthly: OfferPrice[] = [
+      {
+        id: "once",
+        label: "",
+        billingType: "one_time",
+        interval: null,
+        intervalCount: 1,
+        trialDays: null,
+        priceCents: 4700,
+        compareAtCents: null,
+        archived: false,
+      },
+      price({ id: "mo" }),
+    ];
+    const el = render(
+      <OfferCheckoutForm
+        offer={offer}
+        signedInEmail="member@example.com"
+        publishableKey="pk_test"
+        prices={onceAndMonthly}
+        chosen={0}
+        bumpOptions={[bump]}
+        skin="v2"
+      />,
+    );
+    expect(el.textContent).toContain("Add the Vault");
+    const box = el.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    act(() => box.click());
+    // 4700 + 2900, undiscounted — the same arithmetic startOfferCheckout
+    // authorises, read off the shared `dueNow` this layout did not have to
+    // re-derive.
+    expect(el.textContent).toMatch(/\$76/);
+
+    // A recurring price opens a SetupIntent; a one-time bump has no charge to
+    // ride. Switching to it must drop the bump, not just relabel the total.
+    const radios = [...el.querySelectorAll<HTMLInputElement>('input[name="way-to-buy"]')];
+    act(() => radios[1].click());
+    expect(el.textContent).not.toContain("Add the Vault");
   });
 
   it("is the checkout that ships unless the redesign was asked for", () => {
