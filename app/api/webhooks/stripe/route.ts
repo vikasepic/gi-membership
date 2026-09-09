@@ -4,6 +4,7 @@ import { recordRenewal } from "@/lib/renewals";
 import { reportReversal, handleDispute, disputeWon } from "@/lib/reversals";
 import { orderForPaymentIntent } from "@/lib/orders";
 import { finalizeOrder } from "@/lib/checkout";
+import { completeOfferCheckout } from "@/lib/offer-checkout";
 import { sendPaymentFailedEmail, sendTrialEndingEmail } from "@/lib/subscription-emails";
 import {
   syncSubscriptionOwnership,
@@ -31,7 +32,37 @@ export async function POST(req: Request) {
   switch (event.type) {
     case "payment_intent.succeeded": {
       const pi = event.data.object as Stripe.PaymentIntent;
-      await finalizeOrder(pi.id);
+      // A standalone offer's PaymentIntent has no order row for finalizeOrder
+      // to find — offer-checkout.ts doesn't write one until completeOfferCheckout
+      // runs, which otherwise only happens on the buyer's own way back through
+      // the return route. Closing the tab after confirming would then mean
+      // charged, no order, no ownership, no email, and nothing left to retry.
+      // offerId is how the two are told apart: only an offer's own intent
+      // carries it (a product's carries productId/bumpOfferId instead).
+      // completeOfferCheckout is idempotent the same way finalizeOrder already
+      // is here — the eligibility re-check short-circuits a second run, and
+      // fulfilment's idempotency key is derived from the intent id — so this
+      // racing the return route is safe.
+      if (pi.metadata?.offerId) {
+        const result = await completeOfferCheckout(pi.id);
+        // Redeliver ONLY a failure a second pass can actually heal.
+        // "order_failed" is a claim/DB hiccup that a retry can win, and
+        // "grant_failed" is completeOfferCheckout's own paid-path key — the
+        // PaymentIntent already succeeded, the order was voided for a retry,
+        // and returning 200 here would tell Stripe this event is handled
+        // while the buyer has no order and no ownership row. "unavailable"
+        // and "unknown_intent_metadata" are the opposite: permanent. No
+        // redelivery ever makes a withdrawn offer active again or grows
+        // metadata an old (or foreign) intent was never written with —
+        // throwing on those would have Stripe retry a failure forever for no
+        // gain. Same shape finalizeOrder already uses a few lines below
+        // (throwing out of this handler so Stripe's own retry redelivers).
+        if (!result.ok && (result.error === "order_failed" || result.error === "grant_failed")) {
+          throw new Error(`completeOfferCheckout: ${result.error}`);
+        }
+      } else {
+        await finalizeOrder(pi.id);
+      }
       break;
     }
 

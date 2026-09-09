@@ -11,17 +11,60 @@ import { LibraryCourseCard } from "@/components/library/course-card";
 import { immediateChargeCents } from "@/lib/offers";
 import { acceptStandingOfferAction, openAppAction } from "./actions";
 
-// Every outcome of acceptStandingOfferAction, in the buyer's words. Without an
-// entry here the redirect lands silently and the button reads as broken — which
-// is exactly how it behaved when only "added" was handled.
+// Every outcome of acceptStandingOfferAction AND of the offer checkout's own
+// return trip (app/(store)/checkout/offer/complete/route.ts, which reads
+// completeOfferCheckout's error straight through to this same ?offer= param),
+// in the buyer's words. Without an entry here the redirect lands silently and
+// the page reads as broken — which is exactly how it behaved when only
+// "added" was handled, and worse than broken for a key from the PAID
+// checkout: a blank page after a real charge looks like the charge vanished.
 const OFFER_STATUS: Record<string, string> = {
   added: "Added — it’s ready in your library.",
   already_owned: "You already have this — nothing was charged.",
   unavailable: "That offer isn’t available any more.",
   no_saved_card:
     "We don’t have a card on file for you yet. Buy anything from the store once and this becomes one tap.",
+  // acceptStandingOfferAction's own one-tap charge (lib/checkout.ts) — a
+  // genuine decline BEFORE any money moves. True here; NOT the key the paid
+  // checkout uses for its own fulfilment failures (see grant_failed below).
   charge_failed:
     "Your saved card was declined, so nothing was charged. Update it under Account → Manage billing, then try again.",
+  // completeOfferCheckout's PAID path (lib/offer-checkout.ts): the
+  // PaymentIntent had already succeeded by the time this fired, so the money
+  // is real — granting access or recording the order is what failed. Must
+  // NEVER say "nothing was charged" — that would be a lie to someone who has,
+  // in fact, paid. A later retry (the webhook redelivering, or the buyer
+  // reloading this page) reclaims the voided order and finishes the grant.
+  grant_failed:
+    "Your payment went through, but we hit a snag setting up your access. We’re on it — check back in a few minutes, and please don’t pay again. Contact us if it still isn’t here.",
+  // completeOfferCheckout: the intent wasn’t "succeeded" when checked (a
+  // failed confirmation reaching this route directly, without Stripe’s own
+  // redirect_status query param). Nothing was taken either way — a
+  // PaymentIntent that hasn’t succeeded hasn’t captured funds.
+  card_not_saved:
+    "We couldn’t confirm that — nothing was charged. Try again, or contact us if you’re not sure what happened.",
+  // completeOfferCheckout: the order row itself could not be booked (a DB
+  // hiccup, or a claim race that neither side won). On the common paid path
+  // the charge has already succeeded by this point, so this hedges rather
+  // than asserting either way.
+  order_failed:
+    "Something went wrong finishing this purchase. If you were charged, don’t pay again — we’re on it. Otherwise, please try again.",
+  // completeOfferCheckout: the id in the URL was neither a PaymentIntent nor a
+  // SetupIntent — a broken or stale link, checked before anything is looked
+  // up, so nothing here could have been charged.
+  unknown_intent:
+    "We couldn’t find that checkout. If you completed a payment, check your library before trying again.",
+  // completeOfferCheckout: the intent succeeded but carries none of the
+  // metadata this checkout writes — most likely a link for a DIFFERENT
+  // purchase (a product's own PaymentIntent) landing on this route. If money
+  // moved, it was for that other purchase, which its own flow already handles.
+  unknown_intent_metadata:
+    "We couldn’t match that to a purchase here. If you were charged, check your library — it may already be there.",
+  // The return route's own catch: completeOfferCheckout threw something this
+  // page has no name for. The most honest thing left to say is that we don't
+  // know either.
+  unknown:
+    "Something went wrong and we couldn’t tell what happened. If you were charged, please don’t pay again — contact us and we’ll sort it out.",
 };
 import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";

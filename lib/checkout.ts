@@ -575,9 +575,42 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       couponCode: coupon?.code ?? "",
       discountCents: String(coupon?.discountCents ?? 0),
       bumpOfferId: bumpOffer?.id ?? "",
+      // Resolved ONCE, here, from THIS product's placement (product.bumpPriceIds)
+      // — bumpOffer is already priced at whatever the placement named, never the
+      // bump's own headline. finalizeOrder has only the id by the time it runs
+      // fulfilBump, so this is how the placement price survives to that call
+      // instead of fulfilBump re-deriving the (possibly different) headline.
+      //
+      // Blank, not "0", for a RECURRING bump: bumpNowCents is 0 there because
+      // nothing is charged TODAY (see the comment above it), not because the
+      // placement priced it at zero — a recurring bump can still bill its
+      // first period immediately, off-session, once fulfilled. Writing "0"
+      // made that real charge book as a $0 order line: the read-back in
+      // finalizeOrder tests string truthiness, and a truthy "0" stopped its
+      // `?? immediateChargeCents(offer)` fallback from ever running. Same
+      // guard shape as bumpPrepaid just below.
+      bumpAmountCents: bumpNowCents > 0 ? String(bumpNowCents) : "",
       // Already paid for in THIS intent, so fulfilment grants it without
       // charging again. Written by us, read by us.
-      bumpPrepaid: bumpNowCents > 0 ? "true" : "",
+      //
+      // Keyed on billingType, NOT on bumpNowCents > 0 — bumpNowCents is also 0
+      // for a FREE one-time bump (nothing left to charge, but it IS fully
+      // covered by this intent) and for a RECURRING one (nothing due today,
+      // but it still needs its own subscription). Amount alone cannot tell
+      // those apart; a free one-time bump read as not-prepaid took the
+      // off_session, confirm: true path fulfilOffer falls through to below —
+      // the exact India refusal this branch exists to delete.
+      //
+      // The offer checkout's own version of this line (offer-checkout.ts,
+      // startOfferCheckout) is correctly just `bumpOffer ? "true" : ""` —
+      // DO NOT "harmonise" the two. There, bumpOffer is never set unless it
+      // resolved one-time (startOfferCheckout refuses the pairing outright
+      // for a recurring bump), so the billingType check would be redundant.
+      // Here, createCheckoutIntent places no such restriction — a product may
+      // pair its bump slot with a recurring offer — so bumpOffer can genuinely
+      // be recurring, and marking THAT prepaid would stop its subscription
+      // ever being created.
+      bumpPrepaid: bumpOffer && bumpOffer.billingType === "one_time" ? "true" : "",
       taxCalculationId: tax.calculationId ?? "",
       newAccount,
     },
@@ -689,9 +722,34 @@ export async function fulfilOffer(args: {
   // SetupIntent instead makes Stripe dedupe the subscription even if two orders
   // exist, which the default order-derived key could not do.
   idempotencyKey?: string;
+  /**
+   * Its money is already in the order's own payment.
+   *
+   * The offer checkout now charges a one-time offer on-session, in a
+   * PaymentIntent the buyer confirms while they are present. Charging again
+   * here would bill them twice for one purchase — and would do it
+   * off-session, which is the thing that cannot happen on an Indian card.
+   */
+  prepaid?: boolean;
 }): Promise<{ subscriptionId?: string; paymentIntentId?: string }> {
   const { order, offer, paymentMethodId } = args;
   const coupon = args.coupon ?? null;
+
+  // A prepaid caller has already taken the money in the order's own intent —
+  // see the `prepaid` doc above. If the offer resolves recurring by the time
+  // we get here, creating a subscription below would stack it on top of that
+  // completed charge: a double bill. Reachable with no code bug, not just in
+  // theory — prices carry their own billingType, so a buyer can pick a
+  // one-time price, have an admin archive it mid-checkout, and land back here
+  // with `offer` recomputed from the headline recurring price while the
+  // PaymentIntent they already confirmed sits there paid. One guard here
+  // covers every prepaid caller, present and future, rather than trusting
+  // each call site to re-derive the same check. The caller's catch turns this
+  // into a voided order — better that than a subscription nobody agreed to.
+  if (args.prepaid && offer.billingType === "recurring") {
+    throw new Error("fulfilOffer: prepaid is only valid for a one-time offer, not a recurring one");
+  }
+
   // The code goes in the key. Without it, applying a coupon to an offer someone
   // had already tried to buy without one would return Stripe's cached
   // subscription from the first attempt — at full price, with no error.
@@ -749,6 +807,9 @@ export async function fulfilOffer(args: {
     return { subscriptionId: sub.id };
   }
 
+  // Already paid for in the order's own intent. Nothing to take.
+  if (args.prepaid) return {};
+
   // A PaymentIntent cannot take a promotion code, so the discount is money off
   // the amount — never below the floor Stripe will accept.
   const charge = coupon
@@ -805,14 +866,50 @@ export async function fulfilBump(args: {
   prepaid?: boolean;
   /** The payment that covered it, for the order line. */
   paidByIntentId?: string | null;
+  /**
+   * Skip the fetch when the caller already has this offer fresh.
+   *
+   * completeOfferCheckout resolves it a few lines earlier to price the bump
+   * for the ledger — re-fetching the same row a moment later would spend a
+   * round trip to learn nothing new. Left undefined (the default) for every
+   * other caller: the retry sweep in particular runs minutes later, where a
+   * fresh read is the whole point — an offer withdrawn since the last attempt
+   * must not be fulfilled just because a stale copy still says active.
+   */
+  offer?: Offer | null;
+  /**
+   * What to book the order line at.
+   *
+   * Defaults to the offer's own headline price, which is wrong whenever the
+   * host placed this bump at a price other than that headline
+   * (offer.bumpPriceIds / product.bumpPriceIds) — the caller has already
+   * resolved the placement's actual figure to price its own ledger, and must
+   * hand it over rather than let this re-derive the headline. Kept optional,
+   * headline-fallback, so a caller with nothing better changes nothing.
+   */
+  amountCents?: number;
 }): Promise<void> {
   const db = createServiceClient();
-  const offer = await getOffer(args.offerId);
+  const offer = args.offer !== undefined ? args.offer : await getOffer(args.offerId);
   // A deactivated offer must not be fulfilled even though the PaymentIntent
   // still carries its id: an admin may have withdrawn it between intent
   // creation and confirmation. Returning rather than throwing — there is
   // nothing here for a retry to fix.
   if (!offer?.active) return;
+
+  // fulfilOffer has its own prepaid/recurring guard a few lines up in this
+  // file — but that guard never runs for a prepaid bump, because the branch
+  // right below skips calling fulfilOffer AT ALL when prepaid is set. "One
+  // guard covers every prepaid caller" was true of every other caller, not
+  // this one. Reachable with no code bug: a bump ticked while its host offer
+  // priced it one-time, whose own first live price flips to recurring before
+  // this runs (the same admin-archives-mid-checkout race fulfilOffer's guard
+  // exists for) would otherwise be granted here with no subscription ever
+  // created and no charge ever taken — free access, indefinitely. Refusing
+  // beats silently dropping.
+  if (args.prepaid && offer.billingType !== "one_time") {
+    throw new Error("fulfilBump: prepaid is only valid for a one-time offer, not a recurring one");
+  }
 
   // Prepaid takes no money and creates no subscription: a one-time bump paid
   // for in the order's own PaymentIntent is already settled, and the only work
@@ -848,7 +945,7 @@ export async function fulfilBump(args: {
     kind: "bump",
     offer_id: offer.id,
     description: offer.name,
-    amount_cents: immediateChargeCents(offer),
+    amount_cents: args.amountCents ?? immediateChargeCents(offer),
     stripe_subscription_id: result.subscriptionId ?? null,
     stripe_payment_intent_id: result.paymentIntentId ?? null,
   });
@@ -1057,6 +1154,12 @@ export async function finalizeOrder(intentId: string): Promise<void> {
         paymentMethodId,
         prepaid: pi.metadata.bumpPrepaid === "true",
         paidByIntentId: pi.id,
+        // Resolved once at checkout time, from the product's own placement —
+        // see createCheckoutIntent. Blank for a RECURRING bump (nothing was
+        // charged today, so there is no placement figure to carry) and for
+        // an intent written before this field existed — both fall through to
+        // the headline fallback inside fulfilBump.
+        amountCents: pi.metadata.bumpAmountCents ? Number(pi.metadata.bumpAmountCents) : undefined,
       });
     } catch (e) {
       // Queued, not lost. The sweep replays it every few minutes and the charge
@@ -1082,6 +1185,9 @@ export async function finalizeOrder(intentId: string): Promise<void> {
           paymentMethodId,
           prepaid: pi.metadata.bumpPrepaid === "true",
           paidByIntentId: pi.id,
+          // Replayed by the sweep so a retry books the same placement price
+          // rather than falling back to the bump's headline.
+          amountCents: pi.metadata.bumpAmountCents ? Number(pi.metadata.bumpAmountCents) : undefined,
         },
       });
     }

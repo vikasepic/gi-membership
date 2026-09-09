@@ -18,8 +18,28 @@ describe("the browser never decides what a discount is worth", () => {
   it("carries the code on the SetupIntent, not an amount", () => {
     // An amount written into metadata is an amount a tampered preview could
     // have influenced. The code is re-priced on the way back.
+    //
+    // Scoped to the metadata object itself, not the SetupIntent call: the
+    // call site only spells the shorthand `metadata,` — a `discountCents`
+    // added straight to `const metadata = {...}` would reach the SetupIntent
+    // without that key ever appearing in the call text. The object is shared
+    // by both call sites, so this one slice covers both: a one-time offer's
+    // PaymentIntent also writes `discountCents` (checked separately below),
+    // but that charge happens synchronously in this same call from a coupon
+    // resolveCoupon() just re-priced server-side — it is a receipt of money
+    // already taken, not a number saved now for a later step to trust
+    // instead of recomputing.
+    const metadataBlock = offerCheckout.slice(
+      offerCheckout.indexOf("const metadata = {"),
+      offerCheckout.indexOf("const description"),
+    );
+    // Fails closed: if either anchor above stops matching (a rename, a
+    // reformat), indexOf returns -1 and slice(-1, ...) silently yields "" —
+    // and `not.toContain` on "" passes forever. This positive assertion
+    // proves the slice actually captured the object, not nothing.
+    expect(metadataBlock).toContain("storeId,");
     expect(offerCheckout).toContain("couponCode: coupon?.code ?? \"\"");
-    expect(offerCheckout).not.toMatch(/metadata:[\s\S]{0,400}discountCents/);
+    expect(metadataBlock).not.toContain("discountCents");
   });
 
   it("prices it again at fulfilment, from that stored code", () => {
@@ -64,9 +84,45 @@ describe("a subscription is discounted by Stripe, not by us", () => {
     // On a subscription the discount lands on the first REAL invoice, so
     // today's order must record the undiscounted figure — booking a reduction
     // nobody was charged today would put the ledger out by the discount.
+    // (A subscription never reaches the `paid` branch below — only a one-time
+    // offer's on-session PaymentIntent does — so `chargeNow` is still what a
+    // recurring sale books.)
     expect(offerCheckout).toContain('sold.billingType !== "recurring"');
-    expect(offerCheckout).toContain("total_cents: chargeNow");
-    expect(offerCheckout).toContain("subtotal_cents: gross");
+    // Pinned to the behaviour, not the exact source text: what decides the
+    // paid branch is free to change (it once needed a cast to narrow the
+    // union of Stripe's two intent types; fix round 1 replaced that with an
+    // `si.object` discriminant check instead, dropping the word "paid" from
+    // this exact expression) as long as this invariant holds — there is a
+    // real branch, and whatever is booked on the side that ISN'T the paid,
+    // on-session one (which is every recurring sale; see above) still falls
+    // back to the undiscounted `chargeNow`. Fails if that fallback is ever
+    // dropped or swapped for a discounted figure; passes through any
+    // reasonable reformat of the condition itself.
+    // Terminator-anchored (`chargeNow` followed only by `;`, `,` or `)`, not
+    // by more expression) so this cannot be satisfied by a regression like
+    // `: chargeNow - coupon.discountCents` — chargeNow appearing as the START
+    // of a discounted expression rather than the whole booked figure.
+    const complete = offerCheckout.slice(offerCheckout.indexOf("export async function completeOfferCheckout"));
+    expect(complete).toMatch(/\?[\s\S]{0,160}:\s*chargeNow\s*[;,)]/);
+    // subtotal_cents books subtotalCents now, not a bare `gross` — a bump
+    // riding the same PaymentIntent (task 10) adds its own money to what the
+    // order claims was sold, alongside the host. Still never net of the
+    // discount: `gross + bumpNowCents`, not `gross - discount`, is what feeds
+    // it, so the invariant this test has always checked — a subscription's
+    // booked subtotal is undiscounted — survives the bump unchanged.
+    expect(offerCheckout).toContain("subtotal_cents: subtotalCents");
+    // Anchored to the statement's OWN terminating `;` — `[^;]*` cannot cross
+    // it — not just `.*`, which is satisfied by ANY `gross + bumpNowCents` in
+    // the statement and so passed on `const subtotalCents = Math.max(gross +
+    // bumpNowCents, totalCents) : gross + bumpNowCents - discount;`: the
+    // regression this test exists to catch, matched via the untouched
+    // Math.max occurrence while the actually-regressed tail went unchecked.
+    // `[^;]*` forces the match onto the text immediately before that `;` —
+    // the tail — so a trailing `- discount` there fails it. Same terminator
+    // idea as the assertion two lines above, adapted because a statement
+    // (ending in `;`) needs a different anchor than an argument (ending in
+    // `;`, `,` or `)`).
+    expect(offerCheckout).toMatch(/const subtotalCents = [^;]*gross \+ bumpNowCents\s*;/);
   });
 
   it("prices the order from the offer as the COUPON sells it", () => {

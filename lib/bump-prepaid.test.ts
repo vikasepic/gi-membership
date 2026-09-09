@@ -63,8 +63,16 @@ describe("fulfilment of something already paid for", () => {
   it("is told so by the intent, not by guessing", () => {
     // Written by us into metadata, read by us — nothing the browser sends can
     // turn a charge into a free grant.
-    expect(checkout).toContain('bumpPrepaid: bumpNowCents > 0 ? "true" : ""');
     expect(checkout).toContain('prepaid: pi.metadata.bumpPrepaid === "true"');
+    // billingType, not bumpNowCents > 0 — a FREE one-time bump and a
+    // RECURRING one both compute bumpNowCents as 0, so the amount alone
+    // cannot tell them apart. A free one-time bump read as not-prepaid would
+    // take fulfilOffer's off_session, confirm: true path — the exact India
+    // refusal this branch exists to delete — for something already fully
+    // covered by the host's own on-session charge.
+    expect(checkout).toContain(
+      'bumpPrepaid: bumpOffer && bumpOffer.billingType === "one_time" ? "true" : ""',
+    );
   });
 
   it("survives the retry queue without becoming a charge", () => {
@@ -72,5 +80,17 @@ describe("fulfilment of something already paid for", () => {
     // would charge for something already paid for.
     expect(checkout).toMatch(/jobPayload: \{[\s\S]{0,400}prepaid: pi\.metadata\.bumpPrepaid === "true"/);
     expect(retry).toContain("prepaid: p.prepaid === true");
+  });
+
+  it("refuses a prepaid claim against an offer that turns out recurring", () => {
+    // fulfilOffer's own prepaid/recurring guard (this same file, above) never
+    // runs for a prepaid bump — the branch under test here skips calling
+    // fulfilOffer entirely when prepaid is set. Without this guard, a bump
+    // whose host priced it one-time but whose own price flips to recurring
+    // before fulfilment would be granted with no subscription and no charge —
+    // free access forever. This is fulfilBump's OWN copy of the guard, not a
+    // call into fulfilOffer's, so it has to exist as its own line.
+    expect(fulfil).toMatch(/if \(args\.prepaid && offer\.billingType !== "one_time"\)/);
+    expect(fulfil).toMatch(/if \(args\.prepaid && offer\.billingType !== "one_time"\)[\s\S]{0,80}throw new Error/);
   });
 });

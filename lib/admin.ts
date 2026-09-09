@@ -242,6 +242,14 @@ export type OfferInput = {
   imageUrl: string | null;
   acceptLabel: string;
   pageAltOfferId?: string | null;
+  /**
+   * Validated in saveOffer (bumpSlotError) and written by toOfferRow below.
+   * The offer form now posts this on every save (its picker defaults to the
+   * current value), so — unlike when this comment warned the write was
+   * missing — omitting it here would go back to nulling out a real value on
+   * every unrelated save rather than preserving one nothing here changed.
+   */
+  bumpOfferId?: string | null;
   activecampaignTagId?: string | null;
   adEventName?: string | null;
   activecampaignTrialTagId?: string | null;
@@ -328,6 +336,7 @@ function toOfferRow(input: OfferInput, storeId: string) {
     image_url: input.imageUrl,
     accept_label: input.acceptLabel,
     page_alt_offer_id: input.pageAltOfferId ?? null,
+    bump_offer_id: input.bumpOfferId ?? null,
     ad_event_name: input.adEventName?.trim() || null,
     activecampaign_tag_id: input.activecampaignTagId ?? null,
     activecampaign_trial_tag_id: input.activecampaignTrialTagId ?? null,

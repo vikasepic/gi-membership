@@ -10,7 +10,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createOffer, updateOffer, updateOfferKey, deleteOffer, type OfferInput } from "@/lib/admin";
 import { requireAdmin } from "@/lib/admin-guard";
-import { altOfferIdFor } from "@/lib/offers";
+import { altOfferIdFor, bumpSlotError } from "@/lib/offers";
+import { getOffer } from "@/lib/store";
 import { OFFER_KEY, offerKeyProblem } from "@/lib/offer-key";
 
 const emptyToNull = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
@@ -49,6 +50,10 @@ const schema = z
     // matching at purchase time.
     // The second price on this offer's own page. Empty means one price.
     pageAltOfferId: z.string().trim().optional().default(""),
+    // An offer shown as a tickbox on THIS offer's own checkout. Empty means
+    // no bump. Validated below with bumpSlotError rather than here, because
+    // the check needs a database read (does the id resolve, is it active).
+    bumpOfferId: z.string().trim().optional().default(""),
     // The ads team's own name for this offer's sale event. Bounded because
     // Meta drops a custom event name over 40 characters without saying so, and
     // from inside an ad account that is indistinguishable from broken tracking.
@@ -143,6 +148,30 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
   const declared = v.grantAppId ? await appChannels(v.grantAppId) : [];
   v.grantChannels = v.grantChannels.filter((c) => declared.includes(c));
 
+  // Refuse a bump that could only fail when somebody tries to buy it — but
+  // only when this save is actually CHOOSING it. The picker (offer-form.tsx)
+  // keeps an already-saved bump visible, labelled, even once it stops
+  // qualifying (deactivated, or switched to recurring, by an edit to THAT
+  // offer) rather than dropping it — so an unrelated save of THIS offer (a
+  // headline tweak) posts that same id back unchanged. Re-running the guard
+  // against a no-op re-post would turn that unrelated save into a hard
+  // failure over a problem it didn't create; comparing against what is
+  // already stored lets the unchanged id through while still refusing any
+  // save that actually PICKS a new, invalid bump.
+  if (v.bumpOfferId) {
+    const current = v.id ? await getOffer(v.id) : null;
+    if (v.bumpOfferId !== current?.bumpOfferId) {
+      const bump = await getOffer(v.bumpOfferId);
+      const problem = bumpSlotError(
+        bump ? { id: bump.id, billingType: bump.billingType, active: bump.active, currency: bump.currency } : null,
+        v.id ?? "",
+        v.currency,
+      );
+      if (!bump) return { error: "That bump offer no longer exists." };
+      if (problem) return { error: problem };
+    }
+  }
+
   const input: OfferInput = {
     key: v.key,
     name: v.name,
@@ -162,6 +191,8 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     imageUrl: v.imageUrl,
     acceptLabel: v.acceptLabel,
     pageAltOfferId: altOfferIdFor(v.pageAltOfferId, v.id),
+    // Self and billing/active are already refused above; nothing left to strip.
+    bumpOfferId: v.bumpOfferId || null,
     adEventName: v.adEventName?.trim() || null,
     activecampaignTagId: v.activecampaignTagId?.trim() || null,
     activecampaignTrialTagId: v.activecampaignTrialTagId?.trim() || null,

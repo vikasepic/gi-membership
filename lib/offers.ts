@@ -217,3 +217,33 @@ export function altSaving(
   if (months < 1) return null;
   return `${months} month${months === 1 ? "" : "s"} free`;
 }
+
+/**
+ * Whether an offer may sit in another offer's bump slot.
+ *
+ * Checked when the admin saves rather than when a buyer pays. A slot that can
+ * only fail is a slot that fails in front of a customer with a card in their
+ * hand, and the message they would see explains nothing.
+ */
+export function bumpSlotError(
+  bump: { id: string; billingType: string; active: boolean; currency: string } | null,
+  hostId: string,
+  hostCurrency: string,
+): string | null {
+  if (!bump) return null;
+  if (bump.id === hostId) return "An offer cannot bump itself.";
+  if (!bump.active) return "That offer is not active, so it cannot be offered as a bump.";
+  if (bump.billingType !== "one_time") {
+    return "A bump must be a one-time offer. A recurring one would have to be charged after the payment, which cards issued in India refuse.";
+  }
+  // The bump's cents are added straight into an amount charged in the HOST's
+  // currency (startOfferCheckout: gross - discount + bumpNowCents, one single
+  // PaymentIntent) — nothing downstream converts between currencies, so a
+  // mismatch would charge, say, 2900 JPY-cents worth of USD cents tacked onto
+  // a USD price. Checked here, not just left to the picker, because the
+  // picker is convenience and this is the only enforcement saveOffer has.
+  if (bump.currency !== hostCurrency) {
+    return "A bump must be priced in the same currency as this offer.";
+  }
+  return null;
+}

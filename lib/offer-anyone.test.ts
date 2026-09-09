@@ -26,8 +26,16 @@ describe("the wall is gone", () => {
   });
 
   it("only checks ownership for somebody who has some", () => {
-    // ownershipFor(undefined) on a stranger is a question with no answer.
-    expect(page).toMatch(/if \(user\?\.id\) \{[\s\S]{0,240}isOfferEligible/);
+    // ownershipFor(undefined) on a stranger is a question with no answer — the
+    // ternary's anonymous branch never reaches it. Computed rather than
+    // skipped now (it used to live inside the eligibility `if`): the bump
+    // placed on this checkout reuses the same `owned` set to decide whether
+    // IT may show, and an empty one is the right answer for a stranger.
+    expect(page).toMatch(/user\?\.id\s*\n?\s*\?\s*await ownershipFor\(user\.id\)/);
+    // isOfferEligible is likewise only ever REACHED for a signed-in visitor —
+    // `&&` short-circuits before it runs for anybody else, the same guarantee
+    // the old nested `if` gave, written as a guard instead of a block.
+    expect(page).toMatch(/if \(user\?\.id && !isOfferEligible/);
   });
 
   it("shows a stranger the trial rather than guessing at their history", () => {

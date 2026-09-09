@@ -20,6 +20,7 @@ import { readFileSync } from "node:fs";
 const checkout = readFileSync("lib/checkout.ts", "utf8");
 const retry = readFileSync("lib/retry.ts", "utf8");
 const errors = readFileSync("lib/errors.ts", "utf8");
+const offerCheckout = readFileSync("lib/offer-checkout.ts", "utf8");
 
 /** The body of a named function, to the next top-level `export`. */
 function bodyOf(src: string, name: string): string {
@@ -113,5 +114,128 @@ describe("the job kind", () => {
     // Record<JobKind, Runner> makes this a compile error rather than a runtime
     // one, which is the reason the union is worth keeping narrow.
     expect(errors).toContain('"bump_charge"');
+  });
+});
+
+// The offer checkout's own two bump-failure records — a different function
+// (completeOfferCheckout, lib/offer-checkout.ts) from finalizeOrder above, and
+// the two records inside it must NOT be handled alike: one is a genuine
+// fulfilBump failure that a retry can fix, the other is a bump that was paid
+// for but can never be resolved (the offer is inactive BY DEFINITION in that
+// branch) — queueing THAT one would let the sweep "resolve" it on its first
+// pass, since fulfilBump returns rather than throws on an inactive offer.
+describe("the offer checkout's own bump failures", () => {
+  const complete = bodyOf(offerCheckout, "completeOfferCheckout");
+  // Genuine failure: the fulfilBump call that can actually throw, up to (not
+  // including) the branch below it.
+  const genuineFailure = complete.slice(
+    complete.indexOf("if (bumpOfferId && bumpRaw?.active)"),
+    complete.indexOf("else if (bumpUnresolved)"),
+  );
+  // The unresolvable-but-paid-for branch, from the recordError CALL itself
+  // (not the comment above it, which spells out "jobKind"/"jobPayload" in
+  // prose to explain their absence — a substring check from there would
+  // trip on the explanation rather than the code) to the end of the function
+  // — its last branch, so this is also the end of the sliced body.
+  const unresolvable = complete.slice(complete.indexOf("await recordError({", complete.indexOf("else if (bumpUnresolved)")));
+
+  it("still queues a retry for a fulfilBump that actually threw", () => {
+    // This one CAN succeed on replay, so it must stay retryable.
+    expect(genuineFailure).toContain('jobKind: "bump_charge"');
+    expect(genuineFailure).toContain("jobPayload: {");
+  });
+
+  it("only logs a paid bump that can never be resolved — never queues it", () => {
+    // recordError queues a retry only when BOTH jobKind and jobPayload are
+    // given (see lib/errors.ts). Neither may appear in the call here, or the
+    // sweep would run this "job", see fulfilBump no-op without throwing, and
+    // mark it resolved within a minute — erasing the visibility this record
+    // exists to give.
+    expect(unresolvable).not.toContain("jobKind");
+    expect(unresolvable).not.toContain("jobPayload");
+  });
+
+  it("still names the offer, the buyer, and what was paid", () => {
+    // The only place left to carry this once jobPayload is gone.
+    expect(unresolvable).toContain("offerId: bumpOfferId");
+    expect(unresolvable).toMatch(/\bemail\b/);
+    expect(unresolvable).toMatch(/\btotalCents\b/);
+  });
+});
+
+// A third, separate try/catch in the same function — wrapping fulfilOffer,
+// grantOfferOwnership and the HOST's own order_items insert, not the bump's
+// two records above. It used to record nothing at all: a charged buyer left
+// with no order and no ownership row raised no alert on the admin badge and
+// nothing ever retried it, unlike the two bump failures above which both call
+// recordError.
+describe("the offer checkout's own host-fulfilment failure", () => {
+  const complete = bodyOf(offerCheckout, "completeOfferCheckout");
+  const hostFailure = complete.slice(
+    complete.indexOf("} catch (e) {"),
+    complete.indexOf("// The bump the buyer ticked"),
+  );
+
+  it("now records it — log-only, so the sweep cannot quietly resolve it", () => {
+    // No sweep job exists for "retry this order's fulfilment" — the retry IS
+    // this function running again, driven by the webhook's redelivery (see
+    // below) or the buyer reloading the return page. An actual jobKind:/
+    // jobPayload: FIELD would queue a job nothing is built to run — checked
+    // with the colon so this doesn't trip on prose that merely mentions the
+    // words (as the comment two lines above this one does).
+    expect(hostFailure).toContain("await recordError({");
+    expect(hostFailure).not.toContain("jobKind:");
+    expect(hostFailure).not.toContain("jobPayload:");
+  });
+
+  it("carries the intent, the order, the buyer, and what was charged", () => {
+    expect(hostFailure).toMatch(/\bintentId\b/);
+    expect(hostFailure).toMatch(/\borderId\b/);
+    expect(hostFailure).toMatch(/\buserId\b/);
+    expect(hostFailure).toMatch(/\btotalCents\b/);
+  });
+
+  it("tells a charged buyer the truth — a different key than the setup path's charge_failed", () => {
+    // `paid` is the pi_ / seti_ discriminant resolved earlier in this same
+    // function. By the time this catch can run on the paid path the money has
+    // already moved, so charge_failed (kept, unchanged, for the setup path)
+    // would be a lie here.
+    expect(hostFailure).toContain('error: paid ? "grant_failed" : "charge_failed"');
+  });
+});
+
+// The Stripe webhook is the only caller left once the buyer closes the tab —
+// so a failure completeOfferCheckout CAN heal on a second pass must reach
+// Stripe as a non-200, or nothing ever redelivers it. See
+// app/api/webhooks/stripe/route.test.ts for the routing-level proof; this
+// pins the shape in the route's own source, the way the rest of this file
+// pins shapes rather than running the money path.
+describe("the webhook redelivers a healable offer failure, not a permanent one", () => {
+  const route = readFileSync("app/api/webhooks/stripe/route.ts", "utf8");
+  const offerBranch = route.slice(
+    route.indexOf("if (pi.metadata?.offerId)"),
+    route.indexOf("} else {\n        await finalizeOrder"),
+  );
+  // Just the condition that decides whether this throws — not the prose
+  // around it, which explains the excluded keys BY NAME and would otherwise
+  // make a substring check on those same names meaningless.
+  const condition = offerBranch.slice(
+    offerBranch.indexOf("if (!result.ok"),
+    offerBranch.indexOf("{", offerBranch.indexOf("if (!result.ok")) + 1,
+  );
+
+  it("throws on order_failed and the paid-path failure key", () => {
+    expect(condition).toContain('result.error === "order_failed"');
+    expect(condition).toContain('result.error === "grant_failed"');
+    expect(offerBranch).toMatch(/result\.error === "order_failed"[\s\S]{0,40}result\.error === "grant_failed"[\s\S]{0,80}throw new Error/);
+  });
+
+  it("does not throw on a permanent failure", () => {
+    // Not asserting these strings are absent from the file (they appear
+    // elsewhere, in completeOfferCheckout's own returns, and in this file's
+    // own comments explaining the exclusion) — asserting they are absent from
+    // the actual CONDITION that decides whether this throws.
+    expect(condition).not.toContain('"unavailable"');
+    expect(condition).not.toContain('"unknown_intent_metadata"');
   });
 });

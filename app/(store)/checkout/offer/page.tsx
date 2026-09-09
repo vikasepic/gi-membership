@@ -3,8 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getOffer } from "@/lib/store";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { ownershipFor } from "@/lib/checkout";
-import { isOfferEligible, immediateChargeCents } from "@/lib/offers";
-import { livePrices } from "@/lib/offer-prices";
+import { isOfferEligible, immediateChargeCents, shouldShowOffer, offerAtPrice } from "@/lib/offers";
+import { livePrices, shownPrices } from "@/lib/offer-prices";
 import { checkoutSkin } from "@/lib/checkout-skin";
 import { CheckoutStage } from "@/components/checkout/v2/stage";
 import { CheckoutTrial, TrialEyebrow, TrialPriceTerms } from "@/components/checkout/trial";
@@ -21,6 +21,8 @@ import { getSettingsOrDefaults } from "@/lib/settings";
 import { checkoutDesignVars } from "@/lib/checkout-design";
 import { publicCoverUrl } from "@/lib/media";
 import { productDisplay } from "@/lib/courses";
+import { buildBumpView } from "@/lib/bump";
+import type { BumpSummary } from "@/components/checkout/checkout-types";
 
 export const metadata = NOINDEX;
 
@@ -55,12 +57,30 @@ export default async function OfferCheckoutPage({
   // out to have used it already. Same rule the product checkout follows.
   const offer = await offerAsSoldTo(user?.email ?? null, listed);
 
-  // Someone who already has it should never see a payment form for it. Nothing
-  // to check for a stranger — they own nothing yet.
-  if (user?.id) {
-    const owned = await ownershipFor(user.id);
-    if (!isOfferEligible(offer, owned)) redirect("/library?offer=already_owned");
-  }
+  // Someone who already has it should never see a payment form for it. An
+  // anonymous visitor owns nothing, so this is computed rather than skipped
+  // for them — the bump below needs the same ownership set to decide whether
+  // IT may be shown, and an empty one is exactly the right answer for a
+  // stranger.
+  const owned = user?.id
+    ? await ownershipFor(user.id)
+    : { productIds: new Set<string>(), appIds: new Set<string>(), appChannels: new Map<string, Set<string>>() };
+  if (user?.id && !isOfferEligible(offer, owned)) redirect("/library?offer=already_owned");
+
+  // The bump this offer places, priced from its own placement — the same
+  // helpers and the same rule the product checkout uses (see
+  // app/(store)/checkout/page.tsx), so a preview here and a charge there can
+  // never disagree about what a bump looks like or costs. Resolved on the
+  // server so the page and the charge are built from the same list; the form
+  // posts an index into it and nothing else.
+  const bumpOfferRaw = offer.bumpOfferId ? await getOffer(offer.bumpOfferId) : null;
+  const bumpAsSold = bumpOfferRaw ? await offerAsSoldTo(user?.email ?? null, bumpOfferRaw) : null;
+  const bumpOptions: BumpSummary[] =
+    bumpAsSold && shouldShowOffer(bumpAsSold, owned)
+      ? shownPrices(bumpAsSold.prices, offer.bumpPriceIds ?? []).map((price) =>
+          buildBumpView(offerAtPrice(bumpAsSold, price)),
+        )
+      : [];
 
   // What this offer looks like: its own image where one has been set, else the
   // artwork of whatever it grants.
@@ -116,6 +136,7 @@ export default async function OfferCheckoutPage({
       // preselects nothing rather than buying something unexpected.
       prices={ways}
       chosen={ways.findIndex((p) => p.id === wantPrice)}
+      bumpOptions={bumpOptions}
       signedInEmail={user?.email ?? null}
       publishableKey={stripePublishableKey()}
       skin={skin}

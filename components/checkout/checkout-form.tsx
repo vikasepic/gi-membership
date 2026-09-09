@@ -264,6 +264,13 @@ function Inner({
   const totalNowRef = useRef(totalNow);
   totalNowRef.current = totalNow;
 
+  // Recurring where the CHOSEN price renews — not where today's total happens
+  // to be zero, which is a different question (see the effect below). False
+  // while nothing has been picked yet (two or more prices, none ticked):
+  // submission is blocked until then (priceUnanswered below), and this
+  // recomputes the instant a real choice lands.
+  const isRecurring = chosenPrice?.billingType === "recurring";
+
   /**
    * Keep Stripe's idea of the total in step with the page's.
    *
@@ -275,14 +282,20 @@ function Inner({
    * wallet quoting a price the buyer did not agree to is the worst version of
    * this bug, because it is the one that completes.
    *
-   * Mode moves with it. Nothing due today means the server is making a
-   * SetupIntent — a $0 PaymentIntent is not a thing Stripe will create — and an
-   * Elements left in payment mode is a wallet offering to charge for a free
-   * trial.
+   * Mode follows `isRecurring`, not `totalNow <= 0` — createCheckoutIntent
+   * (lib/checkout.ts) opens a PaymentIntent only for a one-time price and a
+   * SetupIntent for every recurring one, trial or not: a no-trial
+   * subscription's first charge is billed through the subscription itself on
+   * creation, not through this intent, even though `totalNow` is that price's
+   * full amount. Keying this off `totalNow` put Elements in "payment" mode for
+   * exactly that price while the server still opened a SetupIntent, and
+   * confirmSetup against an Elements mounted for a payment is a Stripe.js
+   * integration error — a dead checkout. Same bug, same fix, as the offer
+   * checkout's matching effect (offer-checkout-form.tsx).
    */
   useEffect(() => {
     if (!elements) return;
-    if (totalNow <= 0) {
+    if (isRecurring) {
       void elements.update({ mode: "setup", currency: product.currency, setupFutureUsage: "off_session" });
       return;
     }
@@ -292,7 +305,7 @@ function Inner({
       currency: product.currency,
       setupFutureUsage: "off_session",
     });
-  }, [elements, totalNow, product.currency]);
+  }, [elements, isRecurring, totalNow, product.currency]);
 
   async function applyCoupon(atPick: number | null = pricePick) {
     const code = couponInput.trim();

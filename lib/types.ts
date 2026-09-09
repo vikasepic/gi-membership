@@ -141,6 +141,10 @@ export type Offer = {
   prices: OfferPrice[];
   /** Which of its own prices the offer's page shows. Empty = the headline one. */
   pagePriceIds: string[];
+  /** An offer shown as a tickbox on this offer's checkout. */
+  bumpOfferId: string | null;
+  /** Which of the bump offer's prices this placement shows. Empty = headline. */
+  bumpPriceIds: string[];
   /** Applied when a trial starts. Kept if they cancel before ever paying. */
   activecampaignTrialTagId: string | null;
   /** Applied when access ends. Never removed. */
