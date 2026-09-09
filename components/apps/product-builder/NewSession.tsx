@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { callApi } from "@/lib/builtin-apps/product-builder/client";
+import { callApi } from "@/lib/builtin-apps/client";
 import { INTAKE_LIMITS } from "@/lib/builtin-apps/product-builder/stages";
 import type { SessionRecord } from "@/lib/builtin-apps/product-builder/types";
 

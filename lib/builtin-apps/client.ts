@@ -1,6 +1,6 @@
-import type { StreamEvent } from "./types";
+import type { StreamEvent } from "./product-builder/types";
 
-// Browser side of the app's routes. Same origin, so the store's session
+// Browser side of the built-in apps' routes. Same origin, so the store's session
 // cookie goes with every request and nothing here handles credentials.
 
 /**

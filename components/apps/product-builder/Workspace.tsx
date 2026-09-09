@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { streamApi } from "@/lib/builtin-apps/product-builder/client";
+import { streamApi } from "@/lib/builtin-apps/client";
 import {
   DOCUMENT_TITLES,
   SKIPPABLE_STAGES,

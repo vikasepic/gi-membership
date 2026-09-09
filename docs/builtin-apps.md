@@ -92,7 +92,9 @@ Nothing public, nothing at build time.
 4. **Create the offers**, last, in Admin → Offers: grant an app, pick the
    internal app, one price, one time, $19, no trial. Write the page at
    `/o/<key>` in the page editor. Attach as a bump or upsell if wanted. The
-   home page's membership card reads "One-time payment" for these.
+   home page's memberships section lists recurring offers only, so link to
+   `/o/<key>` from a page block or an ad; wherever the membership card does
+   draw a one-time offer it reads "One-time payment".
 5. **Test purchase** in Stripe test mode: buy, open from the library, refund
    from Admin → Orders, confirm the app refuses.
 6. Retire the standalone deployments and their Supabase projects. Neither has

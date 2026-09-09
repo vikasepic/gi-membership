@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
-import { callApi } from "@/lib/builtin-apps/product-builder/client";
+import { callApi } from "@/lib/builtin-apps/client";
 import type {
   GenerationRecord,
   GenerationResult,
