@@ -87,7 +87,7 @@ export default async function AdminTrafficPage({
   const sourceView = filter.source
     ? buildFunnels(counts.filter((c) => c.source === filter.source), [], owners, days)
     : view;
-  const shown = applyOverview(overviewRows(sourceView), filter);
+  const shown = applyOverview(overviewRows(sourceView, !filter.source), filter);
 
   return (
     <div className="flex flex-col gap-6 py-4">

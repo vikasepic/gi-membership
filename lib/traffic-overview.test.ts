@@ -59,6 +59,55 @@ describe("every page is in one list", () => {
   });
 });
 
+describe("when the order count isn't known (a source filter)", () => {
+  // Same shape as VIEW's funnels, but the caller decides the steps by hand
+  // so each case can put the forced 0 exactly where a source filter puts it:
+  // in `Bought`, never in a real count.
+  const funnel = (steps: [number, number, number, number]): FunnelView => ({
+    funnels: [
+      {
+        key: "k",
+        title: "K",
+        kind: "offer",
+        steps: [
+          step("Saw the sales page", steps[0]),
+          step("Reached the checkout", steps[1]),
+          step("Saw the upsell", steps[2]),
+          step("Bought", steps[3]),
+        ],
+        sources: [],
+        daily: [],
+        salesViews: steps[0],
+      },
+    ],
+    others: [],
+    counted: 0,
+  });
+
+  it("reports the real drop among the known steps, not the forced zero", () => {
+    // Steps[3] is forced to 0 by the caller, same as a source-filtered
+    // funnel with real upsell traffic. Unknown orders must not let that
+    // absence outrank the actual 60% drop at the checkout.
+    const [row] = overviewRows(funnel([500, 200, 150, 0]), false);
+    expect(row.drop).toEqual({ from: 0, percent: 60 });
+  });
+
+  it("reports no drop at all when the known steps never fall", () => {
+    // The only fall across all four steps is into the sale step — the one
+    // step this call says it cannot see. With that step excluded, nothing
+    // here actually falls, so the honest answer is no drop, not a 100% one.
+    const [row] = overviewRows(funnel([300, 300, 300, 0]), false);
+    expect(row.drop).toBeNull();
+  });
+
+  it("still reports a genuine 100% fall to zero sales when orders ARE known", () => {
+    // Same steps as above, but this time the 0 is a real order count, not a
+    // forced one — the default `ordersKnown = true` must keep reporting it.
+    const [row] = overviewRows(funnel([300, 300, 300, 0]));
+    expect(row.drop).toEqual({ from: 2, percent: 100 });
+  });
+});
+
 describe("sorting", () => {
   const rows = overviewRows(VIEW);
 

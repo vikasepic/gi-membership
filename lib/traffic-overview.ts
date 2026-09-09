@@ -95,14 +95,23 @@ export function trafficUrl(path: string, filter: LinkFilter, over: Partial<LinkF
 const pathOf = (kind: "product" | "offer", key: string) =>
   kind === "product" ? `/p/${key}` : `/o/${key}`;
 
-export function overviewRows(view: FunnelView): OverviewRow[] {
+export function overviewRows(view: FunnelView, ordersKnown = true): OverviewRow[] {
   const funnels: OverviewRow[] = view.funnels.map((f) => ({
     key: f.key,
     title: f.title,
     path: pathOf(f.kind, f.key),
     kind: f.kind,
     steps: f.steps.map((s) => s.count),
-    drop: biggestDrop(f.steps),
+    // biggestDrop is correct for whatever steps it's given, but under a
+    // source filter `f.steps[3]` isn't a measured zero, it's an absence:
+    // orders carry no source anywhere in this store, so the caller forces
+    // the fourth step to 0 rather than counting it (see page.tsx). Handed
+    // that step anyway, biggestDrop would call the fall INTO it a
+    // mathematically perfect "100% at the sale," which wins the sort over
+    // every real leak in the one column whose job is finding the page that
+    // actually leaks. Truncating to the three steps that ARE known is not an
+    // optimisation — it's a statement that this filter cannot see the sale.
+    drop: biggestDrop(ordersKnown ? f.steps : f.steps.slice(0, 3)),
     daily: f.daily,
     topSource: f.sources[0] ?? null,
   }));

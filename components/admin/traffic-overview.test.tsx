@@ -38,7 +38,7 @@ afterEach(() => {
   if (r) act(() => r.unmount());
 });
 
-function mount(over: Record<string, string> = {}) {
+function mount(over: Record<string, string> = {}, rows: OverviewRow[] = ROWS) {
   document.body.innerHTML = "";
   const host = document.createElement("div");
   document.body.appendChild(host);
@@ -46,7 +46,7 @@ function mount(over: Record<string, string> = {}) {
   mounted = root;
   const filter = { ...overviewFilterFrom(over), preset: over.preset ?? "30" };
   act(() => {
-    root.render(<TrafficOverview rows={ROWS} filter={filter} sources={["meta", "direct"]} />);
+    root.render(<TrafficOverview rows={rows} filter={filter} sources={["meta", "direct"]} />);
   });
 }
 const text = () => document.body.textContent ?? "";
@@ -119,6 +119,19 @@ describe("the traffic table", () => {
     const cells = [...document.querySelectorAll("tbody tr")][0].querySelectorAll("td");
     expect(cells[1].textContent).toBe("100");
     expect(cells[4].textContent).toBe("—");
+  });
+
+  it("under a source filter, the drop cell never claims a fall into the sale step", () => {
+    // Mirrors what overviewRows(sourceView, false) now hands the table for a
+    // funnel whose fourth step is a forced 0, not a measured one: the real
+    // 60% drop at the checkout — never the "100% at the sale" a forced zero
+    // used to hand the sort.
+    const rows: OverviewRow[] = [
+      { ...ROWS[0], steps: [500, 200, 150, 0], drop: { from: 0, percent: 60 } },
+    ];
+    mount({ source: "meta" }, rows);
+    const cell = [...document.querySelectorAll("tbody tr")][0].querySelectorAll("td")[5];
+    expect(cell.textContent).toBe("60% at the checkout");
   });
 
   it("shows dashes rather than zeroes for a page with no funnel", () => {
