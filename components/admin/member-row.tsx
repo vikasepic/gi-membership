@@ -1,8 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useActionState, useState } from "react";
 import { DeleteMember } from "@/components/admin/delete-member";
-import { cancelSubscriptionAction, revokeAccessAction, toggleAdminAction } from "@/app/admin/members/actions";
+import {
+  cancelSubscriptionAction,
+  grantAccessAction,
+  revokeAccessAction,
+  toggleAdminAction,
+  type MemberActionState,
+} from "@/app/admin/members/actions";
+import { GrantPicker, type GrantOption } from "@/components/admin/grant-picker";
 import { holdsLabel, standingOf, type Standing } from "@/lib/member-view";
 import { money } from "@/lib/money";
 import type { MemberRow as Member } from "@/lib/members";
@@ -31,11 +38,14 @@ const date = (s: string) =>
 export function MemberRowView({
   member,
   access,
+  grants,
   isOwner,
   isSelf,
 }: {
   member: Member;
   access: AccessRow[];
+  /** Everything the store can grant, so an existing member can be given more. */
+  grants: GrantOption[];
   /** Admin through ADMIN_EMAILS, which this page cannot change. */
   isOwner: boolean;
   isSelf: boolean;
@@ -120,6 +130,8 @@ export function MemberRowView({
                 )}
               </div>
 
+              <GrantMore member={member} access={access} grants={grants} />
+
               <div className="flex min-w-52 flex-col gap-2">
                 <span className="kicker text-muted">Subscriptions</span>
                 {member.subscriptions.length === 0 ? (
@@ -190,5 +202,55 @@ export function MemberRowView({
         </tr>
       )}
     </>
+  );
+}
+
+/**
+ * Give an existing member something.
+ *
+ * grantAccessAction has existed since the multi-grant work and nothing ever
+ * called it: the only picker in the admin was on the form that CREATES an
+ * account, so anyone already in the list could be revoked from but never
+ * granted to. Same action, same options, same "kind:id" values — the screen
+ * was the only missing part.
+ *
+ * Behind a summary because a row is opened to read it far more often than to
+ * change it, and an open list of tickboxes in every expanded row is a lot of
+ * page for the rarer job.
+ */
+function GrantMore({
+  member,
+  access,
+  grants,
+}: {
+  member: Member;
+  access: AccessRow[];
+  grants: GrantOption[];
+}) {
+  const [state, action, pending] = useActionState<MemberActionState, FormData>(grantAccessAction, {});
+  // What they already hold, in the picker's own "kind:id" vocabulary, so those
+  // rows show ticked and disabled rather than inviting a grant that no-ops.
+  const held = access
+    .filter((a) => a.status !== "canceled")
+    .map((a) => a.grantValue)
+    .filter((v): v is string => v !== null);
+
+  return (
+    <details className="min-w-56 flex-1">
+      <summary className="cursor-pointer text-sm text-primary hover:underline">Grant access</summary>
+      <form action={action} className="mt-2 flex flex-col gap-2">
+        <input type="hidden" name="userId" value={member.id} />
+        <GrantPicker grants={grants} held={held} />
+        {state.error && <p className="text-sm text-primary">{state.error}</p>}
+        {state.message && <p className="text-sm text-navy">{state.message}</p>}
+        <button
+          type="submit"
+          disabled={pending}
+          className="w-fit rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-60"
+        >
+          {pending ? "Granting…" : "Grant"}
+        </button>
+      </form>
+    </details>
   );
 }

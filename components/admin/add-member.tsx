@@ -4,6 +4,7 @@ import { useSlowSave } from "@/components/admin/save-status";
 import { useActionState } from "react";
 import { addMemberAction, type MemberActionState } from "@/app/admin/members/actions";
 import { inputClass as input } from "@/components/admin/form-controls";
+import { GrantPicker, type GrantOption } from "@/components/admin/grant-picker";
 
 /**
  * Add a member by hand, optionally granting access in the same step.
@@ -14,20 +15,10 @@ import { inputClass as input } from "@/components/admin/form-controls";
  * add someone by hand is to give them something, and two screens invites
  * forgetting the second.
  */
-const GROUPS = [
-  { kind: "product", heading: "Products" },
-  { kind: "offer", heading: "Offers" },
-] as const;
-
-/** "Offer — Book Writer" -> "Book Writer". The group heading carries the kind. */
-function stripKind(label: string): string {
-  return label.replace(/^(Product|Offer)\s+—\s+/, "");
-}
-
 export function AddMember({
   grants,
 }: {
-  grants: { value: string; label: string }[];
+  grants: GrantOption[];
 }) {
   const [state, action, pending] = useActionState<MemberActionState, FormData>(addMemberAction, {});
   const slow = useSlowSave(pending);
@@ -63,32 +54,7 @@ export function AddMember({
             scrollbar nested inside a form inside a collapsed <details> — three
             scroll contexts to reach one tickbox. The list is short, the form is
             behind a summary, and the page scrolls perfectly well on its own. */}
-        <div className="rounded-xl border border-border p-3">
-          {GROUPS.map(({ kind, heading }) => {
-            const items = grants.filter((g) => g.value.startsWith(`${kind}:`));
-            if (items.length === 0) return null;
-            return (
-              <div key={kind} className="mb-3 flex flex-col gap-1.5 last:mb-0">
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted">
-                  {heading}
-                </span>
-                {items.map((g) => (
-                  <label key={g.value} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      name="grant"
-                      value={g.value}
-                      className="size-4 shrink-0 accent-primary"
-                    />
-                    {/* The heading says which kind it is, so the label does not
-                        repeat it. */}
-                    <span>{stripKind(g.label)}</span>
-                  </label>
-                ))}
-              </div>
-            );
-          })}
-        </div>
+        <GrantPicker grants={grants} />
       </fieldset>
 
       {state.error && (

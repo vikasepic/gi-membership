@@ -175,6 +175,7 @@ export default async function AdminMembersPage({
                   key={m.id}
                   member={m}
                   access={access.get(m.id) ?? []}
+                  grants={grants}
                   isOwner={isAdminEmail(m.email)}
                   isSelf={(me.email ?? "").toLowerCase() === m.email.toLowerCase()}
                 />

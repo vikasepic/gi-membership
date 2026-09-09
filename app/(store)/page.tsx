@@ -1,7 +1,7 @@
 import { COVER_ASPECT } from "@/lib/cover";
 import { offerHref } from "@/lib/offer-link";
 import { ProductCard, type CatalogItem } from "@/components/product-card";
-import { listPublishedProducts, listSubscriptionOffers } from "@/lib/store";
+import { listPublishedProducts, listHomeOffers } from "@/lib/store";
 import { viewerOwnership, accessHrefForProduct } from "@/lib/library";
 import { isOfferEligible } from "@/lib/offers";
 import { productDisplay, type ProductDisplay } from "@/lib/courses";
@@ -51,10 +51,12 @@ async function StoreData() {
   const ownership = await viewerOwnership();
   const ownedIds = ownership.productIds;
 
-  // Subscription offers shown as their own section. isOfferEligible is the same
-  // check the checkout bump uses, so a member who already subscribes is shown
-  // "Active", never a second sign-up that would bill them twice.
-  const subscriptions = await listSubscriptionOffers();
+  // The offers the admin put on the storefront, in that order — not "every
+  // recurring one", which showed all three Content Engine channels the day
+  // they went active with nowhere to say otherwise. isOfferEligible is the
+  // same check the checkout bump uses, so a member who already subscribes is
+  // shown "Active", never a second sign-up that would bill them twice.
+  const subscriptions = await listHomeOffers();
   const ownedOfferIds = new Set(
     subscriptions.filter((o) => !isOfferEligible(o, ownership)).map((o) => o.id),
   );

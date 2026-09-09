@@ -34,6 +34,7 @@ export const PRODUCT_FIELD_TABS: FieldTabs = {
   activecampaignAbandonedTagId: "marketing",
   adEventName: "marketing",
   contentName: "marketing",
+  homeOrder: "basics",
 };
 
 export const OFFER_FIELD_TABS: FieldTabs = {

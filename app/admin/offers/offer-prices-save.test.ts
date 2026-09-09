@@ -193,3 +193,28 @@ describe("the offer's own Meta event name", () => {
     expect(updated.mock.calls[0][1]).toMatchObject({ contentName: null });
   });
 });
+
+describe("where the offer sits on the storefront", () => {
+  beforeEach(() => {
+    updated.mockClear();
+    created.mockClear();
+  });
+
+  it("saves the position that was typed", async () => {
+    await saveOffer({}, form([PRICE], { homeOrder: "2" }));
+    expect(updated.mock.calls[0][1]).toMatchObject({ homeOrder: 2 });
+  });
+
+  it("treats blank as off the storefront, not as position zero", async () => {
+    // A number input posts "" when cleared and Number("") is 0 — which the
+    // column's CHECK refuses and the page would read as a real position.
+    await saveOffer({}, form([PRICE], { homeOrder: "" }));
+    expect(updated.mock.calls[0][1]).toMatchObject({ homeOrder: null });
+  });
+
+  it("refuses a position the column could not hold", async () => {
+    const res = await saveOffer({}, form([PRICE], { homeOrder: "0" }));
+    expect(res.error).toMatch(/first position is 1/);
+    expect(updated).not.toHaveBeenCalled();
+  });
+});

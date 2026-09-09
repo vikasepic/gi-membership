@@ -348,13 +348,17 @@ export type AccessRow = {
   kind: "product" | "app";
   status: string;
   granted: boolean;
+  /** What this row came from, in the same "kind:id" vocabulary applyGrants takes,
+   *  so the grant picker can show what a member already holds. Null on a row
+   *  predating per-offer ownership, which simply shows as un-held. */
+  grantValue: string | null;
 };
 
 export async function accessForMember(userId: string): Promise<AccessRow[]> {
   const db = createServiceClient();
   const { data: rows } = await db
     .from("ownership")
-    .select("id, product_id, app_id, status, source, granted_by")
+    .select("id, product_id, app_id, offer_id, status, source, granted_by")
     .eq("user_id", userId);
   if (!rows || rows.length === 0) return [];
 
@@ -375,6 +379,14 @@ export async function accessForMember(userId: string): Promise<AccessRow[]> {
       : (pName.get(r.product_id as string) ?? "Product"),
     status: r.status as string,
     granted: r.source === "grant",
+    // An offer grant is recorded with the offer that granted it (0069); a bare
+    // product grant has only the product. Either way this is the value that
+    // would grant it again, which is exactly what the picker must not offer.
+    grantValue: r.offer_id
+      ? `offer:${r.offer_id as string}`
+      : r.product_id
+        ? `product:${r.product_id as string}`
+        : null,
   }));
 }
 

@@ -125,6 +125,8 @@ export type Offer = {
   adEventName?: string | null;
   /** Overrides the title/name as Meta's content_name. Null keeps the old value. */
   contentName?: string | null;
+  /** Position on the storefront. Null means it is not shown there; 1 is first. */
+  homeOrder?: number | null;
   activecampaignTagId: string | null;
   /**
    * A second price on this offer's OWN page at /o/<key>.

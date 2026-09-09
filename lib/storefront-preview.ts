@@ -1,5 +1,5 @@
 import "server-only";
-import { listPublishedProducts, listSubscriptionOffers } from "@/lib/store";
+import { listPublishedProducts, listHomeOffers } from "@/lib/store";
 import { productDisplay } from "@/lib/courses";
 import { publicCoverUrl } from "@/lib/media";
 import { offerHref } from "@/lib/offer-link";
@@ -22,7 +22,7 @@ import type { CatalogItem } from "@/components/product-card";
  * they are actually working on. The live page still resolves real ownership.
  */
 export async function storefrontPreview(): Promise<StoreRender> {
-  const [products, offers] = await Promise.all([listPublishedProducts(), listSubscriptionOffers()]);
+  const [products, offers] = await Promise.all([listPublishedProducts(), listHomeOffers()]);
   const display = await productDisplay(products.map((p) => p.id));
 
   const card = (p: Product): CatalogItem => ({

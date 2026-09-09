@@ -259,6 +259,7 @@ export type OfferInput = {
   adEventName?: string | null;
   /** Overrides the title/name as Meta's content_name. Null keeps the old value. */
   contentName?: string | null;
+  homeOrder?: number | null;
   activecampaignTrialTagId?: string | null;
   activecampaignCancelledTagId?: string | null;
   otoTemplate?: string;
@@ -349,6 +350,7 @@ function toOfferRow(input: OfferInput, storeId: string) {
     upsell_offer_id: input.upsellOfferId ?? null,
     ad_event_name: input.adEventName?.trim() || null,
     content_name: input.contentName?.trim() || null,
+    home_order: input.homeOrder ?? null,
     activecampaign_tag_id: input.activecampaignTagId ?? null,
     activecampaign_trial_tag_id: input.activecampaignTrialTagId ?? null,
     activecampaign_cancelled_tag_id: input.activecampaignCancelledTagId ?? null,

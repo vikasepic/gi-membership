@@ -61,7 +61,7 @@ export function hydrateProduct(row: unknown): Product {
  * the one nobody reads.
  */
 export const OFFER_COLUMNS =
-  "id, key, name, updated_at, ad_event_name, content_name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, grant_channels, page_alt_offer_id, page_price_ids, bump_offer_id, bump_price_ids, upsell_offer_id, upsell_price_ids, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, activecampaign_trial_tag_id, activecampaign_cancelled_tag_id, bump_headline, bump_description, bump_banner, bump_bullets, bump_note, bump_accent, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live, " +
+  "id, key, name, updated_at, ad_event_name, content_name, home_order, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, grant_channels, page_alt_offer_id, page_price_ids, bump_offer_id, bump_price_ids, upsell_offer_id, upsell_price_ids, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, activecampaign_trial_tag_id, activecampaign_cancelled_tag_id, bump_headline, bump_description, bump_banner, bump_bullets, bump_note, bump_accent, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live, " +
   // The ways to pay, embedded rather than fetched one offer at a time: every
   // reader of an offer is a reader of its prices, and a second round trip per
   // offer on a storefront that lists them all is a query nobody would write on
@@ -186,14 +186,27 @@ export async function getOfferByKey(key: string): Promise<Offer | null> {
  * thing this store sells and was previously invisible until someone was already
  * buying something else.
  */
-export async function listSubscriptionOffers(): Promise<Offer[]> {
+/**
+ * The offers the storefront shows, in the order the admin put them.
+ *
+ * It used to be every active RECURRING offer, cheapest first — a rule nothing
+ * could change. Splitting Content Engine into three channel offers put all
+ * three on the storefront the day they went active, and a one-time offer could
+ * never appear however much it belonged there. Placement is `home_order` now:
+ * null means not shown, and billing type decides nothing.
+ *
+ * Ordered by id as well as by the number, so two offers sharing a position
+ * cannot swap places between two reads of the same page.
+ */
+export async function listHomeOffers(): Promise<Offer[]> {
   const db = createServiceClient();
   const { data, error } = await db
     .from("offers")
     .select(OFFER_COLUMNS)
     .eq("active", true)
-    .eq("billing_type", "recurring")
-    .order("price_cents", { ascending: true });
-  if (error) throw new Error(`listSubscriptionOffers: ${error.message}`);
+    .not("home_order", "is", null)
+    .order("home_order", { ascending: true })
+    .order("id", { ascending: true });
+  if (error) throw new Error(`listHomeOffers: ${error.message}`);
   return (data ?? []).map(hydrateOffer);
 }

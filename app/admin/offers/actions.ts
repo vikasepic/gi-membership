@@ -75,6 +75,20 @@ const schema = z
       .max(100, "Keep the content name under 100 characters")
       .optional()
       .default(""),
+    // Where this offer sits on the storefront. Blank means it is not shown —
+    // the default, and the only way to take one off the page. Coerced through
+    // a string because a number input posts "" when cleared, and Number("")
+    // is 0, which the CHECK would refuse and the page would read as a position.
+    homeOrder: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+      z.coerce
+        .number()
+        .int("Position must be a whole number")
+        .min(1, "The first position is 1")
+        .max(999, "That is not a position")
+        .nullable()
+        .default(null),
+    ),
     activecampaignTagId: z
       .string()
       .trim()
@@ -228,6 +242,7 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     upsellOfferId: v.upsellOfferId || null,
     adEventName: v.adEventName?.trim() || null,
     contentName: v.contentName?.trim() || null,
+    homeOrder: v.homeOrder,
     activecampaignTagId: v.activecampaignTagId?.trim() || null,
     activecampaignTrialTagId: v.activecampaignTrialTagId?.trim() || null,
     activecampaignCancelledTagId: v.activecampaignCancelledTagId?.trim() || null,

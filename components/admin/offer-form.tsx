@@ -176,6 +176,27 @@ export function OfferForm({
       </div>
       </Section>
 
+      <Section
+        title="Storefront"
+        hint="The home page used to show every active subscription, cheapest first, with no way to choose. This is the way."
+      >
+        <Field
+          label="Home page position"
+          hint="Blank keeps it off the home page — it can still be sold from its own link, a bump or an upsell. 1 shows first. Any offer can appear here, one-time or recurring."
+        >
+          <input
+            name="homeOrder"
+            type="number"
+            min={1}
+            max={999}
+            step={1}
+            defaultValue={offer?.homeOrder ?? ""}
+            placeholder="not shown"
+            className={`${input} max-w-40`}
+          />
+        </Field>
+      </Section>
+
       {/* Grant — what the offer gives. */}
       </TabPanel>
 
