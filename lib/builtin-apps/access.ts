@@ -5,7 +5,7 @@ import { getStoreId } from "@/lib/store";
 import { APP_COLUMNS, type AppRow } from "@/lib/apps";
 import { camelize } from "@/lib/case";
 import { subscribedToApp } from "@/lib/library";
-import { builtinAppOfferPath, type BuiltinAppKey } from "@/lib/builtin-apps/registry";
+import { BUILTIN_APPS, builtinAppOfferPath, type BuiltinAppKey } from "@/lib/builtin-apps/registry";
 
 /**
  * Who may use an internal app: the one question every page and route of it
@@ -57,19 +57,28 @@ export async function internalAppAccess(key: BuiltinAppKey): Promise<InternalApp
 }
 
 /**
- * The answer as a redirect, for pages. Signed out goes to login; an app the
- * store does not sell is a 404; someone who does not own it is sent to the
- * page that sells it, which is the only useful place to land.
+ * The answer as a redirect, for pages. Signed out goes to login and comes
+ * back here; an app the store does not sell is a 404; someone who does not
+ * own it is sent to the page that sells it, the only useful place to land.
  */
 export async function requireInternalApp(key: BuiltinAppKey): Promise<InternalAppViewer> {
   const access = await internalAppAccess(key);
   if (access.ok) return { user: access.user, app: access.app };
   if (access.reason === "no_app") notFound();
-  if (access.reason === "signed_out") redirect("/login");
+  if (access.reason === "signed_out") {
+    redirect(`/login?next=${encodeURIComponent(BUILTIN_APPS[key].route)}`);
+  }
   redirect(builtinAppOfferPath(key));
 }
 
 /** The HTTP status a route handler answers with when access is refused. */
 export function accessStatus(reason: AccessRefusal): number {
   return reason === "signed_out" ? 401 : reason === "no_app" ? 404 : 403;
+}
+
+/** The JSON refusal a route handler sends, with the code the browser shows a sentence for. */
+export function accessRefused(reason: AccessRefusal): Response {
+  const error =
+    reason === "signed_out" ? "unauthorized" : reason === "no_app" ? "not_found" : "no_access";
+  return Response.json({ error }, { status: accessStatus(reason) });
 }
