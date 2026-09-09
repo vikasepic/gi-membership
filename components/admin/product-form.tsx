@@ -583,6 +583,19 @@ export function ProductForm({
             className={inputClass}
           />
         </Field>
+        <Field
+          label="Content name"
+          hint="What Meta calls this product in reporting and in any audience built on a purchase of it. Leave blank to use the title above — set it only when your ads team already calls this something else."
+          error={err("contentName")}
+        >
+          <input
+            name="contentName"
+            defaultValue={product?.contentName ?? ""}
+            maxLength={100}
+            placeholder={product?.title || "e.g. Validator - Front End"}
+            className={inputClass}
+          />
+        </Field>
       </Group>
       <Group label="ActiveCampaign"
         hint="Buyers of this product are added to ActiveCampaign (or updated if they're already there) and given this tag."

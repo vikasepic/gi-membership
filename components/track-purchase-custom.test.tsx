@@ -112,6 +112,21 @@ describe("the event name the admin can save", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.errors.adEventName).toMatch(/40 characters/);
   });
+
+  it("keeps the content name the ads team uses for this product", () => {
+    // Separate from the event name above: one names the event, the other names
+    // the thing bought. This action parses the post through its own schema, so
+    // a field the schema does not name is dropped before it reaches the column.
+    const r = parseProductForm(form({ contentName: "Validator - Front End" }));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.contentName).toBe("Validator - Front End");
+  });
+
+  it("treats a blank content name as unset, so the title still reports", () => {
+    const r = parseProductForm(form({ contentName: "   " }));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.data.contentName).toBeNull();
+  });
 });
 
 describe("the funnel event has a server half", () => {

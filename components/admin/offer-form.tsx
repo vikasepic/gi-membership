@@ -504,6 +504,18 @@ export function OfferForm({
             className={input}
           />
         </Field>
+        <Field
+          label="Content name"
+          hint="What Meta calls this offer in reporting and in any audience built on a purchase of it. Leave blank to use the offer name — set it only when your ads team already calls this something else."
+        >
+          <input
+            name="contentName"
+            defaultValue={offer?.contentName ?? ""}
+            maxLength={100}
+            placeholder={offer?.name || "e.g. Funnel App - Upsell"}
+            className={input}
+          />
+        </Field>
       </Section>
       <Section
         title="ActiveCampaign"

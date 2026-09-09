@@ -45,6 +45,8 @@ export type Product = {
   activecampaignAbandonedTagId: string | null;
   /** Meta custom event fired on this funnel's upsell page. Ads team's name. */
   adEventName?: string | null;
+  /** Overrides the title/name as Meta's content_name. Null keeps the old value. */
+  contentName?: string | null;
   status: ProductStatus;
   bumpOfferId: string | null;
   upsellOfferId: string | null;
@@ -121,6 +123,8 @@ export type Offer = {
    */
   /** Meta custom event fired when this offer is bought. Ads team's name. */
   adEventName?: string | null;
+  /** Overrides the title/name as Meta's content_name. Null keeps the old value. */
+  contentName?: string | null;
   activecampaignTagId: string | null;
   /**
    * A second price on this offer's OWN page at /o/<key>.

@@ -1,7 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { trackServerEvent } from "@/lib/tracking";
-import { eventIdFor } from "@/lib/analytics/events";
+import { contentNameOr, eventIdFor } from "@/lib/analytics/events";
 
 /**
  * What an order is worth, for the browser's copy of the purchase event.
@@ -70,12 +70,18 @@ export async function adEventForOrder(
 
     const { data: product } = await db
       .from("products")
-      .select("ad_event_name, title")
+      .select("ad_event_name, title, content_name")
       .eq("id", item.product_id as string)
       .maybeSingle();
     const name = (product?.ad_event_name as string | null)?.trim();
     if (!name) return null;
-    return { name, contentName: (product?.title as string) ?? name };
+    return {
+      name,
+      contentName: contentNameOr(
+        product?.content_name as string | null | undefined,
+        (product?.title as string) ?? name,
+      ),
+    };
   } catch {
     // Same rule as the receipt: tracking never breaks the page somebody lands
     // on after paying.
@@ -157,7 +163,7 @@ export async function reportTrialConverted(
   if (!own?.offer_id) return;
 
   const [{ data: offer }, { data: user }] = await Promise.all([
-    db.from("offers").select("price_cents, currency, name").eq("id", own.offer_id as string).maybeSingle(),
+    db.from("offers").select("price_cents, currency, name, content_name").eq("id", own.offer_id as string).maybeSingle(),
     db.from("users").select("email, username").eq("id", userId).maybeSingle(),
   ]);
   if (!offer || !user?.email) return;
@@ -199,7 +205,10 @@ export async function reportTrialConverted(
     orderId: stripeSubscriptionId,
     clickIds: (visitor?.click_ids as Record<string, string>) ?? {},
     clickTimeMs: visitor?.first_seen_at ? new Date(visitor.first_seen_at as string).getTime() : null,
-    contentName: (offer.name as string) ?? null,
+    contentName: contentNameOr(
+      offer.content_name as string | null | undefined,
+      (offer.name as string) ?? null,
+    ),
     occurredAt: Math.floor(Date.now() / 1000),
   });
 }

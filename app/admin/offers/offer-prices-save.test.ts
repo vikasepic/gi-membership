@@ -174,4 +174,17 @@ describe("the offer's own Meta event name", () => {
     expect(res.error).toMatch(/40 characters/);
     expect(updated).not.toHaveBeenCalled();
   });
+
+  it("saves the content name beside it, as its own field", async () => {
+    // The event name and the content name are different things — one names the
+    // event, the other names what was bought — and this schema drops any field
+    // it does not name, which is how the event name silently vanished once.
+    await saveOffer({}, form([PRICE], { contentName: "Funnel App - Upsell" }));
+    expect(updated.mock.calls[0][1]).toMatchObject({ contentName: "Funnel App - Upsell" });
+  });
+
+  it("treats a blank content name as unset, so the offer name still reports", async () => {
+    await saveOffer({}, form([PRICE], { contentName: "   " }));
+    expect(updated.mock.calls[0][1]).toMatchObject({ contentName: null });
+  });
 });

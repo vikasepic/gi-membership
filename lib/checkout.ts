@@ -8,7 +8,7 @@ import type { BumpChoice } from "@/lib/bump";
 import { offerAsSoldTo, recordTrialStart } from "@/lib/trial-history";
 import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
 import { trackPurchase, trackServerEvent } from "@/lib/tracking";
-import { customEventIdFor } from "@/lib/analytics/events";
+import { contentNameOr, customEventIdFor } from "@/lib/analytics/events";
 import { eventIdFor } from "@/lib/analytics/events";
 import { trialWorthFor, adEventForOrder } from "@/lib/tracking-receipt";
 import { sendEmail, buildWelcomeEmail, buildReceiptEmail } from "@/lib/email";
@@ -1462,6 +1462,14 @@ export async function buyerContextFor(orderId: string) {
     .from("order_items")
     .select("description, product_id")
     .eq("order_id", order.id as string);
+
+  // The ads team's name for what was bought, if they set one. Its own query
+  // rather than an embed on the line above: this is a nicety, and an embed
+  // that failed would take the content ids and item count down with it.
+  const firstProductId = (items ?? [])[0]?.product_id as string | undefined;
+  const { data: named } = firstProductId
+    ? await db.from("products").select("content_name").eq("id", firstProductId).maybeSingle()
+    : { data: null };
   const { data: buyer } = await db
     .from("users")
     .select("username")
@@ -1479,7 +1487,10 @@ export async function buyerContextFor(orderId: string) {
     clickIds: (visitor?.click_ids as Record<string, string>) ?? {},
     clickTimeMs: visitor?.first_seen_at ? new Date(visitor.first_seen_at as string).getTime() : null,
     contentIds: (items ?? []).map((i) => (i.product_id as string) ?? "").filter(Boolean),
-    contentName: (items ?? [])[0]?.description as string | undefined,
+    contentName: contentNameOr(
+      named?.content_name as string | null | undefined,
+      (items ?? [])[0]?.description as string | undefined,
+    ),
     numItems: (items ?? []).length || undefined,
   };
 }
@@ -1803,7 +1814,7 @@ async function trackOfferSale(
     // Validator" with the product's id and num_items 3, which would attribute
     // every upsell to the product in any audience built on it.
     const identity = {
-      contentName: offer.name,
+      contentName: contentNameOr(offer.contentName, offer.name),
       contentIds: [offer.key],
       contentType: "product" as const,
       numItems: 1,

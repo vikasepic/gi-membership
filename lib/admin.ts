@@ -69,6 +69,8 @@ export type ProductInput = {
   activecampaignTagId: string | null;
   activecampaignAbandonedTagId: string | null;
   adEventName?: string | null;
+  /** Overrides the title/name as Meta's content_name. Null keeps the old value. */
+  contentName?: string | null;
   checkoutNote?: string | null;
   checkoutBullets?: string[];
 };
@@ -152,6 +154,7 @@ function toRow(input: ProductInput, storeId: string) {
     activecampaign_tag_id: input.activecampaignTagId?.trim() || null,
     activecampaign_abandoned_tag_id: input.activecampaignAbandonedTagId?.trim() || null,
     ad_event_name: input.adEventName?.trim() || null,
+    content_name: input.contentName?.trim() || null,
     checkout_note: input.checkoutNote?.trim() || null,
     // Blank lines dropped rather than stored: an empty bullet renders as a tick
     // beside nothing, which reads as a missing promise.
@@ -254,6 +257,8 @@ export type OfferInput = {
   upsellOfferId?: string | null;
   activecampaignTagId?: string | null;
   adEventName?: string | null;
+  /** Overrides the title/name as Meta's content_name. Null keeps the old value. */
+  contentName?: string | null;
   activecampaignTrialTagId?: string | null;
   activecampaignCancelledTagId?: string | null;
   otoTemplate?: string;
@@ -341,6 +346,7 @@ function toOfferRow(input: OfferInput, storeId: string) {
     bump_offer_id: input.bumpOfferId ?? null,
     upsell_offer_id: input.upsellOfferId ?? null,
     ad_event_name: input.adEventName?.trim() || null,
+    content_name: input.contentName?.trim() || null,
     activecampaign_tag_id: input.activecampaignTagId ?? null,
     activecampaign_trial_tag_id: input.activecampaignTrialTagId ?? null,
     activecampaign_cancelled_tag_id: input.activecampaignCancelledTagId ?? null,

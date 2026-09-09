@@ -170,7 +170,9 @@ describe("an offer reports as itself", () => {
     // 2026: a Funnel App trial arrived as content_name "Digital Product
     // Validator", the product's uuid, num_items 3. Any audience built on
     // content_name would have attributed every upsell to the product.
-    expect(sale).toContain("contentName: offer.name");
+    // Whatever this resolves to, it is resolved from the OFFER. An admin can
+    // now override the reported name, but only with the offer's own.
+    expect(sale).toMatch(/contentName: contentNameOr\(offer\.contentName, offer\.name\)/);
     expect(sale).toContain("contentIds: [offer.key]");
     expect(sale).toContain("numItems: 1");
     // and the override has to come AFTER the spread, or it is not an override

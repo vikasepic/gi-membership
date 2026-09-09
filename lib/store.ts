@@ -17,7 +17,7 @@ const STORE_SLUG = "greater-inside";
  * test exists precisely because they had already drifted.
  */
 export const PRODUCT_COLUMNS =
-  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, bump_price_ids, upsell_price_ids, is_placeholder, sort_order, checkout_note, checkout_bullets, ad_event_name, stripe_product_id_test, stripe_product_id_live, " +
+  "id, slug, title, tagline, description, type, price_cents, compare_at_cents, currency, media_mode, media_path, media_embed_url, cover_image_url, cover_path, activecampaign_tag_id, activecampaign_abandoned_tag_id, status, bump_offer_id, upsell_offer_id, bump_alt_offer_id, upsell_alt_offer_id, bump_price_ids, upsell_price_ids, is_placeholder, sort_order, checkout_note, checkout_bullets, ad_event_name, content_name, stripe_product_id_test, stripe_product_id_live, " +
   // The ways to buy, embedded rather than fetched one product at a time —
   // every reader of a product is a reader of its prices, and a second round
   // trip per product on a storefront that lists them all is a query nobody
@@ -61,7 +61,7 @@ export function hydrateProduct(row: unknown): Product {
  * the one nobody reads.
  */
 export const OFFER_COLUMNS =
-  "id, key, name, updated_at, ad_event_name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, grant_channels, page_alt_offer_id, page_price_ids, bump_offer_id, bump_price_ids, upsell_offer_id, upsell_price_ids, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, activecampaign_trial_tag_id, activecampaign_cancelled_tag_id, bump_headline, bump_description, bump_banner, bump_bullets, bump_note, bump_accent, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live, " +
+  "id, key, name, updated_at, ad_event_name, content_name, grant_type, grant_product_id, grant_app_id, grant_entitlement_key, grant_channels, page_alt_offer_id, page_price_ids, bump_offer_id, bump_price_ids, upsell_offer_id, upsell_price_ids, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, currency, headline, description, bullets, image_url, accept_label, decline_label, active, activecampaign_tag_id, activecampaign_trial_tag_id, activecampaign_cancelled_tag_id, bump_headline, bump_description, bump_banner, bump_bullets, bump_note, bump_accent, oto_template, oto_body, oto_video_url, oto_sections, oto_page, stripe_product_id_test, stripe_product_id_live, " +
   // The ways to pay, embedded rather than fetched one offer at a time: every
   // reader of an offer is a reader of its prices, and a second round trip per
   // offer on a storefront that lists them all is a query nobody would write on

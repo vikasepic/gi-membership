@@ -67,6 +67,14 @@ const schema = z
       .max(40, "Meta ignores a custom event name longer than 40 characters")
       .optional()
       .default(""),
+    // What Meta is told this offer is called, when the name buyers see is not
+    // the name the ad account uses. Blank keeps the offer name.
+    contentName: z
+      .string()
+      .trim()
+      .max(100, "Keep the content name under 100 characters")
+      .optional()
+      .default(""),
     activecampaignTagId: z
       .string()
       .trim()
@@ -219,6 +227,7 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     bumpOfferId: v.bumpOfferId || null,
     upsellOfferId: v.upsellOfferId || null,
     adEventName: v.adEventName?.trim() || null,
+    contentName: v.contentName?.trim() || null,
     activecampaignTagId: v.activecampaignTagId?.trim() || null,
     activecampaignTrialTagId: v.activecampaignTrialTagId?.trim() || null,
     activecampaignCancelledTagId: v.activecampaignCancelledTagId?.trim() || null,

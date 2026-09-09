@@ -109,6 +109,17 @@ export const productSchema = z.object({
       .nullable()
       .default(null),
   ),
+  // What Meta is told this product is called, when the title on the sales page
+  // is not the name the ad account uses. Blank keeps the title.
+  contentName: z.preprocess(
+    emptyToNull,
+    z
+      .string()
+      .trim()
+      .max(100, "Keep the content name under 100 characters")
+      .nullable()
+      .default(null),
+  ),
   activecampaignTagId: z.preprocess(
     emptyToNull,
     z
@@ -140,6 +151,7 @@ export type ParsedProduct = {
   activecampaignAbandonedTagId: string | null;
   checkoutNote: string | null;
   adEventName: string | null;
+  contentName: string | null;
 };
 
 export type ParseResult =
@@ -190,6 +202,7 @@ export function parseProductForm(raw: Record<string, unknown>): ParseResult {
       activecampaignAbandonedTagId: v.activecampaignAbandonedTagId,
       checkoutNote: v.checkoutNote,
       adEventName: v.adEventName,
+      contentName: v.contentName,
     },
   };
 }

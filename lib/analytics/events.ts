@@ -230,3 +230,20 @@ export function eventIdFor(name: EventName, stableKey?: string | null): string {
   const rand = g && "randomUUID" in g ? g.randomUUID() : `${Date.now()}.${Math.random()}`;
   return `${name}.${rand}`;
 }
+
+/**
+ * What Meta is told this thing is called.
+ *
+ * `content_name` is what an ads team reads in reporting and builds audiences
+ * on, and it came from three different places depending on the event: an order
+ * line's description, a product's title, an offer's name. Those are storefront
+ * copy — written for buyers — and renaming one to suit a campaign renamed it
+ * on the sales page too.
+ *
+ * So the product and the offer each carry an optional `content_name`, and every
+ * site that reports one asks here. Blank keeps whatever that site sent before,
+ * which is what makes the column safe to add under live campaigns.
+ */
+export function contentNameOr<T>(override: string | null | undefined, fallback: T): string | T {
+  return override?.trim() || fallback;
+}
