@@ -32,7 +32,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Lint
-        run: npx next lint
+        run: npx eslint .
 
       # Integration suites self-skip without SUPABASE_SERVICE_ROLE_KEY /
       # STRIPE_SECRET_KEY — a secret you cannot have without the real thing

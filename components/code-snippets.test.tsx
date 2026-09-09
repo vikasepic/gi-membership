@@ -67,7 +67,7 @@ describe("the checkout stays clean unless told otherwise", () => {
   });
 
   it("fails safe when the path is unknown", () => {
-    // The layout treats a missing x-pathname as the checkout, so a middleware
+    // The layout treats a missing x-pathname as the checkout, so a proxy
     // that stopped setting it costs a snippet firing — visible, and reported —
     // rather than putting a third-party script on a payment page unnoticed.
     const layout = readFileSync("app/(store)/layout.tsx", "utf8");
@@ -76,6 +76,6 @@ describe("the checkout stays clean unless told otherwise", () => {
 
   it("has the header it depends on actually set", () => {
     // The guard above is only as good as the thing that feeds it.
-    expect(readFileSync("middleware.ts", "utf8")).toContain('set("x-pathname"');
+    expect(readFileSync("proxy.ts", "utf8")).toContain('set("x-pathname"');
   });
 });

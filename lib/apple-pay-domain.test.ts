@@ -42,7 +42,7 @@ describe("the Apple Pay domain association file", () => {
     // The matcher runs on everything it does not explicitly exclude. Stripe's
     // fetch carries no cookies and wants the file back and nothing else, so
     // the session refresh and the visitor cookie have no business on it.
-    const mw = readFileSync("middleware.ts", "utf8");
+    const mw = readFileSync("proxy.ts", "utf8");
     const matcher = mw.slice(mw.indexOf("matcher:"));
     expect(matcher).toContain("well-known");
   });

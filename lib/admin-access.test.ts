@@ -10,7 +10,7 @@ import { readFileSync } from "node:fs";
 // lock everyone out of their own store. These pin that it cannot.
 
 const guard = readFileSync("lib/admin-guard.ts", "utf8");
-const mw = readFileSync("middleware.ts", "utf8");
+const mw = readFileSync("proxy.ts", "utf8");
 const actions = readFileSync("app/admin/members/actions.ts", "utf8");
 const page = readFileSync("app/admin/members/page.tsx", "utf8");
 const row = readFileSync("components/admin/member-row.tsx", "utf8");

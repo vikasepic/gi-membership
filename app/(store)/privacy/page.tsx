@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 // Everything here describes what the store ACTUALLY does — each claim was
 // checked against the code (lib/tracking.ts, lib/email.ts, lib/consent.ts,
-// middleware.ts). Change the behaviour and this page has to change with it; a
+// proxy.ts). Change the behaviour and this page has to change with it; a
 // privacy policy that overstates or understates what happens is the one kind of
 // inaccuracy that carries legal weight.
 export default async function PrivacyPage() {

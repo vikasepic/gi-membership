@@ -49,7 +49,7 @@ describe("CI runs what a person runs", () => {
   it("typechecks, lints, tests and builds", () => {
     // A typecheck and a green suite have both passed while the build was
     // broken. The build is the only step that reads the environment for real.
-    for (const step of ["tsc --noEmit", "next lint", "npm test", "npm run build"]) {
+    for (const step of ["tsc --noEmit", "eslint .", "npm test", "npm run build"]) {
       expect(workflow, step).toContain(step);
     }
   });
