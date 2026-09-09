@@ -1,5 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
+import type { AppKind } from "@/lib/apps";
+import { builtinAppRoute } from "@/lib/builtin-apps/registry";
 import { camelize } from "@/lib/case";
 import { getStoreId, hydrateOffer, hydrateProduct, OFFER_COLUMNS, PRODUCT_COLUMNS } from "@/lib/store";
 import { savedPaymentMethodFor, ownershipFor } from "@/lib/checkout";
@@ -47,7 +49,12 @@ export async function listOwnedApps(
 ): Promise<
   {
     id: string;
+    key: string;
     name: string;
+    /** internal opens a route on this site; external goes through the handoff. */
+    kind: AppKind;
+    /** Where an internal app opens. Null for external, and for a key with no code. */
+    route: string | null;
     status: string;
     host: string | null;
     channels: string[];
@@ -63,7 +70,7 @@ export async function listOwnedApps(
   const rows = owns ?? [];
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.app_id as string);
-  const { data: apps } = await db.from("apps").select("id, name, base_url").in("id", ids);
+  const { data: apps } = await db.from("apps").select("id, key, name, kind, base_url").in("id", ids);
   const byId = new Map((apps ?? []).map((a) => [a.id as string, a]));
 
   // What was actually bought, per app. A member on the Instagram plan and a
@@ -85,11 +92,17 @@ export async function listOwnedApps(
 
   return rows.map((r) => {
     const app = byId.get(r.app_id as string);
+    const kind: AppKind = app?.kind === "internal" ? "internal" : "external";
+    const key = (app?.key as string) ?? "";
     return {
       id: r.app_id as string,
+      key,
       name: (app?.name as string) ?? "App",
+      kind,
+      route: kind === "internal" ? builtinAppRoute(key) : null,
       status: r.status as string,
-      host: hostOf(app?.base_url as string | undefined),
+      // An internal app has no host of its own; it is this one.
+      host: kind === "internal" ? null : hostOf(app?.base_url as string | undefined),
       channels: channelsByOffer.get(r.offer_id as string) ?? [],
       imageUrl: imageByOffer.get(r.offer_id as string) ?? null,
     };

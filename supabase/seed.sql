@@ -94,3 +94,14 @@ update products
 set bump_offer_id   = '00000000-0000-0000-0000-0000000000c1',
     upsell_offer_id = '00000000-0000-0000-0000-0000000000c1'
 where id = '00000000-0000-0000-0000-0000000000b1';
+
+-- Built-in apps ----------------------------------------------------------
+-- Internal apps run inside this codebase (lib/builtin-apps/registry.ts). No
+-- host, no secret: access is the ownership row, read directly.
+insert into apps (id, store_id, key, name, kind, entitlement_mapping, channels, active)
+values
+  ('00000000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-000000000001',
+   'micro-product-builder', 'Micro-Product Builder', 'internal', '{}'::jsonb, '{}'::text[], true),
+  ('00000000-0000-0000-0000-0000000000a3', '00000000-0000-0000-0000-000000000001',
+   'hook-generator', 'Viral Hook Generator', 'internal', '{}'::jsonb, '{}'::text[], true)
+on conflict (id) do nothing;

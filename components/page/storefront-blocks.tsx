@@ -3,6 +3,7 @@ import { BuyLink } from "@/components/buy-link";
 import { ProductCard, type CatalogItem } from "@/components/product-card";
 import type { Offer } from "@/lib/types";
 import { money } from "@/lib/money";
+import { membershipTerms } from "@/lib/offer-terms";
 
 /**
  * The three parts of the storefront that read live data.
@@ -109,6 +110,7 @@ export function MembershipCard({ view }: { view: MembershipView }) {
   const { offer, href, owned } = view;
   const trial = offer.trialDays ?? 0;
   const price = money(offer.priceCents, offer.currency);
+  const billing = membershipTerms(offer, price);
   return (
     <section
       id={`offer-${offer.key}`}
@@ -145,15 +147,12 @@ export function MembershipCard({ view }: { view: MembershipView }) {
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline gap-2">
             <span className="font-display text-4xl">{price}</span>
-            {offer.interval && <span className="text-muted">/{offer.interval}</span>}
+            {billing.suffix && <span className="text-muted">{billing.suffix}</span>}
           </div>
           {/* Say the charge out loud. A trial that bills silently on day 8 is
-              the single most complained-about pattern in subscriptions. */}
-          <p className="text-sm text-muted">
-            {trial > 0
-              ? `Free for ${trial} days, then ${price} each ${offer.interval}. Cancel any time before then and you pay nothing.`
-              : `Billed every ${offer.interval}. Cancel any time.`}
-          </p>
+              the single most complained-about pattern in subscriptions — and
+              a one-time price must never read as one. See lib/offer-terms.ts. */}
+          <p className="text-sm text-muted">{billing.terms}</p>
         </div>
 
         {owned ? (

@@ -159,15 +159,16 @@ too.
 | `store_id` | uuid | no |  |  |
 | `key` | text | no |  |  |
 | `name` | text | no |  |  |
-| `base_url` | text | no |  |  |
+| `base_url` | text | yes |  | Null for an internal app (0074). |
 | `provision_endpoint` | text | no | `'/api/store/provision'::text` |  |
 | `handoff_endpoint` | text | no | `'/auth/store-handoff'::text` |  |
-| `shared_secret` | text | no |  |  |
+| `shared_secret` | text | yes |  | Null for an internal app (0074). |
 | `entitlement_mapping` | jsonb | no | `'{}'::jsonb` |  |
 | `active` | boolean | no | `true` |  |
 | `created_at` | timestamptz | no | `now()` |  |
 | `updated_at` | timestamptz | no | `now()` |  |
 | `channels` | ARRAY | no | `'{}'::text[]` | What this app can grant inside itself, e.g. {instagram,linkedin} for Content Engine. Empty… |
+| `kind` | text | no | `'external'::text` | internal = runs inside this codebase at /apps/<key>, no HTTP bridge. external = a separate app reached through provision and handoff. |
 
 **Keys:** `PRIMARY KEY (id)`; `UNIQUE (store_id, key)`
 
@@ -178,6 +179,8 @@ too.
 **Check constraints:**
 
 - `CHECK ((channels <@ ARRAY['instagram'::text, 'linkedin'::text]))`
+- `CHECK ((kind = ANY (ARRAY['internal'::text, 'external'::text])))`
+- `CHECK (((kind <> 'external'::text) OR ((base_url IS NOT NULL) AND (shared_secret IS NOT NULL))))` — an external app must have somewhere to be called; an internal one has nothing to fill in
 
 ---
 

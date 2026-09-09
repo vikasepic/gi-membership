@@ -10,14 +10,26 @@ import { recordError } from "@/lib/errors";
 // token and a server-to-server provision call. The app-side endpoints live in
 // the app's own repo (see docs/app-bridge-contract.md).
 
+export type AppKind = "internal" | "external";
+
 export type AppRow = {
   id: string;
   key: string;
   name: string;
-  baseUrl: string;
+  /**
+   * Where the app runs. `external` is the original shape: a separate app the
+   * store provisions over HTTP and hands users into with a signed token.
+   * `internal` runs inside this codebase at /apps/<key> against this database;
+   * it has no host and no secret, and access is the ownership row itself.
+   * See lib/builtin-apps/registry.ts for what the store has code for.
+   */
+  kind: AppKind;
+  /** Null for an internal app, which has nowhere to be called. */
+  baseUrl: string | null;
   provisionEndpoint: string;
   handoffEndpoint: string;
-  sharedSecret: string;
+  /** Null for an internal app. Nothing authenticates to or from it. */
+  sharedSecret: string | null;
   entitlementMapping: Record<string, string>;
   /**
    * What this app can grant inside itself, e.g. ["instagram","linkedin"].
@@ -31,7 +43,12 @@ export type AppRow = {
 };
 
 export const APP_COLUMNS =
-  "id, key, name, base_url, provision_endpoint, handoff_endpoint, shared_secret, entitlement_mapping, channels, active";
+  "id, key, name, kind, base_url, provision_endpoint, handoff_endpoint, shared_secret, entitlement_mapping, channels, active";
+
+/** An app that lives in this codebase rather than behind the bridge. */
+export function isInternalApp(app: Pick<AppRow, "kind"> | null | undefined): boolean {
+  return app?.kind === "internal";
+}
 
 /**
  * What one app declares it can grant inside itself.
@@ -81,6 +98,12 @@ export function buildHandoffUrl(
   // The name rides along here as well as on the provision call. Handoff is what
   // creates the session, so for anyone who arrives that way first it is the
   // only chance the app gets to learn what to call them.
+  // An internal app has no handoff: it is opened by a plain link on this
+  // domain, and the session cookie is already there. Minting a token for one
+  // would sign with a null secret, so refuse loudly rather than quietly.
+  if (isInternalApp(app) || !app.sharedSecret || !app.baseUrl) {
+    throw new Error(`buildHandoffUrl: ${app.key} is an internal app and has no handoff`);
+  }
   const token = signHandoffToken(
     { email: user.email, userId: user.id, appId: app.id, exp, fullName: user.fullName ?? null },
     app.sharedSecret,
@@ -163,10 +186,19 @@ export async function notifyAppEntitlement(args: {
   const occurredAt = args.occurredAt ?? Math.floor(Date.now() / 1000);
   const stamped = { ...args, occurredAt };
   const app = await getAppById(args.appId);
+  // An internal app has nobody to tell. It reads the ownership row this call
+  // is reporting, directly, on its next request — so the delivery already
+  // happened the moment the row was written. Every outbound push in the store
+  // comes through here (purchase, refund, subscription sync, the retry runner,
+  // a manual grant, the name backfill), which is what makes this one return
+  // enough: nothing is fetched and nothing is queued.
+  if (isInternalApp(app)) return { ok: true };
   // Not queued: an app that is switched off is a decision someone made, not a
   // delivery that failed. Retrying it forever would fill the queue with work
   // that is meant not to happen.
-  if (!app || !app.active) return { ok: false, error: "app_inactive" };
+  if (!app || !app.active || !app.baseUrl || !app.sharedSecret) {
+    return { ok: false, error: "app_inactive" };
+  }
 
   const url = `${app.baseUrl}${app.provisionEndpoint}`;
   try {
