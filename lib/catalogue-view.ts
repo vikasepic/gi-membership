@@ -45,7 +45,7 @@ export function wiringOf(
   };
 }
 
-export type OfferUse = { productTitle: string; slot: "bump" | "second price" | "one-click upsell" };
+export type OfferUse = { hostTitle: string; slot: "bump" | "second price" | "one-click upsell" };
 
 /**
  * Where an offer is attached.
@@ -53,16 +53,29 @@ export type OfferUse = { productTitle: string; slot: "bump" | "second price" | "
  * The only shared records in the store: everything else belongs to one thing,
  * an offer is deliberately reused. Reuse without visibility is how a price
  * changes somewhere nobody was looking.
+ *
+ * A host is a product OR another offer. Offers gained bump and upsell slots of
+ * their own, and this kept scanning products alone — so the Book Launch System,
+ * sitting in Book Writer's bump slot, read "Not attached to anything" on the
+ * one screen built to catch exactly that.
  */
 export function usesOf(
   offer: Pick<Offer, "id">,
   products: Pick<Product, "title" | "bumpOfferId" | "bumpAltOfferId" | "upsellOfferId">[],
+  offers: Pick<Offer, "id" | "name" | "bumpOfferId" | "upsellOfferId">[] = [],
 ): OfferUse[] {
   const out: OfferUse[] = [];
   for (const p of products) {
-    if (p.bumpOfferId === offer.id) out.push({ productTitle: p.title, slot: "bump" });
-    if (p.bumpAltOfferId === offer.id) out.push({ productTitle: p.title, slot: "second price" });
-    if (p.upsellOfferId === offer.id) out.push({ productTitle: p.title, slot: "one-click upsell" });
+    if (p.bumpOfferId === offer.id) out.push({ hostTitle: p.title, slot: "bump" });
+    if (p.bumpAltOfferId === offer.id) out.push({ hostTitle: p.title, slot: "second price" });
+    if (p.upsellOfferId === offer.id) out.push({ hostTitle: p.title, slot: "one-click upsell" });
+  }
+  for (const o of offers) {
+    // An offer cannot host itself; the database refuses it. Skipped anyway so a
+    // row can never report that it is attached to itself.
+    if (o.id === offer.id) continue;
+    if (o.bumpOfferId === offer.id) out.push({ hostTitle: o.name, slot: "bump" });
+    if (o.upsellOfferId === offer.id) out.push({ hostTitle: o.name, slot: "one-click upsell" });
   }
   return out;
 }

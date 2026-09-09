@@ -14,7 +14,7 @@ export default async function AdminOffersPage() {
   // store — everything else belongs to one thing, an offer is deliberately
   // reused — and reuse without visibility is how a price changes somewhere
   // nobody was looking.
-  const uses = new Map(offers.map((o) => [o.id, usesOf(o, products)]));
+  const uses = new Map(offers.map((o) => [o.id, usesOf(o, products, offers)]));
 
   // An offer that grants a product borrows that product's artwork; one that
   // grants an app has none of its own.
@@ -95,7 +95,7 @@ export default async function AdminOffersPage() {
                     <span className="flex flex-col gap-0.5 text-muted">
                       {(uses.get(o.id) ?? []).map((u, i) => (
                         <span key={i}>
-                          {u.productTitle} <b className="font-medium text-fg">{u.slot}</b>
+                          {u.hostTitle} <b className="font-medium text-fg">{u.slot}</b>
                         </span>
                       ))}
                     </span>

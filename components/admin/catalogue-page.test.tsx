@@ -59,7 +59,9 @@ describe("the offers page", () => {
   const src = readFileSync("app/admin/offers/page.tsx", "utf8");
 
   it("says where each offer is attached", () => {
-    expect(src).toContain("usesOf(o, products)");
+    // Both kinds of host. Passing products alone is what made an offer sitting
+    // in another offer's bump slot read as attached to nothing.
+    expect(src).toContain("usesOf(o, products, offers)");
     expect(src).toContain("Used by");
   });
 
