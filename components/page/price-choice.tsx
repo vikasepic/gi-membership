@@ -119,7 +119,16 @@ export function PriceChoice({
   band: { fg: string; muted: string; rule: string; accent: string; panel: string };
   s: PriceChoiceStyle;
 }) {
-  const [picked, setPicked] = useState<number | null>(chosen ?? (prices.length === 1 ? 0 : null));
+  // Preselected on an upsell, where accepting is one click and the card is
+  // already on file. With two ways to pay and nothing ticked, the only button
+  // on that page read "Choose one above" and was greyed out — the sticky bar's
+  // "Start 7-day free trial" scrolled the buyer to a disabled control, and
+  // nothing on the page asked them to tick a radio first. Eight buyers were
+  // shown the Funnel App upsell and none of them accepted. A sales page still
+  // starts unticked: choosing there is the point, and its button is a link.
+  const [picked, setPicked] = useState<number | null>(
+    chosen ?? (prices.length === 1 || otoToken ? 0 : null),
+  );
   if (prices.length === 0) return null;
 
   const accent = s.selectedColor || band.accent;

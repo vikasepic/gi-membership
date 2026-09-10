@@ -62,3 +62,12 @@ describe("the buy control on it", () => {
     expect(form).toContain("disabled={waiting}");
   });
 });
+
+describe("the choice on an upsell", () => {
+  it("starts on the first way to pay, so the button is live", () => {
+    // Two prices with nothing ticked left the only accept control on the page
+    // disabled and labelled "Choose one above" — the sticky bar scrolled the
+    // buyer straight to it. A sales page still starts unticked.
+    expect(priceChoice).toContain("prices.length === 1 || otoToken ? 0 : null");
+  });
+});
