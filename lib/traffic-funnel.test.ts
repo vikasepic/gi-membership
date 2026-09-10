@@ -26,7 +26,7 @@ describe("building the funnel", () => {
         row({ path: "/checkout", hits: 30 }),
         row({ path: "/checkout/oto", hits: 12 }),
       ],
-      [{ product: "validator", orders: 9 }],
+      [{ product: "validator", source: "direct", orders: 9 }],
       NAMES,
       DAYS,
     );
@@ -50,7 +50,7 @@ describe("building the funnel", () => {
   it("keeps a product that sold without a single counted view", () => {
     // A direct link, or a sale that predates the counter. Dropping it would
     // hide revenue.
-    const view = buildFunnels([], [{ product: "carousels", orders: 2 }], NAMES, DAYS);
+    const view = buildFunnels([], [{ product: "carousels", source: "direct", orders: 2 }], NAMES, DAYS);
     expect(view.funnels.map((f) => f.key)).toEqual(["carousels"]);
     expect(view.funnels[0].steps[3].count).toBe(2);
   });
@@ -83,7 +83,7 @@ describe("building the funnel", () => {
     );
     expect(view.funnels).toEqual([]);
     expect(view.others).toEqual([
-      { path: "/o/funnel-app", hits: 7, sources: [{ source: "direct", hits: 7 }] },
+      { path: "/o/funnel-app", hits: 7, sources: [{ source: "direct", hits: 7, orders: 0 }] },
     ]);
   });
 
@@ -106,8 +106,8 @@ describe("building the funnel", () => {
       DAYS,
     );
     expect(view.funnels[0].sources).toEqual([
-      { source: "meta", hits: 80 },
-      { source: "direct", hits: 20 },
+      { source: "meta", hits: 80, orders: 0 },
+      { source: "direct", hits: 20, orders: 0 },
     ]);
   });
 
@@ -183,7 +183,7 @@ describe("a source filter recomputes the funnel rather than hiding rows", () => 
       row({ path: "/checkout", hits: 90 }),
       row({ path: "/checkout/oto", hits: 80 }),
     ];
-    const buggy = buildFunnels(views, [{ product: "validator", orders: 5 }], NAMES, DAYS);
+    const buggy = buildFunnels(views, [{ product: "validator", source: "direct", orders: 5 }], NAMES, DAYS);
     const fixed = buildFunnels(views, [], NAMES, DAYS);
     expect(biggestDrop(buggy.funnels[0].steps)).toEqual({ to: 3, percent: 94 });
 
@@ -202,10 +202,46 @@ describe("a source filter recomputes the funnel rather than hiding rows", () => 
     // funnel set, so it disappears instead of rendering a filtered funnel it
     // does not have. Mirrors "keeps a product that sold without a single
     // counted view" above, for the source-filtered call.
-    const buggy = buildFunnels([], [{ product: "carousels", orders: 2 }], NAMES, DAYS);
+    const buggy = buildFunnels([], [{ product: "carousels", source: "direct", orders: 2 }], NAMES, DAYS);
     const fixed = buildFunnels([], [], NAMES, DAYS);
     expect(buggy.funnels.map((f) => f.key)).toEqual(["carousels"]);
     expect(fixed.funnels).toEqual([]);
+  });
+});
+
+describe("bought, per source", () => {
+  const views = [
+    row({ path: "/p/validator", hits: 100, source: "meta" }),
+    row({ path: "/p/validator", hits: 40, source: "direct" }),
+  ];
+  const bought = [
+    { product: "validator", source: "meta", orders: 6 },
+    { product: "validator", source: "direct", orders: 3 },
+  ];
+
+  it("sums every source into the fourth step", () => {
+    const view = buildFunnels(views, bought, NAMES, DAYS);
+    expect(view.funnels[0].steps[3].count).toBe(9);
+  });
+
+  it("shows orders beside hits in the source split, zero where a source drove views but no sale", () => {
+    const view = buildFunnels([...views, row({ path: "/p/validator", hits: 5, source: "referral" })], bought, NAMES, DAYS);
+    expect(view.funnels[0].sources).toEqual([
+      { source: "meta", hits: 100, orders: 6 },
+      { source: "direct", hits: 40, orders: 3 },
+      { source: "referral", hits: 5, orders: 0 },
+    ]);
+  });
+
+  it("lists a source that sold without a counted view, so a sale is never hidden", () => {
+    const view = buildFunnels(views, [...bought, { product: "validator", source: "newsletter", orders: 2 }], NAMES, DAYS);
+    expect(view.funnels[0].sources.find((s) => s.source === "newsletter")).toEqual({ source: "newsletter", hits: 0, orders: 2 });
+    expect(view.funnels[0].steps[3].count).toBe(11);
+  });
+
+  it("gives a funnel to an owner that only sold, from any source", () => {
+    const view = buildFunnels([], [{ product: "carousels", source: "meta", orders: 1 }], NAMES, DAYS);
+    expect(view.funnels.map((f) => f.key)).toEqual(["carousels"]);
   });
 });
 

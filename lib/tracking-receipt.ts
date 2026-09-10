@@ -2,6 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { trackServerEvent } from "@/lib/tracking";
 import { contentNameOr, eventIdFor } from "@/lib/analytics/events";
+import { EMPTY_ATTRIBUTION, type Attribution, type Labels } from "@/lib/attribution";
 
 /**
  * What an order is worth, for the browser's copy of the purchase event.
@@ -18,6 +19,8 @@ export type TrackingReceipt = {
   /** The recurring value of a trial started on this order, if any. */
   trialCents: number | null;
   email: string | null;
+  /** For the browser copy, so both halves of a deduplicated event carry the same labels. */
+  attribution: Attribution;
 };
 
 export async function purchaseForTracking(paymentIntentId: string): Promise<TrackingReceipt | null> {
@@ -94,7 +97,7 @@ async function receiptFor(column: string, value: string): Promise<TrackingReceip
     const db = createServiceClient();
     const { data: order } = await db
       .from("orders")
-      .select("id, total_cents, currency, email, status")
+      .select("id, total_cents, currency, email, status, utm_first, utm_last, referrer")
       .eq(column, value)
       .maybeSingle();
     if (!order || order.status === "refunded") return null;
@@ -110,6 +113,11 @@ async function receiptFor(column: string, value: string): Promise<TrackingReceip
       currency: (order.currency as string) ?? "usd",
       trialCents,
       email: (order.email as string) ?? null,
+      attribution: {
+        first: (order.utm_first as Labels | null) ?? {},
+        last: (order.utm_last as Labels | null) ?? {},
+        referrer: (order.referrer as string | null) ?? null,
+      },
     };
   } catch {
     // Tracking must never break the page a buyer lands on after paying.
@@ -173,7 +181,7 @@ export async function reportTrialConverted(
   // attached it — which is the whole reason the order stores visitor_id.
   const { data: order } = await db
     .from("orders")
-    .select("visitor_id, buyer_country, client_ip, client_user_agent, source_url")
+    .select("visitor_id, buyer_country, client_ip, client_user_agent, source_url, utm_first, utm_last, referrer")
     .eq("user_id", userId)
     .not("visitor_id", "is", null)
     .order("created_at", { ascending: false })
@@ -186,6 +194,35 @@ export async function reportTrialConverted(
         .eq("id", order.visitor_id as string)
         .maybeSingle()
     : { data: null };
+
+  // The campaign, separately — order-level, not person-level. "Most recent
+  // order with a visitor" above is right for IP, country and click ids, which
+  // describe the PERSON and are stable across their orders; it is wrong for
+  // campaign, which describes the SALE. A repeat buyer who took a trial on
+  // product A from campaign X and later bought product B from campaign Y must
+  // not have A's trial conversion reported under Y. order_items is where
+  // fulfilOffer/fulfilBump record stripe_subscription_id at fulfilment, so
+  // it is a direct, unambiguous hop to the order THIS subscription came from.
+  // No campaign (EMPTY_ATTRIBUTION) beats the wrong campaign.
+  const { data: attributionItem } = await db
+    .from("order_items")
+    .select("order_id")
+    .eq("stripe_subscription_id", stripeSubscriptionId)
+    .maybeSingle();
+  const { data: attributionOrder } = attributionItem?.order_id
+    ? await db
+        .from("orders")
+        .select("utm_first, utm_last, referrer")
+        .eq("id", attributionItem.order_id as string)
+        .maybeSingle()
+    : { data: null };
+  const attribution: Attribution = attributionOrder
+    ? {
+        first: (attributionOrder.utm_first as Labels | null) ?? {},
+        last: (attributionOrder.utm_last as Labels | null) ?? {},
+        referrer: (attributionOrder.referrer as string | null) ?? null,
+      }
+    : EMPTY_ATTRIBUTION;
 
   await trackServerEvent({
     eventId: eventIdFor("Subscribe", stripeSubscriptionId),
@@ -200,6 +237,7 @@ export async function reportTrialConverted(
     clientIp: (order?.client_ip as string | null) ?? null,
     userAgent: (order?.client_user_agent as string | null) ?? null,
     sourceUrl: (order?.source_url as string | null) ?? null,
+    attribution,
     valueCents: offer.price_cents as number,
     currency: (offer.currency as string) ?? "usd",
     orderId: stripeSubscriptionId,

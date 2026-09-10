@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { GA4_NAME, NO_VALUE, type EventName } from "@/lib/analytics/events";
 import { compact, countryHash, fbcFrom, fbpFrom, hashed, nameParts } from "@/lib/tracking-fields";
 import { recordError } from "@/lib/errors";
+import { stripeAttributionMetadata, ga4CampaignParams, type Attribution } from "@/lib/attribution";
 
 // Server-side ad tracking. Events are sent from the server (not the browser) so
 // ad blockers and ITP cannot silence conversions, and so the day-7 trial
@@ -52,6 +53,13 @@ export type PurchaseEvent = {
   contentName?: string | null;
   contentType?: string;
   numItems?: number;
+
+  /**
+   * The campaign the order came from, off the order row. Sent to Meta as
+   * custom_data keys (for reading in Events Manager — Meta attributes by
+   * fbc, not by this) and to GA4 under its own campaign parameter names.
+   */
+  attribution?: Attribution | null;
 };
 
 export type TrackingEnv = {
@@ -165,6 +173,9 @@ export function buildMetaEvent(e: PurchaseEvent, testEventCode?: string) {
           value: NO_VALUE.includes(e.eventName) ? undefined : major(e.valueCents),
           currency: NO_VALUE.includes(e.eventName) ? undefined : e.currency.toUpperCase(),
           ...content,
+          // The same keys the Stripe metadata carries, so the ads team reads
+          // one vocabulary in both places.
+          ...stripeAttributionMetadata(e.attribution),
         }),
       },
     ],
@@ -187,6 +198,7 @@ export function buildGa4Event(e: PurchaseEvent) {
         params: {
           transaction_id: e.orderId, // GA4 dedupes replays on this
           ...money,
+          ...ga4CampaignParams(e.attribution),
         },
       },
     ],

@@ -15,16 +15,21 @@ export type OrderFilter = {
   /** Days back from now, or "all". */
   range: "7" | "30" | "90" | "all";
   sort: "newest" | "oldest" | "largest";
+  /** A last-touch utm_source present in the loaded rows, "direct", or "" for all. */
+  source: string;
 };
 
-export const DEFAULT_FILTER: OrderFilter = { status: "all", q: "", range: "all", sort: "newest" };
+export const DEFAULT_FILTER: OrderFilter = { status: "all", q: "", range: "all", sort: "newest", source: "" };
 
 const STATUSES = ["all", "paid", "refunded", "pending", "failed", "subscriptions"] as const;
 const RANGES = ["7", "30", "90", "all"] as const;
 const SORTS = ["newest", "oldest", "largest"] as const;
 
 /** Read a filter off the URL, refusing anything it does not recognise. */
-export function filterFrom(params: Record<string, string | string[] | undefined>): OrderFilter {
+export function filterFrom(
+  params: Record<string, string | string[] | undefined>,
+  sources: string[] = [],
+): OrderFilter {
   const one = (k: string) => {
     const v = params[k];
     return typeof v === "string" ? v : Array.isArray(v) ? v[0] : undefined;
@@ -38,6 +43,9 @@ export function filterFrom(params: Record<string, string | string[] | undefined>
     q: (one("q") ?? "").trim().slice(0, 120),
     range: pick("range", RANGES, "all"),
     sort: pick("sort", SORTS, "newest"),
+    // A whitelist built from the data: the URL can only name a source that
+    // is actually on the page. Anything else is "all".
+    source: sources.includes(one("source") ?? "") ? (one("source") as string) : "",
   };
 }
 
@@ -49,8 +57,29 @@ export function filterHref(filter: OrderFilter, patch: Partial<OrderFilter>): st
   if (next.q) q.set("q", next.q);
   if (next.range !== "all") q.set("range", next.range);
   if (next.sort !== "newest") q.set("sort", next.sort);
+  if (next.source) q.set("source", next.source);
   const s = q.toString();
   return s ? `/admin/orders?${s}` : "/admin/orders";
+}
+
+/** The pill's words: source and medium of last touch, or direct. */
+export function sourceLabel(o: OrderRow): string {
+  const s = o.utmLast.utm_source;
+  if (!s) return "direct";
+  return o.utmLast.utm_medium ? `${s} · ${o.utmLast.utm_medium}` : s;
+}
+
+/** The sources present, busiest first, then "direct" if any order has none. The filter's whitelist. */
+export function sourcesIn(orders: OrderRow[]): string[] {
+  const count = new Map<string, number>();
+  let direct = 0;
+  for (const o of orders) {
+    const s = o.utmLast.utm_source;
+    if (s) count.set(s, (count.get(s) ?? 0) + 1);
+    else direct += 1;
+  }
+  const named = [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([s]) => s);
+  return direct > 0 ? [...named, "direct"] : named;
 }
 
 /**
@@ -68,6 +97,9 @@ function haystack(o: OrderRow): string {
     o.stripePaymentIntentId ?? "",
     ...o.items.map((i) => i.description),
     ...o.items.map((i) => i.stripeSubscriptionId ?? ""),
+    ...Object.values(o.utmLast),
+    ...Object.values(o.utmFirst),
+    o.referrer ?? "",
   ]
     .join(" ")
     .toLowerCase();
@@ -88,6 +120,8 @@ export function applyFilter(orders: OrderRow[], filter: OrderFilter, now = Date.
       return false;
     }
     if (cutoff !== null && new Date(o.createdAt).getTime() < cutoff) return false;
+    if (filter.source === "direct" && o.utmLast.utm_source) return false;
+    if (filter.source && filter.source !== "direct" && o.utmLast.utm_source !== filter.source) return false;
     if (q && !haystack(o).includes(q)) return false;
     return true;
   });

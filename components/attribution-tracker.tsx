@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { parseLabels } from "@/lib/attribution";
 
-const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"];
 const CLICK_KEYS = ["gclid", "fbclid", "ttclid", "msclkid", "wbraid", "gbraid"];
 
 /** A cookie by name, or undefined. */
@@ -45,7 +45,11 @@ function capture() {
     body: JSON.stringify({
       landingUrl: window.location.href,
       referrer: document.referrer,
-      utm: pick(UTM_KEYS),
+      // The same seven keys the server keeps (lib/attribution.ts), so the
+      // consented visitor row and the order can never disagree about which
+      // labels exist. The old fixed five dropped utm_adset — the one key the
+      // ads team's template is built around.
+      utm: parseLabels(window.location.search),
       clickIds,
     }),
   })

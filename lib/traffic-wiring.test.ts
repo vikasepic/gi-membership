@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 
+/** Shared by every source-reading assertion in this file that pins a call
+ *  across its arguments: collapses whitespace so wrapping a line — a
+ *  readability change, not a behaviour change — cannot silently break a
+ *  literal-substring match. A ~140-char line once got forced by exactly this
+ *  kind of unnormalised assertion. */
+const normalize = (s: string) => s.replace(/\s+/g, " ");
+
 /**
  * The four funnel pages each count their own view, under the product it was
  * about.
@@ -101,20 +108,26 @@ describe("the overview's source filter recomputes the funnels, it does not hide 
     // The bug this replaces filtered `rows` (already-shaped OverviewRows) by
     // topSource, which could only ever hide a row, never recompute its
     // numbers. The fix filters `counts` and feeds the result straight back
-    // into buildFunnels.
-    const src = readFileSync("app/admin/traffic/page.tsx", "utf8");
-    expect(src).toContain("buildFunnels(counts.filter(");
+    // into buildFunnels. Whitespace-normalised on both sides so wrapping this
+    // call across lines — readability, not a behaviour change — cannot
+    // silently break the assertion the way a literal ~140-char line once did.
+    const src = normalize(readFileSync("app/admin/traffic/page.tsx", "utf8"));
+    expect(src).toContain(normalize("buildFunnels(\n  counts.filter("));
   });
 
-  it("passes no bought rows into the source-filtered view", () => {
-    // Under a source filter there is no honest per-source order count —
-    // orders carry no source anywhere in this store. Passing the unfiltered
-    // `boughtRows` here, as this used to, lets a funnel's fourth step show an
-    // ALL-source order count beside three source-filtered view counts, and
-    // biggestDrop compute a real-looking percentage from a fall that never
-    // happened in this source's own numbers — sorted to the top of the
-    // column whose only job is finding the page that actually leaks.
-    const src = readFileSync("app/admin/traffic/page.tsx", "utf8");
-    expect(src).toContain("counts.filter((c) => c.source === filter.source), [], owners, days)");
+  it("passes source-filtered bought rows into the source-filtered view, not the unfiltered ones", () => {
+    // Orders now carry a source (orders.utm_last, bucketed by sourceOfOrder
+    // with the same rules a view gets), so the honest per-source order count
+    // is `boughtRows` narrowed to this source — not `[]` (which used to force
+    // every fourth step to zero) and not the unfiltered `boughtRows` (which
+    // would show an ALL-source order count beside three source-filtered view
+    // counts, letting biggestDrop compute a real-looking percentage from a
+    // fall that never happened in this source's own numbers).
+    // Whitespace-normalised, like the assertion above — a raw contiguous
+    // literal here would force this call onto one long line and silently
+    // stop catching a regression the moment anyone reflowed it.
+    const src = normalize(readFileSync("app/admin/traffic/page.tsx", "utf8"));
+    expect(src).toContain(normalize("boughtRows.filter((b) => b.source === filter.source)"));
+    expect(src).not.toContain(normalize("counts.filter((c) => c.source === filter.source), [],"));
   });
 });

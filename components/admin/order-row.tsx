@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { RefundButton } from "@/components/admin/refund-button";
+import { AttributionBlock, SourcePill } from "@/components/admin/attribution-popover";
 import { money } from "@/lib/money";
 import type { OrderRow as Order, OrderItemRow } from "@/lib/orders";
 
@@ -62,7 +63,8 @@ export function OrderRowView({ order }: { order: Order }) {
       >
         <td className="px-3 py-2.5 text-sm text-muted">{when(order.createdAt)}</td>
         <td className="px-3 py-2.5">
-          <span className="text-sm font-medium">{order.email}</span>
+          {order.buyerName && <span className="block text-sm font-medium">{order.buyerName}</span>}
+          <span className={`text-sm ${order.buyerName ? "text-muted" : "font-medium"}`}>{order.email}</span>
           {order.buyerCountry && (
             <span className="ml-2 text-xs text-muted">{order.buyerCountry}</span>
           )}
@@ -98,6 +100,9 @@ export function OrderRowView({ order }: { order: Order }) {
             </span>
           )}
         </td>
+        <td className="px-3 py-2.5">
+          <SourcePill order={order} />
+        </td>
         <td className="px-3 py-2.5 text-right text-sm font-medium tabular-nums">
           <span className={order.livemode ? "" : "text-muted line-through"}>
             {money(order.totalCents, order.currency)}
@@ -108,7 +113,7 @@ export function OrderRowView({ order }: { order: Order }) {
 
       {open && (
         <tr className="border-b border-border/60 bg-surface-2 last:border-b-0">
-          <td colSpan={6} className="px-3 pb-3">
+          <td colSpan={7} className="px-3 pb-3">
             <div className="flex flex-wrap items-start gap-x-8 gap-y-4 rounded-xl border border-border bg-surface p-4">
               <div className="flex min-w-56 flex-1 flex-col gap-1.5">
                 {/* A bump or an upsell is a separate line because it was a
@@ -150,6 +155,10 @@ export function OrderRowView({ order }: { order: Order }) {
                     </div>
                   ))}
               </dl>
+
+              <div className="min-w-56">
+                <AttributionBlock order={order} />
+              </div>
 
               <div className="ml-auto">
                 {order.status === "paid" ? (

@@ -70,24 +70,19 @@ export default async function AdminTrafficPage({
   // from a source-narrowed set of rows would leave the chosen source as the
   // only option, with no way back to any other one.
   const sources = sourcesIn(rows);
-  // Job 3 of the source filter is not hiding rows — it recomputes the three
-  // view steps, the trend and the totals from that source's rows alone. So
-  // the raw counts are restricted to that source BEFORE the funnels are
-  // shaped, and the funnels are shaped again from that alone. `bought` is
-  // passed as `[]`, not `boughtRows`: orders carry no source anywhere in this
-  // store, so there is no honest source-scoped order count, and handing
-  // buildFunnels the unfiltered orders would let a funnel's fourth step show
-  // an ALL-source order count beside three source-filtered view counts —
-  // biggestDrop would then compute a real-looking percentage from a fall
-  // that never happened in this source's own numbers, in the one column
-  // whose job is finding the page that actually leaks. With `[]`, step four
-  // is 0 for every funnel here, matching the Bought cell the table already
-  // blanks under this filter, and an owner with nothing but an unfiltered
-  // order to its name no longer earns a funnel it does not have.
+  // Job 3 of the source filter is not hiding rows — it recomputes the steps,
+  // the trend and the totals from that source's rows alone. Orders carry a
+  // source now (orders.utm_last, bucketed by sourceOfOrder with the same
+  // rules a view gets), so the fourth step is that source's own sales.
   const sourceView = filter.source
-    ? buildFunnels(counts.filter((c) => c.source === filter.source), [], owners, days)
+    ? buildFunnels(
+        counts.filter((c) => c.source === filter.source),
+        boughtRows.filter((b) => b.source === filter.source),
+        owners,
+        days,
+      )
     : view;
-  const shown = applyOverview(overviewRows(sourceView, !filter.source), filter);
+  const shown = applyOverview(overviewRows(sourceView), filter);
 
   return (
     <div className="flex flex-col gap-6 py-4">

@@ -141,6 +141,50 @@ describe.skipIf(!canRun)("checkout money path (integration)", () => {
     // The real token still works afterwards (tampered attempt didn't consume it).
     expect(await acceptOto(token!)).toEqual({ ok: true });
   });
+
+  it("writes the campaign it came from onto the order and the PaymentIntent, beside the keys already there", async () => {
+    const email = `it_${Date.now()}_utm@example.com`;
+    createdEmails.push(email);
+    const attribution = {
+      first: { utm_source: "ig", utm_medium: "paid", utm_campaign: "Launch A" },
+      last: {
+        utm_source: "meta",
+        utm_medium: "paid_social",
+        utm_campaign: "AJ | LAL | Book Writer",
+        utm_adset: "LAL 1%",
+        utm_content: "Reel 3",
+      },
+      referrer: "https://l.facebook.com/l.php",
+    };
+    const res = await createCheckoutIntent({
+      productSlug: "placeholder-offer",
+      email,
+      fullName: "Test Buyer",
+      bumpChoice: "none",
+      attribution,
+    });
+    if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
+    const piId = res.clientSecret.split("_secret_")[0];
+
+    const db = createServiceClient();
+    const { data: order } = await db
+      .from("orders")
+      .select("utm_first, utm_last, referrer")
+      .eq("stripe_payment_intent_id", piId)
+      .single();
+    expect(order?.utm_last).toEqual(attribution.last);
+    expect(order?.utm_first).toEqual(attribution.first);
+    expect(order?.referrer).toBe(attribution.referrer);
+
+    const pi = await stripe().paymentIntents.retrieve(piId);
+    expect(pi.metadata.utm_source).toBe("meta");
+    expect(pi.metadata.utm_adset).toBe("LAL 1%");
+    expect(pi.metadata.first_utm_source).toBe("ig");
+    expect(pi.metadata.referrer).toBe(attribution.referrer);
+    // The keys another platform already reads must be exactly where they were.
+    expect(pi.metadata.store_created).toBe("true");
+    expect(pi.metadata.productSlug).toBe("placeholder-offer");
+  });
 });
 
 afterAll(async () => {

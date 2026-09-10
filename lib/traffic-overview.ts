@@ -106,15 +106,8 @@ export function overviewRows(view: FunnelView, ordersKnown = true): OverviewRow[
     path: pathOf(f.kind, f.key),
     kind: f.kind,
     steps: f.steps.map((s) => s.count),
-    // biggestDrop is correct for whatever steps it's given, but under a
-    // source filter `f.steps[3]` isn't a measured zero, it's an absence:
-    // orders carry no source anywhere in this store, so the caller forces
-    // the fourth step to 0 rather than counting it (see page.tsx). Handed
-    // that step anyway, biggestDrop would call the fall INTO it a
-    // mathematically perfect "100% at the sale," which wins the sort over
-    // every real leak in the one column whose job is finding the page that
-    // actually leaks. Truncating to the three steps that ARE known is not an
-    // optimisation — it's a statement that this filter cannot see the sale.
+    // Under a source filter the sale IS known now — orders carry a source —
+    // so callers pass the default.
     drop: biggestDrop(ordersKnown ? f.steps : f.steps.slice(0, 3)),
     daily: f.daily,
     topSource: f.sources[0] ?? null,

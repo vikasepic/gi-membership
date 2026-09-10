@@ -52,6 +52,16 @@ describe("recording it once", () => {
 });
 
 describe("who the renewal belongs to", () => {
+  // Scoped to the orders INSERT itself, not the whole file — every one of
+  // these field names also appears in the SELECT a few dozen lines down
+  // (line ~244, reading the origin order back), so an unscoped
+  // `renewals.toContain(f)` passes on that alone and would not fail if the
+  // corresponding `f: origin.x` line were deleted from the INSERT below.
+  const insert = renewals.slice(
+    renewals.indexOf("const { data: created, error } = await db"),
+    renewals.indexOf('.select("id")'),
+  );
+
   it("is found through the subscription, not the customer", () => {
     // One Stripe customer can hold several subscriptions.
     expect(renewals).toContain('.eq("stripe_subscription_id", subscriptionId)');
@@ -65,8 +75,10 @@ describe("who the renewal belongs to", () => {
 
   it("carries the attribution the sale was won with", () => {
     // A conversion with no match data is one Meta can count but not learn from.
-    for (const f of ["visitor_id", "tracking_consent", "buyer_country"]) {
-      expect(renewals, f).toContain(f);
+    // And a renewal belongs to the campaign that made the sale, so the labels
+    // come along with the visitor.
+    for (const f of ["visitor_id", "tracking_consent", "buyer_country", "utm_first", "utm_last", "referrer"]) {
+      expect(insert, f).toContain(f);
     }
   });
 });

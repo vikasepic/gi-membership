@@ -102,6 +102,7 @@ export default async function ThankYouPage({
           trialCents={receipt.trialCents}
           email={receipt.email}
           adsLabel={googleAdsPurchaseLabel()}
+          attribution={receipt.attribution}
         />
       )}
       {paid && summary ? (

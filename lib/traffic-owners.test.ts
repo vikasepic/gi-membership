@@ -23,7 +23,7 @@ describe("an offer is a funnel like a product is", () => {
         hit({ path: "/checkout/offer", product: "book-writer", hits: 40 }),
         hit({ path: "/checkout/oto", product: "book-writer", hits: 10 }),
       ],
-      [{ product: "book-writer", orders: 6 }],
+      [{ product: "book-writer", source: "direct", orders: 6 }],
       OWNERS,
       DAYS,
     );
@@ -39,7 +39,7 @@ describe("an offer is a funnel like a product is", () => {
         hit({ path: "/checkout", product: "digital-product-validator", hits: 20 }),
         hit({ path: "/checkout/oto", product: "digital-product-validator", hits: 5 }),
       ],
-      [{ product: "digital-product-validator", orders: 3 }],
+      [{ product: "digital-product-validator", source: "direct", orders: 3 }],
       OWNERS,
       DAYS,
     );
@@ -153,7 +153,7 @@ describe("an owner with no upsell configured", () => {
         hit({ path: "/o/book-writer", product: "book-writer", hits: 354 }),
         hit({ path: "/checkout/offer", product: "book-writer", hits: 7 }),
       ],
-      bought ? [{ product: "book-writer", orders: bought }] : [],
+      bought ? [{ product: "book-writer", source: "direct", orders: bought }] : [],
       OWNERS_NO_UPSELL,
       DAYS,
     );
@@ -180,7 +180,7 @@ describe("an owner with no upsell configured", () => {
         hit({ path: "/o/book-writer", product: "book-writer", hits: 10 }),
         hit({ path: "/checkout/offer", product: "book-writer", hits: 10 }),
       ],
-      [{ product: "book-writer", orders: 1 }],
+      [{ product: "book-writer", source: "direct", orders: 1 }],
       OWNERS_NO_UPSELL,
       DAYS,
     );
@@ -196,7 +196,7 @@ describe("an owner with no upsell configured", () => {
         hit({ path: "/checkout", product: "digital-product-validator", hits: 50 }),
         hit({ path: "/checkout/oto", product: "digital-product-validator", hits: 40 }),
       ],
-      [{ product: "digital-product-validator", orders: 10 }],
+      [{ product: "digital-product-validator", source: "direct", orders: 10 }],
       [{ key: "digital-product-validator", title: "Validator", kind: "product", hasUpsell: true }],
       DAYS,
     );

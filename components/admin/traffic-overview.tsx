@@ -84,15 +84,11 @@ export function TrafficOverview({
         </form>
       </div>
 
-      {/* Orders carry no source anywhere in this store, so a source-filtered
-          Bought column would be the unfiltered number sitting beside filtered
-          view counts — which reads as that source's conversion rate and is
-          wrong by however much traffic came from elsewhere. */}
       {filter.source && (
         <p className="text-xs text-muted">
-          Showing views from <span className="font-medium text-fg">{filter.source}</span>. Orders are
-          not attributed to a source, so <span className="font-medium text-fg">Bought</span> is left
-          blank rather than counted against a filtered funnel.
+          Showing views and orders from <span className="font-medium text-fg">{filter.source}</span>.
+          Orders are bucketed the way views are — by campaign name, else by source — so Bought is
+          this source&rsquo;s own sales.
         </p>
       )}
 
@@ -140,13 +136,9 @@ export function TrafficOverview({
                 </td>
                 {[0, 1, 2, 3].map((i) => {
                   // An em dash means "this page has no such step" — a row with
-                  // no funnel, an owner with no upsell, or Bought under a
-                  // source filter that orders cannot follow. Never a zero,
-                  // which is a measurement.
-                  const blank =
-                    r.kind === "other"
-                      ? i > 0
-                      : r.steps[i] === null || (i === 3 && Boolean(filter.source));
+                  // no funnel, or an owner with no upsell. Never a zero, which
+                  // is a measurement.
+                  const blank = r.kind === "other" ? i > 0 : r.steps[i] === null;
                   return (
                     <td key={i} className="px-4 py-3 text-right tabular-nums">
                       {blank ? (

@@ -32,6 +32,7 @@ import { livePrices, chargeNowCents as chargeNowFor } from "@/lib/offer-prices";
 import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
 import { markLeadConverted } from "@/lib/leads";
 import { recordError, messageOf } from "@/lib/errors";
+import { stripeAttributionMetadata, orderAttributionColumns, type Attribution, type Labels } from "@/lib/attribution";
 import type { Offer } from "@/lib/types";
 
 const OTO_TTL_SECONDS = 15 * 60; // 15 minutes
@@ -94,6 +95,13 @@ export type CheckoutInput = {
   clientIp?: string | null;
   userAgent?: string | null;
   sourceUrl?: string | null;
+  /**
+   * The campaign that brought them, off the gi_utm cookie — read by the
+   * action layer, never from the client payload. Snapshotted onto the order
+   * and mirrored into the intent's metadata so the platform the ads team
+   * reads from Stripe can tell a paid sale from an organic one.
+   */
+  attribution?: Attribution | null;
 };
 
 export type CheckoutResult =
@@ -480,6 +488,10 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
         bumpOfferId: bumpOffer?.id ?? "",
         country: country ?? "",
         newAccount,
+        // Last touch as utm_*, first touch as first_utm_*, plus referrer.
+        // Spread last: nothing above uses these names, and the keys another
+        // platform already reads stay exactly where they are.
+        ...stripeAttributionMetadata(input.attribution),
       },
     });
     if (!si.client_secret) return { ok: false, error: "No client secret" };
@@ -511,6 +523,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       stripe_customer_id: customerId,
       stripe_setup_intent_id: si.id,
       visitor_id: visitor,
+      ...orderAttributionColumns(input.attribution),
     })
       .select("id")
       .single();
@@ -635,6 +648,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       bumpPrepaid: bumpOffer && bumpOffer.billingType === "one_time" ? "true" : "",
       taxCalculationId: tax.calculationId ?? "",
       newAccount,
+      ...stripeAttributionMetadata(input.attribution),
     },
   });
 
@@ -669,6 +683,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       stripe_customer_id: customerId,
       stripe_payment_intent_id: pi.id,
       visitor_id: visitorId,
+      ...orderAttributionColumns(input.attribution),
     })
     .select("id")
     .single();
@@ -778,6 +793,22 @@ export async function fulfilOffer(args: {
   const idem =
     (args.idempotencyKey ?? `fulfil_${order.id}_${offer.id}`) + (coupon ? `_${coupon.promotionCodeId}` : "");
 
+  // The campaign this order came from, for the subscription's or charge's
+  // metadata. Read off the order rather than passed by every caller: the
+  // offer checkout, the bump, the upsell accept and the library's one-tap
+  // all reach here, and one read is how none of them forgets. Empty for an
+  // organic sale, which adds no keys.
+  const { data: orderRow } = await createServiceClient()
+    .from("orders")
+    .select("utm_first, utm_last, referrer")
+    .eq("id", order.id)
+    .maybeSingle();
+  const campaign = stripeAttributionMetadata({
+    first: (orderRow?.utm_first as Labels | null) ?? {},
+    last: (orderRow?.utm_last as Labels | null) ?? {},
+    referrer: (orderRow?.referrer as string | null) ?? null,
+  });
+
   if (offer.billingType === "recurring") {
     const productId = await ensureStripeProduct(offer);
     const sub = await stripe().subscriptions.create(
@@ -817,6 +848,7 @@ export async function fulfilOffer(args: {
           orderId: order.id,
           offerId: offer.id,
           offerName: offer.name,
+          ...campaign,
         },
       },
       { idempotencyKey: idem },
@@ -851,6 +883,7 @@ export async function fulfilOffer(args: {
         orderId: order.id,
         offerId: offer.id,
         offerName: offer.name,
+        ...campaign,
       },
     },
     { idempotencyKey: idem },
@@ -978,7 +1011,7 @@ export async function fulfilBump(args: {
 export async function finalizeOrder(intentId: string): Promise<void> {
   const db = createServiceClient();
   const COLUMNS =
-    "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents, stripe_setup_intent_id, currency, buyer_country, client_ip, client_user_agent, source_url, subtotal_cents, discount_cents, coupon_code";
+    "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents, stripe_setup_intent_id, currency, buyer_country, client_ip, client_user_agent, source_url, subtotal_cents, discount_cents, coupon_code, utm_first, utm_last, referrer";
 
   // Either kind of intent. A one-off product order points at a PaymentIntent; a
   // recurring one points at a SetupIntent, because a trial charges nothing
@@ -1086,6 +1119,16 @@ export async function finalizeOrder(intentId: string): Promise<void> {
     // deliberately REMOVES the trial, and `0 || x` would hand back the price's.
     baseTrialDays = (coupon?.ok ? coupon.coupon.trialDays : null) ?? price.trialDays ?? null;
 
+    // The campaign this order came from, same shape fulfilOffer uses, so both
+    // read the same metadata. This is the store's highest-value order type —
+    // a recurring product sale — and its subscription is the row the ads
+    // platform reads.
+    const campaign = stripeAttributionMetadata({
+      first: (order.utm_first as Labels | null) ?? {},
+      last: (order.utm_last as Labels | null) ?? {},
+      referrer: (order.referrer as string | null) ?? null,
+    });
+
     const sub = await stripe().subscriptions.create(
       {
         customer: order.stripe_customer_id as string,
@@ -1120,6 +1163,7 @@ export async function finalizeOrder(intentId: string): Promise<void> {
           productId: prod.id,
           productTitle: prod.title,
           productPriceId: price.id,
+          ...campaign,
         },
       },
       // Keyed on the SetupIntent, so the thank-you page and the webhook racing
@@ -1441,7 +1485,7 @@ export async function buyerContextFor(orderId: string) {
   const { data: order } = await db
     .from("orders")
     .select(
-      "id, email, user_id, visitor_id, buyer_country, client_ip, client_user_agent, source_url",
+      "id, email, user_id, visitor_id, buyer_country, client_ip, client_user_agent, source_url, utm_first, utm_last, referrer",
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -1492,6 +1536,11 @@ export async function buyerContextFor(orderId: string) {
       (items ?? [])[0]?.description as string | undefined,
     ),
     numItems: (items ?? []).length || undefined,
+    attribution: {
+      first: (order.utm_first as Labels | null) ?? {},
+      last: (order.utm_last as Labels | null) ?? {},
+      referrer: (order.referrer as string | null) ?? null,
+    } satisfies Attribution,
   };
 }
 

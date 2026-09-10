@@ -18,6 +18,10 @@ const order = (over: Partial<OrderRow> = {}): OrderRow => ({
   buyerCountry: "IN",
   stripePaymentIntentId: "pi_abc123",
   livemode: true,
+  buyerName: "Jane Buyer",
+  utmFirst: {},
+  utmLast: {},
+  referrer: null,
   createdAt: "2026-08-01T09:14:00Z",
   items: [
     { kind: "product", description: "The Guide", amountCents: 499, stripeSubscriptionId: null },
@@ -82,7 +86,7 @@ describe("the page", () => {
   it("keeps the filter in the URL", () => {
     // A view becomes a link: sendable, bookmarkable, and the back button means
     // what it looks like it means.
-    expect(src).toContain("filterFrom(await searchParams)");
+    expect(src).toContain("filterFrom(await searchParams, sources)");
     expect(src).toContain("filterHref(filter");
   });
 
@@ -100,5 +104,31 @@ describe("the page", () => {
   it("offers a way out of a filter", () => {
     // JSX puts it on its own line; matching the word is what matters.
     expect(src).toMatch(/>\s*Clear\s*</);
+  });
+});
+
+describe("where it came from", () => {
+  const paid = () =>
+    order({
+      utmLast: { utm_source: "meta", utm_medium: "paid_social", utm_campaign: "AJ | LAL", utm_adset: "LAL 1%", utm_content: "Reel 3" },
+      utmFirst: { utm_source: "ig", utm_medium: "paid", utm_campaign: "Launch" },
+      referrer: "https://l.facebook.com/l.php",
+    });
+
+  it("shows the buyer's name above the email", () => {
+    const out = row();
+    expect(out.indexOf("Jane Buyer")).toBeGreaterThan(-1);
+    expect(out.indexOf("Jane Buyer")).toBeLessThan(out.indexOf("buyer@test.com"));
+  });
+
+  it("shows source and medium in the row, and nothing more until asked", () => {
+    const out = row(paid());
+    expect(out).toContain("meta · paid_social");
+    expect(out).not.toContain("LAL 1%");
+    expect(out).not.toContain("l.facebook.com");
+  });
+
+  it("reads direct when there are no labels", () => {
+    expect(row()).toContain("direct");
   });
 });

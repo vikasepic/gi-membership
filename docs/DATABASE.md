@@ -651,6 +651,9 @@ not in these tables; it is the `ownership` row for the app.
 | `source_url` | text | yes |  | The page the checkout happened on, sent as event_source_url. Written only with tracking co… |
 | `stripe_invoice_id` | text | yes |  | The Stripe invoice this order records, for a renewal or a trial converting. Null on a chec… |
 | `livemode` | boolean | no | `true` | False when the order was made against a Stripe test key. Test orders are real rows for mon… |
+| `utm_first` | jsonb | no | `'{}'::jsonb` | First-touch campaign labels (utm_source … utm_id), snapshotted at creation. Migration 0079. |
+| `utm_last` | jsonb | no | `'{}'::jsonb` | Last-touch campaign labels, snapshotted at creation. Shown on the Orders page; mirrored into Stripe metadata. |
+| `referrer` | text | yes |  | Landing referrer, origin + path, foreign hosts only. |
 
 **Keys:** `PRIMARY KEY (id)`
 

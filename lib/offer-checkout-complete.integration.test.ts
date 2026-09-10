@@ -147,6 +147,45 @@ describe.skipIf(!canRun)("completeOfferCheckout's claim on a race (0070)", () =>
     if (fixtureProductId) await db.from("products").delete().eq("id", fixtureProductId);
   });
 
+  it("writes the campaign from the intent's metadata onto the order — there is no cookie on the webhook path", async () => {
+    const db = createServiceClient();
+    const { userId } = await buyer("utm");
+    const storeId = await getStoreId();
+    const piId = `pi_utm_${crypto.randomUUID()}`;
+    PI_RESPONSES.set(piId, {
+      id: piId,
+      object: "payment_intent",
+      status: "succeeded",
+      amount: PRICE_CENTS,
+      customer: `cus_utm_${crypto.randomUUID()}`,
+      payment_method: `pm_utm_${crypto.randomUUID()}`,
+      metadata: {
+        userId,
+        offerId: fixtureOfferId,
+        storeId,
+        offerPriceId: "",
+        couponCode: "",
+        newAccount: "false",
+        utm_source: "meta",
+        utm_medium: "paid_social",
+        utm_campaign: "AJ | LAL",
+        first_utm_source: "ig",
+        referrer: "https://l.facebook.com/l.php",
+      },
+    });
+    const res = await completeOfferCheckout(piId);
+    expect(res.ok).toBe(true);
+    const { data: order } = await db
+      .from("orders")
+      .select("id, utm_first, utm_last, referrer")
+      .eq("stripe_payment_intent_id", piId)
+      .single();
+    orderIds.push(order!.id as string);
+    expect(order?.utm_last).toEqual({ utm_source: "meta", utm_medium: "paid_social", utm_campaign: "AJ | LAL" });
+    expect(order?.utm_first).toEqual({ utm_source: "ig" });
+    expect(order?.referrer).toBe("https://l.facebook.com/l.php");
+  });
+
   it("two concurrent completions for the same PaymentIntent book exactly one order, one order_items row, and one ownership row", async () => {
     const db = createServiceClient();
     const { userId } = await buyer("race");

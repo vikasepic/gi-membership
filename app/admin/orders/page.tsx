@@ -7,6 +7,7 @@ import {
   chipCounts,
   filterFrom,
   filterHref,
+  sourcesIn,
   totalsFor,
   type OrderFilter,
 } from "@/lib/order-view";
@@ -45,8 +46,9 @@ export default async function AdminOrdersPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const filter = filterFrom(await searchParams);
   const all = await listOrders();
+  const sources = sourcesIn(all);
+  const filter = filterFrom(await searchParams, sources);
   const shown = applyFilter(all, filter);
   const totals = totalsFor(shown, all[0]?.currency ?? "usd");
   const counts = chipCounts(all, filter);
@@ -111,13 +113,21 @@ export default async function AdminOrdersPage({
           />
           <Picker name="range" value={filter.range} options={RANGES} label="Date range" />
           <Picker name="sort" value={filter.sort} options={SORTS} label="Sort" />
+          {sources.length > 0 && (
+            <Picker
+              name="source"
+              value={filter.source}
+              options={[{ key: "", label: "Any source" }, ...sources.map((s) => ({ key: s, label: s }))]}
+              label="Source"
+            />
+          )}
           <button
             type="submit"
             className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:border-primary hover:text-fg"
           >
             Apply
           </button>
-          {(filter.q || filter.range !== "all" || filter.sort !== "newest" || filter.status !== "all") && (
+          {(filter.q || filter.range !== "all" || filter.sort !== "newest" || filter.status !== "all" || filter.source) && (
             <Link href="/admin/orders" className="text-xs text-muted underline-offset-4 hover:underline">
               Clear
             </Link>
@@ -133,13 +143,14 @@ export default async function AdminOrdersPage({
         </p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-border bg-surface">
-          <table className="w-full min-w-[46rem] border-collapse">
+          <table className="w-full min-w-[54rem] border-collapse">
             <thead>
               <tr className="border-b border-border bg-surface-2">
                 <Th>Date</Th>
                 <Th>Buyer</Th>
                 <Th>What they bought</Th>
                 <Th>Status</Th>
+                <Th>Source</Th>
                 <Th right>Total</Th>
                 <Th />
               </tr>

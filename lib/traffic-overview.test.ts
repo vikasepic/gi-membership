@@ -16,7 +16,7 @@ const VIEW: FunnelView = {
       kind: "offer",
       hasUpsell: true,
       steps: [step("Saw the sales page", 100), step("Reached the checkout", 20), step("Saw the upsell", 5), step("Bought", 4)],
-      sources: [{ source: "meta", hits: 60 }, { source: "direct", hits: 40 }],
+      sources: [{ source: "meta", hits: 60, orders: 3 }, { source: "direct", hits: 40, orders: 1 }],
       daily: [{ day: "2026-09-09", hits: 100 }],
       salesViews: 100,
     },
@@ -26,12 +26,12 @@ const VIEW: FunnelView = {
       kind: "product",
       hasUpsell: true,
       steps: [step("Saw the sales page", 40), step("Reached the checkout", 30), step("Saw the upsell", 20), step("Bought", 10)],
-      sources: [{ source: "direct", hits: 40 }],
+      sources: [{ source: "direct", hits: 40, orders: 10 }],
       daily: [{ day: "2026-09-09", hits: 40 }],
       salesViews: 40,
     },
   ],
-  others: [{ path: "/", hits: 70, sources: [{ source: "direct", hits: 70 }] }],
+  others: [{ path: "/", hits: 70, sources: [{ source: "direct", hits: 70, orders: 0 }] }],
   counted: 210,
 };
 
@@ -57,7 +57,10 @@ describe("every page is in one list", () => {
   });
 
   it("names the busiest source", () => {
-    expect(overviewRows(VIEW)[0].topSource).toEqual({ source: "meta", hits: 60 });
+    // topSource is just VIEW's own sources[0], orders and all — its type only
+    // promises source/hits, but the object underneath still carries whatever
+    // SourceSplit does.
+    expect(overviewRows(VIEW)[0].topSource).toEqual({ source: "meta", hits: 60, orders: 3 });
   });
 });
 
