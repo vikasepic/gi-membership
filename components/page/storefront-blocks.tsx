@@ -144,15 +144,33 @@ export function MembershipCard({ view }: { view: MembershipView }) {
       </div>
 
       <div className="flex flex-col justify-between gap-6 border-t border-border pt-7 md:col-span-5 md:border-l md:border-t-0 md:pl-10 md:pt-0">
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-baseline gap-2">
-            <span className="font-display text-4xl">{price}</span>
-            {billing.suffix && <span className="text-muted">{billing.suffix}</span>}
+        <div className="flex flex-col gap-5">
+          {/* The offer's artwork, above the price — the same band and the
+              same cover the library gives it, so a thing looks like itself
+              wherever it appears. Nothing is drawn when there is none: a
+              placeholder here would be a grey box beside a real price. */}
+          {offer.imageUrl && (
+            <div className="relative aspect-[16/10] w-full overflow-hidden rounded-2xl bg-surface-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={offer.imageUrl}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            </div>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-baseline gap-2">
+              <span className="font-display text-4xl">{price}</span>
+              {billing.suffix && <span className="text-muted">{billing.suffix}</span>}
+            </div>
+            {/* Say the charge out loud. A trial that bills silently on day 8 is
+                the single most complained-about pattern in subscriptions — and
+                a one-time price must never read as one. See lib/offer-terms.ts. */}
+            <p className="text-sm text-muted">{billing.terms}</p>
           </div>
-          {/* Say the charge out loud. A trial that bills silently on day 8 is
-              the single most complained-about pattern in subscriptions — and
-              a one-time price must never read as one. See lib/offer-terms.ts. */}
-          <p className="text-sm text-muted">{billing.terms}</p>
         </div>
 
         {owned ? (
