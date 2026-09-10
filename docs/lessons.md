@@ -168,3 +168,19 @@ screen must not assert a number it has just declared it does not have.
 `biggestDrop` now reports `to`, the step a fall LANDED on, because the old
 `from` + 1 at every call site is unreadable once a step in between can be
 missing. (`lib/traffic-owners.test.ts`)
+
+**2026-09-10 — the upsell's accept button did nothing, for ten buyers.**
+0 of 10 upsells accepted looked like a conversion problem. It was a dead
+control. `OtoStickyBar` renders a button that SCROLLS to the price choice
+instead of accepting whenever the offer shows more than one way to pay
+(`optionCount > 1`). `buyAnchor()` finds that choice by looking for a Ways to
+pay block (`data-ways-to-pay`) or a Button set to buy (`data-buy`). The Funnel
+App's upsell page has two live prices and neither block — eight headings,
+eight rows, five card grids, three texts, an FAQ, an image — so
+`scrollIntoView` ran on null, nothing moved, and no other accept control
+existed anywhere on the page. Rule: a control whose behaviour depends on
+another element existing must check that it exists, and fall back to the
+thing that works. Never ship a branch that can only no-op. And when a funnel
+step reads zero, open the page before concluding anything about the audience
+— the data said "nobody wanted it" and the truth was "nobody could".
+(`components/oto/dead-accept-button.test.ts`)

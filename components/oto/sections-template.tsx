@@ -3,7 +3,7 @@ import { OtoStickyBar } from "@/components/oto/sticky-bar";
 import { SalesPage } from "@/components/page/sales-page";
 import { offersForRows } from "@/lib/block-offers";
 import { livePrices } from "@/lib/offer-prices";
-import { hasStickyBarBlock, type SectionRow } from "@/lib/page-sections";
+import { hasBuyAnchorBlock, hasStickyBarBlock, type SectionRow } from "@/lib/page-sections";
 import type { GlobalBlocks } from "@/lib/section-to-blocks";
 import { money } from "@/lib/money";
 
@@ -37,7 +37,20 @@ export async function SectionsOto({
   // What the page is showing to choose between. The bar can buy only when
   // there is one of them.
   const options = livePrices(offer.prices);
-  const optionCount = options.length > 1 ? options.length : alt ? 2 : 1;
+  const shown = options.length > 1 ? options.length : alt ? 2 : 1;
+
+  // More than one way to pay makes the bar SCROLL to the choice instead of
+  // accepting — which is right only if the page has a choice to scroll to.
+  // The Funnel App's upsell had two prices and neither a Ways to pay nor a
+  // buy Button block, so the bar's only button called scrollIntoView on
+  // nothing: ten buyers were shown that page and none of them could accept.
+  //
+  // With no anchor the bar accepts at the terms it is already displaying —
+  // the first live price, which is what acceptOto uses when no choice is
+  // sent, and what the bar's own price line and sub-line describe. A page
+  // that wants the buyer to pick adds a Ways to pay block; until it does, a
+  // button that works beats a button that does nothing.
+  const optionCount = hasBuyAnchorBlock(rows) ? shown : 1;
 
   return (
     <div className="pb-28">

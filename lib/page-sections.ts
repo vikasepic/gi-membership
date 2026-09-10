@@ -730,6 +730,34 @@ export function hasStickyBarBlock(rows: { content?: unknown }[]): boolean {
   });
 }
 
+/**
+ * Does this page carry something a sticky bar can scroll to?
+ *
+ * `buyAnchor` looks for a Ways to pay block (`data-ways-to-pay`) or a Button
+ * block set to buy (`data-buy`). A bar that scrolls when neither is present
+ * calls `scrollIntoView` on null and does nothing at all — which is what the
+ * Funnel App's upsell did to ten buyers: two prices, so the bar chose to
+ * scroll rather than accept, and its page had neither block. The button was
+ * dead and nobody could take the offer.
+ *
+ * Deliberately the same shape as hasStickyBarBlock, and deliberately NOT
+ * counting a block that merely renders a CTA through the page's `cta`
+ * callback: those are accept controls, but they leave no anchor, so a bar
+ * still cannot find them.
+ */
+export function hasBuyAnchorBlock(rows: { content?: unknown }[]): boolean {
+  return rows.some((row) => {
+    const blocks = (row.content as { blocks?: unknown } | null)?.blocks;
+    if (!Array.isArray(blocks)) return false;
+    return walkBlocks(normalizeBlocks(blocks)).some(
+      (b) =>
+        b.type === "prices" ||
+        (b.type === "button" &&
+          (b as { props?: { action?: unknown } }).props?.action === "buy"),
+    );
+  });
+}
+
 export const SECTION_KEYS = SECTIONS.map((s) => s.key);
 export const HOME_SECTION_KEYS = HOME_SECTIONS.map((s) => s.key);
 export const CHECKOUT_SECTION_KEYS = CHECKOUT_SECTIONS.map((s) => s.key);
