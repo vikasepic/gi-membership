@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import { applyAttributionCookie } from "@/lib/attribution-cookie";
-import { UTM_COOKIE, serializeCookie } from "@/lib/attribution";
+import { UTM_COOKIE, UTM_KEYS, serializeCookie } from "@/lib/attribution";
 
 const SITE = "http://localhost:3000";
 
@@ -75,6 +75,58 @@ describe("the gi_utm cookie", () => {
     const res = NextResponse.next();
     expect(applyAttributionCookie(req, res)).toBe(true);
     expect(JSON.parse(res.cookies.get(UTM_COOKIE)!.value).f).toEqual({ utm_source: "meta" });
+  });
+
+  it("drops first touch and the referrer, keeping last touch, when the encoded record is too big", () => {
+    // MAX_LABEL (lib/attribution.ts) caps a label at 120 CHARACTERS, but Next
+    // serializes the cookie with encodeURIComponent, which counts BYTES —
+    // this store's real Meta campaign names ("AJ | LAL | Book Writer |
+    // Sales | Sept 2026") are the pipe-and-space-heavy shape that grows once
+    // encoded ("|" -> %7C, " " -> %20). Two full sets of seven such labels
+    // (first touch already stored, last touch arriving now) blow well past
+    // the budget; only the last-touch half needs to survive.
+    const pipeHeavy = (tag: string) => `${tag}:${"| ".repeat(60)}`.slice(0, 120);
+    const existingFirst = serializeCookie({
+      f: Object.fromEntries(UTM_KEYS.map((k) => [k, pipeHeavy(`first-${k}`)])),
+      l: Object.fromEntries(UTM_KEYS.map((k) => [k, pipeHeavy(`first-${k}`)])),
+      fa: "2026-01-01T00:00:00.000Z",
+      la: "2026-01-01T00:00:00.000Z",
+      r: "https://someblog.example/a-reasonably-long-landing-path-to-pad-the-record-out-further-than-usual",
+    });
+    const params = new URLSearchParams();
+    for (const k of UTM_KEYS) params.set(k, pipeHeavy(`last-${k}`));
+    const req = request(`/p/validator?${params.toString()}`, {
+      cookie: `${UTM_COOKIE}=${encodeURIComponent(existingFirst)}`,
+    });
+    const res = NextResponse.next();
+
+    expect(applyAttributionCookie(req, res, new Date("2026-09-10T00:00:00.000Z"))).toBe(true);
+    const cookie = res.cookies.get(UTM_COOKIE)!;
+    // The written value itself has to actually be within the budget — the
+    // whole point of the guard.
+    expect(encodeURIComponent(cookie.value).length).toBeLessThanOrEqual(3800);
+    const parsed = JSON.parse(cookie.value);
+    expect(parsed.f).toBeUndefined();
+    expect(parsed.r).toBeUndefined();
+    expect(parsed.fa).toBeUndefined();
+    expect(parsed.l.utm_source).toContain("last-utm_source");
+    expect(parsed.la).toBe("2026-09-10T00:00:00.000Z");
+  });
+
+  it("writes nothing when even last touch alone is still over budget", () => {
+    // MAX_LABEL truncates by CHARACTER count, not bytes. A label of 120
+    // Devanagari characters is still one label under the cap, but each
+    // character is 3 UTF-8 bytes and encodeURIComponent renders every byte
+    // as %XX (3 characters) — a 9x blow-up that clears the budget on last
+    // touch alone, with nothing left to drop.
+    const wide = "अ".repeat(150); // truncated to 120 by sanitizeLabel; still ~1080 bytes encoded
+    const params = new URLSearchParams();
+    for (const k of UTM_KEYS) params.set(k, wide);
+    const req = request(`/p/validator?${params.toString()}`);
+    const res = NextResponse.next();
+
+    expect(applyAttributionCookie(req, res)).toBe(false);
+    expect(res.cookies.get(UTM_COOKIE)).toBeUndefined();
   });
 
   it("returns false instead of throwing when a request accessor explodes", () => {
