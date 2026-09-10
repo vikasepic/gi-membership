@@ -80,16 +80,23 @@ describe("showing it", () => {
     expect(library).toContain("{standing.imageUrl && (");
   });
 
-  it("shows the artwork rather than a crop of it", () => {
-    // These are product mockups on a transparent field, not photographs.
-    // object-cover cropped them and stranded them in flat grey — a screenshot
-    // dropped into a box. Contained on a wash, the mockup floats and the panel
-    // is part of the card.
-    expect(library).toContain("object-contain p-");
-    // In a class, not in the prose explaining why it is gone.
-    const classes = [...library.matchAll(/className="([^"]*)"/g)].map((m) => m[1]).join(" ");
-    expect(classes).not.toContain("object-cover");
+  it("floats the standing offer's artwork on the wash, uncropped", () => {
+    // A mockup on a transparent field, on a panel of its own: contained, it
+    // floats and the panel is part of the card. This one never sits beside a
+    // course, so it keeps that treatment.
+    expect(library).toContain("object-contain p-6");
     expect(library).toContain("const WASH");
+  });
+
+  it("gives the app cards the cover the course cards have", () => {
+    // Contained with a margin, the app cards read as the poor relations of
+    // the course cards beside them — small pictures in grey boxes on a shelf
+    // where everything else is a picture. The owner asked for the course
+    // treatment on 10 Sep 2026: same band, same object-cover, same hover.
+    const appCard = library.slice(library.indexOf("Your apps"), library.indexOf("Still available"));
+    expect(appCard).toContain("object-cover transition-transform duration-500 group-hover:scale-[1.03]");
+    expect(appCard, "the hover lift needs the card to be a group").toMatch(/className="group flex flex-col overflow-hidden/);
+    expect(appCard, "no margin around a cover").not.toContain("object-contain");
   });
 
   it("uses one ground for both, not two that drift", () => {
