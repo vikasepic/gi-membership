@@ -65,7 +65,9 @@ describe("who the renewal belongs to", () => {
 
   it("carries the attribution the sale was won with", () => {
     // A conversion with no match data is one Meta can count but not learn from.
-    for (const f of ["visitor_id", "tracking_consent", "buyer_country"]) {
+    // And a renewal belongs to the campaign that made the sale, so the labels
+    // come along with the visitor.
+    for (const f of ["visitor_id", "tracking_consent", "buyer_country", "utm_first", "utm_last", "referrer"]) {
       expect(renewals, f).toContain(f);
     }
   });

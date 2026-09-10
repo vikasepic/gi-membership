@@ -62,6 +62,49 @@ describe.skipIf(!canRun)("standalone offer checkout (integration)", () => {
     const after = await db.from("ownership").select("app_id").eq("user_id", userId);
     expect(after.data).toHaveLength(1);
   });
+
+  it("stamps the campaign onto the subscription fulfilOffer creates", async () => {
+    const { userId, email } = await memberWithoutCard();
+    const offer = await getStandingOffer(userId);
+    if (!offer) return; // no subscription offer configured — nothing to assert
+
+    const start = await startOfferCheckout({
+      userId,
+      email,
+      offerId: offer.id,
+      attribution: {
+        first: { utm_source: "ig" },
+        last: { utm_source: "meta", utm_campaign: "AJ | LAL" },
+        referrer: null,
+      },
+    });
+    expect(start.ok).toBe(true);
+    if (!start.ok) return;
+
+    const siId = start.clientSecret.split("_secret_")[0];
+    await stripe().setupIntents.confirm(siId, {
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/checkout/offer/complete",
+    });
+
+    expect(await completeOfferCheckout(siId)).toEqual({ ok: true, orderId: expect.any(String) });
+
+    const db = createServiceClient();
+    const owned = await db
+      .from("ownership")
+      .select("stripe_subscription_id")
+      .eq("user_id", userId)
+      .single();
+    const subId = owned.data?.stripe_subscription_id as string;
+    expect(subId).toBeTruthy();
+
+    const sub = await stripe().subscriptions.retrieve(subId);
+    expect(sub.metadata.utm_source).toBe("meta");
+    expect(sub.metadata.utm_campaign).toBe("AJ | LAL");
+    expect(sub.metadata.first_utm_source).toBe("ig");
+    expect(sub.metadata.store_created).toBe("true");
+    expect(sub.metadata.offerName).toBeTruthy();
+  });
 });
 
 afterAll(async () => {

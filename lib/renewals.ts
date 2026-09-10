@@ -95,6 +95,10 @@ export async function recordRenewal(
       visitor_id: origin.visitorId,
       tracking_consent: origin.trackingConsent,
       buyer_country: origin.buyerCountry,
+      // The campaign that won the sale owns its renewals too.
+      utm_first: origin.utmFirst,
+      utm_last: origin.utmLast,
+      referrer: origin.referrer,
     })
     .select("id")
     .single();
@@ -206,6 +210,9 @@ type Origin = {
   visitorId: string | null;
   trackingConsent: boolean | null;
   buyerCountry: string | null;
+  utmFirst: Record<string, string>;
+  utmLast: Record<string, string>;
+  referrer: string | null;
   productId: string | null;
   offerId: string | null;
   description: string | null;
@@ -234,7 +241,7 @@ async function originOrderFor(subscriptionId: string): Promise<Origin | null> {
   const { data: order } = await db
     .from("orders")
     .select(
-      "store_id, user_id, email, currency, stripe_customer_id, visitor_id, tracking_consent, buyer_country",
+      "store_id, user_id, email, currency, stripe_customer_id, visitor_id, tracking_consent, buyer_country, utm_first, utm_last, referrer",
     )
     .eq("id", item.order_id as string)
     .maybeSingle();
@@ -249,6 +256,9 @@ async function originOrderFor(subscriptionId: string): Promise<Origin | null> {
     visitorId: (order.visitor_id as string | null) ?? null,
     trackingConsent: (order.tracking_consent as boolean | null) ?? null,
     buyerCountry: (order.buyer_country as string | null) ?? null,
+    utmFirst: (order.utm_first as Record<string, string> | null) ?? {},
+    utmLast: (order.utm_last as Record<string, string> | null) ?? {},
+    referrer: (order.referrer as string | null) ?? null,
     productId: (item.product_id as string | null) ?? null,
     offerId: (item.offer_id as string | null) ?? null,
     description: (item.description as string | null) ?? null,
