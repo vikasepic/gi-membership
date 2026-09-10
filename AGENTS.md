@@ -29,6 +29,11 @@ same PR — that is how the next person's Claude avoids your mistake.
   every test that reaches the database passes here and fails on CI. After
   every push: `gh run list --branch main --limit 1`. To reproduce CI: move
   `.env.local` aside and run the file.
+- **Run the FULL suite before every push, and gate on the runner's own exit
+  status.** A targeted run cannot see the test in another file that guards
+  what you changed. `npx vitest run | grep … && git push` pushes a red suite —
+  grep exits 0 when it finds the failure line. `set -o pipefail`, or run the
+  suite bare and check `$?`.
 - **Stripe is LIVE in production.** Local is test mode. The Stripe account is
   shared with five other apps — their charges dominate the payments list;
   filter on `metadata["store_created"]:"true"`.
