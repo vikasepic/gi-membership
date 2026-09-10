@@ -103,12 +103,17 @@ import { NOINDEX } from "@/lib/seo";
 export const metadata = NOINDEX;
 
 /**
- * The ground a piece of offer artwork sits on.
+ * The ground a piece of offer artwork sits on while it loads, and behind the
+ * letter drawn when there is none.
  *
- * These pictures are product mockups on a transparent field, not photographs.
- * `object-cover` cropped them and stranded them in flat grey — a screenshot
- * dropped into a box. Contained on a wash of the store's own colour, the
- * mockup floats and the panel is part of the card.
+ * The app cards once contained their artwork on this wash with a margin all
+ * round, on the theory that a mockup on a transparent field should float.
+ * Beside the course cards, whose covers fill their band edge to edge, the
+ * apps read as the poor relations — small pictures in grey boxes. The owner
+ * asked for the course treatment (10 Sep 2026), so the app cards now cover
+ * their band the way a course does, and this wash is what shows through
+ * before the image arrives. The standing offer below still floats its image;
+ * that panel is a different shape and was never beside a course.
  */
 const WASH = {
   backgroundImage:
@@ -228,13 +233,13 @@ export default async function LibraryPage({
               return (
                 <div
                   key={a.id}
-                  className="flex flex-col overflow-hidden rounded-2xl border border-border bg-surface"
+                  className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-surface"
                 >
                   {/* The offer's artwork is a wide banner with its name set
                       into it — not an icon. Squeezed into a 44px square beside
                       the title it was unreadable and the title said the same
-                      thing twice. Given the band the courses use, it is legible
-                      and it is the thing you recognise the card by. */}
+                      thing twice. It gets the band the courses use, and the
+                      same cover treatment, so the two rows read as one shelf. */}
                   <div className="relative aspect-[16/10] w-full overflow-hidden" style={WASH}>
                     {a.imageUrl ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
@@ -243,7 +248,7 @@ export default async function LibraryPage({
                         alt=""
                         loading="lazy"
                         decoding="async"
-                        className="absolute inset-0 h-full w-full object-contain p-4"
+                        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                       />
                     ) : (
                       // A letter on the same ground. What you draw when there
