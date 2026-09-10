@@ -31,7 +31,7 @@ import { ensureStripeProductForProduct, ensureStripeProduct } from "@/lib/stripe
 import { livePrices, chargeNowCents as chargeNowFor } from "@/lib/offer-prices";
 import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
 import { markLeadConverted } from "@/lib/leads";
-import { recordError } from "@/lib/errors";
+import { recordError, messageOf } from "@/lib/errors";
 import type { Offer } from "@/lib/types";
 
 const OTO_TTL_SECONDS = 15 * 60; // 15 minutes
@@ -1951,13 +1951,29 @@ export async function acceptOto(
     .select("id");
   if (!consumed || consumed.length === 0) return { ok: false, error: "used" };
 
+  // Every failure past this point hands the token back AND says so. The
+  // release alone made a failed accept identical to a buyer who never
+  // clicked: nine pending tokens, no way to tell which were declines and
+  // which were charges that died. The row is log-only — nothing here can be
+  // retried without the buyer, and the sweep must never charge a card on
+  // its own.
+  const fail = async (
+    error: "invalid" | "charge_failed",
+    why: string,
+    context: Record<string, unknown> = {},
+  ): Promise<OtoAcceptResult> => {
+    await db.from("oto_tokens").update({ status: "pending", consumed_at: null }).eq("token_hash", sha256(token));
+    await recordError({ source: "oto_accept", message: why, context: { orderId, offerId, error, ...context } });
+    return { ok: false, error };
+  };
+
   const { data: order } = await db
     .from("orders")
     .select("id, store_id, stripe_customer_id, email")
     .eq("id", orderId)
     .maybeSingle();
   const shown = await getOffer(offerId);
-  if (!order || !shown) return { ok: false, error: "invalid" };
+  if (!order || !shown) return fail("invalid", !order ? "order not found" : "offer not found");
 
   // A choice between the prices the page showed, not a free choice of offer.
   // It resolves through the ORDER's product, so the worst a tampered form can
@@ -1969,16 +1985,13 @@ export async function acceptOto(
     // Out of range refuses rather than falling back to the headline price.
     // The token is already claimed at this point, so the release below is what
     // gives them their offer back — see the note on failed charges.
-    if (!price) {
-      await db.from("oto_tokens").update({ status: "pending", consumed_at: null }).eq("token_hash", sha256(token));
-      return { ok: false, error: "invalid" };
-    }
+    if (!price) return fail("invalid", "choice out of range", { choice, options: options.length });
     picked = offerAtPrice(shown, price);
   } else {
     // The old two-offer pairing, while placements are still on it.
     const alt = await upsellAltFor(orderId);
     const buyId = offerForChoice(shown, alt, choice);
-    if (!buyId) return { ok: false, error: "invalid" };
+    if (!buyId) return fail("invalid", "no offer for choice", { choice: choice ?? null });
     picked = buyId === shown.id ? shown : (alt as Offer);
   }
   // Same decision as the bump. The upsell always follows a purchase, so the
@@ -2008,8 +2021,9 @@ export async function acceptOto(
     ? await savedPaymentMethodFor(order.stripe_customer_id as string)
     : null;
   if (!order.stripe_customer_id || !pm) {
-    await db.from("oto_tokens").update({ status: "pending", consumed_at: null }).eq("token_hash", sha256(token));
-    return { ok: false, error: "invalid" };
+    return fail("invalid", order.stripe_customer_id ? "no saved card on customer" : "order has no customer", {
+      stripeCustomerId: order.stripe_customer_id ?? null,
+    });
   }
 
   // The token is already claimed above — that is the replay guard, and it must
@@ -2024,12 +2038,8 @@ export async function acceptOto(
       offer,
       paymentMethodId: pm,
     });
-  } catch {
-    await db
-      .from("oto_tokens")
-      .update({ status: "pending", consumed_at: null })
-      .eq("token_hash", sha256(token));
-    return { ok: false, error: "charge_failed" };
+  } catch (e) {
+    return fail("charge_failed", messageOf(e), { pickedOfferId: offer.id, amountCents: immediateChargeCents(offer) });
   }
 
   await grantOfferOwnership(order.store_id as string, userId, offer, "oto", result.subscriptionId ?? null, {

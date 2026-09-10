@@ -170,6 +170,24 @@ describe.skipIf(!canRun)("OTO token vs failed charge (integration)", () => {
     // The token must NOT be burned — presenting it again is not "used".
     const second = await acceptOto(token);
     expect(second).not.toEqual({ ok: false, error: "used" });
+
+    // And the dead end is on record. A released token alone looked exactly
+    // like a buyer who never clicked; this row is what tells them apart.
+    const { data: orderRow } = await db
+      .from("orders")
+      .select("id")
+      .eq("stripe_payment_intent_id", piId)
+      .maybeSingle();
+    const { data: logged } = await db
+      .from("error_events")
+      .select("message, context")
+      .eq("source", "oto_accept")
+      .eq("context->>orderId", orderRow!.id as string)
+      .order("created_at", { ascending: false });
+    expect(logged?.length).toBeGreaterThanOrEqual(2);
+    expect(logged![0].message).toBe("no saved card on customer");
+    expect(logged![0].context).toMatchObject({ error: "invalid" });
+    await db.from("error_events").delete().eq("source", "oto_accept").eq("context->>orderId", orderRow!.id as string);
   });
 
   it("releases the single-use token when fulfilOffer ITSELF throws (a declined off-session charge), so the buyer can retry", async () => {
