@@ -112,12 +112,16 @@ export function SourcePill({ order }: { order: OrderRow }) {
         // Source sits near the right edge of a table inside a horizontal
         // scroller — left-anchored, the popover ran off the scroller and
         // got clipped, cutting off campaign, ad set, ad name and referrer.
-        // Anchor right so it opens back into the table instead.
+        // Anchor right so it opens back into the table instead. On a phone
+        // the pill's right edge sits too close to the scroller's own right
+        // edge for a 288px (w-72) panel to fit either direction, so below
+        // `sm` cap the width to 15rem — measured at 390px: right edge 273,
+        // scroller starts at 20, so 15rem lands the left edge at 33.
         <div
           role="dialog"
           aria-label="Where this order came from"
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-0 top-full z-20 mt-1 w-72 rounded-xl border border-border bg-surface p-3 shadow-lg"
+          className="absolute right-0 top-full z-20 mt-1 w-72 max-w-[15rem] sm:max-w-none rounded-xl border border-border bg-surface p-3 shadow-lg"
         >
           <AttributionBlock order={order} />
         </div>

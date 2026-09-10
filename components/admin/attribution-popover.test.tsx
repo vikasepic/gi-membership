@@ -85,11 +85,18 @@ describe("SourcePill", () => {
   // for having looked. At 1280px the popover sat left:1026 right:1314 while
   // the table's horizontal scroll container ended at right:1248, clipping
   // campaign, ad set, ad name and referrer — left-0 opened it past the
-  // scroller. right-0 opens it back into the table instead.
-  it("anchors the popover to the pill's right edge, not its left", () => {
+  // scroller. right-0 opens it back into the table instead. At 390px the
+  // popover's right edge sat at x:273 while the scroller started at x:20 —
+  // the full w-72 (288px) panel opened at left:-15, still 35px clipped past
+  // the scroller's left edge even right-anchored. 15rem (240px) lands the
+  // left edge at 33, inside the scroller with room to spare, and only below
+  // `sm` — desktop and laptop keep the full w-72.
+  it("anchors the popover to the pill's right edge, not its left, and caps its width below sm", () => {
     const src = readFileSync(new URL("./attribution-popover.tsx", import.meta.url), "utf8");
     const popoverClass = src.match(/role="dialog"[\s\S]*?className="([^"]+)"/)?.[1];
     expect(popoverClass).toContain("right-0");
     expect(popoverClass).not.toContain("left-0");
+    expect(popoverClass).toContain("max-w-[15rem]");
+    expect(popoverClass).toContain("sm:max-w-none");
   });
 });
