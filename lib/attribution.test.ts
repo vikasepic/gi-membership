@@ -52,6 +52,11 @@ describe("parseLabels", () => {
     expect(parseLabels("")).toEqual({});
     expect(parseLabels("?%E0%A4%A")).toEqual({});
   });
+
+  it("refuses a value whose @ sits past character 120 — truncating before the check would let it through", () => {
+    const evil = "x".repeat(121) + "@evil.com";
+    expect(parseLabels(`?utm_campaign=${evil}`)).toEqual({});
+  });
 });
 
 describe("landingReferrer", () => {
@@ -99,6 +104,22 @@ describe("parseCookie", () => {
       la: undefined,
       r: undefined,
     });
+  });
+
+  it("drops a cookie-sourced label containing @, and trims one with surrounding whitespace — the cookie is attacker-writable even though it's httpOnly", () => {
+    const raw = JSON.stringify({ f: { utm_source: "  ig  ", utm_campaign: "jane@example.com" } });
+    expect(parseCookie(raw)).toEqual({
+      f: { utm_source: "ig" },
+      l: undefined,
+      fa: undefined,
+      la: undefined,
+      r: undefined,
+    });
+  });
+
+  it("caps an oversized fa", () => {
+    const raw = JSON.stringify({ fa: "x".repeat(100) });
+    expect(parseCookie(raw)?.fa).toHaveLength(40);
   });
 });
 

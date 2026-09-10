@@ -39,6 +39,19 @@ export const UTM_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
  *  them twice over plus a referrer stay well under the 4 KB cookie limit. */
 const MAX_LABEL = 120;
 const MAX_REFERRER = 200;
+/** Ample for an ISO 8601 timestamp; caps a cookie-sourced fa/la so a forged
+ *  value can't grow the record past the 4 KB cookie limit. */
+const MAX_STAMP = 40;
+
+/** One label value, cleaned or refused. The @ is refused BEFORE any
+ *  truncation: a per-recipient link whose address falls past the cap would
+ *  otherwise slip through the guard that exists to catch it. */
+function sanitizeLabel(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const v = raw.trim();
+  if (!v || v.includes("@")) return undefined;
+  return v.slice(0, MAX_LABEL);
+}
 
 /**
  * What the cookie holds. Short keys on purpose: this rides on every request
@@ -57,13 +70,8 @@ export function parseLabels(search: string): Labels {
   }
   const out: Labels = {};
   for (const k of UTM_KEYS) {
-    const raw = params.get(k);
-    if (raw == null) continue;
-    const v = raw.trim().slice(0, MAX_LABEL);
-    // The @ is refused before anything else, and that order is the point:
-    // cleaning first would turn this guard into decoration.
-    if (!v || v.includes("@")) continue;
-    out[k] = v;
+    const v = sanitizeLabel(params.get(k));
+    if (v !== undefined) out[k] = v;
   }
   return out;
 }
@@ -99,8 +107,8 @@ export function parseCookie(raw: string | null | undefined): StoredAttribution |
       if (!x || typeof x !== "object" || Array.isArray(x)) return undefined;
       const out: Labels = {};
       for (const k of UTM_KEYS) {
-        const val = (x as Record<string, unknown>)[k];
-        if (typeof val === "string" && val) out[k] = val.slice(0, MAX_LABEL);
+        const v = sanitizeLabel((x as Record<string, unknown>)[k]);
+        if (v !== undefined) out[k] = v;
       }
       return out;
     };
@@ -108,8 +116,8 @@ export function parseCookie(raw: string | null | undefined): StoredAttribution |
     return {
       f: labels(s.f),
       l: labels(s.l),
-      fa: str(s.fa),
-      la: str(s.la),
+      fa: str(s.fa)?.slice(0, MAX_STAMP),
+      la: str(s.la)?.slice(0, MAX_STAMP),
       r: str(s.r)?.slice(0, MAX_REFERRER),
     };
   } catch {
