@@ -2,11 +2,27 @@ import {
   pageCountsSince,
   paidByProduct,
   productNames,
+  offerKeys,
+  paidByOffer,
   consentedVisitorCount,
   todayUtc,
 } from "@/lib/traffic";
-import { buildFunnels, daysInRange, rangeFrom } from "@/lib/traffic-funnel";
-import { FunnelCard, RangeTabs, OtherPages } from "@/components/admin/traffic-funnel";
+import {
+  buildFunnels,
+  daysInRange,
+  presetFrom,
+  rangeOf,
+  type FunnelOwner,
+} from "@/lib/traffic-funnel";
+import {
+  overviewFilterFrom,
+  overviewRows,
+  applyOverview,
+  sourcesIn,
+  type LinkFilter,
+} from "@/lib/traffic-overview";
+import { PresetTabs } from "@/components/admin/traffic-funnel";
+import { TrafficOverview } from "@/components/admin/traffic-overview";
 import { CoverageNote } from "@/components/admin/traffic-table";
 
 export const dynamic = "force-dynamic";
@@ -16,19 +32,62 @@ export default async function AdminTrafficPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const range = rangeFrom(await searchParams);
+  // Captured once: awaiting the same promise twice in one render is a latent
+  // bug even where it happens to work, and both presetFrom and
+  // overviewFilterFrom need the same params.
+  const params = await searchParams;
+  const preset = presetFrom(params);
   // One clock read for the whole request. Reading it again after the awaits
   // lets a request that crosses UTC midnight build a chart one day short of
   // the totals beside it — the disagreement b481969 closed.
   const today = todayUtc();
-  const [counts, bought, names, consented] = await Promise.all([
-    pageCountsSince(range, today),
-    paidByProduct(range, today),
+  const range = rangeOf(preset, today);
+  const [counts, bought, names, offers, boughtOffers, consented] = await Promise.all([
+    pageCountsSince(range),
+    paidByProduct(range),
     productNames(),
-    consentedVisitorCount(range, today),
+    offerKeys(),
+    paidByOffer(range),
+    consentedVisitorCount(range),
   ]);
-  const days = daysInRange(range, today);
-  const view = buildFunnels(counts, bought, names, days);
+  // Products first: if a product slug and an offer key ever collided, the
+  // product wins, which is the behaviour that existed before offers had
+  // funnels at all.
+  const owners: FunnelOwner[] = [
+    ...names.map((n) => ({ key: n.slug, title: n.title, kind: "product" as const })),
+    ...offers.map((o) => ({ key: o.key, title: o.name, kind: "offer" as const })),
+  ];
+  const days = daysInRange(range);
+  const boughtRows = [...bought, ...boughtOffers];
+  const view = buildFunnels(counts, boughtRows, owners, days);
+
+  const filter = overviewFilterFrom(params);
+  // Carries the preset alongside the rest of the filter so PresetTabs and
+  // TrafficOverview build every link from one shared shape.
+  const linkFilter: LinkFilter = { ...filter, preset };
+  const rows = overviewRows(view);
+  // The select's options always come from the WHOLE window: deriving them
+  // from a source-narrowed set of rows would leave the chosen source as the
+  // only option, with no way back to any other one.
+  const sources = sourcesIn(rows);
+  // Job 3 of the source filter is not hiding rows — it recomputes the three
+  // view steps, the trend and the totals from that source's rows alone. So
+  // the raw counts are restricted to that source BEFORE the funnels are
+  // shaped, and the funnels are shaped again from that alone. `bought` is
+  // passed as `[]`, not `boughtRows`: orders carry no source anywhere in this
+  // store, so there is no honest source-scoped order count, and handing
+  // buildFunnels the unfiltered orders would let a funnel's fourth step show
+  // an ALL-source order count beside three source-filtered view counts —
+  // biggestDrop would then compute a real-looking percentage from a fall
+  // that never happened in this source's own numbers, in the one column
+  // whose job is finding the page that actually leaks. With `[]`, step four
+  // is 0 for every funnel here, matching the Bought cell the table already
+  // blanks under this filter, and an owner with nothing but an unfiltered
+  // order to its name no longer earns a funnel it does not have.
+  const sourceView = filter.source
+    ? buildFunnels(counts.filter((c) => c.source === filter.source), [], owners, days)
+    : view;
+  const shown = applyOverview(overviewRows(sourceView, !filter.source), filter);
 
   return (
     <div className="flex flex-col gap-6 py-4">
@@ -40,7 +99,7 @@ export default async function AdminTrafficPage({
             and GA4 never see. Expect it to read higher than theirs.
           </p>
         </div>
-        <RangeTabs range={range} />
+        <PresetTabs filter={linkFilter} />
       </div>
 
       {/*
@@ -49,7 +108,7 @@ export default async function AdminTrafficPage({
         a page counted before the product column existed. Gating on the views
         alone would render "nothing here" over real orders.
       */}
-      {view.products.length === 0 && view.others.length === 0 ? (
+      {view.funnels.length === 0 && view.others.length === 0 ? (
         <p className="text-muted">
           Nothing counted in this window. Try a longer range, or check back once somebody opens a
           sales page.
@@ -69,12 +128,7 @@ export default async function AdminTrafficPage({
             conversion rate.
           </p>
           <CoverageNote counted={view.counted} consented={consented} />
-          <div className="flex flex-col gap-4">
-            {view.products.map((p) => (
-              <FunnelCard key={p.slug} product={p} />
-            ))}
-          </div>
-          <OtherPages pages={view.others} />
+          <TrafficOverview rows={shown} filter={linkFilter} sources={sources} />
         </>
       )}
     </div>

@@ -1,18 +1,19 @@
 import Link from "next/link";
-import { formatCount as n, sparklinePath, type DayPoint, type OtherPage, type ProductFunnel, type Range } from "@/lib/traffic-funnel";
+import { formatCount as n, sparklinePath, type DayPoint, type Funnel, PRESETS } from "@/lib/traffic-funnel";
+import { trafficUrl, type LinkFilter } from "@/lib/traffic-overview";
 
 /**
  * The traffic page's furniture.
  *
- * Types and arithmetic come from `lib/traffic-funnel.ts`, never from
- * `lib/traffic.ts` — that one starts with `import "server-only"` and a jsdom
- * component test that reaches it throws.
+ * Types and arithmetic come from `lib/traffic-funnel.ts`, and link-building
+ * from `lib/traffic-overview.ts` — never from `lib/traffic.ts`, which starts
+ * with `import "server-only"` and a jsdom component test that reaches it
+ * throws. Neither of the other two carries that import, which is why
+ * `PresetTabs` can build a URL through the same `trafficUrl` the table uses.
  *
  * Everything here is a server component. No `"use client"`, no chart library:
  * the only chart is a polyline whose geometry `sparklinePath` computes.
  */
-
-const RANGES: Range[] = [7, 30, 90];
 
 /** The sparkline's box. The same numbers go to `sparklinePath`, so the path fits. */
 const SPARK_W = 132;
@@ -65,24 +66,28 @@ export function Sparkline({ daily }: { daily: DayPoint[] }) {
  * top; the row-level unit is what stops somebody reading four numbers of the
  * same kind when the last one is a different kind.
  */
-export function FunnelCard({ product }: { product: ProductFunnel }) {
-  const steps = product.steps;
+export function FunnelCard({ funnel }: { funnel: Funnel }) {
+  const steps = funnel.steps;
   // Not steps[0]: an order can arrive against a product whose sales page was
   // never viewed in the window, and dividing by that zero would hide it.
   const top = Math.max(...steps.map((s) => s.count), 0);
-  const peak = Math.max(...product.daily.map((d) => d.hits), 0);
-  const totalSources = product.sources.reduce((sum, s) => sum + s.hits, 0);
+  const peak = Math.max(...funnel.daily.map((d) => d.hits), 0);
+  const totalSources = funnel.sources.reduce((sum, s) => sum + s.hits, 0);
+  // An offer's real page is /o/<key>, a product's is /p/<slug> — this card
+  // is shared by both, so the prefix has to follow the owner's kind rather
+  // than assume "/p/".
+  const pathPrefix = funnel.kind === "offer" ? "/o/" : "/p/";
 
   return (
     <section className="flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5">
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
         <div className="flex flex-col gap-0.5">
-          <h2 className="font-display text-lg leading-tight">{product.title}</h2>
-          <span className="text-xs text-muted">/p/{product.slug}</span>
+          <h2 className="font-display text-lg leading-tight">{funnel.title}</h2>
+          <span className="text-xs text-muted">{pathPrefix}{funnel.key}</span>
         </div>
         {/* The line has no axis, so the number beside it is the scale. */}
         <div className="flex items-center gap-3">
-          <Sparkline daily={product.daily} />
+          <Sparkline daily={funnel.daily} />
           {peak > 0 && (
             <span className="whitespace-nowrap text-xs text-muted">
               busiest day <span className="tabular-nums text-fg">{n(peak)}</span>
@@ -129,10 +134,10 @@ export function FunnelCard({ product }: { product: ProductFunnel }) {
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-3 text-xs text-muted">
         <span className="kicker">Came from</span>
-        {product.sources.length === 0 ? (
+        {funnel.sources.length === 0 ? (
           <span>nothing recorded a source in this window.</span>
         ) : (
-          product.sources.map((s) => (
+          funnel.sources.map((s) => (
             <span
               key={s.source}
               className="rounded-full border border-border px-2 py-0.5 text-[0.7rem]"
@@ -181,66 +186,35 @@ function Drop({ from, to, share }: { from: number; to: number; share: boolean })
 }
 
 /**
- * The window, as three links.
+ * The window, as a row of links.
  *
  * Links and not buttons: the range lives in the URL, so a view can be sent to
  * somebody, kept in a tab, and walked back with the back button.
+ *
+ * Takes the whole filter, not just the preset it switches: a tab that only
+ * knew the preset had to build its `href` from that one field, which is
+ * exactly what silently cleared the sort, the type chip, the source filter
+ * and the search box on every window change — this is the page's most-used
+ * control, so that was the most-hit version of the bug `trafficUrl` exists to
+ * close.
  */
-export function RangeTabs({ range }: { range: Range }) {
+export function PresetTabs({ filter }: { filter: LinkFilter }) {
   return (
-    <nav aria-label="Date range" className="flex items-center gap-2">
-      {RANGES.map((r) => (
+    <nav aria-label="Date range" className="flex flex-wrap items-center gap-2">
+      {PRESETS.map((p) => (
         <Link
-          key={r}
-          href={`/admin/traffic?range=${r}`}
-          aria-current={r === range ? "page" : undefined}
-          className={`rounded-full border px-3 py-1 text-xs tabular-nums transition-colors ${
-            r === range
+          key={p.key}
+          href={trafficUrl("/admin/traffic", filter, { preset: p.key })}
+          aria-current={p.key === filter.preset ? "page" : undefined}
+          className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+            p.key === filter.preset
               ? "border-primary bg-primary/10 font-medium text-primary"
               : "border-border text-muted hover:border-fg hover:text-fg"
           }`}
         >
-          {r} days
+          {p.label}
         </Link>
       ))}
     </nav>
-  );
-}
-
-/**
- * Everything no funnel claimed.
- *
- * Deliberately not a card: a bare list under a rule, because these are pages
- * with a view count and nothing else — no steps, no orders, no funnel. Giving
- * them the same chrome as a product would imply a comparison that does not
- * exist. Nothing at all when there are none.
- */
-export function OtherPages({ pages }: { pages: OtherPage[] }) {
-  if (pages.length === 0) return null;
-  return (
-    <section className="flex flex-col gap-3 border-t border-border pt-5">
-      <div className="flex flex-col gap-0.5">
-        <h2 className="kicker text-muted">Other pages</h2>
-        <p className="text-sm text-muted">
-          Views outside any product funnel — offer pages, the storefront, and pages counted before
-          they carried a product. Totals only; there are no steps behind these.
-        </p>
-      </div>
-      <ul className="flex flex-col divide-y divide-border">
-        {pages.map((p) => (
-          <li key={p.path} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-2">
-            <span className="text-sm text-fg">{p.path}</span>
-            <span className="flex flex-wrap gap-x-2 text-xs text-muted">
-              {p.sources.map((s) => (
-                <span key={s.source}>
-                  {s.source} <span className="tabular-nums">{n(s.hits)}</span>
-                </span>
-              ))}
-            </span>
-            <span className="ml-auto font-display text-sm tabular-nums">{n(p.hits)}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }

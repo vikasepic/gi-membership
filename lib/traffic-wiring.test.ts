@@ -60,3 +60,61 @@ describe("the funnel pages count their own views", () => {
     );
   });
 });
+
+describe("an offer's funnel is counted at every step", () => {
+  it("counts the offer's own checkout, under the offer's key", () => {
+    // Without this the second step of every offer funnel is permanently zero.
+    const src = readFileSync("app/(store)/checkout/offer/page.tsx", "utf8");
+    expect(src).toContain('void recordPageHit("/checkout/offer", offer.key)');
+  });
+
+  it("counts it AFTER the guards, so a bounced visitor is not a checkout", () => {
+    const src = readFileSync("app/(store)/checkout/offer/page.tsx", "utf8");
+    const hit = src.indexOf('recordPageHit("/checkout/offer"');
+    const bounce = src.indexOf("offer=already_owned");
+    expect(bounce).toBeGreaterThan(-1);
+    expect(hit).toBeGreaterThan(bounce);
+  });
+
+  // The behavioural version of "files an offer-originated upsell view under
+  // the host offer" lives in lib/traffic.integration.test.ts, against a real
+  // order and a real page_counts row. A source-reading version of that
+  // assertion could only ever check that `host_offer_id` and
+  // `orderFunnelKey` appear somewhere in the file — both also appear in
+  // paidByOffer, so it would keep passing with the fallback deleted.
+});
+
+describe("the overview's source filter recomputes the funnels, it does not hide rows", () => {
+  // The composition itself — restrict counts, then buildFunnels — is proven
+  // by lib/traffic-funnel.test.ts. What can only be checked here, by reading
+  // the page rather than rendering it against a database, is the ORDER: the
+  // select's options have to be read off the window before it is narrowed.
+  it("derives the select's options before the counts are narrowed by source", () => {
+    const src = readFileSync("app/admin/traffic/page.tsx", "utf8");
+    const sourcesIdx = src.indexOf("sourcesIn(rows)");
+    const filterIdx = src.indexOf("counts.filter(");
+    expect(sourcesIdx).toBeGreaterThan(-1);
+    expect(filterIdx).toBeGreaterThan(sourcesIdx);
+  });
+
+  it("restricts the raw counts, then reshapes — not a filter over the shaped rows", () => {
+    // The bug this replaces filtered `rows` (already-shaped OverviewRows) by
+    // topSource, which could only ever hide a row, never recompute its
+    // numbers. The fix filters `counts` and feeds the result straight back
+    // into buildFunnels.
+    const src = readFileSync("app/admin/traffic/page.tsx", "utf8");
+    expect(src).toContain("buildFunnels(counts.filter(");
+  });
+
+  it("passes no bought rows into the source-filtered view", () => {
+    // Under a source filter there is no honest per-source order count —
+    // orders carry no source anywhere in this store. Passing the unfiltered
+    // `boughtRows` here, as this used to, lets a funnel's fourth step show an
+    // ALL-source order count beside three source-filtered view counts, and
+    // biggestDrop compute a real-looking percentage from a fall that never
+    // happened in this source's own numbers — sorted to the top of the
+    // column whose only job is finding the page that actually leaks.
+    const src = readFileSync("app/admin/traffic/page.tsx", "utf8");
+    expect(src).toContain("counts.filter((c) => c.source === filter.source), [], owners, days)");
+  });
+});

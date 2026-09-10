@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { FunnelCard, Sparkline, RangeTabs, OtherPages } from "@/components/admin/traffic-funnel";
-import type { ProductFunnel } from "@/lib/traffic-funnel";
+import { FunnelCard, Sparkline, PresetTabs } from "@/components/admin/traffic-funnel";
+import type { Funnel } from "@/lib/traffic-funnel";
 
-const PRODUCT: ProductFunnel = {
-  slug: "validator",
+const PRODUCT: Funnel = {
+  key: "validator",
   title: "Product Validator",
+  kind: "product",
   steps: [
     { label: "Saw the sales page", count: 412 },
     { label: "Reached the checkout", count: 88 },
@@ -27,7 +28,7 @@ const PRODUCT: ProductFunnel = {
 
 describe("a product's funnel card", () => {
   it("names the product and every step", () => {
-    const html = renderToStaticMarkup(<FunnelCard product={PRODUCT} />);
+    const html = renderToStaticMarkup(<FunnelCard funnel={PRODUCT} />);
     expect(html).toContain("Product Validator");
     expect(html).toContain("412");
     expect(html).toContain("88");
@@ -40,7 +41,7 @@ describe("a product's funnel card", () => {
     // the step reads as three stages and hides the thing worth knowing.
     const html = renderToStaticMarkup(
       <FunnelCard
-        product={{ ...PRODUCT, steps: PRODUCT.steps.map((s, i) => (i === 3 ? { ...s, count: 0 } : s)) }}
+        funnel={{ ...PRODUCT, steps: PRODUCT.steps.map((s, i) => (i === 3 ? { ...s, count: 0 } : s)) }}
       />,
     );
     expect(html).toContain("Bought");
@@ -51,16 +52,26 @@ describe("a product's funnel card", () => {
     // 21 views to 19 buyers is not a 10% drop — it is two different units,
     // and the percentage is the bit somebody would quote. The two
     // views-to-views transitions above it keep theirs (79%, 76%).
-    const html = renderToStaticMarkup(<FunnelCard product={PRODUCT} />);
+    const html = renderToStaticMarkup(<FunnelCard funnel={PRODUCT} />);
     expect(html).toContain("2 fewer");
     expect(html).not.toContain("10%");
     expect(html).toContain("%");
   });
 
   it("shows where the traffic came from", () => {
-    const html = renderToStaticMarkup(<FunnelCard product={PRODUCT} />);
+    const html = renderToStaticMarkup(<FunnelCard funnel={PRODUCT} />);
     expect(html).toContain("meta");
     expect(html).toContain("direct");
+  });
+
+  it("shows an offer's own path, not a product's", () => {
+    // A later task renders this same card on a page whose own heading reads
+    // /o/…; a hardcoded /p/ here would contradict the heading right above it.
+    const html = renderToStaticMarkup(
+      <FunnelCard funnel={{ ...PRODUCT, key: "book-writer", kind: "offer" }} />,
+    );
+    expect(html).toContain("/o/book-writer");
+    expect(html).not.toContain("/p/");
   });
 });
 
@@ -82,41 +93,26 @@ describe("the sparkline", () => {
 });
 
 describe("the range control", () => {
-  it("offers all three as links so a view can be sent to somebody", () => {
-    const html = renderToStaticMarkup(<RangeTabs range={30} />);
-    expect(html).toContain("/admin/traffic?range=7");
-    expect(html).toContain("/admin/traffic?range=90");
+  const FILTER = { kind: "all" as const, source: "", q: "", sort: "views" as const, dir: "desc" as const, preset: "30" };
+
+  it("offers each preset as a link so a view can be sent to somebody", () => {
+    const html = renderToStaticMarkup(<PresetTabs filter={FILTER} />);
+    expect(html).toContain("/admin/traffic?preset=7");
+    expect(html).toContain("/admin/traffic?preset=90");
     expect(html).toContain("href");
   });
-});
 
-describe("the pages outside the funnel", () => {
-  it("lists them with their totals", () => {
+  it("keeps the rest of the filter when switching windows", () => {
+    // I3: PresetTabs used to build its href from the preset alone, so
+    // switching 30 days -> 7 days silently cleared the sort, the type chip,
+    // the source filter and the search box — on the page's most-used
+    // control, resetting the rest of the screen's state on every click.
     const html = renderToStaticMarkup(
-      // Two sources summing to the total, so 7 appears only as the total —
-      // one source carrying the whole 7 would let the split satisfy an
-      // assertion meant for the figure at the end of the row.
-      <OtherPages
-        pages={[
-          {
-            path: "/o/funnel-app",
-            hits: 7,
-            sources: [
-              { source: "direct", hits: 5 },
-              { source: "email", hits: 2 },
-            ],
-          },
-        ]}
-      />,
+      <PresetTabs filter={{ ...FILTER, kind: "offer", sort: "drop", dir: "asc" }} />,
     );
-    expect(html).toContain("/o/funnel-app");
-    // Its own element's text, not a substring of the markup: `toContain("7")`
-    // passed against a card that never rendered the total at all, because
-    // `text-[0.7rem]` is in the class list.
-    expect(html).toMatch(/>7</);
-  });
-
-  it("renders nothing when there are none", () => {
-    expect(renderToStaticMarkup(<OtherPages pages={[]} />)).toBe("");
+    expect(html).toContain("preset=7");
+    expect(html).toContain("kind=offer");
+    expect(html).toContain("sort=drop");
+    expect(html).toContain("dir=asc");
   });
 });

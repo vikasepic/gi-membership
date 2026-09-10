@@ -3,6 +3,19 @@ import { headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { sourceOf, isBot } from "@/lib/traffic-source";
+import type { DayRange } from "@/lib/traffic-funnel";
+
+/**
+ * UTC midnight AFTER a window's last day.
+ *
+ * `page_counts.day` is a date and its window is inclusive; `orders.created_at`
+ * is a timestamp, so the same window is `>= start` and `< the day after end`.
+ * Written once because getting it wrong drops or adds a whole day of orders
+ * against view counts that did not move, and nothing on screen would say so.
+ */
+function endExclusive(range: DayRange): string {
+  return `${new Date(Date.parse(`${range.end}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)}T00:00:00.000Z`;
+}
 
 /**
  * Counting what actually happened on the site.
@@ -78,15 +91,19 @@ export async function recordPageHit(path: string, product = ""): Promise<void> {
 }
 
 /**
- * The base product an order was for.
+ * The funnel key an order belongs to: its base product, or its host offer.
+ *
+ * `kind = 'product'` is the base row — a bump or an accepted upsell is an
+ * offer, not what was bought first. An order that came from an OFFER's
+ * checkout has no such row at all, so this used to return "" and the upsell
+ * view it names was filed under no funnel; 24 such rows were sitting in
+ * production on 9 Sep 2026. `orders.host_offer_id` names that offer.
  *
  * Two queries rather than a PostgREST embed: the embed's shape depends on how
  * the relationship is detected, and this runs behind a fire-and-forget count
- * where a silently-wrong shape would never surface. `kind = 'product'` is the
- * base row — a bump or an accepted upsell is an offer, not what was bought
- * first.
+ * where a silently-wrong shape would never surface.
  */
-async function orderProductSlug(orderId: string): Promise<string> {
+async function orderFunnelKey(orderId: string): Promise<string> {
   const db = createServiceClient();
   const { data: items } = await db
     .from("order_items")
@@ -96,13 +113,28 @@ async function orderProductSlug(orderId: string): Promise<string> {
     .not("product_id", "is", null)
     .limit(1);
   const productId = items?.[0]?.product_id as string | undefined;
-  if (!productId) return "";
-  const { data: product } = await db
-    .from("products")
-    .select("slug")
-    .eq("id", productId)
+  if (productId) {
+    const { data: product } = await db
+      .from("products")
+      .select("slug")
+      .eq("id", productId)
+      .maybeSingle();
+    if (product?.slug) return product.slug as string;
+  }
+
+  const { data: order } = await db
+    .from("orders")
+    .select("host_offer_id")
+    .eq("id", orderId)
     .maybeSingle();
-  return (product?.slug as string) ?? "";
+  const offerId = order?.host_offer_id as string | null | undefined;
+  if (!offerId) return "";
+  const { data: offer } = await db
+    .from("offers")
+    .select("key")
+    .eq("id", offerId)
+    .maybeSingle();
+  return (offer?.key as string) ?? "";
 }
 
 /**
@@ -115,32 +147,10 @@ async function orderProductSlug(orderId: string): Promise<string> {
  */
 export async function recordOtoPageHit(orderId: string): Promise<void> {
   try {
-    await recordPageHit("/checkout/oto", await orderProductSlug(orderId));
+    await recordPageHit("/checkout/oto", await orderFunnelKey(orderId));
   } catch {
     // Deliberately silent, like everything else in this file.
   }
-}
-
-/**
- * The first day of the window, as an ISO date — how `page_counts.day` is keyed.
- *
- * `daysInRange` in `lib/traffic-funnel.ts` is the definition every window here
- * follows: the last N UTC calendar days INCLUDING today, so `days - 1` back and
- * not `days`. Every reader in this file derives from it so they cannot
- * drift apart again — when they disagreed, a row on the oldest day counted
- * towards a card's totals but not towards the chart beside them, and the card
- * contradicted itself at the boundary with nothing on screen to show it.
- *
- * `today` is a parameter and not a clock read for the same reason. One page
- * render calls four of these and then builds its chart, and a request that
- * crosses UTC midnight between two of those reads gets a chart a day short of
- * its own totals. The caller settles "today" once and hands the same value to
- * everything; the default is only for a caller that has nothing to settle.
- */
-function windowStart(days: number, today: string): string {
-  return new Date(Date.parse(`${today}T00:00:00Z`) - (days - 1) * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
 }
 
 /** The clock read, in one place, so the shape of "today" is written once. */
@@ -202,18 +212,16 @@ function chunks<T>(list: T[], size: number): T[][] {
  * Refusing to turn that pair into a percentage is a reason not to panic about
  * the gap, not a licence for the two halves to measure different spans.
  */
-export async function consentedVisitorCount(
-  days: number,
-  today: string = todayUtc(),
-): Promise<number> {
+export async function consentedVisitorCount(range: DayRange): Promise<number> {
   try {
-    const since = `${windowStart(days, today)}T00:00:00.000Z`;
+    const since = `${range.start}T00:00:00.000Z`;
     const db = createServiceClient();
     const { count } = await db
       .from("visitors")
       .select("id", { count: "exact", head: true })
       .eq("store_id", await getStoreId())
-      .gte("first_seen_at", since);
+      .gte("first_seen_at", since)
+      .lt("first_seen_at", endExclusive(range));
     return count ?? 0;
   } catch {
     return 0;
@@ -228,14 +236,10 @@ export async function consentedVisitorCount(
  * rows a day over at most ninety days that is a small read, and it means those
  * four things cannot disagree with each other about what the window held.
  */
-export async function pageCountsSince(
-  days: number,
-  today: string = todayUtc(),
-): Promise<CountRow[]> {
+export async function pageCountsSince(range: DayRange): Promise<CountRow[]> {
   try {
     const db = createServiceClient();
     const store = await getStoreId();
-    const start = windowStart(days, today);
     // Paged, not capped. The product column multiplies rows per day and the
     // range now runs to 90 of them, so a single select is well inside the
     // distance where PostgREST would truncate — see `allRows`.
@@ -244,7 +248,8 @@ export async function pageCountsSince(
         .from("page_counts")
         .select("day, path, source, product, hits")
         .eq("store_id", store)
-        .gte("day", start)
+        .gte("day", range.start)
+        .lte("day", range.end)
         // `day` alone is not a total order, and an offset-paged read over a
         // partial order can repeat one row and skip another. The rest of the
         // primary key makes it total.
@@ -271,19 +276,17 @@ export async function pageCountsSince(
  * a PostgREST embed's shape here would be a silent wrong answer rather than an
  * error if the relationship were detected differently.
  */
-export async function paidByProduct(
-  days: number,
-  today: string = todayUtc(),
-): Promise<BoughtRow[]> {
+export async function paidByProduct(range: DayRange): Promise<BoughtRow[]> {
   try {
     const db = createServiceClient();
     const store = await getStoreId();
-    // UTC midnight of the window's first day, not a rolling `days * 24h`:
-    // `page_counts.day` is written from `toISOString()`, so the three view
-    // steps are bounded by UTC midnights and this step has to be too. A
-    // rolling cutoff would leave the last step counting a different span from
-    // the three above it, by however many hours into the day it is now.
-    const since = `${windowStart(days, today)}T00:00:00.000Z`;
+    // UTC midnight of the window's first day, and the midnight AFTER its last,
+    // not a rolling `days * 24h`: `page_counts.day` is written from
+    // `toISOString()`, so the three view steps are bounded by UTC midnights and
+    // this step has to be too. A rolling cutoff would leave the last step
+    // counting a different span from the three above it, by however many hours
+    // into the day it is now.
+    const since = `${range.start}T00:00:00.000Z`;
 
     // Paged for the same reason as `pageCountsSince`: a truncated read here
     // returns fewer orders than there were and understates revenue, which is
@@ -296,6 +299,7 @@ export async function paidByProduct(
         .eq("status", "paid")
         .eq("livemode", true)
         .gte("created_at", since)
+        .lt("created_at", endExclusive(range))
         .order("id", { ascending: true })
         .range(from, to),
     );
@@ -344,6 +348,62 @@ export async function paidByProduct(
 }
 
 /**
+ * How many orders each OFFER sold, keyed by the offer's key.
+ *
+ * The fourth step of an offer's funnel. `paidByProduct` counts base-product
+ * order lines, and an offer has none — the line it writes carries the same
+ * kind ('oto') an accepted upsell does, so the two are indistinguishable
+ * there. `orders.host_offer_id` says which offer the order was opened for,
+ * which is exactly the question the funnel asks.
+ *
+ * Same window arithmetic, `livemode` filter and paging as paidByProduct, for
+ * the reasons its comments give.
+ */
+export async function paidByOffer(range: DayRange): Promise<BoughtRow[]> {
+  try {
+    const db = createServiceClient();
+    const store = await getStoreId();
+    const since = `${range.start}T00:00:00.000Z`;
+
+    const orders = await allRows<{ id: string; host_offer_id: string }>((from, to) =>
+      db
+        .from("orders")
+        .select("id, host_offer_id")
+        .eq("store_id", store)
+        .eq("status", "paid")
+        .eq("livemode", true)
+        .not("host_offer_id", "is", null)
+        .gte("created_at", since)
+        .lt("created_at", endExclusive(range))
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+    if (orders.length === 0) return [];
+
+    const { data: offers } = await db
+      .from("offers")
+      .select("id, key")
+      .eq("store_id", store);
+    const keyOf = new Map((offers ?? []).map((o) => [o.id as string, o.key as string]));
+
+    // Distinct ORDERS per offer. One order has one host offer, so this is a
+    // count rather than a dedup — but it is written as a set for the same
+    // reason paidByProduct is: a paged read can hand back a row twice.
+    const seen = new Map<string, Set<string>>();
+    for (const o of orders) {
+      const key = keyOf.get(o.host_offer_id);
+      if (!key) continue;
+      const set = seen.get(key) ?? new Set<string>();
+      set.add(o.id);
+      seen.set(key, set);
+    }
+    return [...seen.entries()].map(([product, ids]) => ({ product, orders: ids.size }));
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Every product in the catalogue, published or not.
  *
  * Unpublished ones are included on purpose: a product that sold and was then
@@ -358,6 +418,20 @@ export async function productNames(): Promise<ProductName[]> {
       .select("slug, title")
       .eq("store_id", await getStoreId());
     return (data ?? []) as ProductName[];
+  } catch {
+    return [];
+  }
+}
+
+/** Every offer's key and name, so an offer key can own a funnel. */
+export async function offerKeys(): Promise<{ key: string; name: string }[]> {
+  try {
+    const db = createServiceClient();
+    const { data } = await db
+      .from("offers")
+      .select("key, name")
+      .eq("store_id", await getStoreId());
+    return (data ?? []).map((o) => ({ key: o.key as string, name: o.name as string }));
   } catch {
     return [];
   }

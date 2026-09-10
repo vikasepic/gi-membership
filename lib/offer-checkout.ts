@@ -569,6 +569,11 @@ export async function completeOfferCheckout(
       // visit, so recording it would make a retry after a failed fulfilment
       // collide for ever.
       stripe_payment_intent_id: paid ? si.id : null,
+      // Which offer this order was FOR. An offer's order line carries the same
+      // kind as an accepted upsell, so without this there is no way to ask how
+      // many people bought this offer from its own checkout — which is the
+      // fourth step of its funnel on /admin/traffic.
+      host_offer_id: offer.id,
       buyer_country: normalizeCountry(country) ?? null,
     })
     .select("id")

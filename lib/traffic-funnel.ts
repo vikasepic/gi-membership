@@ -27,20 +27,24 @@ export type SourceSplit = { source: string; hits: number };
 export type DayPoint = { day: string; hits: number };
 export type FunnelStep = { label: string; count: number };
 
-export type ProductFunnel = {
-  slug: string;
+/** What a recorded key belongs to. Products and offers both own funnels. */
+export type FunnelOwner = { key: string; title: string; kind: "product" | "offer" };
+
+export type Funnel = {
+  key: string;
   title: string;
+  kind: "product" | "offer";
   steps: FunnelStep[];
   sources: SourceSplit[];
   daily: DayPoint[];
-  /** Sales-page views, which is what the cards are ordered by. */
+  /** Sales-page views, the default order. */
   salesViews: number;
 };
 
 export type OtherPage = { path: string; hits: number; sources: SourceSplit[] };
 
 export type FunnelView = {
-  products: ProductFunnel[];
+  funnels: Funnel[];
   others: OtherPage[];
   /** Every counted view in the window, funnel or not. */
   counted: number;
@@ -69,21 +73,32 @@ function add(m: Map<string, number>, k: string, n: number): void {
 }
 
 /**
- * Every product with something to show, and every row that belonged to none.
+ * Every owner with something to show, and every row that belonged to none.
  *
- * A card exists for a slug only if that slug names a real product. That is
- * what keeps offer keys — `/o/<key>` writes its key as the product — and the
- * slugs of deleted products from inventing funnels; they fall through to
- * `others` with everything else nothing consumed.
+ * A funnel exists for a key only if some owner — a product or an offer —
+ * claims it. That is what keeps a deleted product's slug, and a deleted
+ * offer's key — `content-engine-monthly` is one, 7 hits and no offer row —
+ * from inventing a funnel; it falls through to `others` with everything else
+ * no owner consumed.
  */
 export function buildFunnels(
   counts: CountRow[],
   bought: BoughtRow[],
-  names: ProductName[],
+  owners: FunnelOwner[],
   days: string[],
 ): FunnelView {
-  const titleOf = new Map(names.map((n) => [n.slug, n.title]));
-  const boughtOf = new Map(bought.map((b) => [b.product, b.orders]));
+  // A `Map` built straight from these arrays keeps the LAST entry for a
+  // duplicate key, not the first — so a colliding key would silently go to
+  // whichever list got concatenated last, the opposite of what page.tsx's
+  // "products first" comment promises. Loop and skip a key already claimed
+  // instead: first occurrence wins, explicitly, for both maps, so the next
+  // person who concatenates a third list of owners (or bought rows) still
+  // gets the right winner without having to know Map's constructor rules.
+  const ownerOf = new Map<string, FunnelOwner>();
+  for (const o of owners) if (!ownerOf.has(o.key)) ownerOf.set(o.key, o);
+
+  const boughtOf = new Map<string, number>();
+  for (const b of bought) if (!boughtOf.has(b.product)) boughtOf.set(b.product, b.orders);
 
   const sales = new Map<string, number>();
   const checkout = new Map<string, number>();
@@ -103,24 +118,29 @@ export function buildFunnels(
   for (const r of counts) {
     counted += r.hits;
 
-    // A sales page names its product in the path; the other two carry it in
-    // the column. Either way it only counts if it is a product we have.
-    const salesSlug = r.path.startsWith("/p/") ? r.path.slice(3) : null;
-    const slug = salesSlug ?? r.product;
-    const known = titleOf.has(slug);
+    // A sales page names its owner in the path; the other steps carry it in
+    // the column. /p/<slug> is a product's page and /o/<key> an offer's.
+    const fromPath =
+      r.path.startsWith("/p/") ? r.path.slice(3) : r.path.startsWith("/o/") ? r.path.slice(3) : null;
+    const key = fromPath ?? r.product;
+    const owner = ownerOf.get(key);
 
-    if (known && salesSlug) {
-      add(sales, slug, r.hits);
-      add(per(sources, slug, () => new Map()), r.source, r.hits);
-      add(per(daily, slug, () => new Map()), r.day, r.hits);
+    if (owner && fromPath) {
+      add(sales, key, r.hits);
+      add(per(sources, key, () => new Map()), r.source, r.hits);
+      add(per(daily, key, () => new Map()), r.day, r.hits);
       continue;
     }
-    if (known && r.path === "/checkout") {
-      add(checkout, slug, r.hits);
+    // Each kind reaches its checkout by its own path, and both carry a key in
+    // the same column — so the path has to agree with the owner's kind, or an
+    // offer's checkout lands on a product's funnel.
+    const checkoutPath = owner?.kind === "offer" ? "/checkout/offer" : "/checkout";
+    if (owner && r.path === checkoutPath) {
+      add(checkout, key, r.hits);
       continue;
     }
-    if (known && r.path === "/checkout/oto") {
-      add(upsell, slug, r.hits);
+    if (owner && r.path === "/checkout/oto") {
+      add(upsell, key, r.hits);
       continue;
     }
 
@@ -132,36 +152,38 @@ export function buildFunnels(
     add(o.sources, r.source, r.hits);
   }
 
-  const slugs = new Set<string>([
+  const keys = new Set<string>([
     ...sales.keys(),
     ...checkout.keys(),
     ...upsell.keys(),
-    ...[...boughtOf.keys()].filter((s) => titleOf.has(s)),
+    ...[...boughtOf.keys()].filter((k) => ownerOf.has(k)),
   ]);
 
-  const products: ProductFunnel[] = [...slugs]
-    .map((slug) => {
-      const byDay = daily.get(slug) ?? new Map<string, number>();
+  const funnels: Funnel[] = [...keys]
+    .map((key) => {
+      const byDay = daily.get(key) ?? new Map<string, number>();
+      const owner = ownerOf.get(key)!;
       return {
-        slug,
-        title: titleOf.get(slug) ?? slug,
+        key,
+        title: owner.title,
+        kind: owner.kind,
         steps: [
-          sales.get(slug) ?? 0,
-          checkout.get(slug) ?? 0,
-          upsell.get(slug) ?? 0,
-          boughtOf.get(slug) ?? 0,
+          sales.get(key) ?? 0,
+          checkout.get(key) ?? 0,
+          upsell.get(key) ?? 0,
+          boughtOf.get(key) ?? 0,
         ].map((count, i) => ({ label: STEP_LABELS[i], count })),
-        sources: splitOf(sources.get(slug) ?? new Map()),
+        sources: splitOf(sources.get(key) ?? new Map()),
         // Dense: a line that skips the quiet days draws a plateau where there
         // was a gap.
         daily: days.map((day) => ({ day, hits: byDay.get(day) ?? 0 })),
-        salesViews: sales.get(slug) ?? 0,
+        salesViews: sales.get(key) ?? 0,
       };
     })
-    .sort((a, b) => b.salesViews - a.salesViews || a.slug.localeCompare(b.slug));
+    .sort((a, b) => b.salesViews - a.salesViews || a.key.localeCompare(b.key));
 
   return {
-    products,
+    funnels,
     others: [...others.entries()]
       .map(([path, o]) => ({ path, hits: o.hits, sources: splitOf(o.sources) }))
       .sort((a, b) => b.hits - a.hits),
@@ -169,12 +191,24 @@ export function buildFunnels(
   };
 }
 
-/** Every ISO date in the window, oldest first, ending on `today`. */
-export function daysInRange(days: number, today: string): string[] {
-  const end = Date.parse(`${today}T00:00:00Z`);
-  return Array.from({ length: days }, (_, i) =>
-    new Date(end - (days - 1 - i) * 86_400_000).toISOString().slice(0, 10),
-  );
+/**
+ * The largest fall between two consecutive steps.
+ *
+ * `from` is the index of the step the fall happened AT, so the table can say
+ * "79% at checkout". Null when nothing fell, and null when the funnel had no
+ * traffic at all — a page nobody visited is not the page that is leaking, and
+ * sorting it to the top would bury the ones that are.
+ */
+export function biggestDrop(steps: FunnelStep[]): { from: number; percent: number } | null {
+  let best: { from: number; percent: number } | null = null;
+  for (let i = 0; i < steps.length - 1; i += 1) {
+    const before = steps[i].count;
+    const after = steps[i + 1].count;
+    if (before <= 0 || after >= before) continue;
+    const percent = Math.round(((before - after) / before) * 100);
+    if (!best || percent > best.percent) best = { from: i, percent };
+  }
+  return best;
 }
 
 /**
@@ -198,18 +232,94 @@ export function sparklinePath(daily: DayPoint[], width: number, height: number):
     .join(" ");
 }
 
-const RANGES = [7, 30, 90] as const;
-export type Range = (typeof RANGES)[number];
+/**
+ * A window, as two inclusive UTC calendar days.
+ *
+ * It used to be a day count. "Last month" is not a count of days back, and
+ * neither is "this month", so the count could not express them — every reader
+ * takes the pair now. Inclusive at both ends: `page_counts.day` is a date, and
+ * a half-open range on dates reads as an off-by-one to everybody who maintains
+ * it later.
+ */
+export type DayRange = { start: string; end: string };
+
+const DAY_MS = 86_400_000;
+
+/** UTC midnight of an ISO date, as epoch ms. */
+function dayMs(day: string): number {
+  return Date.parse(`${day}T00:00:00Z`);
+}
+
+/** An epoch ms back to an ISO date. */
+function isoDay(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+export const PRESETS = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "7", label: "7 days" },
+  { key: "30", label: "30 days" },
+  { key: "90", label: "90 days" },
+  { key: "this-month", label: "This month" },
+  { key: "last-month", label: "Last month" },
+] as const;
+
+export type Preset = (typeof PRESETS)[number]["key"];
+
+const DEFAULT_PRESET: Preset = "30";
 
 /**
- * The range off the URL, refusing anything not on the list.
+ * The preset off the URL, refusing anything not on the list.
  *
- * It reaches a query, so it is a whitelist rather than a parse: an unbounded
- * number here would be a request for the whole table.
+ * A whitelist rather than a parse: the value becomes a date bound on a query,
+ * and an unbounded one here would be a request for the whole table.
  */
-export function rangeFrom(params: Record<string, string | string[] | undefined>): Range {
-  const raw = params.range;
+export function presetFrom(params: Record<string, string | string[] | undefined>): Preset {
+  const raw = params.preset;
   const one = typeof raw === "string" ? raw : Array.isArray(raw) ? raw[0] : undefined;
-  const n = Number(one);
-  return (RANGES as readonly number[]).includes(n) ? (n as Range) : 30;
+  return PRESETS.some((p) => p.key === one) ? (one as Preset) : DEFAULT_PRESET;
+}
+
+/**
+ * What a preset covers, on a given UTC day.
+ *
+ * `today` is a parameter rather than a clock read for the reason every reader
+ * in lib/traffic.ts gives: one page render resolves a range once and hands the
+ * same pair to four queries and a chart, and a request that crosses UTC
+ * midnight between two clock reads gets a chart a day short of its own totals.
+ */
+export function rangeOf(preset: Preset, today: string): DayRange {
+  const end = dayMs(today);
+  const back = (n: number) => isoDay(end - n * DAY_MS);
+  const firstOfMonth = (d: Date) =>
+    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
+
+  switch (preset) {
+    case "today":
+      return { start: today, end: today };
+    case "yesterday":
+      return { start: back(1), end: back(1) };
+    case "7":
+    case "30":
+    case "90":
+      // Counting back INCLUDES today, so "7 days" is six days back plus today.
+      return { start: back(Number(preset) - 1), end: today };
+    case "this-month":
+      return { start: firstOfMonth(new Date(end)), end: today };
+    case "last-month": {
+      const firstThis = dayMs(firstOfMonth(new Date(end)));
+      const lastPrev = firstThis - DAY_MS;
+      return { start: firstOfMonth(new Date(lastPrev)), end: isoDay(lastPrev) };
+    }
+  }
+}
+
+/** Every ISO day in the window, oldest first, both ends included. */
+export function daysInRange(range: DayRange): string[] {
+  const start = dayMs(range.start);
+  const end = dayMs(range.end);
+  if (end < start) return [];
+  const n = Math.round((end - start) / DAY_MS) + 1;
+  return Array.from({ length: n }, (_, i) => isoDay(start + i * DAY_MS));
 }
