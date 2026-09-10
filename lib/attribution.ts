@@ -210,3 +210,28 @@ export function orderAttributionColumns(
 ): { utm_first: Labels; utm_last: Labels; referrer: string | null } {
   return { utm_first: a?.first ?? {}, utm_last: a?.last ?? {}, referrer: a?.referrer ?? null };
 }
+
+/**
+ * GA4's own parameter names for a campaign, so its attribution reports read
+ * them: campaign_id, campaign, source, medium, term, content. `utm_adset` has
+ * no GA4 name and first touch has none either — those go as custom params
+ * (adset, first_source, first_medium, first_campaign, referrer), which GA4
+ * stores and shows only once somebody registers each as a custom dimension.
+ */
+export function ga4CampaignParams(a: Attribution | null | undefined): Record<string, string> {
+  if (!a) return {};
+  const out: Record<string, string> = {};
+  const l = a.last;
+  if (l.utm_id) out.campaign_id = l.utm_id;
+  if (l.utm_campaign) out.campaign = l.utm_campaign;
+  if (l.utm_source) out.source = l.utm_source;
+  if (l.utm_medium) out.medium = l.utm_medium;
+  if (l.utm_term) out.term = l.utm_term;
+  if (l.utm_content) out.content = l.utm_content;
+  if (l.utm_adset) out.adset = l.utm_adset;
+  if (a.first.utm_source) out.first_source = a.first.utm_source;
+  if (a.first.utm_medium) out.first_medium = a.first.utm_medium;
+  if (a.first.utm_campaign) out.first_campaign = a.first.utm_campaign;
+  if (a.referrer) out.referrer = a.referrer;
+  return out;
+}

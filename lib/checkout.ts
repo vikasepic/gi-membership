@@ -1474,7 +1474,7 @@ export async function buyerContextFor(orderId: string) {
   const { data: order } = await db
     .from("orders")
     .select(
-      "id, email, user_id, visitor_id, buyer_country, client_ip, client_user_agent, source_url",
+      "id, email, user_id, visitor_id, buyer_country, client_ip, client_user_agent, source_url, utm_first, utm_last, referrer",
     )
     .eq("id", orderId)
     .maybeSingle();
@@ -1525,6 +1525,11 @@ export async function buyerContextFor(orderId: string) {
       (items ?? [])[0]?.description as string | undefined,
     ),
     numItems: (items ?? []).length || undefined,
+    attribution: {
+      first: (order.utm_first as Labels | null) ?? {},
+      last: (order.utm_last as Labels | null) ?? {},
+      referrer: (order.referrer as string | null) ?? null,
+    } satisfies Attribution,
   };
 }
 

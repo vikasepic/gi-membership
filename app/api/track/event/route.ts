@@ -4,6 +4,7 @@ import { getStoreId } from "@/lib/store";
 import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
 import { EVENTS, META_BOTH_SIDES, type EventName } from "@/lib/analytics/events";
 import { trackServerEvent } from "@/lib/tracking";
+import { UTM_COOKIE, attributionFromCookie } from "@/lib/attribution";
 
 /**
  * The server's copy of an event the browser also sent.
@@ -97,6 +98,9 @@ export async function POST(req: Request) {
     sourceUrl: h.get("referer"),
     contentIds: body.contentIds,
     contentName: body.contentName,
+    // Off the cookie, never the body: a caller can say which event happened,
+    // not which campaign it belongs to.
+    attribution: attributionFromCookie(jar.get(UTM_COOKIE)?.value),
     occurredAt: Math.floor(Date.now() / 1000),
   },
   // Meta only. The browser already reported this one to GA4, which does not

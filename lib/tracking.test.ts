@@ -140,3 +140,46 @@ describe("configuration that looks set but cannot work", () => {
     ).toEqual([]);
   });
 });
+
+describe("the campaign on an event", () => {
+  const attribution = {
+    first: { utm_source: "ig", utm_campaign: "B" },
+    last: { utm_source: "meta", utm_medium: "paid_social", utm_campaign: "A", utm_adset: "LAL 1%", utm_content: "Reel", utm_term: "t", utm_id: "1" },
+    referrer: "https://l.facebook.com/l.php",
+  };
+
+  it("rides in Meta's custom_data beside the money, last as utm_*, first as first_utm_*", () => {
+    const meta = buildMetaEvent({ ...event, attribution });
+    const cd = meta.data[0].custom_data as Record<string, unknown>;
+    expect(cd.value).toBe(27);
+    expect(cd.utm_source).toBe("meta");
+    expect(cd.utm_adset).toBe("LAL 1%");
+    expect(cd.first_utm_source).toBe("ig");
+    expect(cd.first_utm_campaign).toBe("B");
+    expect(cd.referrer).toBe("https://l.facebook.com/l.php");
+  });
+
+  it("rides in GA4 params under GA4's own campaign names, with adset and first touch as custom params", () => {
+    const ga = buildGa4Event({ ...event, attribution });
+    const p = ga.events[0].params as Record<string, unknown>;
+    expect(p.transaction_id).toBe("order-1");
+    expect(p.source).toBe("meta");
+    expect(p.medium).toBe("paid_social");
+    expect(p.campaign).toBe("A");
+    expect(p.content).toBe("Reel");
+    expect(p.term).toBe("t");
+    expect(p.campaign_id).toBe("1");
+    expect(p.adset).toBe("LAL 1%");
+    expect(p.first_source).toBe("ig");
+    expect(p.first_campaign).toBe("B");
+    expect(p.referrer).toBe("https://l.facebook.com/l.php");
+    expect("first_medium" in p).toBe(false);
+  });
+
+  it("adds no keys at all to an event without one", () => {
+    const cd = buildMetaEvent(event).data[0].custom_data as Record<string, unknown>;
+    expect(Object.keys(cd).some((k) => k.startsWith("utm_") || k.startsWith("first_") || k === "referrer")).toBe(false);
+    const p = buildGa4Event({ ...event, attribution: { first: {}, last: {}, referrer: null } }).events[0].params as Record<string, unknown>;
+    expect(Object.keys(p).sort()).toEqual(["currency", "transaction_id", "value"]);
+  });
+});

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { track, adsConversion, trackNamedCustom } from "@/components/analytics";
 import { eventIdFor, customEventIdFor } from "@/lib/analytics/events";
+import { stripeAttributionMetadata, type Attribution } from "@/lib/attribution";
 
 /**
  * The browser half of a completed purchase.
@@ -26,6 +27,7 @@ export function TrackPurchase({
   email,
   adsLabel,
   customEvent,
+  attribution,
 }: {
   orderId: string;
   /** What was actually charged today. */
@@ -41,15 +43,19 @@ export function TrackPurchase({
    * rather than trying to split one Purchase between campaigns.
    */
   customEvent?: { name: string; contentName: string } | null;
+  /** Off the order row, via the receipt — never off the URL. Same keys the server copy sends. */
+  attribution?: Attribution | null;
 }) {
   const sent = useRef(false);
   useEffect(() => {
     if (sent.current) return;
     sent.current = true;
 
+    const campaign = stripeAttributionMetadata(attribution);
+
     track(
       "Purchase",
-      { value: valueCents / 100, currency: currency.toUpperCase(), order_id: orderId },
+      { value: valueCents / 100, currency: currency.toUpperCase(), order_id: orderId, ...campaign },
       eventIdFor("Purchase", orderId),
     );
 
@@ -59,7 +65,12 @@ export function TrackPurchase({
     if (trialCents) {
       track(
         "StartTrial",
-        { value: trialCents / 100, currency: currency.toUpperCase(), predicted_ltv: trialCents / 100 },
+        {
+          value: trialCents / 100,
+          currency: currency.toUpperCase(),
+          predicted_ltv: trialCents / 100,
+          ...campaign,
+        },
         eventIdFor("StartTrial", orderId),
       );
     }
@@ -77,6 +88,7 @@ export function TrackPurchase({
           currency: currency.toUpperCase(),
           value: valueCents / 100,
           order_id: orderId,
+          ...campaign,
         },
         // The server sends this same event with this same id from
         // finalizeOrder, so a blocked pixel or a closed tab still reports the
@@ -88,7 +100,7 @@ export function TrackPurchase({
     if (adsLabel) {
       adsConversion(adsLabel, { valueCents, currency, orderId, email });
     }
-  }, [orderId, valueCents, currency, trialCents, email, adsLabel, customEvent]);
+  }, [orderId, valueCents, currency, trialCents, email, adsLabel, customEvent, attribution]);
 
   return null;
 }

@@ -2,6 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { trackServerEvent } from "@/lib/tracking";
 import { contentNameOr, eventIdFor } from "@/lib/analytics/events";
+import { EMPTY_ATTRIBUTION, type Attribution, type Labels } from "@/lib/attribution";
 
 /**
  * What an order is worth, for the browser's copy of the purchase event.
@@ -18,6 +19,8 @@ export type TrackingReceipt = {
   /** The recurring value of a trial started on this order, if any. */
   trialCents: number | null;
   email: string | null;
+  /** For the browser copy, so both halves of a deduplicated event carry the same labels. */
+  attribution: Attribution;
 };
 
 export async function purchaseForTracking(paymentIntentId: string): Promise<TrackingReceipt | null> {
@@ -94,7 +97,7 @@ async function receiptFor(column: string, value: string): Promise<TrackingReceip
     const db = createServiceClient();
     const { data: order } = await db
       .from("orders")
-      .select("id, total_cents, currency, email, status")
+      .select("id, total_cents, currency, email, status, utm_first, utm_last, referrer")
       .eq(column, value)
       .maybeSingle();
     if (!order || order.status === "refunded") return null;
@@ -110,6 +113,11 @@ async function receiptFor(column: string, value: string): Promise<TrackingReceip
       currency: (order.currency as string) ?? "usd",
       trialCents,
       email: (order.email as string) ?? null,
+      attribution: {
+        first: (order.utm_first as Labels | null) ?? {},
+        last: (order.utm_last as Labels | null) ?? {},
+        referrer: (order.referrer as string | null) ?? null,
+      },
     };
   } catch {
     // Tracking must never break the page a buyer lands on after paying.
@@ -173,7 +181,7 @@ export async function reportTrialConverted(
   // attached it — which is the whole reason the order stores visitor_id.
   const { data: order } = await db
     .from("orders")
-    .select("visitor_id, buyer_country, client_ip, client_user_agent, source_url")
+    .select("visitor_id, buyer_country, client_ip, client_user_agent, source_url, utm_first, utm_last, referrer")
     .eq("user_id", userId)
     .not("visitor_id", "is", null)
     .order("created_at", { ascending: false })
@@ -200,6 +208,13 @@ export async function reportTrialConverted(
     clientIp: (order?.client_ip as string | null) ?? null,
     userAgent: (order?.client_user_agent as string | null) ?? null,
     sourceUrl: (order?.source_url as string | null) ?? null,
+    attribution: order
+      ? {
+          first: (order.utm_first as Labels | null) ?? {},
+          last: (order.utm_last as Labels | null) ?? {},
+          referrer: (order.referrer as string | null) ?? null,
+        }
+      : EMPTY_ATTRIBUTION,
     valueCents: offer.price_cents as number,
     currency: (offer.currency as string) ?? "usd",
     orderId: stripeSubscriptionId,

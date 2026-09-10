@@ -105,6 +105,7 @@ export default async function OtoPage({
       email={receipt.email}
       adsLabel={googleAdsPurchaseLabel()}
       customEvent={adEvent}
+      attribution={receipt.attribution}
     />
   ) : null;
 
