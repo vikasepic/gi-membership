@@ -100,3 +100,43 @@ export function isBot(userAgent: string | null): boolean {
   if (!ua) return true;
   return BOTS.some((b) => ua.includes(b));
 }
+
+const META_SOURCES = new Set(["fb", "ig", "meta", "facebook", "instagram"]);
+const GOOGLE_SOURCES = new Set(["google", "adwords"]);
+
+/**
+ * Where an ORDER came from, in the same words `sourceOf` uses for a view.
+ *
+ * Same `campaignSlug`, same order of preference, so a campaign's views and
+ * its sales land in one bucket and the Bought step under a source filter is
+ * that source's own number. A view has click ids and an order does not, so
+ * the Meta/Google fold reads utm_source instead: `fb`, `ig` and `meta` are
+ * the names the ads team's own templates have used.
+ */
+export function sourceOfOrder(
+  utmLast: Partial<Record<string, string>> | null | undefined,
+  referrer: string | null | undefined,
+): string {
+  const campaign = utmLast?.utm_campaign?.trim();
+  if (campaign) {
+    const slug = campaignSlug(campaign);
+    if (slug) return slug;
+  }
+  const source = utmLast?.utm_source?.trim().toLowerCase();
+  if (source) {
+    if (META_SOURCES.has(source)) return "meta";
+    if (GOOGLE_SOURCES.has(source)) return "google";
+    const slug = campaignSlug(source);
+    if (slug) return slug;
+  }
+  const ref = (referrer ?? "").trim();
+  if (!ref) return "direct";
+  try {
+    const host = new URL(ref).hostname;
+    const site = process.env.NEXT_PUBLIC_SITE_URL;
+    if (site && host === new URL(site).hostname) return "direct";
+  } catch {
+    return "direct";
+  }
+  return "referral";
+}

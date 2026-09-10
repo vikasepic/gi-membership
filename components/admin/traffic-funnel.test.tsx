@@ -16,8 +16,8 @@ const PRODUCT: Funnel = {
     { label: "Bought", count: 19 },
   ],
   sources: [
-    { source: "meta", hits: 300 },
-    { source: "direct", hits: 112 },
+    { source: "meta", hits: 300, orders: 15 },
+    { source: "direct", hits: 112, orders: 4 },
   ],
   daily: [
     { day: "2026-09-03", hits: 100 },
@@ -59,10 +59,13 @@ describe("a product's funnel card", () => {
     expect(html).toContain("%");
   });
 
-  it("shows where the traffic came from", () => {
+  it("shows where the traffic came from, and how many of it bought", () => {
     const html = renderToStaticMarkup(<FunnelCard funnel={PRODUCT} />);
     expect(html).toContain("meta");
     expect(html).toContain("direct");
+    expect(html).toContain("15");
+    expect(html).toContain("bought");
+    expect(html).toContain("sales-page views · bought");
   });
 
   it("shows an offer's own path, not a product's", () => {

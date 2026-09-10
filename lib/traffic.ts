@@ -2,7 +2,7 @@ import "server-only";
 import { headers } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
-import { sourceOf, isBot } from "@/lib/traffic-source";
+import { sourceOf, isBot, sourceOfOrder } from "@/lib/traffic-source";
 import type { DayRange } from "@/lib/traffic-funnel";
 
 /**
@@ -32,7 +32,7 @@ export type CountRow = {
   product: string;
   hits: number;
 };
-export type BoughtRow = { product: string; orders: number };
+export type BoughtRow = { product: string; source: string; orders: number };
 export type ProductName = { slug: string; title: string; hasUpsell: boolean };
 
 /**
@@ -291,20 +291,22 @@ export async function paidByProduct(range: DayRange): Promise<BoughtRow[]> {
     // Paged for the same reason as `pageCountsSince`: a truncated read here
     // returns fewer orders than there were and understates revenue, which is
     // the one direction this page must never be wrong in.
-    const orders = await allRows<{ id: string }>((from, to) =>
-      db
-        .from("orders")
-        .select("id")
-        .eq("store_id", store)
-        .eq("status", "paid")
-        .eq("livemode", true)
-        .gte("created_at", since)
-        .lt("created_at", endExclusive(range))
-        .order("id", { ascending: true })
-        .range(from, to),
+    const orders = await allRows<{ id: string; utm_last: Record<string, string> | null; referrer: string | null }>(
+      (from, to) =>
+        db
+          .from("orders")
+          .select("id, utm_last, referrer")
+          .eq("store_id", store)
+          .eq("status", "paid")
+          .eq("livemode", true)
+          .gte("created_at", since)
+          .lt("created_at", endExclusive(range))
+          .order("id", { ascending: true })
+          .range(from, to),
     );
     const ids = orders.map((o) => o.id);
     if (ids.length === 0) return [];
+    const sourceOfId = new Map(orders.map((o) => [o.id, sourceOfOrder(o.utm_last, o.referrer)]));
 
     // In batches: every id rides in the GET query string, and the whole list
     // at volume is a URL a proxy refuses with a 414. The dedup below merges
@@ -331,17 +333,26 @@ export async function paidByProduct(range: DayRange): Promise<BoughtRow[]> {
       .eq("store_id", store);
     const slugOf = new Map((products ?? []).map((p) => [p.id as string, p.slug as string]));
 
-    // Distinct ORDERS per product: an order with two rows for the same product
-    // is one sale, and counting rows would inflate the step it feeds.
-    const seen = new Map<string, Set<string>>();
+    // Distinct ORDERS per product and source: an order with two rows for the
+    // same product is one sale, and counting rows would inflate the step it
+    // feeds. Keyed on the order's source too, so the traffic page can show
+    // sales beside views per source.
+    const seen = new Map<string, Map<string, Set<string>>>();
     for (const i of items) {
       const slug = slugOf.get(i.product_id);
       if (!slug) continue;
-      const set = seen.get(slug) ?? new Set<string>();
+      const source = sourceOfId.get(i.order_id) ?? "direct";
+      const bySource = seen.get(slug) ?? new Map<string, Set<string>>();
+      const set = bySource.get(source) ?? new Set<string>();
       set.add(i.order_id);
-      seen.set(slug, set);
+      bySource.set(source, set);
+      seen.set(slug, bySource);
     }
-    return [...seen.entries()].map(([product, set]) => ({ product, orders: set.size }));
+    const out: BoughtRow[] = [];
+    for (const [product, bySource] of seen) {
+      for (const [source, set] of bySource) out.push({ product, source, orders: set.size });
+    }
+    return out;
   } catch {
     return [];
   }
@@ -365,10 +376,15 @@ export async function paidByOffer(range: DayRange): Promise<BoughtRow[]> {
     const store = await getStoreId();
     const since = `${range.start}T00:00:00.000Z`;
 
-    const orders = await allRows<{ id: string; host_offer_id: string }>((from, to) =>
+    const orders = await allRows<{
+      id: string;
+      host_offer_id: string;
+      utm_last: Record<string, string> | null;
+      referrer: string | null;
+    }>((from, to) =>
       db
         .from("orders")
-        .select("id, host_offer_id")
+        .select("id, host_offer_id, utm_last, referrer")
         .eq("store_id", store)
         .eq("status", "paid")
         .eq("livemode", true)
@@ -379,6 +395,7 @@ export async function paidByOffer(range: DayRange): Promise<BoughtRow[]> {
         .range(from, to),
     );
     if (orders.length === 0) return [];
+    const sourceOfId = new Map(orders.map((o) => [o.id, sourceOfOrder(o.utm_last, o.referrer)]));
 
     const { data: offers } = await db
       .from("offers")
@@ -386,18 +403,26 @@ export async function paidByOffer(range: DayRange): Promise<BoughtRow[]> {
       .eq("store_id", store);
     const keyOf = new Map((offers ?? []).map((o) => [o.id as string, o.key as string]));
 
-    // Distinct ORDERS per offer. One order has one host offer, so this is a
-    // count rather than a dedup — but it is written as a set for the same
-    // reason paidByProduct is: a paged read can hand back a row twice.
-    const seen = new Map<string, Set<string>>();
+    // Distinct ORDERS per offer and source. One order has one host offer, so
+    // the product dimension is a count rather than a dedup — but it is
+    // written as a set for the same reason paidByProduct is: a paged read can
+    // hand back a row twice. Keyed on source too, for the same reason.
+    const seen = new Map<string, Map<string, Set<string>>>();
     for (const o of orders) {
       const key = keyOf.get(o.host_offer_id);
       if (!key) continue;
-      const set = seen.get(key) ?? new Set<string>();
+      const source = sourceOfId.get(o.id) ?? "direct";
+      const bySource = seen.get(key) ?? new Map<string, Set<string>>();
+      const set = bySource.get(source) ?? new Set<string>();
       set.add(o.id);
-      seen.set(key, set);
+      bySource.set(source, set);
+      seen.set(key, bySource);
     }
-    return [...seen.entries()].map(([product, ids]) => ({ product, orders: ids.size }));
+    const out: BoughtRow[] = [];
+    for (const [product, bySource] of seen) {
+      for (const [source, set] of bySource) out.push({ product, source, orders: set.size });
+    }
+    return out;
   } catch {
     return [];
   }

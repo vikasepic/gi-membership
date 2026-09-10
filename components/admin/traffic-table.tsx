@@ -17,6 +17,8 @@ export function CoverageNote({ counted, consented }: { counted: number; consente
       <span className="font-medium text-fg">{n(consented)}</span> visitors your pixel saw in the
       same window. These count different things — views against people, and one person browsing
       three pages is three views — so read the gap as a direction, not a percentage.
+      {" "}Orders placed before 11 Sep 2026 carry no campaign unless the buyer had accepted cookies,
+      and sit under <span className="font-medium text-fg">direct</span>.
     </p>
   );
 }

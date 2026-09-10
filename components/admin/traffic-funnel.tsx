@@ -153,13 +153,17 @@ export function FunnelCard({ funnel }: { funnel: Funnel }) {
             <span
               key={s.source}
               className="rounded-full border border-border px-2 py-0.5 text-[0.7rem]"
+              title={`${n(s.hits)} sales-page views, ${n(s.orders)} bought`}
             >
               {s.source} <span className="tabular-nums text-fg">{n(s.hits)}</span>
+              {s.orders > 0 && (
+                <span className="ml-1 tabular-nums text-navy">· {n(s.orders)} bought</span>
+              )}
             </span>
           ))
         )}
         {totalSources > 0 && (
-          <span className="ml-auto">sales-page views only</span>
+          <span className="ml-auto">sales-page views · bought</span>
         )}
       </div>
     </section>

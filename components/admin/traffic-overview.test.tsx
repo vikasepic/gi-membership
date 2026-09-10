@@ -107,25 +107,28 @@ describe("the traffic table", () => {
     expect(hrefs()).toContain("/admin/traffic?sort=drop&dir=asc");
   });
 
-  it("blanks Bought under a source filter, and says why", () => {
+  it("shows Bought under a source filter now that orders carry a source", () => {
     mount({ source: "meta" });
-    expect(text()).toContain("not attributed to a source");
-    // 4 is the only step the source filter cannot honour; the views stay.
+    expect(text()).not.toContain("Orders are not attributed");
+    expect(text()).toContain("Showing views and orders from");
+    // 4 is now a real, source-scoped sale count; the views stay too.
     expect(text()).toContain("100");
     // `text()` is document.body.textContent, which never contains markup, so
     // a `not.toContain(">4<")` assertion on it passes no matter what the
     // component renders. Read the first row's own cells instead: the views
-    // cell must still show its number while the Bought cell is blanked.
+    // cell and the Bought cell must both show their real numbers.
     const cells = [...document.querySelectorAll("tbody tr")][0].querySelectorAll("td");
     expect(cells[1].textContent).toBe("100");
-    expect(cells[4].textContent).toBe("—");
+    expect(cells[4].textContent).toBe("4");
   });
 
-  it("under a source filter, the drop cell never claims a fall into the sale step", () => {
-    // Mirrors what overviewRows(sourceView, false) now hands the table for a
-    // funnel whose fourth step is a forced 0, not a measured one: the real
-    // 60% drop at the checkout — never the "100% at the sale" a forced zero
-    // used to hand the sort.
+  it("renders whatever drop overviewRows computed, unchanged", () => {
+    // The component never computes a drop itself — it renders the `drop`
+    // object overviewRows already worked out. This fixture is what
+    // overviewRows still hands back for a caller with a real reason to
+    // pass ordersKnown = false (the parameter overviewRows kept): a fourth
+    // step that is not a measurement, so the checkout's real 60% drop is
+    // reported instead of a claimed fall into the sale.
     const rows: OverviewRow[] = [
       { ...ROWS[0], steps: [500, 200, 150, 0], drop: { to: 1, percent: 60 } },
     ];

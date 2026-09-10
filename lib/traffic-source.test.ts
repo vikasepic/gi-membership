@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect } from "vitest";
-import { sourceOf, isBot } from "@/lib/traffic-source";
+import { sourceOf, isBot, sourceOfOrder } from "@/lib/traffic-source";
 
 describe("where a visit came from", () => {
   it("prefers the campaign somebody named over one we inferred", () => {
@@ -118,5 +118,30 @@ describe("obvious robots", () => {
     // and counting it inflates the only number this feature exists to give.
     expect(isBot(null)).toBe(true);
     expect(isBot("")).toBe(true);
+  });
+});
+
+describe("where an order came from", () => {
+  it("buckets by the campaign, the same slug a view gets", () => {
+    const search = "?utm_campaign=AJ%20%7C%20LAL%20%7C%20Book%20Writer&utm_source=meta";
+    expect(sourceOfOrder({ utm_campaign: "AJ | LAL | Book Writer", utm_source: "meta" }, null)).toBe(sourceOf(search, null));
+    expect(sourceOfOrder({ utm_campaign: "AJ | LAL | Book Writer" }, null)).toBe("aj-lal-book-writer");
+  });
+
+  it("falls back to the source, with Meta's and Google's names folded", () => {
+    for (const s of ["fb", "ig", "meta", "facebook", "instagram", "Meta"]) expect(sourceOfOrder({ utm_source: s }, null)).toBe("meta");
+    for (const s of ["google", "adwords"]) expect(sourceOfOrder({ utm_source: s }, null)).toBe("google");
+    expect(sourceOfOrder({ utm_source: "Newsletter Weekly" }, null)).toBe("newsletter-weekly");
+  });
+
+  it("refuses a campaign that names a person and uses the source instead", () => {
+    expect(sourceOfOrder({ utm_campaign: "jane@example.com", utm_source: "mail" }, null)).toBe("mail");
+  });
+
+  it("calls a foreign referrer a referral and nothing at all direct", () => {
+    expect(sourceOfOrder({}, "https://someblog.example/post")).toBe("referral");
+    expect(sourceOfOrder({}, `${process.env.NEXT_PUBLIC_SITE_URL}/p/x`)).toBe("direct");
+    expect(sourceOfOrder({}, null)).toBe("direct");
+    expect(sourceOfOrder(null, undefined)).toBe("direct");
   });
 });

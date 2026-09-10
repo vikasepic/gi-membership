@@ -20,10 +20,10 @@ export type CountRow = {
   product: string;
   hits: number;
 };
-export type BoughtRow = { product: string; orders: number };
+export type BoughtRow = { product: string; source: string; orders: number };
 export type ProductName = { slug: string; title: string; hasUpsell: boolean };
 
-export type SourceSplit = { source: string; hits: number };
+export type SourceSplit = { source: string; hits: number; orders: number };
 export type DayPoint = { day: string; hits: number };
 /**
  * One step of a funnel.
@@ -78,11 +78,16 @@ const STEP_LABELS = ["Saw the sales page", "Reached the checkout", "Saw the upse
  */
 export const formatCount = (v: number): string => v.toLocaleString("en-US");
 
-/** Sorted busiest first, which is the only order anybody reads a split in. */
-function splitOf(m: Map<string, number>): SourceSplit[] {
-  return [...m.entries()]
-    .map(([source, hits]) => ({ source, hits }))
-    .sort((a, b) => b.hits - a.hits);
+/**
+ * Views and sales per source, busiest first. A source that sold without a
+ * counted view still appears, with zero hits: hiding a sale is the one
+ * direction this page must never be wrong in.
+ */
+function splitOf(hits: Map<string, number>, orders: Map<string, number> = new Map()): SourceSplit[] {
+  const keys = new Set([...hits.keys(), ...orders.keys()]);
+  return [...keys]
+    .map((source) => ({ source, hits: hits.get(source) ?? 0, orders: orders.get(source) ?? 0 }))
+    .sort((a, b) => b.hits - a.hits || b.orders - a.orders || a.source.localeCompare(b.source));
 }
 
 function add(m: Map<string, number>, k: string, n: number): void {
@@ -114,8 +119,22 @@ export function buildFunnels(
   const ownerOf = new Map<string, FunnelOwner>();
   for (const o of owners) if (!ownerOf.has(o.key)) ownerOf.set(o.key, o);
 
+  const per = <T>(m: Map<string, T>, k: string, make: () => T): T => {
+    const v = m.get(k) ?? make();
+    m.set(k, v);
+    return v;
+  };
+
+  // Bought per owner (the fourth step) and per owner-and-source (the split).
+  // First occurrence of a (product, source) pair wins, for the reason the
+  // owners map gives above; the per-owner total is the sum of those.
+  const boughtBySource = new Map<string, Map<string, number>>();
+  for (const b of bought) {
+    const m = per(boughtBySource, b.product, () => new Map<string, number>());
+    if (!m.has(b.source)) m.set(b.source, b.orders);
+  }
   const boughtOf = new Map<string, number>();
-  for (const b of bought) if (!boughtOf.has(b.product)) boughtOf.set(b.product, b.orders);
+  for (const [product, m] of boughtBySource) boughtOf.set(product, [...m.values()].reduce((a, n) => a + n, 0));
 
   const sales = new Map<string, number>();
   const checkout = new Map<string, number>();
@@ -125,12 +144,6 @@ export function buildFunnels(
   const others = new Map<string, { hits: number; sources: Map<string, number> }>();
 
   let counted = 0;
-
-  const per = <T>(m: Map<string, T>, k: string, make: () => T): T => {
-    const v = m.get(k) ?? make();
-    m.set(k, v);
-    return v;
-  };
 
   for (const r of counts) {
     counted += r.hits;
@@ -193,7 +206,7 @@ export function buildFunnels(
           // The third step is the upsell. Null rather than 0 where this owner
           // has none configured: nobody can fall at a step that is never shown.
         ].map((count, i) => ({ label: STEP_LABELS[i], count: i === 2 && !owner.hasUpsell ? null : count })),
-        sources: splitOf(sources.get(key) ?? new Map()),
+        sources: splitOf(sources.get(key) ?? new Map(), boughtBySource.get(key) ?? new Map()),
         // Dense: a line that skips the quiet days draws a plateau where there
         // was a gap.
         daily: days.map((day) => ({ day, hits: byDay.get(day) ?? 0 })),
