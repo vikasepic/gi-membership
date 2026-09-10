@@ -184,3 +184,32 @@ thing that works. Never ship a branch that can only no-op. And when a funnel
 step reads zero, open the page before concluding anything about the audience
 — the data said "nobody wanted it" and the truth was "nobody could".
 (`components/oto/dead-accept-button.test.ts`)
+
+**2026-09-10 — that last entry is wrong, and the way it got wrong is the
+lesson.** The census behind it ran
+`jsonb_array_elements(content->'blocks')`, which reads TOP-LEVEL blocks only.
+Every block nested inside a `row`'s `columns` was invisible to it — which is
+where most blocks on a built page live. A recursive census of the same page
+found two `prices` blocks, in the `guarantee` and `cta` sections, both naming
+the Funnel App offer. So `hasBuyAnchorBlock` was already true, the sticky bar
+already scrolled to a real chooser, and `318dff0` changed nothing on the page
+it was written for. Rule: `walkBlocks` descends into `columns` and your SQL
+does not. Any query that counts, finds or audits blocks must recurse, or it
+is measuring the page's outline and calling it the page. And a diagnosis that
+rests on one query gets a second, differently-shaped query before it becomes
+a deploy.
+
+**2026-09-10 — the real reason nobody accepted: the button was born
+disabled.** `PriceChoice` starts with no option ticked whenever there is more
+than one (`useState(chosen ?? (prices.length === 1 ? 0 : null))`), and its
+button is `disabled={waiting}` with the label "Choose one above" until one is.
+On a sales page that is right — choosing is the point and the button is a
+link. On an upsell it is the whole flow: the sticky bar's "Start 7-day free
+trial" scrolls the buyer to a greyed-out control, and nothing on the page asks
+them to tick a radio. Now preselected whenever `otoToken` is set. Rule: a
+default that is correct on one surface is a dead end on another — check every
+surface a shared component renders on, especially the one that takes money.
+And note what made this expensive to find: `acceptOto` releases the token back
+to `pending` on failure and logs nothing, so a failed accept and a buyer who
+never clicked are the same row. A money path that can fail silently should
+write an `error_events` row on the way out. (`lib/oto-one-click.test.ts`)
