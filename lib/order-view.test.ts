@@ -5,6 +5,8 @@ import {
   filterFrom,
   filterHref,
   totalsFor,
+  sourcesIn,
+  sourceLabel,
   DEFAULT_FILTER,
 } from "@/lib/order-view";
 import type { OrderRow } from "@/lib/orders";
@@ -22,6 +24,10 @@ const order = (over: Partial<OrderRow> = {}): OrderRow => ({
   buyerCountry: "IN",
   stripePaymentIntentId: "pi_abc123",
   livemode: true,
+  buyerName: null,
+  utmFirst: {},
+  utmLast: {},
+  referrer: null,
   createdAt: daysAgo(1),
   items: [{ kind: "product", description: "The Guide", amountCents: 499, stripeSubscriptionId: null }],
   ...over,
@@ -228,5 +234,43 @@ describe("the counts on the chips", () => {
     const c = chipCounts(SET, at({ q: "ronit" }), NOW);
     expect(c.all).toBe(2);
     expect(c.paid).toBe(0);
+  });
+});
+
+describe("the source filter", () => {
+  const orders = [
+    order({ utmLast: { utm_source: "meta", utm_medium: "paid_social" } }),
+    order({ utmLast: { utm_source: "meta" } }),
+    order({ utmLast: { utm_source: "ig" } }),
+    order({}),
+  ];
+
+  it("lists the sources present, busiest first, then direct", () => {
+    expect(sourcesIn(orders)).toEqual(["meta", "ig", "direct"]);
+    expect(sourcesIn([order({ utmLast: { utm_source: "meta" } })])).toEqual(["meta"]);
+  });
+
+  it("keeps only that source, and direct means no labels", () => {
+    expect(applyFilter(orders, { ...DEFAULT_FILTER, source: "meta" })).toHaveLength(2);
+    expect(applyFilter(orders, { ...DEFAULT_FILTER, source: "direct" })).toHaveLength(1);
+    expect(applyFilter(orders, { ...DEFAULT_FILTER, source: "" })).toHaveLength(4);
+  });
+
+  it("is read off the URL only when it names a source that is present — a whitelist, never a parse", () => {
+    expect(filterFrom({ source: "meta" }, ["meta", "ig", "direct"]).source).toBe("meta");
+    expect(filterFrom({ source: "tiktok" }, ["meta", "ig", "direct"]).source).toBe("");
+    expect(filterFrom({ source: "<script>" }, ["meta"]).source).toBe("");
+    expect(filterFrom({}, ["meta"]).source).toBe("");
+  });
+
+  it("rides in every link and is searchable", () => {
+    expect(filterHref({ ...DEFAULT_FILTER, source: "meta" }, {})).toBe("/admin/orders?source=meta");
+    expect(applyFilter(orders, { ...DEFAULT_FILTER, q: "paid_social" })).toHaveLength(1);
+  });
+
+  it("labels a row for the pill", () => {
+    expect(sourceLabel(orders[0])).toBe("meta · paid_social");
+    expect(sourceLabel(orders[1])).toBe("meta");
+    expect(sourceLabel(orders[3])).toBe("direct");
   });
 });

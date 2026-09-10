@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { stripe } from "@/lib/stripe";
 import { revokeOwnershipForOrder } from "@/lib/subscription-sync";
+import type { Labels } from "@/lib/attribution";
 
 // Admin-side order reads and refunds. Service-role; callers are admin actions.
 
@@ -18,6 +19,8 @@ export type OrderItemRow = {
 export type OrderRow = {
   id: string;
   email: string;
+  /** users.username, which the checkout fills with the typed full name. Null when unknown. */
+  buyerName: string | null;
   status: "pending" | "paid" | "failed" | "refunded";
   currency: string;
   totalCents: number;
@@ -44,6 +47,10 @@ export type OrderRow = {
   livemode: boolean;
   createdAt: string;
   items: OrderItemRow[];
+  /** Campaign labels, migration 0079. Empty objects when none — the admin reads that as direct. */
+  utmFirst: Labels;
+  utmLast: Labels;
+  referrer: string | null;
 };
 
 // Newest first. Items are fetched in one batched query rather than per order.
@@ -54,7 +61,7 @@ export async function listOrders(limit = 100): Promise<OrderRow[]> {
   const { data: orders, error } = await db
     .from("orders")
     .select(
-      "id, email, status, currency, total_cents, tax_cents, buyer_country, stripe_payment_intent_id, host_offer_id, livemode, created_at",
+      "id, email, status, currency, total_cents, tax_cents, buyer_country, stripe_payment_intent_id, host_offer_id, livemode, created_at, utm_first, utm_last, referrer, users(username)",
     )
     .eq("store_id", storeId)
     .order("created_at", { ascending: false })
@@ -83,20 +90,30 @@ export async function listOrders(limit = 100): Promise<OrderRow[]> {
     ]);
   }
 
-  return orders.map((o) => ({
-    id: o.id as string,
-    email: o.email as string,
-    status: o.status as OrderRow["status"],
-    currency: o.currency as string,
-    totalCents: o.total_cents as number,
-    taxCents: (o.tax_cents as number) ?? null,
-    buyerCountry: (o.buyer_country as string) ?? null,
-    hostOfferId: (o.host_offer_id as string) ?? null,
-    stripePaymentIntentId: (o.stripe_payment_intent_id as string) ?? null,
-    livemode: (o.livemode as boolean) !== false,
-    createdAt: o.created_at as string,
-    items: byOrder.get(o.id as string) ?? [],
-  }));
+  return orders.map((o) => {
+    // `orders.user_id` references `users(id)`, so PostgREST embeds the buyer
+    // as `users` — an object on this PostgREST version, but some versions
+    // return a one-element array for a to-one embed, so handle both.
+    const u = Array.isArray(o.users) ? o.users[0] : o.users;
+    return {
+      id: o.id as string,
+      email: o.email as string,
+      buyerName: ((u as { username?: string | null } | null)?.username as string | null) ?? null,
+      status: o.status as OrderRow["status"],
+      currency: o.currency as string,
+      totalCents: o.total_cents as number,
+      taxCents: (o.tax_cents as number) ?? null,
+      buyerCountry: (o.buyer_country as string) ?? null,
+      hostOfferId: (o.host_offer_id as string) ?? null,
+      stripePaymentIntentId: (o.stripe_payment_intent_id as string) ?? null,
+      livemode: (o.livemode as boolean) !== false,
+      createdAt: o.created_at as string,
+      items: byOrder.get(o.id as string) ?? [],
+      utmFirst: (o.utm_first as Labels | null) ?? {},
+      utmLast: (o.utm_last as Labels | null) ?? {},
+      referrer: (o.referrer as string | null) ?? null,
+    };
+  });
 }
 
 export type RefundResult = { ok: true; alreadyRefunded?: boolean } | { ok: false; error: string };
