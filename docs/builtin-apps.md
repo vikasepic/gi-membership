@@ -26,8 +26,14 @@ for an app applies to both:
 **Access is the ownership row.** `lib/builtin-apps/access.ts` answers every
 page and route of an internal app with the same live-ownership check the
 library uses for "Open" (`subscribedToApp`): signed out goes to `/login` and
-comes back, no live ownership goes to the offer page `/o/<key>`, an
-unregistered key is a 404. There is no flag on the member and nothing to sync.
+comes back, no live ownership goes to the offer that *sells* the app — looked
+up by `grant_app_id` (`offerSellingApp`), never guessed from the app's key —
+or to `/library` when nothing sells it yet, and an unregistered key is a 404.
+There is no flag on the member and nothing to sync.
+
+That lookup exists because the first version guessed `/o/<app key>`, and no
+offer has ever had the app's key: the Micro-Product Builder is sold at
+`/o/the-micro-product-builder`. Every non-owner landed on the 404 page.
 
 `lib/builtin-apps/registry.ts` is the list of keys this build has code for.
 A row in `apps` says an internal app exists and can be sold; the registry says
@@ -82,19 +88,27 @@ Nothing public, nothing at build time.
 
 1. **Apply 0074 and 0075** to production by hand, like every migration. 0074
    inserts the two internal rows, active, for every store.
-2. **Set both keys** (`ANTHROPIC_API_KEY_PRODUCT_BUILDER`, `ANTHROPIC_API_KEY_HOOK_GENERATOR`) in Coolify and redeploy.
+2. **Set both keys** (`ANTHROPIC_API_KEY_PRODUCT_BUILDER`, `ANTHROPIC_API_KEY_HOOK_GENERATOR`) in Coolify *before* the deploy. `anthropicFor` throws
+   at call time, not at import, so the store deploys fine without them and
+   only the app fails — which is easy to miss until a member reports it.
 3. **Prove a full build survives the proxy.** A guide build streams for 4 to 6
    minutes. Node has no limit; the reverse proxy in front of the container has
    a response timeout that is not visible from this repo. Grant yourself the
    Product Builder from Admin → Members, run a quick session to the gate, press
    Build, and watch it finish. If the proxy cuts the stream, the fallback is a
    server-side build the page polls; say so before selling.
-4. **Create the offers**, last, in Admin → Offers: grant an app, pick the
-   internal app, one price, one time, $19, no trial. Write the page at
+4. **Create the offers**, last, in Admin → Offers: grant type *App*, and pick
+   **this** app — the picker labels built-in apps "(built in)". Check it
+   before saving: both original offers shipped granting something else (one
+   the Book Writer app, one a product called "test"), and a buyer of either
+   would have been bounced to the offer page forever. A grant made while the
+   offer pointed at the wrong thing stays wrong after the offer is fixed —
+   revoke it and grant again. One price, one time, no trial. Write the page at
    `/o/<key>` in the page editor. Attach as a bump or upsell if wanted. The
-   home page's memberships section lists recurring offers only, so link to
-   `/o/<key>` from a page block or an ad; wherever the membership card does
-   draw a one-time offer it reads "One-time payment".
+   home page shows an offer only when its **Home page position** is set
+   (`offers.home_order`; blank means not shown), so a new offer is invisible
+   there until somebody numbers it. The membership card reads "One-time
+   payment" for a one-time offer.
 5. **Test purchase** in Stripe test mode: buy, open from the library, refund
    from Admin → Orders, confirm the app refuses.
 6. Retire the standalone deployments and their Supabase projects. Neither has
@@ -115,6 +129,11 @@ Nothing public, nothing at build time.
 | Hook generation | Six hooks, history row written, visible on reload |
 | Refund, then reload the app | Refused, sent to the offer page |
 | Admin → Apps | Internal rows show kind and route, no secret, no resend |
+| `npm ci` from a clean checkout | Succeeds. The Dockerfile runs it; a lock file out of step with `package.json` fails the production build, not just CI |
+| The offer that sells the app | Grant type App, and the grant is *this* app — read it back, do not trust the save |
+| CI on the merge commit | Green on GitHub, not only `vitest` on a machine that has `.env.local` |
+| Migration on production | Applied and `notify pgrst` sent *before* the merge that deploys |
+| A member's non-owned visit to `/apps/<key>` | Lands on the offer that sells it, never on a 404 |
 
 The unit tests beside the code cover the parts a model quirk can break: the
 stage-marker parser, the pace note, the input parsing, the dash scrubber, the
@@ -123,10 +142,36 @@ membership card's one-time wording.
 
 ## Adding a third built-in app
 
-1. Add the key to `lib/builtin-apps/registry.ts`.
-2. Insert the row: `insert into apps (store_id, key, name, kind) values (..., 'internal')`.
-3. Tables in a new migration, in the conventions above.
-4. Pages under `app/(apps)/apps/<key>/`, each starting with
+The order is the point: each step is what the next one needs.
+
+1. **Pick the migration number** from `ls supabase/migrations | tail -1` *and*
+   any open spec in `docs/superpowers/specs/` that has reserved one. Two
+   features numbering in parallel is how 0074 was claimed twice in one day.
+2. Add the key to `lib/builtin-apps/registry.ts`. The key is what `apps`,
+   the route, the ownership row and the traffic funnel all agree on; it is
+   never the offer's key.
+3. Insert the row in that migration: `insert into apps (store_id, key, name, kind)
+   values (..., 'internal')`, `on conflict (store_id, key) do nothing`, for
+   every store. Tables in the same migration, in the conventions above:
+   `store_id` and `user_id` on every row, RLS on with no policies, grants to
+   `service_role` only (0067 stripped the defaults, so the grants *are* the
+   access story).
+4. One `ANTHROPIC_API_KEY_<APP>` read in `lib/anthropic.ts`, set in Coolify
+   before the deploy. No shared fallback.
+5. Pages under `app/(apps)/apps/<key>/`, each starting with
    `await requireInternalApp("<key>")`; routes under `app/api/<key>/`, each
-   starting with `internalAppAccess("<key>")`.
-5. An offer that grants it, last.
+   starting with `internalAppAccess("<key>")`. A route never throws past its
+   handler; the browser never touches a table.
+6. Tests beside the code, following `lib/apps-internal.test.ts`: the guards,
+   the parser for whatever the model returns, and every branch that reads
+   ownership. A unit test of a server action must mock every `@/lib/*` module
+   that opens a service client, or it is green here and red on CI.
+7. **Apply the migration to production and reload the schema cache** before
+   the merge that deploys the code — see `AGENTS.md`.
+8. Merge. Then in Admin → Offers: an offer with grant type *App* pointing at
+   **this** app, a page at `/o/<its key>`, a `Home page position` if it
+   belongs on the storefront, and `content_name` / the Meta event name for the
+   ads team. Grant yourself the app from Admin → Members and open it. Then
+   hard-refresh any admin tab you had open across the deploy.
+
+What each of those protects against is in `docs/lessons.md`.
