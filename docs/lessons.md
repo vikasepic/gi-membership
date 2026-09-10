@@ -116,3 +116,12 @@ client can paste (`body_html`) gets `[overflow-wrap:anywhere]` plus
 `max-w-full` on img/iframe/video and `overflow-x-auto` on pre/table; a
 `flex justify-between` row with text on both sides needs `flex-wrap` or
 `sm:flex-row` before it ships. (`components/mobile-layout.test.tsx`)
+
+**2026-09-10 — a red test was pushed because `&&` checked `grep`, not vitest.**
+`npx vitest run | grep -E "×|Tests"` && commit && push: grep found lines, so
+it exited 0, and the chain carried on past a failing suite. Main went red
+twice in ten minutes. Rule: `set -o pipefail` at the top of any chain that
+pipes a test runner, or run the suite bare and gate on its own exit status.
+And run the FULL suite before every push — a targeted run cannot see the
+test in another file that guards the thing you changed (`offer-image.test.ts`
+guarded the library card treatment from `lib/`, not from `app/`).

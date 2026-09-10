@@ -93,7 +93,11 @@ describe("showing it", () => {
     // the course cards beside them — small pictures in grey boxes on a shelf
     // where everything else is a picture. The owner asked for the course
     // treatment on 10 Sep 2026: same band, same object-cover, same hover.
-    const appCard = library.slice(library.indexOf("Your apps"), library.indexOf("Still available"));
+    // Up to the standing offer's own image, which floats and must not be
+    // caught by the assertion below. "Still available" sits AFTER that image
+    // in source order, which is how the first version of this test slept
+    // through the very thing it checked for.
+    const appCard = library.slice(library.indexOf("Your apps"), library.indexOf("{standing.imageUrl && ("));
     expect(appCard).toContain("object-cover transition-transform duration-500 group-hover:scale-[1.03]");
     expect(appCard, "the hover lift needs the card to be a group").toMatch(/className="group flex flex-col overflow-hidden/);
     expect(appCard, "no margin around a cover").not.toContain("object-contain");
