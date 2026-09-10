@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { applyAttributionCookie } from "@/lib/attribution-cookie";
 
 // - Gates /admin to admin users (ADMIN_EMAILS); redirects others to /login.
 // - Refreshes the Supabase auth session so server components see it.
 // - Ensures a first-party anon id cookie so attribution can be captured on
 //   landing (events don't send until phase 6, but the id must exist now or
 //   early traffic is permanently unattributable).
+// - Maintains the gi_utm cookie: first-touch and last-touch campaign labels
+//   plus the landing referrer, for everyone, no JavaScript needed.
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   // The path, forwarded to the server components. A layout cannot read the URL
@@ -95,6 +98,11 @@ export async function proxy(req: NextRequest) {
       path: "/",
     });
   }
+  // The campaign that brought them, captured on the server so a visitor who
+  // bounces before JavaScript runs is still recorded, and kept for a year so
+  // a purchase weeks later still carries it. Labels only — the consent gate
+  // stays on click ids, IP and user agent (see lib/attribution.ts).
+  applyAttributionCookie(req, res);
   return res;
 }
 
