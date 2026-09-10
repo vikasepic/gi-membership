@@ -4,7 +4,11 @@
  * No database, no request object, no `server-only` — pure input to output, so
  * it can be tested exhaustively and read at a glance. The rules are ordered on
  * purpose: a UTM is a label somebody chose and beats anything inferred from a
- * click id or a referrer.
+ * click id or a referrer, and between the two UTM fields the campaign (a
+ * specific ad) beats the source (a channel). A page VIEW and the ORDER it
+ * produces are bucketed through the same ranking — `bucketOf` below is the
+ * one place that ranking lives, so `sourceOf` and `sourceOfOrder` cannot
+ * drift apart the way they once did.
  */
 
 /** Long enough for a real campaign name, short enough not to store an essay. */
@@ -47,22 +51,50 @@ function campaignSlug(raw: string): string | null {
   return /^[a-z0-9]/.test(slug) ? slug : null;
 }
 
-export function sourceOf(search: string, referrer: string | null): string {
-  let params: URLSearchParams;
-  try {
-    params = new URLSearchParams(search);
-  } catch {
-    // A query that cannot be parsed is not a reason to fail a page render.
-    params = new URLSearchParams();
-  }
+/** The ads team's own names for themselves, folded to one bucket each. */
+const META_SOURCES = new Set(["fb", "ig", "meta", "facebook", "instagram"]);
+const GOOGLE_SOURCES = new Set(["google", "adwords"]);
 
-  const utm = params.get("utm_campaign")?.trim();
-  if (utm) {
-    const slug = campaignSlug(utm);
+/** The fields either kind of visit — a view or an order — can supply. */
+type Visit = {
+  campaign?: string | null;
+  source?: string | null;
+  fbclid?: string | null;
+  gclid?: string | null;
+  referrer?: string | null;
+};
+
+/**
+ * The shared ranking `sourceOf` and `sourceOfOrder` both bucket through:
+ * `utm_campaign` beats `utm_source` (folded through the same Meta/Google
+ * names above) beats a click id beats a referrer beats `direct`. A click id
+ * only ever exists on a view — an order is created after the click, not
+ * during it — so it ranks below either UTM field but is still read before
+ * falling through to the referrer.
+ *
+ * Kept private and shape-agnostic on purpose: `sourceOf` pulls these five
+ * fields out of a query string, `sourceOfOrder` out of `utm_last`. This is
+ * the one place the actual decision lives, so a VIEW and the ORDER it
+ * produces cannot land in different buckets because the two exported
+ * functions quietly grew different rules.
+ */
+function bucketOf({ campaign, source, fbclid, gclid, referrer }: Visit): string {
+  const trimmedCampaign = campaign?.trim();
+  if (trimmedCampaign) {
+    const slug = campaignSlug(trimmedCampaign);
     if (slug) return slug;
   }
-  if (params.get("fbclid")) return "meta";
-  if (params.get("gclid")) return "google";
+
+  const trimmedSource = source?.trim().toLowerCase();
+  if (trimmedSource) {
+    if (META_SOURCES.has(trimmedSource)) return "meta";
+    if (GOOGLE_SOURCES.has(trimmedSource)) return "google";
+    const slug = campaignSlug(trimmedSource);
+    if (slug) return slug;
+  }
+
+  if (fbclid) return "meta";
+  if (gclid) return "google";
 
   const ref = (referrer ?? "").trim();
   if (!ref) return "direct";
@@ -78,6 +110,24 @@ export function sourceOf(search: string, referrer: string | null): string {
     return "direct";
   }
   return "referral";
+}
+
+export function sourceOf(search: string, referrer: string | null): string {
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(search);
+  } catch {
+    // A query that cannot be parsed is not a reason to fail a page render.
+    params = new URLSearchParams();
+  }
+
+  return bucketOf({
+    campaign: params.get("utm_campaign"),
+    source: params.get("utm_source"),
+    fbclid: params.get("fbclid"),
+    gclid: params.get("gclid"),
+    referrer,
+  });
 }
 
 /**
@@ -101,42 +151,19 @@ export function isBot(userAgent: string | null): boolean {
   return BOTS.some((b) => ua.includes(b));
 }
 
-const META_SOURCES = new Set(["fb", "ig", "meta", "facebook", "instagram"]);
-const GOOGLE_SOURCES = new Set(["google", "adwords"]);
-
 /**
- * Where an ORDER came from, in the same words `sourceOf` uses for a view.
- *
- * Same `campaignSlug`, same order of preference, so a campaign's views and
- * its sales land in one bucket and the Bought step under a source filter is
- * that source's own number. A view has click ids and an order does not, so
- * the Meta/Google fold reads utm_source instead: `fb`, `ig` and `meta` are
- * the names the ads team's own templates have used.
+ * Where an ORDER came from, in the same bucket the matching VIEW landed in —
+ * see `bucketOf` above for the shared ranking. An order carries no click id
+ * (it is created after the click, not during it), so only `utm_last`'s two
+ * UTM fields and the referrer feed in.
  */
 export function sourceOfOrder(
   utmLast: Partial<Record<string, string>> | null | undefined,
   referrer: string | null | undefined,
 ): string {
-  const campaign = utmLast?.utm_campaign?.trim();
-  if (campaign) {
-    const slug = campaignSlug(campaign);
-    if (slug) return slug;
-  }
-  const source = utmLast?.utm_source?.trim().toLowerCase();
-  if (source) {
-    if (META_SOURCES.has(source)) return "meta";
-    if (GOOGLE_SOURCES.has(source)) return "google";
-    const slug = campaignSlug(source);
-    if (slug) return slug;
-  }
-  const ref = (referrer ?? "").trim();
-  if (!ref) return "direct";
-  try {
-    const host = new URL(ref).hostname;
-    const site = process.env.NEXT_PUBLIC_SITE_URL;
-    if (site && host === new URL(site).hostname) return "direct";
-  } catch {
-    return "direct";
-  }
-  return "referral";
+  return bucketOf({
+    campaign: utmLast?.utm_campaign,
+    source: utmLast?.utm_source,
+    referrer,
+  });
 }

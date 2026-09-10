@@ -75,7 +75,12 @@ export default async function AdminTrafficPage({
   // source now (orders.utm_last, bucketed by sourceOfOrder with the same
   // rules a view gets), so the fourth step is that source's own sales.
   const sourceView = filter.source
-    ? buildFunnels(counts.filter((c) => c.source === filter.source), boughtRows.filter((b) => b.source === filter.source), owners, days)
+    ? buildFunnels(
+        counts.filter((c) => c.source === filter.source),
+        boughtRows.filter((b) => b.source === filter.source),
+        owners,
+        days,
+      )
     : view;
   const shown = applyOverview(overviewRows(sourceView), filter);
 

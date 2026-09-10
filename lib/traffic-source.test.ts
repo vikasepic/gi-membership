@@ -145,3 +145,50 @@ describe("where an order came from", () => {
     expect(sourceOfOrder(null, undefined)).toBe("direct");
   });
 });
+
+describe("a view and the order it produces land in the same bucket", () => {
+  // The whole point of a per-source Bought column is that a VIEW and the
+  // SALE it produced are counted under the same name. `sourceOf` (views) and
+  // `sourceOfOrder` (orders) share one internal ranking now, but a shared
+  // implementation can still be miscalled from either side — these pin the
+  // outward behaviour, not the internals, so a future edit that reintroduces
+  // a difference fails here first.
+
+  it("agrees when only utm_source names a channel — no campaign, no click id", () => {
+    // This was the actual defect: a bare `?utm_source=newsletter` link
+    // bucketed its view as direct/referral and its sale as "newsletter".
+    expect(sourceOf("?utm_source=newsletter", null)).toBe(
+      sourceOfOrder({ utm_source: "newsletter" }, null),
+    );
+    expect(sourceOf("?utm_source=newsletter", null)).toBe("newsletter");
+  });
+
+  it("agrees when utm_source is a Meta name with no campaign — both fold to meta", () => {
+    expect(sourceOf("?utm_source=fb", null)).toBe(sourceOfOrder({ utm_source: "fb" }, null));
+    expect(sourceOf("?utm_source=fb", null)).toBe("meta");
+  });
+
+  it("agrees when a campaign and a source are both present — the campaign wins on both", () => {
+    expect(sourceOf("?utm_campaign=X&utm_source=newsletter", null)).toBe(
+      sourceOfOrder({ utm_campaign: "X", utm_source: "newsletter" }, null),
+    );
+  });
+
+  it("agrees when utm_source is an email address — refused by campaignSlug on both", () => {
+    expect(sourceOf("?utm_source=jane@example.com", null)).toBe(
+      sourceOfOrder({ utm_source: "jane@example.com" }, null),
+    );
+  });
+
+  it("agrees on a foreign referrer with no labels at all", () => {
+    expect(sourceOf("", "https://someblog.example/post")).toBe(
+      sourceOfOrder({}, "https://someblog.example/post"),
+    );
+    expect(sourceOf("", "https://someblog.example/post")).toBe("referral");
+  });
+
+  it("agrees on no labels and no referrer", () => {
+    expect(sourceOf("", null)).toBe(sourceOfOrder({}, null));
+    expect(sourceOf("", null)).toBe("direct");
+  });
+});

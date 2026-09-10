@@ -101,9 +101,12 @@ describe("the overview's source filter recomputes the funnels, it does not hide 
     // The bug this replaces filtered `rows` (already-shaped OverviewRows) by
     // topSource, which could only ever hide a row, never recompute its
     // numbers. The fix filters `counts` and feeds the result straight back
-    // into buildFunnels.
-    const src = readFileSync("app/admin/traffic/page.tsx", "utf8");
-    expect(src).toContain("buildFunnels(counts.filter(");
+    // into buildFunnels. Whitespace-normalised on both sides so wrapping this
+    // call across lines — readability, not a behaviour change — cannot
+    // silently break the assertion the way a literal ~140-char line once did.
+    const normalize = (s: string) => s.replace(/\s+/g, " ");
+    const src = normalize(readFileSync("app/admin/traffic/page.tsx", "utf8"));
+    expect(src).toContain(normalize("buildFunnels(\n  counts.filter("));
   });
 
   it("passes source-filtered bought rows into the source-filtered view, not the unfiltered ones", () => {
