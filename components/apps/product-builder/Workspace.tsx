@@ -396,9 +396,15 @@ export function Workspace({
         </div>
 
         <div className="mt-3 grid min-h-0 flex-1 gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+          {/* A bounded height only at lg, where the two panes stand side by
+              side and each scrolls inside itself. On a phone that height was
+              taller than the screen — 855px of page on an 812px viewport — so
+              the composer sat below the fold. Now the page flows and the
+              composer sticks to the bottom (see Chat). */}
           <section
-            className={`min-h-0 flex-col ${mobileTab === "chat" ? "flex" : "hidden lg:flex"}`}
-            style={{ height: "calc(100dvh - 150px)", minHeight: 420 }}
+            className={`min-h-0 flex-col lg:h-[calc(100dvh-150px)] lg:min-h-[420px] ${
+              mobileTab === "chat" ? "flex" : "hidden lg:flex"
+            }`}
           >
             <Chat
               messages={messages}
@@ -419,8 +425,9 @@ export function Workspace({
             />
           </section>
           <section
-            className={`min-h-0 ${mobileTab === "product" ? "block" : "hidden lg:block"}`}
-            style={{ height: "calc(100dvh - 150px)", minHeight: 420 }}
+            className={`min-h-0 lg:h-[calc(100dvh-150px)] lg:min-h-[420px] ${
+              mobileTab === "product" ? "block" : "hidden lg:block"
+            }`}
           >
             {productPane}
           </section>

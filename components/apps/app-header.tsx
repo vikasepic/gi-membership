@@ -24,16 +24,19 @@ export function BuiltinAppHeader({ app, wide = false }: { app: BuiltinApp; wide?
           </span>
           <Link
             href={app.route}
-            className="min-w-0 truncate font-display text-base font-semibold text-navy"
+            className="min-w-0 truncate font-display text-sm font-semibold text-navy sm:text-base"
           >
             {app.name}
           </Link>
         </div>
-        <div className="flex shrink-0 items-center gap-4 text-sm">
+        {/* On a phone the two labels left the app's own name 106px — it read
+            "Micro-Prod…". Account is one tap away inside the library, so it
+            stays off the bar until there is room for both. */}
+        <div className="flex shrink-0 items-center gap-3 text-sm sm:gap-4">
           <Link href="/library" className="text-muted transition-colors hover:text-fg">
             Library
           </Link>
-          <Link href="/account" className="text-muted transition-colors hover:text-fg">
+          <Link href="/account" className="hidden text-muted transition-colors hover:text-fg sm:inline">
             Account
           </Link>
         </div>

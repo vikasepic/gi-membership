@@ -39,11 +39,13 @@ export default function Chat({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [thinkingIdx, setThinkingIdx] = useState(0);
 
-  // Keep the newest message in view.
+  // Keep the newest message in view. scrollIntoView rather than scrolling the
+  // list itself: at lg the list is the scroll container, on a phone the page
+  // is, and this finds whichever one it is.
   useEffect(() => {
-    const el = listRef.current;
+    const el = listRef.current?.lastElementChild;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    el.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [messages, streamingText]);
 
   // Rotate the waiting line while the coach has not started typing.
@@ -69,8 +71,11 @@ export default function Chat({
     onSend(text);
   };
 
+  // Enter sends where there is a keyboard with a Shift key. On a phone Enter
+  // is the only way to start a new line and the Send button is right there,
+  // so it stays a newline — the convention every chat app on a phone follows.
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && hasFinePointer()) {
       e.preventDefault();
       submit();
     }
@@ -100,9 +105,14 @@ export default function Chat({
         )}
       </div>
 
+      {/* Sticky on a phone so the reply box is always on screen and the
+          transcript scrolls under it; static at lg where the pane scrolls
+          inside itself. The wrapper carries the page's own background so
+          nothing shows through the gap beneath the rounded form. */}
+      <div className="sticky bottom-0 z-10 bg-bg pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 lg:static lg:pb-0">
       <form
         onSubmit={submit}
-        className="mt-2 rounded-2xl border border-border bg-surface p-2 shadow-sm transition-colors focus-within:border-primary/60"
+        className="rounded-2xl border border-border bg-surface p-2 shadow-sm transition-colors focus-within:border-primary/60"
       >
         <textarea
           ref={textareaRef}
@@ -113,11 +123,7 @@ export default function Chat({
           rows={1}
           maxLength={6000}
           aria-label="Your reply"
-          placeholder={
-            disabled
-              ? (disabledReason ?? "One moment")
-              : "Answer in your own words. Enter sends, Shift+Enter for a new line."
-          }
+          placeholder={disabled ? (disabledReason ?? "One moment") : "Answer in your own words."}
           className="no-focus-ring block w-full resize-none bg-transparent px-3 py-2 text-[15px] leading-relaxed outline-none placeholder:text-muted disabled:opacity-60"
         />
         <div className="flex items-center justify-between gap-3 px-2 pb-1">
@@ -133,7 +139,10 @@ export default function Chat({
               </button>
             )}
             <span className="text-[11px] text-muted">
-              {draft.length > 5000 ? `${6000 - draft.length} characters left` : ""}
+              {draft.length > 5000
+                ? `${6000 - draft.length} characters left`
+                : // The shortcut only exists where Enter sends.
+                  <span className="hidden sm:inline">Enter sends · Shift+Enter for a new line</span>}
             </span>
           </div>
           <button
@@ -145,8 +154,14 @@ export default function Chat({
           </button>
         </div>
       </form>
+      </div>
     </div>
   );
+}
+
+/** A mouse or trackpad — i.e. a keyboard with a Shift key beside it. */
+function hasFinePointer(): boolean {
+  return typeof window !== "undefined" && !!window.matchMedia?.("(pointer: fine)").matches;
 }
 
 function CoachBubble({

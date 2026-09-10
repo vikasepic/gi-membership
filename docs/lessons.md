@@ -99,3 +99,20 @@ never passed it on. Type-checks fine, silently drops the payload. The mirror
 image had been fixed once before on the preview side. Rule: three render
 paths draw the storefront blocks; a test pins all three, because each is
 wired separately and one can be fixed while another stays broken. (`7905965`)
+
+**2026-09-10 — "not mobile responsive" was six layout defects and zero overflows.**
+An overflow probe over every page at 375px found one real blowout (a pasted
+URL in a lesson body) and nothing else; the app screens looked fine to it.
+The screenshots told a different story: the app header truncated the app's
+own name, both composers clipped their placeholder, the coach's reply box
+sat 43px below the fold, a progress line was crushed beside a two-line
+button, a heading collided with its kicker. Rule: a probe proves the page is
+not wider than the phone; only a rendered screenshot at 375px proves it
+works. Take the screenshot before saying a page is responsive. Rules that
+came out of it: a chat composer on a phone is `sticky bottom-0` with
+safe-area padding and the page scrolls — never a fixed-height pane taller
+than the viewport; Enter sends only where `(pointer: fine)`; anything a
+client can paste (`body_html`) gets `[overflow-wrap:anywhere]` plus
+`max-w-full` on img/iframe/video and `overflow-x-auto` on pre/table; a
+`flex justify-between` row with text on both sides needs `flex-wrap` or
+`sm:flex-row` before it ships. (`components/mobile-layout.test.tsx`)

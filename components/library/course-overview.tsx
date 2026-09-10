@@ -83,7 +83,10 @@ export function CourseOverview({
             />
           ) : (
             <section className="flex flex-col gap-5">
-              <div className="flex items-center justify-between">
+              {/* Stacked on a phone. Side by side, a lesson title of any
+                  length made the button two lines tall and crushed "0 of 4
+                  complete" into a two-line column beside it. */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-sm text-muted">
                   {roll.done} of {roll.total} complete
                 </span>
@@ -91,12 +94,12 @@ export function CourseOverview({
                   (lessonHref ? (
                     <Link
                       href={lessonHref(resume.id)}
-                      className="rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg hover:bg-primary-hover"
+                      className="rounded-full bg-primary px-5 py-2.5 text-center text-sm font-medium text-balance text-primary-fg hover:bg-primary-hover sm:text-left"
                     >
                       Continue &rarr; {resume.title}
                     </Link>
                   ) : (
-                    <span className="rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-fg">
+                    <span className="rounded-full bg-primary px-5 py-2.5 text-center text-sm font-medium text-balance text-primary-fg sm:text-left">
                       Continue &rarr; {resume.title}
                     </span>
                   ))}

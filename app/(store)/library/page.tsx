@@ -208,7 +208,7 @@ export default async function LibraryPage({
       {/* Connected apps — signed handoff, lands the user already signed in. */}
       {apps.length > 0 && (
         <section className="flex flex-col gap-5">
-          <div className="flex items-baseline justify-between border-b border-border pb-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-4">
             <h2 className="text-xl">Your apps</h2>
             <span className="kicker text-muted">Included with your purchase</span>
           </div>

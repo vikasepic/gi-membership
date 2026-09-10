@@ -111,7 +111,7 @@ export function Generator({ initialHistory }: { initialHistory: GenerationRecord
         <textarea
           required
           maxLength={1500}
-          rows={3}
+          rows={4}
           value={postIdea}
           onChange={(e) => setPostIdea(e.target.value)}
           aria-label="Your post idea"

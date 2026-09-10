@@ -121,7 +121,11 @@ export function LessonView({
 
       {item.bodyHtml && (
         <div
-          className="flex flex-col gap-4 leading-relaxed [&_a]:text-primary [&_a]:underline [&_h2]:text-xl [&_h3]:text-lg [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6"
+          // Written by a client in an editor, so it holds whatever they pasted:
+          // a 90-character URL with no spaces widened the whole page to 1412px
+          // on a 375px phone and dragged the bottom nav with it. Long strings
+          // break anywhere; images, embeds and tables never exceed the column.
+          className="flex min-w-0 flex-col gap-4 leading-relaxed break-words [overflow-wrap:anywhere] [&_a]:text-primary [&_a]:underline [&_h2]:text-xl [&_h3]:text-lg [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_img]:h-auto [&_img]:max-w-full [&_iframe]:max-w-full [&_video]:max-w-full [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto"
           dangerouslySetInnerHTML={{ __html: item.bodyHtml }}
         />
       )}
