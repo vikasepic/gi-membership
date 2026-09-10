@@ -1034,13 +1034,29 @@ function TrustBlock() {
 
   return (
     <div className="flex flex-col gap-3 border-t border-border pt-4">
-      {/* Stripe is on automatic payment methods, so what a buyer is offered
-          depends on where they are — UPI in India, iDEAL in the Netherlands.
-          Saying so beats listing marks that might be wrong for them. */}
+      {/* The marks a buyer is looking for before they type a card number.
+          One flat strip rather than five separate files: it is a single
+          decorative image, so one request and one alt, and the height is what
+          is fixed — 24px on a phone, 28px from sm — with the width following
+          the artwork's own ratio so nothing is squeezed. `w-auto` and an
+          explicit max-width keep it from overflowing a narrow column when the
+          strip is scaled up.
+
+          Stripe is on automatic payment methods, so the real list depends on
+          where the buyer is — UPI in India, iDEAL in the Netherlands. These
+          are the marks everyone is offered, not a promise of the whole set,
+          which is why the strip carries no caption claiming to be exhaustive. */}
       {showRow && (
-      <p className="text-center text-xs text-muted" style={FINE}>
-        Card, or whatever Stripe offers where you are — UPI, wallets, bank transfer.
-      </p>
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src="/brand/payment-marks.webp"
+          alt="Visa, Mastercard, American Express, Apple Pay and Google Pay accepted"
+          width={840}
+          height={99}
+          loading="lazy"
+          decoding="async"
+          className="mx-auto h-6 w-auto max-w-full sm:h-7"
+        />
       )}
       {showRow && (
       <ul className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
