@@ -139,7 +139,14 @@ export function TrafficOverview({
                   <span className="block text-xs text-muted">{r.path}</span>
                 </td>
                 {[0, 1, 2, 3].map((i) => {
-                  const blank = r.kind === "other" ? i > 0 : i === 3 && Boolean(filter.source);
+                  // An em dash means "this page has no such step" — a row with
+                  // no funnel, an owner with no upsell, or Bought under a
+                  // source filter that orders cannot follow. Never a zero,
+                  // which is a measurement.
+                  const blank =
+                    r.kind === "other"
+                      ? i > 0
+                      : r.steps[i] === null || (i === 3 && Boolean(filter.source));
                   return (
                     <td key={i} className="px-4 py-3 text-right tabular-nums">
                       {blank ? (
@@ -153,7 +160,7 @@ export function TrafficOverview({
                 <td className="px-4 py-3 text-sm">
                   {r.drop ? (
                     <span className="text-primary">
-                      {r.drop.percent}% at {STEP_AT[r.drop.from + 1]}
+                      {r.drop.percent}% at {STEP_AT[r.drop.to]}
                     </span>
                   ) : (
                     <span className="text-muted">—</span>

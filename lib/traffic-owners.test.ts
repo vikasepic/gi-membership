@@ -3,8 +3,8 @@ import { buildFunnels, biggestDrop, type CountRow, type FunnelOwner } from "@/li
 
 const DAYS = ["2026-09-08", "2026-09-09"];
 const OWNERS: FunnelOwner[] = [
-  { key: "digital-product-validator", title: "Digital Product Validator", kind: "product" },
-  { key: "book-writer", title: "Book Writer", kind: "offer" },
+  { key: "digital-product-validator", title: "Digital Product Validator", kind: "product", hasUpsell: true },
+  { key: "book-writer", title: "Book Writer", kind: "offer", hasUpsell: true },
 ];
 const hit = (over: Partial<CountRow>): CountRow => ({
   day: "2026-09-09",
@@ -92,8 +92,8 @@ describe("when a product slug and an offer key collide", () => {
     // comment promises. This pins the product as the winner no matter which
     // list buildFunnels is handed last.
     const owners: FunnelOwner[] = [
-      { key: "collide", title: "Collide Product", kind: "product" },
-      { key: "collide", title: "Collide Offer", kind: "offer" },
+      { key: "collide", title: "Collide Product", kind: "product", hasUpsell: true },
+      { key: "collide", title: "Collide Offer", kind: "offer", hasUpsell: true },
     ];
     const view = buildFunnels(
       [hit({ path: "/checkout", product: "collide", hits: 12 })],
@@ -115,16 +115,16 @@ describe("the biggest drop, which the table sorts on", () => {
     counts.map((count, i) => ({ label: ["a", "b", "c", "d"][i], count }));
 
   it("names the step the fall happened AT and its size", () => {
-    expect(biggestDrop(steps(100, 21, 20, 19))).toEqual({ from: 0, percent: 79 });
+    expect(biggestDrop(steps(100, 21, 20, 19))).toEqual({ to: 1, percent: 79 });
   });
 
   it("picks the largest fall, not the first", () => {
-    expect(biggestDrop(steps(100, 90, 9, 9))).toEqual({ from: 1, percent: 90 });
+    expect(biggestDrop(steps(100, 90, 9, 9))).toEqual({ to: 2, percent: 90 });
   });
 
   it("ignores a step that follows a zero, which is not a drop", () => {
     // 0 -> 0 is not a 100% fall; there was nobody to lose.
-    expect(biggestDrop(steps(10, 0, 0, 0))).toEqual({ from: 0, percent: 100 });
+    expect(biggestDrop(steps(10, 0, 0, 0))).toEqual({ to: 1, percent: 100 });
   });
 
   it("is nothing at all when the funnel had no traffic", () => {
@@ -135,5 +135,71 @@ describe("the biggest drop, which the table sorts on", () => {
 
   it("is nothing when no step falls", () => {
     expect(biggestDrop(steps(5, 5, 5, 5))).toBeNull();
+  });
+});
+
+describe("an owner with no upsell configured", () => {
+  // Reported 10 Sep 2026: every offer row read "100% at the upsell". Not one
+  // of the nine active offers had an upsell configured, and no offer buyer is
+  // ever sent to /checkout/oto — so the step was a structural absence being
+  // read as a total loss, and 100% is the ceiling, so it won the leak sort
+  // over every real problem on the screen.
+  const OWNERS_NO_UPSELL: FunnelOwner[] = [
+    { key: "book-writer", title: "Book Writer", kind: "offer", hasUpsell: false },
+  ];
+  const view = (bought: number) =>
+    buildFunnels(
+      [
+        hit({ path: "/o/book-writer", product: "book-writer", hits: 354 }),
+        hit({ path: "/checkout/offer", product: "book-writer", hits: 7 }),
+      ],
+      bought ? [{ product: "book-writer", orders: bought }] : [],
+      OWNERS_NO_UPSELL,
+      DAYS,
+    );
+
+  it("reports the upsell step as absent, not as zero", () => {
+    expect(view(2).funnels[0].steps[2].count).toBeNull();
+    expect(view(2).funnels[0].hasUpsell).toBe(false);
+  });
+
+  it("does not call the missing step a 100% drop", () => {
+    const drop = biggestDrop(view(2).funnels[0].steps);
+    expect(drop).not.toEqual({ to: 2, percent: 100 });
+  });
+
+  it("measures the fall across the gap, from checkout to the sale", () => {
+    // 354 -> 7 is 98%; 7 -> 2 is 71%. The sales page is still the worst, and
+    // that is the honest answer for this funnel.
+    expect(biggestDrop(view(2).funnels[0].steps)).toEqual({ to: 1, percent: 98 });
+  });
+
+  it("still finds the fall to the sale when the sales page is not the worst", () => {
+    const flat = buildFunnels(
+      [
+        hit({ path: "/o/book-writer", product: "book-writer", hits: 10 }),
+        hit({ path: "/checkout/offer", product: "book-writer", hits: 10 }),
+      ],
+      [{ product: "book-writer", orders: 1 }],
+      OWNERS_NO_UPSELL,
+      DAYS,
+    );
+    // Nothing falls at the checkout; the only fall is checkout -> sale, and
+    // the null between them must not hide it.
+    expect(biggestDrop(flat.funnels[0].steps)).toEqual({ to: 3, percent: 90 });
+  });
+
+  it("leaves an owner that HAS an upsell measuring it as before", () => {
+    const withUpsell = buildFunnels(
+      [
+        hit({ path: "/p/digital-product-validator", hits: 100 }),
+        hit({ path: "/checkout", product: "digital-product-validator", hits: 50 }),
+        hit({ path: "/checkout/oto", product: "digital-product-validator", hits: 40 }),
+      ],
+      [{ product: "digital-product-validator", orders: 10 }],
+      [{ key: "digital-product-validator", title: "Validator", kind: "product", hasUpsell: true }],
+      DAYS,
+    );
+    expect(withUpsell.funnels[0].steps.map((s) => s.count)).toEqual([100, 50, 40, 10]);
   });
 });

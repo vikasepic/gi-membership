@@ -14,6 +14,7 @@ const VIEW: FunnelView = {
       key: "book-writer",
       title: "Book Writer",
       kind: "offer",
+      hasUpsell: true,
       steps: [step("Saw the sales page", 100), step("Reached the checkout", 20), step("Saw the upsell", 5), step("Bought", 4)],
       sources: [{ source: "meta", hits: 60 }, { source: "direct", hits: 40 }],
       daily: [{ day: "2026-09-09", hits: 100 }],
@@ -23,6 +24,7 @@ const VIEW: FunnelView = {
       key: "digital-product-validator",
       title: "Digital Product Validator",
       kind: "product",
+      hasUpsell: true,
       steps: [step("Saw the sales page", 40), step("Reached the checkout", 30), step("Saw the upsell", 20), step("Bought", 10)],
       sources: [{ source: "direct", hits: 40 }],
       daily: [{ day: "2026-09-09", hits: 40 }],
@@ -69,6 +71,7 @@ describe("when the order count isn't known (a source filter)", () => {
         key: "k",
         title: "K",
         kind: "offer",
+        hasUpsell: true,
         steps: [
           step("Saw the sales page", steps[0]),
           step("Reached the checkout", steps[1]),
@@ -89,7 +92,7 @@ describe("when the order count isn't known (a source filter)", () => {
     // funnel with real upsell traffic. Unknown orders must not let that
     // absence outrank the actual 60% drop at the checkout.
     const [row] = overviewRows(funnel([500, 200, 150, 0]), false);
-    expect(row.drop).toEqual({ from: 0, percent: 60 });
+    expect(row.drop).toEqual({ to: 1, percent: 60 });
   });
 
   it("reports no drop at all when the known steps never fall", () => {
@@ -104,7 +107,7 @@ describe("when the order count isn't known (a source filter)", () => {
     // Same steps as above, but this time the 0 is a real order count, not a
     // forced one — the default `ordersKnown = true` must keep reporting it.
     const [row] = overviewRows(funnel([300, 300, 300, 0]));
-    expect(row.drop).toEqual({ from: 2, percent: 100 });
+    expect(row.drop).toEqual({ to: 3, percent: 100 });
   });
 });
 

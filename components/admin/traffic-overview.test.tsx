@@ -12,7 +12,7 @@ const ROWS: OverviewRow[] = [
     path: "/o/book-writer",
     kind: "offer",
     steps: [100, 20, 5, 4],
-    drop: { from: 0, percent: 80 },
+    drop: { to: 1, percent: 80 },
     daily: [
       { day: "2026-09-08", hits: 40 },
       { day: "2026-09-09", hits: 60 },
@@ -127,7 +127,7 @@ describe("the traffic table", () => {
     // 60% drop at the checkout — never the "100% at the sale" a forced zero
     // used to hand the sort.
     const rows: OverviewRow[] = [
-      { ...ROWS[0], steps: [500, 200, 150, 0], drop: { from: 0, percent: 60 } },
+      { ...ROWS[0], steps: [500, 200, 150, 0], drop: { to: 1, percent: 60 } },
     ];
     mount({ source: "meta" }, rows);
     const cell = [...document.querySelectorAll("tbody tr")][0].querySelectorAll("td")[5];

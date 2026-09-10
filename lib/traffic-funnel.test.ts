@@ -9,8 +9,8 @@ import {
 } from "@/lib/traffic-funnel";
 
 const NAMES = [
-  { key: "validator", title: "Product Validator", kind: "product" as const },
-  { key: "carousels", title: "Viral Carousels", kind: "product" as const },
+  { key: "validator", title: "Product Validator", kind: "product" as const, hasUpsell: true },
+  { key: "carousels", title: "Viral Carousels", kind: "product" as const, hasUpsell: true },
 ];
 const DAYS = ["2026-09-03", "2026-09-04", "2026-09-05"];
 
@@ -185,13 +185,13 @@ describe("a source filter recomputes the funnel rather than hiding rows", () => 
     ];
     const buggy = buildFunnels(views, [{ product: "validator", orders: 5 }], NAMES, DAYS);
     const fixed = buildFunnels(views, [], NAMES, DAYS);
-    expect(biggestDrop(buggy.funnels[0].steps)).toEqual({ from: 2, percent: 94 });
+    expect(biggestDrop(buggy.funnels[0].steps)).toEqual({ to: 3, percent: 94 });
 
     expect(fixed.funnels[0].steps[3].count).toBe(0);
     // Whatever the fixed drop reports, it is never the old cross-scope 94% —
     // a source filter cannot produce that number honestly, so it must not
     // appear here either.
-    expect(biggestDrop(fixed.funnels[0].steps)).not.toEqual({ from: 2, percent: 94 });
+    expect(biggestDrop(fixed.funnels[0].steps)).not.toEqual({ to: 3, percent: 94 });
   });
 
   it("drops an owner entirely once its only reason to appear was an unfiltered order", () => {

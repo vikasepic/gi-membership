@@ -18,9 +18,13 @@ export type OverviewRow = {
   title: string;
   path: string;
   kind: "product" | "offer" | "other";
-  /** Four for a funnel; one (views) for anything else. */
-  steps: number[];
-  drop: { from: number; percent: number } | null;
+  /**
+   * Four for a funnel; one (views) for anything else. Null means the step does
+   * not exist for this page — an offer with no upsell configured — as opposed
+   * to a measured zero.
+   */
+  steps: (number | null)[];
+  drop: { to: number; percent: number } | null;
   daily: DayPoint[];
   topSource: { source: string; hits: number } | null;
 };
@@ -140,6 +144,7 @@ export function sourcesIn(rows: OverviewRow[]): string[] {
   return [...total.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([s]) => s);
 }
 
+/** A step's count for sorting. An absent step sorts as nothing, like a zero. */
 const at = (row: OverviewRow, i: number): number => row.steps[i] ?? 0;
 
 export function applyOverview(rows: OverviewRow[], filter: OverviewFilter): OverviewRow[] {

@@ -8,6 +8,7 @@ const PRODUCT: Funnel = {
   key: "validator",
   title: "Product Validator",
   kind: "product",
+  hasUpsell: true,
   steps: [
     { label: "Saw the sales page", count: 412 },
     { label: "Reached the checkout", count: 88 },

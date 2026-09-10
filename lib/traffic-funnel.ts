@@ -21,19 +21,36 @@ export type CountRow = {
   hits: number;
 };
 export type BoughtRow = { product: string; orders: number };
-export type ProductName = { slug: string; title: string };
+export type ProductName = { slug: string; title: string; hasUpsell: boolean };
 
 export type SourceSplit = { source: string; hits: number };
 export type DayPoint = { day: string; hits: number };
-export type FunnelStep = { label: string; count: number };
+/**
+ * One step of a funnel.
+ *
+ * `count` is null when the step does not exist for this owner — an offer with
+ * no upsell configured never shows one, so nobody can fall at it. A measured
+ * zero and an absent step are different facts and the difference is the whole
+ * reason this is nullable: read as a zero, an absent upsell made every
+ * trafficked offer report a perfect 100% drop.
+ */
+export type FunnelStep = { label: string; count: number | null };
 
 /** What a recorded key belongs to. Products and offers both own funnels. */
-export type FunnelOwner = { key: string; title: string; kind: "product" | "offer" };
+export type FunnelOwner = {
+  key: string;
+  title: string;
+  kind: "product" | "offer";
+  /** Whether an upsell is configured. Without one there is no upsell step. */
+  hasUpsell: boolean;
+};
 
 export type Funnel = {
   key: string;
   title: string;
   kind: "product" | "offer";
+  /** Whether this owner shows an upsell at all. */
+  hasUpsell: boolean;
   steps: FunnelStep[];
   sources: SourceSplit[];
   daily: DayPoint[];
@@ -167,12 +184,15 @@ export function buildFunnels(
         key,
         title: owner.title,
         kind: owner.kind,
+        hasUpsell: owner.hasUpsell,
         steps: [
           sales.get(key) ?? 0,
           checkout.get(key) ?? 0,
           upsell.get(key) ?? 0,
           boughtOf.get(key) ?? 0,
-        ].map((count, i) => ({ label: STEP_LABELS[i], count })),
+          // The third step is the upsell. Null rather than 0 where this owner
+          // has none configured: nobody can fall at a step that is never shown.
+        ].map((count, i) => ({ label: STEP_LABELS[i], count: i === 2 && !owner.hasUpsell ? null : count })),
         sources: splitOf(sources.get(key) ?? new Map()),
         // Dense: a line that skips the quiet days draws a plateau where there
         // was a gap.
@@ -199,14 +219,24 @@ export function buildFunnels(
  * traffic at all — a page nobody visited is not the page that is leaking, and
  * sorting it to the top would bury the ones that are.
  */
-export function biggestDrop(steps: FunnelStep[]): { from: number; percent: number } | null {
-  let best: { from: number; percent: number } | null = null;
-  for (let i = 0; i < steps.length - 1; i += 1) {
-    const before = steps[i].count;
-    const after = steps[i + 1].count;
-    if (before <= 0 || after >= before) continue;
-    const percent = Math.round(((before - after) / before) * 100);
-    if (!best || percent > best.percent) best = { from: i, percent };
+export function biggestDrop(steps: FunnelStep[]): { to: number; percent: number } | null {
+  let best: { to: number; percent: number } | null = null;
+  // Each step against the last one that EXISTS, not the last one in the array.
+  // An offer with no upsell has a null third step, and the honest comparison
+  // for it is checkout against sales — skipping the gap rather than reporting
+  // a fall into it, and rather than losing the real fall on the other side.
+  let prev: { i: number; count: number } | null = null;
+  for (let i = 0; i < steps.length; i += 1) {
+    const count = steps[i].count;
+    if (count === null) continue;
+    if (prev && prev.count > 0 && count < prev.count) {
+      const percent = Math.round(((prev.count - count) / prev.count) * 100);
+      // `to` is the step the fall landed ON, so a caller can name it directly.
+      // It used to be the step before, and every caller added one — which is
+      // unreadable the moment a step in between can be missing.
+      if (!best || percent > best.percent) best = { to: i, percent };
+    }
+    prev = { i, count };
   }
   return best;
 }

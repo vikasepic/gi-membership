@@ -54,8 +54,8 @@ export default async function AdminTrafficPage({
   // product wins, which is the behaviour that existed before offers had
   // funnels at all.
   const owners: FunnelOwner[] = [
-    ...names.map((n) => ({ key: n.slug, title: n.title, kind: "product" as const })),
-    ...offers.map((o) => ({ key: o.key, title: o.name, kind: "offer" as const })),
+    ...names.map((n) => ({ key: n.slug, title: n.title, kind: "product" as const, hasUpsell: n.hasUpsell })),
+    ...offers.map((o) => ({ key: o.key, title: o.name, kind: "offer" as const, hasUpsell: o.hasUpsell })),
   ];
   const days = daysInRange(range);
   const boughtRows = [...bought, ...boughtOffers];

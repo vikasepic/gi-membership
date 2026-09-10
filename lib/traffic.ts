@@ -33,7 +33,7 @@ export type CountRow = {
   hits: number;
 };
 export type BoughtRow = { product: string; orders: number };
-export type ProductName = { slug: string; title: string };
+export type ProductName = { slug: string; title: string; hasUpsell: boolean };
 
 /**
  * The raw increment, which DOES throw — but only on a transport failure or a
@@ -415,23 +415,31 @@ export async function productNames(): Promise<ProductName[]> {
     const db = createServiceClient();
     const { data } = await db
       .from("products")
-      .select("slug, title")
+      .select("slug, title, upsell_offer_id")
       .eq("store_id", await getStoreId());
-    return (data ?? []) as ProductName[];
+    return (data ?? []).map((p) => ({
+      slug: p.slug as string,
+      title: p.title as string,
+      hasUpsell: Boolean(p.upsell_offer_id),
+    }));
   } catch {
     return [];
   }
 }
 
 /** Every offer's key and name, so an offer key can own a funnel. */
-export async function offerKeys(): Promise<{ key: string; name: string }[]> {
+export async function offerKeys(): Promise<{ key: string; name: string; hasUpsell: boolean }[]> {
   try {
     const db = createServiceClient();
     const { data } = await db
       .from("offers")
-      .select("key, name")
+      .select("key, name, upsell_offer_id")
       .eq("store_id", await getStoreId());
-    return (data ?? []).map((o) => ({ key: o.key as string, name: o.name as string }));
+    return (data ?? []).map((o) => ({
+      key: o.key as string,
+      name: o.name as string,
+      hasUpsell: Boolean(o.upsell_offer_id),
+    }));
   } catch {
     return [];
   }

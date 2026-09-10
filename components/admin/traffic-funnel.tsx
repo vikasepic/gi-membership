@@ -70,7 +70,7 @@ export function FunnelCard({ funnel }: { funnel: Funnel }) {
   const steps = funnel.steps;
   // Not steps[0]: an order can arrive against a product whose sales page was
   // never viewed in the window, and dividing by that zero would hide it.
-  const top = Math.max(...steps.map((s) => s.count), 0);
+  const top = Math.max(...steps.map((s) => s.count ?? 0), 0);
   const peak = Math.max(...funnel.daily.map((d) => d.hits), 0);
   const totalSources = funnel.sources.reduce((sum, s) => sum + s.hits, 0);
   // An offer's real page is /o/<key>, a product's is /p/<slug> — this card
@@ -98,11 +98,17 @@ export function FunnelCard({ funnel }: { funnel: Funnel }) {
 
       <ol className="flex flex-col">
         {steps.map((step, i) => {
-          const prev = i > 0 ? steps[i - 1].count : null;
+          // The last step that EXISTS, not the one above in the array: an
+          // owner with no upsell has a null third step, and the fall worth
+          // showing under its checkout is the one into the sale.
+          const prev = steps.slice(0, i).reverse().find((p) => p.count !== null)?.count ?? null;
           const last = i === steps.length - 1;
+          // Null is "this owner never shows this step", not a measured zero.
+          const missing = step.count === null;
           // A hairline for a non-zero step that would otherwise round to
           // nothing, so "small" never draws the same as "none".
-          const width = top > 0 && step.count > 0 ? Math.max(1.5, (step.count / top) * 100) : 0;
+          const width =
+            top > 0 && (step.count ?? 0) > 0 ? Math.max(1.5, ((step.count ?? 0) / top) * 100) : 0;
           return (
             <li key={step.label} className="flex flex-col">
               {/*
@@ -111,7 +117,7 @@ export function FunnelCard({ funnel }: { funnel: Funnel }) {
                 rate this page cannot compute. The other two are views to
                 views and keep theirs.
               */}
-              {prev !== null && <Drop from={prev} to={step.count} share={!last} />}
+              {prev !== null && !missing && <Drop from={prev} to={step.count!} share={!last} />}
               <div className="flex items-center gap-3">
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <span className="truncate text-sm text-fg">{step.label}</span>
@@ -123,8 +129,14 @@ export function FunnelCard({ funnel }: { funnel: Funnel }) {
                   </div>
                 </div>
                 <div className="flex w-24 shrink-0 flex-col items-end">
-                  <span className="font-display text-lg leading-none tabular-nums">{n(step.count)}</span>
-                  <span className="text-[0.65rem] text-muted">{last ? "people" : "views"}</span>
+                  <span
+                    className={`font-display text-lg leading-none tabular-nums ${missing ? "text-muted" : ""}`}
+                  >
+                    {missing ? "—" : n(step.count!)}
+                  </span>
+                  <span className="text-[0.65rem] text-muted">
+                    {missing ? "not offered" : last ? "people" : "views"}
+                  </span>
                 </div>
               </div>
             </li>

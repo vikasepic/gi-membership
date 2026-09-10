@@ -153,3 +153,18 @@ reconcile against the payment processor before touching the reporting code —
 only one of them is an emergency. Backfill rules stay conservative: two
 lines of the same `kind` mean the host is a guess, and a guessed number on a
 screen people spend against is worse than a low one.
+
+**2026-09-10 — a step that does not exist is not a step everybody left.**
+Every offer on the traffic screen read "100% at the upsell". Not one of the
+nine active offers had an upsell configured, and no offer buyer is ever sent
+to `/checkout/oto` — so the third step was a structural absence, counted as a
+measured zero, and a fall to zero is the mathematical ceiling, so it won the
+"biggest drop" sort over every real problem on the page. Book Writer read
+354 → 7 → 0 → 2: nobody saw the upsell, yet two people bought. Rule: a funnel
+step that an owner never shows is `null`, not `0`, and anything derived from
+it — a drop, a sort, a label — measures across the gap to the last step that
+exists rather than into it. Same rule as the source filter a day earlier: a
+screen must not assert a number it has just declared it does not have.
+`biggestDrop` now reports `to`, the step a fall LANDED on, because the old
+`from` + 1 at every call site is unreadable once a step in between can be
+missing. (`lib/traffic-owners.test.ts`)

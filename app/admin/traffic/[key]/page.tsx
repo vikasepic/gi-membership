@@ -57,8 +57,8 @@ export default async function TrafficFunnelPage({
   // product wins, which is the behaviour that existed before offers had
   // funnels at all.
   const owners: FunnelOwner[] = [
-    ...names.map((n) => ({ key: n.slug, title: n.title, kind: "product" as const })),
-    ...offers.map((o) => ({ key: o.key, title: o.name, kind: "offer" as const })),
+    ...names.map((n) => ({ key: n.slug, title: n.title, kind: "product" as const, hasUpsell: n.hasUpsell })),
+    ...offers.map((o) => ({ key: o.key, title: o.name, kind: "offer" as const, hasUpsell: o.hasUpsell })),
   ];
   const view = buildFunnels(counts, [...bought, ...boughtOffers], owners, daysInRange(range));
   const funnel = view.funnels.find((f) => f.key === key);
