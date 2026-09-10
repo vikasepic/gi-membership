@@ -1,9 +1,11 @@
 "use server";
 
 import { z } from "zod";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { previewOfferCoupon, startOfferCheckout } from "@/lib/offer-checkout";
 import { resolveBuyer } from "@/lib/checkout";
+import { UTM_COOKIE, attributionFromCookie } from "@/lib/attribution";
 
 // An index into the list the page built, or "none" — never an id, and never
 // the legacy alt/main/boolean shapes the product checkout's own schema still
@@ -57,6 +59,9 @@ export async function startOffer(
   );
   if (!resolved.ok) return resolved;
 
+  const jar = await cookies();
+  const attribution = attributionFromCookie(jar.get(UTM_COOKIE)?.value);
+
   const res = await startOfferCheckout({
     userId: resolved.userId,
     email: resolved.email,
@@ -65,6 +70,7 @@ export async function startOffer(
     couponCode,
     isNewAccount: resolved.isNew,
     bumpChoice: parsedBump.data,
+    attribution,
   });
   if (!res.ok) return res;
   return { ok: true, clientSecret: res.clientSecret, mode: res.mode };

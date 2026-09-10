@@ -12,6 +12,7 @@ import { ensureUserProfile } from "@/lib/users";
 import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { recordError, messageOf } from "@/lib/errors";
+import { stripeAttributionMetadata, attributionFromMetadata, orderAttributionColumns, type Attribution } from "@/lib/attribution";
 import type { Offer } from "@/lib/types";
 
 // Standalone checkout for a single offer, for a member who has no card on file
@@ -130,6 +131,13 @@ export async function startOfferCheckout(args: {
   couponCode?: string | null;
   /** Whether this checkout created the account. Decides the sign-in on return. */
   isNewAccount?: boolean;
+  /**
+   * The campaign that brought them, off the gi_utm cookie, read by the action.
+   * Stashed in the intent's metadata rather than read again at completion:
+   * completeOfferCheckout also runs from the Stripe webhook, which has no
+   * cookies, and the intent is the one thing both paths hold.
+   */
+  attribution?: Attribution | null;
 }): Promise<StartResult> {
   const offer = await getOffer(args.offerId);
   if (!offer || !offer.active) return { ok: false, error: "That offer isn’t available any more." };
@@ -243,6 +251,11 @@ export async function startOfferCheckout(args: {
     // Whether THIS checkout created the account. Read on the way back to
     // decide whether a session may be handed out — see mintOfferLogin.
     newAccount: args.isNewAccount ? "true" : "false",
+    // Last touch as utm_*, first touch as first_utm_*, plus referrer — for
+    // the platform the ads team reads from Stripe, and read back at
+    // completion to write the order. Spread last; the keys above are what
+    // that platform already filters on and they do not move.
+    ...stripeAttributionMetadata(args.attribution),
   };
   const description = `${offer.name} — ${await getStoreName()}`;
 
@@ -575,6 +588,10 @@ export async function completeOfferCheckout(
       // fourth step of its funnel on /admin/traffic.
       host_offer_id: offer.id,
       buyer_country: normalizeCountry(country) ?? null,
+      // From the metadata WE wrote at start, never from a request: the
+      // webhook has no cookie, and the return route's cookie could have moved
+      // on to a later ad by the time Stripe sends the buyer back.
+      ...orderAttributionColumns(attributionFromMetadata(si.metadata as Record<string, string> | null)),
     })
     .select("id")
     .single();

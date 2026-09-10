@@ -77,6 +77,47 @@ describe.skipIf(!canRun)("which intent an offer checkout opens (integration)", (
     expect(res.mode).toBe("setup");
     expect(res.clientSecret.startsWith("seti_")).toBe(true);
   });
+
+  it("carries the campaign onto a one-time offer's PaymentIntent beside the existing keys", async () => {
+    const { userId, email } = await member();
+    const offerId = await offerOf("one_time");
+    const res = await startOfferCheckout({
+      userId,
+      email,
+      offerId,
+      attribution: {
+        first: { utm_source: "ig" },
+        last: { utm_source: "meta", utm_medium: "paid_social", utm_adset: "LAL 1%" },
+        referrer: "https://l.facebook.com/l.php",
+      },
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const pi = await stripe().paymentIntents.retrieve(res.clientSecret.split("_secret_")[0]);
+    expect(pi.metadata.utm_source).toBe("meta");
+    expect(pi.metadata.utm_adset).toBe("LAL 1%");
+    expect(pi.metadata.first_utm_source).toBe("ig");
+    expect(pi.metadata.referrer).toBe("https://l.facebook.com/l.php");
+    expect(pi.metadata.store_created).toBe("true");
+    expect(pi.metadata.offerId).toBe(offerId);
+  });
+
+  it("carries the campaign onto a trial's SetupIntent too", async () => {
+    const { userId, email } = await member();
+    const offerId = await offerOf("recurring");
+    const res = await startOfferCheckout({
+      userId,
+      email,
+      offerId,
+      attribution: { first: { utm_source: "meta" }, last: { utm_source: "meta" }, referrer: null },
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const si = await stripe().setupIntents.retrieve(res.clientSecret.split("_secret_")[0]);
+    expect(si.metadata?.utm_source).toBe("meta");
+    expect(si.metadata?.first_utm_source).toBe("meta");
+    expect(si.metadata?.offerId).toBe(offerId);
+  });
 });
 
 afterAll(async () => {
