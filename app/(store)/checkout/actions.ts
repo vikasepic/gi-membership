@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { cookies, headers } from "next/headers";
 import { createCheckoutIntent, finalizeOrder, orderIdForIntent, type CheckoutResult } from "@/lib/checkout";
+import { UTM_COOKIE, attributionFromCookie } from "@/lib/attribution";
 import { sendPostPurchaseIfDue } from "@/lib/post-purchase-send";
 import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
 import { createClient } from "@/lib/supabase/server";
@@ -80,6 +81,9 @@ export async function startCheckout(input: unknown): Promise<CheckoutResult> {
   // payload, and stored on the order so the (cookie-less) webhook can honour it.
   const jar = await cookies();
   const anonId = jar.get("gi_anon")?.value ?? null;
+  // The campaign labels, for everyone — no consent needed for a label that
+  // describes the ad rather than the person. See lib/attribution.ts.
+  const attribution = attributionFromCookie(jar.get(UTM_COOKIE)?.value);
   const trackingConsent = mayTrack(parseConsent(jar.get(CONSENT_COOKIE)?.value));
 
   // The buyer's own request, captured here and nowhere else.
@@ -103,7 +107,7 @@ export async function startCheckout(input: unknown): Promise<CheckoutResult> {
       }
     : {};
 
-  return createCheckoutIntent({ ...parsed.data, existingUserId, anonId, trackingConsent, ...client });
+  return createCheckoutIntent({ ...parsed.data, existingUserId, anonId, trackingConsent, attribution, ...client });
 }
 
 // Called by the thank-you page after Stripe redirects back. Idempotent — the

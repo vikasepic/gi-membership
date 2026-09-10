@@ -32,6 +32,7 @@ import { livePrices, chargeNowCents as chargeNowFor } from "@/lib/offer-prices";
 import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
 import { markLeadConverted } from "@/lib/leads";
 import { recordError, messageOf } from "@/lib/errors";
+import { stripeAttributionMetadata, orderAttributionColumns, type Attribution } from "@/lib/attribution";
 import type { Offer } from "@/lib/types";
 
 const OTO_TTL_SECONDS = 15 * 60; // 15 minutes
@@ -94,6 +95,13 @@ export type CheckoutInput = {
   clientIp?: string | null;
   userAgent?: string | null;
   sourceUrl?: string | null;
+  /**
+   * The campaign that brought them, off the gi_utm cookie — read by the
+   * action layer, never from the client payload. Snapshotted onto the order
+   * and mirrored into the intent's metadata so the platform the ads team
+   * reads from Stripe can tell a paid sale from an organic one.
+   */
+  attribution?: Attribution | null;
 };
 
 export type CheckoutResult =
@@ -480,6 +488,10 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
         bumpOfferId: bumpOffer?.id ?? "",
         country: country ?? "",
         newAccount,
+        // Last touch as utm_*, first touch as first_utm_*, plus referrer.
+        // Spread last: nothing above uses these names, and the keys another
+        // platform already reads stay exactly where they are.
+        ...stripeAttributionMetadata(input.attribution),
       },
     });
     if (!si.client_secret) return { ok: false, error: "No client secret" };
@@ -511,6 +523,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       stripe_customer_id: customerId,
       stripe_setup_intent_id: si.id,
       visitor_id: visitor,
+      ...orderAttributionColumns(input.attribution),
     })
       .select("id")
       .single();
@@ -635,6 +648,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       bumpPrepaid: bumpOffer && bumpOffer.billingType === "one_time" ? "true" : "",
       taxCalculationId: tax.calculationId ?? "",
       newAccount,
+      ...stripeAttributionMetadata(input.attribution),
     },
   });
 
@@ -669,6 +683,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       stripe_customer_id: customerId,
       stripe_payment_intent_id: pi.id,
       visitor_id: visitorId,
+      ...orderAttributionColumns(input.attribution),
     })
     .select("id")
     .single();
