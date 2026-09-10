@@ -27,13 +27,25 @@ describe("AttributionBlock", () => {
       <AttributionBlock
         order={{
           ...base,
-          utmLast: { utm_source: "meta", utm_medium: "paid_social", utm_campaign: "A", utm_adset: "LAL 1%", utm_content: "Reel", utm_term: "t", utm_id: "1" },
+          utmLast: {
+            utm_source: "meta",
+            utm_medium: "paid_social",
+            utm_campaign: "Spring Push",
+            utm_adset: "LAL 1%",
+            utm_content: "Reel",
+            utm_term: "brandterm",
+            utm_id: "camp-42",
+          },
           utmFirst: { utm_source: "ig", utm_campaign: "B" },
           referrer: "https://l.facebook.com/l.php",
         }}
       />,
     );
-    for (const v of ["meta", "paid_social", "A", "LAL 1%", "Reel", "t", "1"]) expect(out).toContain(v);
+    // Every value here must be one that genuinely fails if its label stops
+    // rendering — "A" collided with "Ad"/"Ad set" (utm_adset/utm_content
+    // labels), "t" with the surrounding markup's own text, "1" with a
+    // Tailwind class fragment. These replacements can't collide with markup.
+    for (const v of ["meta", "paid_social", "Spring Push", "LAL 1%", "Reel", "brandterm", "camp-42"]) expect(out).toContain(v);
     expect(out).toContain("First touch");
     expect(out).toContain("ig");
     expect(out).toContain("l.facebook.com/l.php");
