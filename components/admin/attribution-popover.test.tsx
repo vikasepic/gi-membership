@@ -36,7 +36,7 @@ describe("AttributionBlock", () => {
             utm_term: "brandterm",
             utm_id: "camp-42",
           },
-          utmFirst: { utm_source: "ig", utm_campaign: "B" },
+          utmFirst: { utm_source: "instaparty", utm_campaign: "Winter B" },
           referrer: "https://l.facebook.com/l.php",
         }}
       />,
@@ -47,12 +47,16 @@ describe("AttributionBlock", () => {
     // Tailwind class fragment. These replacements can't collide with markup.
     for (const v of ["meta", "paid_social", "Spring Push", "LAL 1%", "Reel", "brandterm", "camp-42"]) expect(out).toContain(v);
     expect(out).toContain("First touch");
-    expect(out).toContain("ig");
+    // "ig" was a substring of "Campaign" — the label the last-touch block
+    // renders unconditionally — so it passed even with the whole first-touch
+    // section deleted. "instaparty"/"Winter B" can't collide with markup.
+    expect(out).toContain("instaparty");
+    expect(out).toContain("Winter B");
     expect(out).toContain("l.facebook.com/l.php");
   });
 
   it("does not repeat first touch when it is the same as last", () => {
-    const same = { utm_source: "meta", utm_campaign: "A" };
+    const same = { utm_source: "meta", utm_campaign: "Fall Reset" };
     const out = renderToStaticMarkup(<AttributionBlock order={{ ...base, utmLast: same, utmFirst: same }} />);
     expect(out).not.toContain("First touch");
   });
