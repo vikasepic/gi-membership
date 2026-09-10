@@ -195,6 +195,35 @@ export async function reportTrialConverted(
         .maybeSingle()
     : { data: null };
 
+  // The campaign, separately — order-level, not person-level. "Most recent
+  // order with a visitor" above is right for IP, country and click ids, which
+  // describe the PERSON and are stable across their orders; it is wrong for
+  // campaign, which describes the SALE. A repeat buyer who took a trial on
+  // product A from campaign X and later bought product B from campaign Y must
+  // not have A's trial conversion reported under Y. order_items is where
+  // fulfilOffer/fulfilBump record stripe_subscription_id at fulfilment, so
+  // it is a direct, unambiguous hop to the order THIS subscription came from.
+  // No campaign (EMPTY_ATTRIBUTION) beats the wrong campaign.
+  const { data: attributionItem } = await db
+    .from("order_items")
+    .select("order_id")
+    .eq("stripe_subscription_id", stripeSubscriptionId)
+    .maybeSingle();
+  const { data: attributionOrder } = attributionItem?.order_id
+    ? await db
+        .from("orders")
+        .select("utm_first, utm_last, referrer")
+        .eq("id", attributionItem.order_id as string)
+        .maybeSingle()
+    : { data: null };
+  const attribution: Attribution = attributionOrder
+    ? {
+        first: (attributionOrder.utm_first as Labels | null) ?? {},
+        last: (attributionOrder.utm_last as Labels | null) ?? {},
+        referrer: (attributionOrder.referrer as string | null) ?? null,
+      }
+    : EMPTY_ATTRIBUTION;
+
   await trackServerEvent({
     eventId: eventIdFor("Subscribe", stripeSubscriptionId),
     eventName: "Subscribe",
@@ -208,13 +237,7 @@ export async function reportTrialConverted(
     clientIp: (order?.client_ip as string | null) ?? null,
     userAgent: (order?.client_user_agent as string | null) ?? null,
     sourceUrl: (order?.source_url as string | null) ?? null,
-    attribution: order
-      ? {
-          first: (order.utm_first as Labels | null) ?? {},
-          last: (order.utm_last as Labels | null) ?? {},
-          referrer: (order.referrer as string | null) ?? null,
-        }
-      : EMPTY_ATTRIBUTION,
+    attribution,
     valueCents: offer.price_cents as number,
     currency: (offer.currency as string) ?? "usd",
     orderId: stripeSubscriptionId,
