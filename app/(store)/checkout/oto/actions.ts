@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { acceptOto, otoBounceHref } from "@/lib/checkout";
 import { verifyOtoToken } from "@/lib/oto-token";
+import { sendPostPurchaseIfDue } from "@/lib/post-purchase-send";
 import { otoSigningSecret } from "@/lib/env";
 
 // POST-only accept (a server action is always POST). Single-use is enforced in
@@ -34,6 +35,18 @@ export async function acceptOtoAction(formData: FormData) {
     // single-use claim) before this ever runs.
     const verified = verifyOtoToken(token, otoSigningSecret());
     const orderId = verified.ok ? verified.payload.orderId : null;
+    // The decision on the upsell is the end of the funnel, whichever way it
+    // went — so the email can finally list everything. A product order goes on
+    // to /checkout/thank-you, which calls this again and gets "already"; an
+    // OFFER order goes to /library and would otherwise have no immediate send
+    // at all. Never allowed to throw: the charge is done either way.
+    if (orderId) {
+      try {
+        await sendPostPurchaseIfDue(orderId);
+      } catch (e) {
+        console.error("[acceptOto] welcome email failed (the sweep will retry):", e);
+      }
+    }
     redirect(await otoBounceHref(orderId, res.ok ? "accepted" : res.error));
   }
   redirect(await otoBounceHref(null));

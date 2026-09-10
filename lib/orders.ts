@@ -11,6 +11,8 @@ export type OrderItemRow = {
   description: string;
   amountCents: number;
   stripeSubscriptionId: string | null;
+  /** The offer this line sold, when it sold one. */
+  offerId?: string | null;
 };
 
 export type OrderRow = {
@@ -22,6 +24,16 @@ export type OrderRow = {
   taxCents: number | null;
   buyerCountry: string | null;
   stripePaymentIntentId: string | null;
+  /**
+   * The offer this order was opened for, when it came from an offer checkout.
+   *
+   * An offer sold on its own page writes its line with `kind: "oto"` — the
+   * same kind an accepted upsell uses — so the line alone cannot say which it
+   * was, and the admin labelled a standalone app purchase "OTO". This is what
+   * tells them apart. Null for a product order and for anything bought before
+   * the column existed (migration 0077).
+   */
+  hostOfferId?: string | null;
   /**
    * False for an order made against a Stripe test key.
    *
@@ -42,7 +54,7 @@ export async function listOrders(limit = 100): Promise<OrderRow[]> {
   const { data: orders, error } = await db
     .from("orders")
     .select(
-      "id, email, status, currency, total_cents, tax_cents, buyer_country, stripe_payment_intent_id, livemode, created_at",
+      "id, email, status, currency, total_cents, tax_cents, buyer_country, stripe_payment_intent_id, host_offer_id, livemode, created_at",
     )
     .eq("store_id", storeId)
     .order("created_at", { ascending: false })
@@ -52,7 +64,7 @@ export async function listOrders(limit = 100): Promise<OrderRow[]> {
 
   const { data: items, error: itemsErr } = await db
     .from("order_items")
-    .select("order_id, kind, description, amount_cents, stripe_subscription_id")
+    .select("order_id, kind, description, amount_cents, stripe_subscription_id, offer_id")
     .in("order_id", orders.map((o) => o.id as string));
   if (itemsErr) throw new Error(`listOrders items: ${itemsErr.message}`);
 
@@ -66,6 +78,7 @@ export async function listOrders(limit = 100): Promise<OrderRow[]> {
         description: i.description as string,
         amountCents: i.amount_cents as number,
         stripeSubscriptionId: (i.stripe_subscription_id as string) ?? null,
+        offerId: (i.offer_id as string) ?? null,
       },
     ]);
   }
@@ -78,6 +91,7 @@ export async function listOrders(limit = 100): Promise<OrderRow[]> {
     totalCents: o.total_cents as number,
     taxCents: (o.tax_cents as number) ?? null,
     buyerCountry: (o.buyer_country as string) ?? null,
+    hostOfferId: (o.host_offer_id as string) ?? null,
     stripePaymentIntentId: (o.stripe_payment_intent_id as string) ?? null,
     livemode: (o.livemode as boolean) !== false,
     createdAt: o.created_at as string,

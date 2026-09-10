@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { RefundButton } from "@/components/admin/refund-button";
 import { money } from "@/lib/money";
-import type { OrderRow as Order } from "@/lib/orders";
+import type { OrderRow as Order, OrderItemRow } from "@/lib/orders";
 
 const PILL: Record<string, string> = {
   paid: "bg-navy/10 text-navy",
@@ -33,6 +33,21 @@ const fullWhen = (iso: string) =>
  * what a lookup needs; the items, the ids and the refund button are what the
  * one you found needs.
  */
+/**
+ * What a line actually was, in the admin's words.
+ *
+ * An offer sold on its own page and an offer accepted as an upsell are both
+ * written with `kind: "oto"`, so the kind alone called a standalone app
+ * purchase "OTO" — reported 10 Sep 2026. The order knows which offer it was
+ * opened for; a line selling that offer is the purchase, not an upsell.
+ * Anything older than migration 0077 has no host offer recorded and keeps the
+ * kind it carries, which for those rows is all anyone can honestly say.
+ */
+function lineKind(item: OrderItemRow, hostOfferId: string | null | undefined): string {
+  if (item.kind === "oto" && hostOfferId && item.offerId === hostOfferId) return "offer";
+  return item.kind;
+}
+
 export function OrderRowView({ order }: { order: Order }) {
   const [open, setOpen] = useState(false);
 
@@ -104,7 +119,7 @@ export function OrderRowView({ order }: { order: Order }) {
                       {i.description}
                       {i.kind !== "product" && (
                         <span className="ml-2 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                          {i.kind}
+                          {lineKind(i, order.hostOfferId)}
                         </span>
                       )}
                       {i.stripeSubscriptionId && (

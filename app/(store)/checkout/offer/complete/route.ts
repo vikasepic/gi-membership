@@ -2,6 +2,7 @@ import { completeOfferCheckout } from "@/lib/offer-checkout";
 import { resolveOtoForOfferOrder } from "@/lib/checkout";
 import { mintOfferLogin } from "@/lib/post-purchase";
 import { createClient } from "@/lib/supabase/server";
+import { sendPostPurchaseIfDue } from "@/lib/post-purchase-send";
 
 export const dynamic = "force-dynamic";
 
@@ -103,6 +104,27 @@ export async function GET(request: Request) {
       if (token) return go(`/checkout/oto?token=${encodeURIComponent(token)}`);
     } catch (e) {
       console.error("[offer complete] OTO lookup failed, sending to library:", e);
+    }
+  }
+
+  // The funnel is over. An offer purchase never touches /checkout/thank-you —
+  // it ends here, on /library — so the immediate send that confirmCheckout
+  // does for a product had no counterpart on this path, and the welcome email
+  // waited for the 30-minute sweep instead. Seen in production 10 Sep 2026:
+  // an app bought at 07:20 was welcomed at 07:55.
+  //
+  // Safe to call unconditionally: sendPostPurchaseIfDue claims
+  // post_purchase_sent_at before sending, so a refresh and the sweep racing
+  // it still produce one email, and it returns "waiting" on its own if an
+  // upsell is still in flight.
+  //
+  // Never allowed to throw: the buyer has paid, and they are being sent to
+  // the thing they bought.
+  if (result.ok && result.orderId) {
+    try {
+      await sendPostPurchaseIfDue(result.orderId);
+    } catch (e) {
+      console.error("[offer complete] welcome email failed (the sweep will retry):", e);
     }
   }
 

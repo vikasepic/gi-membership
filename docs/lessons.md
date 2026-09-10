@@ -125,3 +125,15 @@ pipes a test runner, or run the suite bare and gate on its own exit status.
 And run the FULL suite before every push — a targeted run cannot see the
 test in another file that guards the thing you changed (`offer-image.test.ts`
 guarded the library card treatment from `lib/`, not from `app/`).
+
+**2026-09-10 — the welcome email only knew one way for a checkout to end.**
+`sendPostPurchaseIfDue` had two callers: `confirmCheckout`, which only the
+PRODUCT funnel's `/checkout/thank-you` calls, and the 30-minute abandonment
+sweep. An offer purchase ends on `/library` — with or without an upsell — so
+it never reached the first, and the sweep was its only route. A built-in app
+bought at 07:20 was welcomed at 07:55, every time, and a buyer refunded
+inside that half hour was never welcomed at all. Rule: when a funnel grows a
+new terminal path, the things that fire "at the end" have to grow with it —
+grep the old terminal page's calls and ask which of them the new path needs.
+The guards (already sent, upsell in flight, disabled) belong in the sender,
+so adding a caller stays safe. (`lib/purchase-email-reaches-every-end.test.ts`)
