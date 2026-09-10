@@ -813,12 +813,12 @@ comment on column orders.referrer  is 'Landing referrer, origin + path, foreign 
 -- carried — and only onto orders that have nothing yet, so this can be
 -- re-run without overwriting a real snapshot.
 update orders o
-   set utm_first = coalesce((select jsonb_object_agg(k, v) from jsonb_each_text(v.utm) where k like 'utm\_%' and v <> ''), '{}'::jsonb),
-       utm_last  = coalesce((select jsonb_object_agg(k, v) from jsonb_each_text(v.utm) where k like 'utm\_%' and v <> ''), '{}'::jsonb),
-       referrer  = coalesce(o.referrer, left(v.referrer, 200))
-  from visitors v
- where v.id = o.visitor_id
-   and v.utm <> '{}'::jsonb
+   set utm_first = coalesce((select jsonb_object_agg(t.k, t.val) from jsonb_each_text(vis.utm) as t(k, val) where t.k like 'utm\_%' and t.val <> ''), '{}'::jsonb),
+       utm_last  = coalesce((select jsonb_object_agg(t.k, t.val) from jsonb_each_text(vis.utm) as t(k, val) where t.k like 'utm\_%' and t.val <> ''), '{}'::jsonb),
+       referrer  = coalesce(o.referrer, left(vis.referrer, 200))
+  from visitors vis
+ where vis.id = o.visitor_id
+   and vis.utm <> '{}'::jsonb
    and o.utm_first = '{}'::jsonb;
 ```
 
