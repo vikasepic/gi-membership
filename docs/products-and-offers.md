@@ -191,3 +191,31 @@ retiring `/o/key` a redirect rather than a deletion.
 
 Everything else is unchanged, except that slice 2 gets bigger and better: a
 product grants a LIST, so a product can grant a course and an app together.
+
+---
+
+## Where an order's campaign comes from
+
+Every order carries `utm_first`, `utm_last` and `referrer` (migration 0079),
+snapshotted at creation from the `gi_utm` cookie the proxy maintains. The
+product checkout reads the cookie in its action; the offer checkout stashes
+the labels in the intent's metadata at start and reads them back at
+completion, because completion also runs from the Stripe webhook; a renewal
+copies them from the origin order. `lib/attribution.ts` is the one place the
+rules live — seven keys, `@` refused, 120 characters. The same helper turns
+them into Stripe metadata (`utm_*`, `first_utm_*`, `referrer`) on every
+intent, subscription and charge, and `buyerContextFor` carries them onto
+every ad event. The Orders page shows them.
+
+The traffic dashboard buckets a page VIEW with `sourceOf` and the ORDER it
+produces with `sourceOfOrder`. The two read different inputs — a view has a
+query string and a click id, an order has only `utm_last` and a referrer,
+because it is created after the click, not during it — but both now call one
+private `bucketOf` in `lib/traffic-source.ts`, which is the only place the
+ranking (campaign beats source beats a click id beats a referrer beats
+`direct`) is written down. That is what makes a campaign's views and its
+sales land in the same row: `sourceOf` and `sourceOfOrder` used to rank
+fields independently, and a link carrying `utm_source` with no
+`utm_campaign` bucketed its view as `direct` and its sale under the source
+name. Routing both functions through `bucketOf` is what closes that gap, not
+a convention either function has to remember on its own.

@@ -213,3 +213,34 @@ And note what made this expensive to find: `acceptOto` releases the token back
 to `pending` on failure and logs nothing, so a failed accept and a buyer who
 never clicked are the same row. A money path that can fail silently should
 write an `error_events` row on the way out. (`lib/oto-one-click.test.ts`)
+
+**2026-09-11 — attribution was gated on consent, and 8 of 13 sales read as organic.**
+The visitor row holds click ids, IP and user agent, so it is rightly
+consent-gated. The campaign labels were stored on the same row, so they were
+gated too — and most buyers never accept the banner. The labels describe the
+ad, not the person; they now ride a first-party cookie from the proxy and are
+snapshotted onto the order for everyone. Rule: decide what needs consent per
+FIELD, not per table. And the offer checkout's order is created in a function
+the webhook also calls — anything that must reach that insert goes through
+the intent's metadata, never a cookie. (`lib/attribution.test.ts`,
+`lib/offer-checkout-complete.integration.test.ts`)
+
+**2026-09-11 — two functions bucketing "the same thing" drifted, because
+each read its own inputs.** `sourceOf` buckets a page VIEW from a query
+string; `sourceOfOrder` buckets the ORDER it produces from `utm_last`. Both
+claimed to rank a UTM campaign over a UTM source over a click id over a
+referrer, and each carried its own copy of that ranking. A link with
+`utm_source` and no `utm_campaign` exposed the gap: `sourceOf` had never read
+`utm_source` at all, so the view bucketed as `direct` while the order, via
+`sourceOfOrder`, bucketed under the source name — one campaign, two rows on
+a page whose entire point is that a campaign's views and its sales share a
+row. The review that caught it also caught why the existing test hadn't:
+`traffic-source.test.ts` asserted `sourceOf` and `sourceOfOrder` separately,
+never against each other, so a rule two functions were supposed to share
+could drift with every test still green. Rule: when two functions must
+bucket the same thing from different inputs, one of them cannot just agree
+with the other by construction — extract the shared decision into one
+function they both call (`bucketOf` in `lib/traffic-source.ts`), and write
+the equivalence test on the cases where the inputs actually differ, not the
+case where every field is present and any reasonable ranking gives the same
+answer. (`lib/traffic-source.ts`, `lib/traffic-source.test.ts`)
