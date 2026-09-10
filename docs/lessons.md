@@ -235,9 +235,11 @@ referrer, and each carried its own copy of that ranking. A link with
 `sourceOfOrder`, bucketed under the source name — one campaign, two rows on
 a page whose entire point is that a campaign's views and its sales share a
 row. The review that caught it also caught why the existing test hadn't:
-`traffic-source.test.ts` asserted `sourceOf` and `sourceOfOrder` separately,
-never against each other, so a rule two functions were supposed to share
-could drift with every test still green. Rule: when two functions must
+the one cross-check `traffic-source.test.ts` ran did compare `sourceOf`
+against `sourceOfOrder` — but only on the one input shape where a campaign
+was present on both sides, which the old, independent rankings already
+agreed on. The assertion passed on every run while the divergence sat one
+input shape away. Rule: when two functions must
 bucket the same thing from different inputs, one of them cannot just agree
 with the other by construction — extract the shared decision into one
 function they both call (`bucketOf` in `lib/traffic-source.ts`), and write
