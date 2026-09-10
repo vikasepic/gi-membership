@@ -48,8 +48,7 @@ comment on column orders.referrer  is 'Landing referrer, origin + path, foreign 
 -- Where it cannot match: landingReferrer parses a real URL and compares
 -- u.hostname (host only, port stripped, case-insensitive by construction);
 -- this is a lowercased prefix match against the production origin, so it
--- would wrongly keep a same-host referrer that carries a non-default port,
--- and would wrongly null out a foreign host that happens to share this
+-- would wrongly null out a foreign host that happens to share this
 -- string as a literal prefix (e.g. grow.greaterinside.com.example.net) —
 -- neither is a real shape this store's traffic produces. It also does not
 -- drop a URL fragment the way a strict origin+pathname reconstruction would;
