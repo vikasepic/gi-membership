@@ -109,11 +109,15 @@ export function SourcePill({ order }: { order: OrderRow }) {
         {label}
       </button>
       {open && (
+        // Source sits near the right edge of a table inside a horizontal
+        // scroller — left-anchored, the popover ran off the scroller and
+        // got clipped, cutting off campaign, ad set, ad name and referrer.
+        // Anchor right so it opens back into the table instead.
         <div
           role="dialog"
           aria-label="Where this order came from"
           onClick={(e) => e.stopPropagation()}
-          className="absolute left-0 top-full z-20 mt-1 w-72 rounded-xl border border-border bg-surface p-3 shadow-lg"
+          className="absolute right-0 top-full z-20 mt-1 w-72 rounded-xl border border-border bg-surface p-3 shadow-lg"
         >
           <AttributionBlock order={order} />
         </div>

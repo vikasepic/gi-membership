@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AttributionBlock, SourcePill } from "@/components/admin/attribution-popover";
@@ -76,5 +77,19 @@ describe("SourcePill", () => {
 
   it("is a button, so a phone can open it", () => {
     expect(renderToStaticMarkup(<SourcePill order={base} />)).toMatch(/<button[^>]*type="button"/);
+  });
+
+  // jsdom has no layout, so the popover's open state can't be rendered and
+  // measured here — this is a source-level guard for a fact measured in a
+  // real headless Chrome run against a production build, not a substitute
+  // for having looked. At 1280px the popover sat left:1026 right:1314 while
+  // the table's horizontal scroll container ended at right:1248, clipping
+  // campaign, ad set, ad name and referrer — left-0 opened it past the
+  // scroller. right-0 opens it back into the table instead.
+  it("anchors the popover to the pill's right edge, not its left", () => {
+    const src = readFileSync(new URL("./attribution-popover.tsx", import.meta.url), "utf8");
+    const popoverClass = src.match(/role="dialog"[\s\S]*?className="([^"]+)"/)?.[1];
+    expect(popoverClass).toContain("right-0");
+    expect(popoverClass).not.toContain("left-0");
   });
 });
