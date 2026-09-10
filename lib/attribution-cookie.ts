@@ -20,17 +20,28 @@ import {
  * what keeps Set-Cookie off every page view after landing.
  */
 export function applyAttributionCookie(req: NextRequest, res: NextResponse, now = new Date()): boolean {
-  const labels = parseLabels(req.nextUrl.search);
-  const stored = parseCookie(req.cookies.get(UTM_COOKIE)?.value);
-  const referrer = landingReferrer(req.headers.get("referer"), process.env.NEXT_PUBLIC_SITE_URL);
-  const next = mergeAttribution(stored, labels, referrer, now);
-  if (!next) return false;
-  res.cookies.set(UTM_COOKIE, serializeCookie(next), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    maxAge: UTM_COOKIE_MAX_AGE,
-    path: "/",
-  });
-  return true;
+  // Every parse below already degrades on its own — but that guarantee lives
+  // in lib/attribution.ts, a file this function does not control. This runs
+  // on nearly every request, checkout included; one future edit there that
+  // drops a try/catch would turn into a 500 on every page of a store that
+  // takes money. So the guard lives here too, where every caller gets it,
+  // present and future. Never log the caught error: it can carry a cookie
+  // value.
+  try {
+    const labels = parseLabels(req.nextUrl.search);
+    const stored = parseCookie(req.cookies.get(UTM_COOKIE)?.value);
+    const referrer = landingReferrer(req.headers.get("referer"), process.env.NEXT_PUBLIC_SITE_URL);
+    const next = mergeAttribution(stored, labels, referrer, now);
+    if (!next) return false;
+    res.cookies.set(UTM_COOKIE, serializeCookie(next), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: UTM_COOKIE_MAX_AGE,
+      path: "/",
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }

@@ -76,4 +76,19 @@ describe("the gi_utm cookie", () => {
     expect(applyAttributionCookie(req, res)).toBe(true);
     expect(JSON.parse(res.cookies.get(UTM_COOKIE)!.value).f).toEqual({ utm_source: "meta" });
   });
+
+  it("returns false instead of throwing when a request accessor explodes", () => {
+    // A real NextRequest, with its `nextUrl` getter poisoned on this one
+    // instance to throw — genuinely exercises the try/catch in
+    // applyAttributionCookie rather than asserting on a hand-built stub.
+    const req = request("/p/validator?utm_source=meta");
+    Object.defineProperty(req, "nextUrl", {
+      get() {
+        throw new Error("boom");
+      },
+    });
+    const res = NextResponse.next();
+    expect(applyAttributionCookie(req, res)).toBe(false);
+    expect(res.cookies.get(UTM_COOKIE)).toBeUndefined();
+  });
 });
