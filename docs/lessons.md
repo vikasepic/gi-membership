@@ -137,3 +137,19 @@ new terminal path, the things that fire "at the end" have to grow with it —
 grep the old terminal page's calls and ask which of them the new path needs.
 The guards (already sent, upsell in flight, disabled) belong in the sender,
 so adding a caller stays safe. (`lib/purchase-email-reaches-every-end.test.ts`)
+
+**2026-09-10 — a forward-only column reads as "the data is wrong".**
+`orders.host_offer_id` (0077) is what the traffic screen counts offer sales
+by, and it is written forward only. Book Writer showed 1 sale against two
+real charges in Stripe, and the owner's reasonable read was that the screen
+was broken. It was arithmetically right about everything it could see; the
+missing sale predated the column by nine hours. The check that mattered came
+first: every Stripe charge in the window was matched against `orders`, and
+none was missing — no money went unrecorded, only unattributed. Rule: when a
+new column decides a number somebody reads, ship the backfill with it, or say
+in the UI which date the number starts from. And when a report looks wrong,
+reconcile against the payment processor before touching the reporting code —
+"is money missing" and "is attribution missing" are very different bugs, and
+only one of them is an emergency. Backfill rules stay conservative: two
+lines of the same `kind` mean the host is a guess, and a guessed number on a
+screen people spend against is worse than a low one.
