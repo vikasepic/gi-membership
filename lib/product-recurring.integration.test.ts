@@ -4,6 +4,7 @@ import { syncSubscriptionOwnership } from "@/lib/subscription-sync";
 import { stripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
+import type { Attribution } from "@/lib/attribution";
 
 // Real money path: local Supabase + Stripe TEST mode. Skips if either is
 // missing, so a unit-only run stays green.
@@ -103,7 +104,7 @@ async function makeProduct(price: {
   return { id: product.id as string, slug };
 }
 
-async function buy(slug: string) {
+async function buy(slug: string, attribution?: Attribution | null) {
   const email = `it_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@example.com`;
   createdEmails.push(email);
   const res = await createCheckoutIntent({
@@ -112,6 +113,7 @@ async function buy(slug: string) {
     fullName: "Test Buyer",
     bumpChoice: "none",
     priceChoice: 0,
+    ...(attribution ? { attribution } : {}),
   });
   if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
   return { email, res };
@@ -207,6 +209,48 @@ describe.skipIf(!canRun)("a product sold on a recurring price (integration)", ()
       .single();
     expect(order!.status).toBe("paid");
     expect(order!.total_cents).toBe(0);
+  }, 60_000);
+
+  it("stamps the campaign onto the base subscription finalizeOrder creates", async () => {
+    // The sibling of fulfilOffer's equivalent test — a recurring PRODUCT
+    // purchase's subscription used to carry no campaign at all, unlike the
+    // offer side. This is the store's highest-value order type and its
+    // subscription is the row the ads platform reads.
+    const product = await makeProduct({
+      billing_type: "recurring",
+      interval: "month",
+      trial_days: 7,
+      price_cents: 900,
+    });
+    const { email, res } = await buy(product.slug, {
+      first: { utm_source: "ig" },
+      last: { utm_source: "meta", utm_campaign: "AJ | LAL" },
+      referrer: null,
+    });
+    if (!res.ok) throw new Error("unreachable");
+    const siId = res.clientSecret.split("_secret_")[0];
+    await stripe().setupIntents.confirm(siId, {
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/checkout/complete",
+    });
+    await finalizeOrder(siId);
+
+    const db = createServiceClient();
+    const { data: user } = await db.from("users").select("id").eq("email", email).single();
+    const { data: own } = await db
+      .from("ownership")
+      .select("stripe_subscription_id")
+      .eq("user_id", user!.id)
+      .single();
+    const subId = own!.stripe_subscription_id as string;
+    createdSubs.push(subId);
+
+    const sub = await stripe().subscriptions.retrieve(subId);
+    expect(sub.metadata.utm_source).toBe("meta");
+    expect(sub.metadata.utm_campaign).toBe("AJ | LAL");
+    expect(sub.metadata.first_utm_source).toBe("ig");
+    expect(sub.metadata.store_created).toBe("true");
+    expect(sub.metadata.productId).toBe(product.id);
   }, 60_000);
 
   it("loses access when the subscription is cancelled", async () => {

@@ -1011,7 +1011,7 @@ export async function fulfilBump(args: {
 export async function finalizeOrder(intentId: string): Promise<void> {
   const db = createServiceClient();
   const COLUMNS =
-    "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents, stripe_setup_intent_id, currency, buyer_country, client_ip, client_user_agent, source_url, subtotal_cents, discount_cents, coupon_code";
+    "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents, stripe_setup_intent_id, currency, buyer_country, client_ip, client_user_agent, source_url, subtotal_cents, discount_cents, coupon_code, utm_first, utm_last, referrer";
 
   // Either kind of intent. A one-off product order points at a PaymentIntent; a
   // recurring one points at a SetupIntent, because a trial charges nothing
@@ -1119,6 +1119,16 @@ export async function finalizeOrder(intentId: string): Promise<void> {
     // deliberately REMOVES the trial, and `0 || x` would hand back the price's.
     baseTrialDays = (coupon?.ok ? coupon.coupon.trialDays : null) ?? price.trialDays ?? null;
 
+    // The campaign this order came from, same shape fulfilOffer uses, so both
+    // read the same metadata. This is the store's highest-value order type —
+    // a recurring product sale — and its subscription is the row the ads
+    // platform reads.
+    const campaign = stripeAttributionMetadata({
+      first: (order.utm_first as Labels | null) ?? {},
+      last: (order.utm_last as Labels | null) ?? {},
+      referrer: (order.referrer as string | null) ?? null,
+    });
+
     const sub = await stripe().subscriptions.create(
       {
         customer: order.stripe_customer_id as string,
@@ -1153,6 +1163,7 @@ export async function finalizeOrder(intentId: string): Promise<void> {
           productId: prod.id,
           productTitle: prod.title,
           productPriceId: price.id,
+          ...campaign,
         },
       },
       // Keyed on the SetupIntent, so the thank-you page and the webhook racing
