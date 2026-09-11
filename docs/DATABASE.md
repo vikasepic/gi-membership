@@ -124,6 +124,7 @@ too.
 | Function | Signature | Purpose |
 |---|---|---|
 | `bump_page_count` | `(uuid, date, text, text, text) → void` | One-statement upsert-increment for traffic counting. Must be one statement: two visitors in the same millisecond would otherwise both read N and both write N+1. `EXECUTE` is granted to `service_role` only. |
+| `record_visit` | `(uuid, text, text, text, text, text, jsonb, jsonb, text, text, text, text, text) → uuid` | Find-or-create for `visits`, in one statement for the same reason as `bump_page_count`: a read then a write from Node lets two page loads in the same millisecond both see no recent visit and both insert. Returns the existing visit's id if `anon_id` had activity in the last 30 minutes, else inserts and returns the new id. Migration 0080. |
 | `move_course_item` | `(uuid, uuid, int) → void` | Reparent and reorder a curriculum item. In Postgres because the reordering must be atomic. |
 | `swap_course_item_order` | `(uuid, uuid) → void` | Swap two items' sort order atomically. |
 | `set_updated_at` | trigger | Standard `updated_at` touch. On 16 tables. |
@@ -654,6 +655,7 @@ not in these tables; it is the `ownership` row for the app.
 | `utm_first` | jsonb | no | `'{}'::jsonb` | First-touch campaign labels (utm_source … utm_id), snapshotted at creation. Migration 0079. |
 | `utm_last` | jsonb | no | `'{}'::jsonb` | Last-touch campaign labels, snapshotted at creation. Shown on the Orders page; mirrored into Stripe metadata. |
 | `referrer` | text | yes |  | Landing referrer, origin + path, foreign hosts only. |
+| `visit_id` | uuid | yes |  | The visit this order was placed in. Null for orders predating migration 0080. |
 
 **Keys:** `PRIMARY KEY (id)`
 
@@ -662,6 +664,7 @@ not in these tables; it is the `ownership` row for the app.
 - `FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE`
 - `FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL`
 - `FOREIGN KEY (visitor_id) REFERENCES visitors(id) ON DELETE SET NULL`
+- `FOREIGN KEY (visit_id) REFERENCES visits(id) ON DELETE SET NULL`
 
 **Check constraints:**
 
@@ -1165,6 +1168,90 @@ not in these tables; it is the `ownership` row for the app.
 **Indexes:**
 
 - `CREATE INDEX users_admin_idx ON public.users USING btree (store_id) WHERE is_admin`
+
+---
+
+### `visit_steps`
+
+*0 rows · 32 kB · RLS disabled*
+
+| Column | Type | Null | Default | Note |
+|---|---|---|---|---|
+| `id` | uuid | no | `gen_random_uuid()` |  |
+| `store_id` | uuid | no |  |  |
+| `visit_id` | uuid | no |  |  |
+| `step` | text | no |  | One of `checkout`, `upsell`, `purchase`. |
+| `order_id` | uuid | yes |  |  |
+| `value_cents` | integer | yes |  |  |
+| `at` | timestamptz | no | `now()` |  |
+
+**Keys:** `PRIMARY KEY (id)`; `UNIQUE (visit_id, step)` — a refresh is not a second milestone.
+
+**Foreign keys:**
+
+- `FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE`
+- `FOREIGN KEY (visit_id) REFERENCES visits(id) ON DELETE CASCADE`
+- `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL`
+
+**Check constraints:**
+
+- `CHECK ((step = ANY (ARRAY['checkout'::text, 'upsell'::text, 'purchase'::text])))`
+
+**Indexes:**
+
+- `CREATE INDEX visit_steps_store_at_idx ON public.visit_steps USING btree (store_id, at DESC)`
+
+Migration 0080. Not RLS-enabled, unlike other tables — new tables inherit no
+`anon`/`authenticated` grants by default (see migration 0067), so PostgREST
+cannot expose either table to those roles regardless.
+
+---
+
+### `visits`
+
+*1 row · 72 kB · RLS disabled*
+
+| Column | Type | Null | Default | Note |
+|---|---|---|---|---|
+| `id` | uuid | no | `gen_random_uuid()` |  |
+| `store_id` | uuid | no |  |  |
+| `anon_id` | text | no |  | The first-party gi_anon cookie. Not a person — the same person on two devices is two visitors. |
+| `started_at` | timestamptz | no | `now()` |  |
+| `last_seen_at` | timestamptz | no | `now()` | Drives the 30-minute idle window in `record_visit`. |
+| `landing_path` | text | no |  |  |
+| `landing_query` | text | yes |  | The query as the link actually was, click ids included, minus any value carrying an address. |
+| `referrer` | text | yes |  | Foreign hosts only — an internal move is not a referral. |
+| `referrer_host` | text | yes |  |  |
+| `utm_first` | jsonb | no | `'{}'::jsonb` |  |
+| `utm_last` | jsonb | no | `'{}'::jsonb` |  |
+| `device` | text | yes |  |  |
+| `browser` | text | yes |  |  |
+| `os` | text | yes |  |  |
+| `ip_hash` | text | yes |  | sha256 of salt:ip. Null when `ATTRIBUTION_IP_SALT` is unset — never a raw address. |
+| `user_agent` | text | yes |  |  |
+| `created_at` | timestamptz | no | `now()` |  |
+
+**Keys:** `PRIMARY KEY (id)`
+
+**Foreign keys:**
+
+- `FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE`
+
+**Indexes:**
+
+- `CREATE INDEX visits_store_started_idx ON public.visits USING btree (store_id, started_at DESC)`
+- `CREATE INDEX visits_window_idx ON public.visits USING btree (store_id, anon_id, last_seen_at DESC)`
+- `CREATE INDEX visits_referrer_host_idx ON public.visits USING btree (store_id, referrer_host) WHERE (referrer_host IS NOT NULL)`
+
+Written for every page load, with no consent gate: a landing URL and a
+campaign describe the ad rather than the person. `page_counts` cannot say
+where one visitor came from and never saw the home page at all — this table
+is written from the store layout, so every page is an entry point. Migration
+0080's one-time seed backfilled rows from `visitors`; those seeded rows have
+a null `user_agent`, no `device`/`browser`/`os`, and a `landing_path` that
+still carries the host (the seed's `split_part(url, '://', 2)` was left
+un-stripped because these rows are historical and the visit log labels them
+as such). Not RLS-enabled — see the note on `visit_steps`.
 
 ---
 
