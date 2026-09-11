@@ -3,6 +3,8 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import type { DayRange } from "@/lib/traffic-funnel";
 import type { CampaignRow, SourceRow, VisitRow } from "@/lib/visit-view";
+import { metaNamesFor } from "@/lib/meta-names";
+import { namedLabel, namedLabels } from "@/lib/meta-id";
 
 /**
  * Reading the visits back.
@@ -44,12 +46,24 @@ async function rollup<T>(fn: string, range: DayRange): Promise<T[]> {
 
 export async function campaignRows(range: DayRange): Promise<CampaignRow[]> {
   const raw = await rollup<Record<string, unknown>>("visit_campaign_rollup", range);
-  return raw
+  const rows = raw.map((r) => ({
+    source: String(r.source), medium: String(r.medium), campaign: String(r.campaign),
+    adset: String(r.adset), ad: String(r.ad),
+    visits: Number(r.visits), checkouts: Number(r.checkouts),
+    orders: Number(r.orders), revenueCents: Number(r.revenue_cents),
+  }));
+
+  // Meta's default dynamic parameters send ids, not names, so most of this
+  // table read `120250826827780282` where somebody needs the campaign. Resolved
+  // AFTER the rows are built and BEFORE the sort, so the alphabetical tiebreak
+  // orders by what a reader actually sees.
+  const names = await metaNamesFor(rows.flatMap((r) => [r.campaign, r.adset, r.ad]));
+  return rows
     .map((r) => ({
-      source: String(r.source), medium: String(r.medium), campaign: String(r.campaign),
-      adset: String(r.adset), ad: String(r.ad),
-      visits: Number(r.visits), checkouts: Number(r.checkouts),
-      orders: Number(r.orders), revenueCents: Number(r.revenue_cents),
+      ...r,
+      campaign: namedLabel(r.campaign, names),
+      adset: namedLabel(r.adset, names),
+      ad: namedLabel(r.ad, names),
     }))
     .sort((a, b) => b.visits - a.visits || a.campaign.localeCompare(b.campaign));
 }
@@ -80,15 +94,24 @@ export async function recentVisits(range: DayRange, limit = 100): Promise<VisitR
       .lt("started_at", to)
       .order("started_at", { ascending: false })
       .limit(limit);
-    return (data ?? []).map((v) => ({
+    const rows = data ?? [];
+    // One lookup for the whole page, over every label on every visit — the
+    // alternative is a query per row on the busiest screen in the admin.
+    const names = await metaNamesFor(
+      rows.flatMap((v) => [
+        ...Object.values((v.utm_first as Record<string, string>) ?? {}),
+        ...Object.values((v.utm_last as Record<string, string>) ?? {}),
+      ]),
+    );
+    return rows.map((v) => ({
       id: v.id as string,
       startedAt: v.started_at as string,
       landingPath: v.landing_path as string,
       landingQuery: (v.landing_query as string) ?? null,
       referrer: (v.referrer as string) ?? null,
       referrerHost: (v.referrer_host as string) ?? null,
-      utmFirst: (v.utm_first as Record<string, string>) ?? {},
-      utmLast: (v.utm_last as Record<string, string>) ?? {},
+      utmFirst: namedLabels((v.utm_first as Record<string, string>) ?? {}, names),
+      utmLast: namedLabels((v.utm_last as Record<string, string>) ?? {}, names),
       device: (v.device as string) ?? null,
       browser: (v.browser as string) ?? null,
       os: (v.os as string) ?? null,

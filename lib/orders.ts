@@ -4,6 +4,8 @@ import { getStoreId } from "@/lib/store";
 import { stripe } from "@/lib/stripe";
 import { revokeOwnershipForOrder } from "@/lib/subscription-sync";
 import type { Labels } from "@/lib/attribution";
+import { metaNamesFor } from "@/lib/meta-names";
+import { namedLabels } from "@/lib/meta-id";
 
 // Admin-side order reads and refunds. Service-role; callers are admin actions.
 
@@ -92,6 +94,15 @@ export async function listOrders(limit = 100): Promise<OrderRow[]> {
     ]);
   }
 
+  // Meta's default ad URLs send object ids rather than names, so an order's
+  // campaign read as an 18-digit number. One lookup for the page.
+  const names = await metaNamesFor(
+    orders.flatMap((o) => [
+      ...Object.values((o.utm_first as Labels | null) ?? {}),
+      ...Object.values((o.utm_last as Labels | null) ?? {}),
+    ]),
+  );
+
   return orders.map((o) => {
     // `orders.user_id` references `users(id)`, so PostgREST embeds the buyer
     // as `users` — an object on this PostgREST version, but some versions
@@ -111,8 +122,8 @@ export async function listOrders(limit = 100): Promise<OrderRow[]> {
       livemode: (o.livemode as boolean) !== false,
       createdAt: o.created_at as string,
       items: byOrder.get(o.id as string) ?? [],
-      utmFirst: (o.utm_first as Labels | null) ?? {},
-      utmLast: (o.utm_last as Labels | null) ?? {},
+      utmFirst: namedLabels((o.utm_first as Labels | null) ?? {}, names),
+      utmLast: namedLabels((o.utm_last as Labels | null) ?? {}, names),
       referrer: (o.referrer as string | null) ?? null,
       visitId: (o.visit_id as string | null) ?? null,
     };
