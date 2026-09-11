@@ -33,6 +33,7 @@ import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
 import { markLeadConverted } from "@/lib/leads";
 import { recordError, messageOf } from "@/lib/errors";
 import { stripeAttributionMetadata, orderAttributionColumns, type Attribution, type Labels } from "@/lib/attribution";
+import { recordVisitStep } from "@/lib/visits";
 import type { Offer } from "@/lib/types";
 
 const OTO_TTL_SECONDS = 15 * 60; // 15 minutes
@@ -102,6 +103,8 @@ export type CheckoutInput = {
    * reads from Stripe can tell a paid sale from an organic one.
    */
   attribution?: Attribution | null;
+  /** The visit this checkout happened in, for the attribution screens. */
+  visitId?: string | null;
 };
 
 export type CheckoutResult =
@@ -523,6 +526,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       stripe_customer_id: customerId,
       stripe_setup_intent_id: si.id,
       visitor_id: visitor,
+      visit_id: input.visitId ?? null,
       ...orderAttributionColumns(input.attribution),
     })
       .select("id")
@@ -683,6 +687,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       stripe_customer_id: customerId,
       stripe_payment_intent_id: pi.id,
       visitor_id: visitorId,
+      visit_id: input.visitId ?? null,
       ...orderAttributionColumns(input.attribution),
     })
     .select("id")
@@ -1011,7 +1016,7 @@ export async function fulfilBump(args: {
 export async function finalizeOrder(intentId: string): Promise<void> {
   const db = createServiceClient();
   const COLUMNS =
-    "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents, stripe_setup_intent_id, currency, buyer_country, client_ip, client_user_agent, source_url, subtotal_cents, discount_cents, coupon_code, utm_first, utm_last, referrer";
+    "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents, stripe_setup_intent_id, currency, buyer_country, client_ip, client_user_agent, source_url, subtotal_cents, discount_cents, coupon_code, utm_first, utm_last, referrer, visit_id";
 
   // Either kind of intent. A one-off product order points at a PaymentIntent; a
   // recurring one points at a SetupIntent, because a trial charges nothing
@@ -1421,6 +1426,15 @@ export async function finalizeOrder(intentId: string): Promise<void> {
       currency: pi.currency,
       orderId: order.id as string,
       occurredAt: Math.floor(Date.now() / 1000),
+    });
+
+    // The visit that produced the sale. Read off the order rather than the
+    // request: finalizeOrder also runs from the Stripe webhook, where there
+    // is no visitor.
+    void recordVisitStep("purchase", {
+      visitId: (order.visit_id as string | null) ?? null,
+      orderId: order.id as string,
+      valueCents: pi.amount,
     });
 
     // A trial started on this order. Reported as its own event with the

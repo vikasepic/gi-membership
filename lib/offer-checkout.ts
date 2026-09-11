@@ -12,6 +12,7 @@ import { ensureUserProfile } from "@/lib/users";
 import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { recordError, messageOf } from "@/lib/errors";
+import { recordVisitStep } from "@/lib/visits";
 import { stripeAttributionMetadata, attributionFromMetadata, orderAttributionColumns, type Attribution } from "@/lib/attribution";
 import type { Offer } from "@/lib/types";
 
@@ -138,6 +139,10 @@ export async function startOfferCheckout(args: {
    * cookies, and the intent is the one thing both paths hold.
    */
   attribution?: Attribution | null;
+  /** The visit this checkout happened in, stashed in the intent's metadata:
+   * completeOfferCheckout also runs from the Stripe webhook, which has no
+   * cookies to resolve a visit from. */
+  visitId?: string | null;
 }): Promise<StartResult> {
   const offer = await getOffer(args.offerId);
   if (!offer || !offer.active) return { ok: false, error: "That offer isn’t available any more." };
@@ -251,6 +256,9 @@ export async function startOfferCheckout(args: {
     // Whether THIS checkout created the account. Read on the way back to
     // decide whether a session may be handed out — see mintOfferLogin.
     newAccount: args.isNewAccount ? "true" : "false",
+    // The visit that started this checkout. Stripe metadata is strings, so a
+    // null visit id becomes "" here and reads back as null in completion.
+    visitId: args.visitId ?? "",
     // Last touch as utm_*, first touch as first_utm_*, plus referrer — for
     // the platform the ads team reads from Stripe, and read back at
     // completion to write the order. Spread last; the keys above are what
@@ -592,6 +600,9 @@ export async function completeOfferCheckout(
       // webhook has no cookie, and the return route's cookie could have moved
       // on to a later ad by the time Stripe sends the buyer back.
       ...orderAttributionColumns(attributionFromMetadata(si.metadata as Record<string, string> | null)),
+      // From the metadata we wrote at start: completion also runs from the
+      // Stripe webhook, which has no cookies to resolve a visit from.
+      visit_id: si.metadata?.visitId || null,
     })
     .select("id")
     .single();
@@ -659,6 +670,11 @@ export async function completeOfferCheckout(
   } else {
     if (!inserted) return { ok: false, error: "order_failed" };
     orderId = inserted.id as string;
+    void recordVisitStep("purchase", {
+      visitId: (si.metadata?.visitId as string | undefined) || null,
+      orderId: inserted!.id as string,
+      valueCents: totalCents,
+    });
   }
 
   try {

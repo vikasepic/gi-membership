@@ -16,6 +16,7 @@ import { TrackPurchase } from "@/components/track-purchase";
 import { purchaseForOrder, adEventForOrder } from "@/lib/tracking-receipt";
 import { googleAdsPurchaseLabel } from "@/lib/env";
 import { recordOtoPageHit } from "@/lib/traffic";
+import { recordVisitStep } from "@/lib/visits";
 
 export const metadata = NOINDEX;
 
@@ -49,6 +50,7 @@ export default async function OtoPage({
   // whose offer has since been deleted also bounces to thank-you, and that is
   // not a shown upsell either.
   void recordOtoPageHit(verified.payload.orderId);
+  void recordVisitStep("upsell");
 
   // The upsell always follows a purchase, so we know exactly who this is: the
   // page shows the terms that will actually be charged.

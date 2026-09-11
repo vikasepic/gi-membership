@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { previewOfferCoupon, startOfferCheckout } from "@/lib/offer-checkout";
 import { resolveBuyer } from "@/lib/checkout";
 import { UTM_COOKIE, attributionFromCookie } from "@/lib/attribution";
+import { currentVisitId } from "@/lib/visits";
 
 // An index into the list the page built, or "none" — never an id, and never
 // the legacy alt/main/boolean shapes the product checkout's own schema still
@@ -61,6 +62,9 @@ export async function startOffer(
 
   const jar = await cookies();
   const attribution = attributionFromCookie(jar.get(UTM_COOKIE)?.value);
+  // Which visit this checkout belongs to, resolved here where the cookies
+  // are, for the same reason anonId and attribution are.
+  const visitId = await currentVisitId();
 
   const res = await startOfferCheckout({
     userId: resolved.userId,
@@ -71,6 +75,7 @@ export async function startOffer(
     isNewAccount: resolved.isNew,
     bumpChoice: parsedBump.data,
     attribution,
+    visitId,
   });
   if (!res.ok) return res;
   return { ok: true, clientSecret: res.clientSecret, mode: res.mode };
