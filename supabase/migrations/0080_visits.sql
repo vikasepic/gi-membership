@@ -23,8 +23,9 @@ create table if not exists visits (
   -- Drives the 30-minute idle window in record_visit below.
   last_seen_at   timestamptz not null default now(),
   landing_path   text not null,
-  -- The query as the link actually was, click ids included, minus any value
-  -- carrying an address. This is what makes a "direct" visit explainable.
+  -- The query as the link actually was, minus click ids (fbclid and friends —
+  -- this column has no consent gate) and minus any value carrying an
+  -- address. This is what makes a "direct" visit explainable.
   landing_query  text,
   -- The whole referring URL, foreign hosts only. An internal move is not a referral.
   referrer       text,

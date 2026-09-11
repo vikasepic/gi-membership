@@ -1245,7 +1245,7 @@ Migration 0080. RLS enabled with no policies, same as every other table since
 | `started_at` | timestamptz | no | `now()` |  |
 | `last_seen_at` | timestamptz | no | `now()` | Drives the 30-minute idle window in `record_visit`. |
 | `landing_path` | text | no |  |  |
-| `landing_query` | text | yes |  | The query as the link actually was, click ids included, minus any value carrying an address. |
+| `landing_query` | text | yes |  | The query as the link actually was, minus click ids (this column has no consent gate) and minus any value carrying an address. |
 | `referrer` | text | yes |  | Foreign hosts only — an internal move is not a referral. |
 | `referrer_host` | text | yes |  |  |
 | `utm_first` | jsonb | no | `'{}'::jsonb` |  |
