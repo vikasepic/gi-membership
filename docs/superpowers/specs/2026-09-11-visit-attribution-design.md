@@ -128,9 +128,11 @@ cannot open two visits in the same minute.
 
 **The query string is sanitised before storage.** Same rule as a label: any
 parameter whose value contains `@` is dropped, because ESP links carry
-per-recipient addresses. Everything else is kept verbatim, including
-`fbclid` — the landing URL is the link the ad used, and dropping half of it
-would defeat the point of the column. Capped at 500 characters.
+per-recipient addresses. Click ids (`fbclid`, `gclid`, `ttclid`, `msclkid`,
+`wbraid`, `gbraid`, `_fbp`, `_fbc`) are dropped too, matched case-insensitively
+on the key — this column has no consent gate, and a click id identifies a
+person's click, not an ad. Everything else, campaign labels included, is kept
+verbatim. Capped at 500 characters.
 
 **The referrer is kept whole**, unlike `orders.referrer` which is origin plus
 path. The visit log is where the owner goes to ask "what exactly was this",
@@ -275,9 +277,9 @@ in six months.
 
 - `lib/visit-fields.test.ts`: device, browser and OS from real user-agent
   strings including a Samsung Internet one and an iPad; `sanitizeQuery` drops
-  an `@` value and keeps `fbclid`; `foreignReferrer` returns null for our own
-  host and keeps the query for a foreign one; `hashIp` is stable, salted, and
-  null without a salt.
+  an `@` value and drops `fbclid` and its siblings, case-insensitively;
+  `foreignReferrer` returns null for our own host and keeps the query for a
+  foreign one; `hashIp` is stable, salted, and null without a salt.
 - `lib/visits.integration.test.ts`: a second call inside the window touches
   the same row rather than opening a second; a call 31 minutes later opens a
   new one; a bot user agent opens none; no `gi_anon` opens none; two

@@ -19,7 +19,7 @@ unfinished:
 | Terms of Service page | **Draft** — renders a visible "not finished" warning | `lib/legal.ts` → `address`, `governingLaw` |
 | Refund policy page | Same warning, same cause | as above |
 | Legal entity name | `Infinite Creative` — **inferred from the Stripe card form, unconfirmed** | `lib/legal.ts` → `legalEntity` |
-| Privacy policy | Complete and accurate | — |
+| Privacy policy | Complete and accurate — reviewed 2026-09-11 against `lib/visits.ts` and `0080_visits.sql` for the visit-attribution branch's no-consent-gate collection (IP hash, user agent, device/browser/OS, landing query) | — |
 
 Fill those three fields first. While any is blank, every policy page tells
 visitors the policy is a draft — which is the honest behaviour, and also not

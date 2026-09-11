@@ -11,6 +11,7 @@ import { listFonts } from "@/lib/fonts";
 import { storeMetadata } from "@/lib/site-metadata";
 import { CodeSnippets } from "@/components/code-snippets";
 import { headers } from "next/headers";
+import { recordVisit } from "@/lib/visits";
 
 // Live store — never statically prerender (server data uses runtime-only env).
 export const dynamic = "force-dynamic";
@@ -44,6 +45,11 @@ export default async function StoreLayout({ children }: { children: React.ReactN
   // consent, and never allowed to break the page: a measurement lookup that
   // fails must cost a match rate, not a store.
   const match = await pixelMatch().catch(() => null);
+  // Every store page is an entry point, which is the whole reason this sits in
+  // the layout rather than in each page: page_counts only ever saw five paths
+  // and never the home page at all. Not awaited — a record of a visit must
+  // never delay one.
+  void recordVisit();
   return (
     <>
       <CodeSnippets snippets={settings.codeSnippets} place="head" onCheckout={onCheckout} />

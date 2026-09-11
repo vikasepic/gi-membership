@@ -51,6 +51,8 @@ export type OrderRow = {
   utmFirst: Labels;
   utmLast: Labels;
   referrer: string | null;
+  /** The visit this order was placed in, migration 0080. Null for orders predating visit tracking. */
+  visitId: string | null;
 };
 
 // Newest first. Items are fetched in one batched query rather than per order.
@@ -61,7 +63,7 @@ export async function listOrders(limit = 100): Promise<OrderRow[]> {
   const { data: orders, error } = await db
     .from("orders")
     .select(
-      "id, email, status, currency, total_cents, tax_cents, buyer_country, stripe_payment_intent_id, host_offer_id, livemode, created_at, utm_first, utm_last, referrer, users(username)",
+      "id, email, status, currency, total_cents, tax_cents, buyer_country, stripe_payment_intent_id, host_offer_id, livemode, created_at, utm_first, utm_last, referrer, visit_id, users(username)",
     )
     .eq("store_id", storeId)
     .order("created_at", { ascending: false })
@@ -112,6 +114,7 @@ export async function listOrders(limit = 100): Promise<OrderRow[]> {
       utmFirst: (o.utm_first as Labels | null) ?? {},
       utmLast: (o.utm_last as Labels | null) ?? {},
       referrer: (o.referrer as string | null) ?? null,
+      visitId: (o.visit_id as string | null) ?? null,
     };
   });
 }

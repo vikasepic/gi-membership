@@ -219,3 +219,45 @@ fields independently, and a link carrying `utm_source` with no
 `utm_campaign` bucketed its view as `direct` and its sale under the source
 name. Routing both functions through `bucketOf` is what closes that gap, not
 a convention either function has to remember on its own.
+
+### Where visits come from, and what the four screens answer
+
+An order's attribution above starts at checkout. Visits start earlier: a row
+is written by `record_visit` (`lib/visits.ts`, migration 0080) from the
+store LAYOUT, so every page is an entry point — home page included, unlike
+the old `page_counts` counter, which only five paths ever called. Each new
+browser (the `gi_anon` cookie) gets one row, reused across a 30-minute idle
+window rather than one row per page view, and carries the landing path and
+query as the link actually was, the first and last UTM seen, the referring
+host, device/browser/os, and a salted IP hash that stays null until
+`ATTRIBUTION_IP_SALT` is set — the safe failure, not an error. `visit_steps`
+marks checkout, upsell and purchase against the visit that reached them.
+Recorded for everyone, with no consent gate: a landing URL and a campaign
+describe the ad, not the person. Click ids are the one thing kept out of it:
+`sanitizeQuery` (`lib/visit-fields.ts`) strips `fbclid`, `gclid` and their
+siblings before the query is ever written to `visits.landing_query`, so
+there is nothing there for a client to read — the full click id survives
+only in the consent-gated `visitors.landing_url`, for whoever accepted the
+banner. Full design in
+`docs/superpowers/specs/2026-09-11-visit-attribution-design.md`.
+
+Three screens under `/admin/attribution` read it back, and a fourth lives on
+the Orders page. **Campaigns** (`/admin/attribution`) answers "which
+campaign, and did it sell" — one row per source/medium/campaign/adset/ad
+with its visits, checkouts, orders and revenue. **Referrers** and **Landing
+pages** (both on `/admin/attribution/sources`) answer "which outside site
+sent them" and "which page did they land on", `direct` its own row in the
+first so neither table hides a share of traffic by omitting it. The **visit
+log** (`/admin/attribution/visits`) answers "what did this one visitor do" —
+every visit, one row, filterable by campaign/host/device/outcome — the
+closest thing here to WP Statistics' or GA4's visitor detail view. Those
+three start from the day `record_visit` first ran in production, except for
+a one-time seed: migration 0080 backfilled one row per consented `visitors`
+row that had a landing URL, so a slice of history survives for whoever had
+already accepted the banner — those rows carry a null `user_agent`, since
+device and browser were never captured for them. Nothing earlier than that
+can be recovered. The fourth, the **Orders page**'s expanded row
+(`components/admin/attribution-popover.tsx`'s open layout), lays out an
+order's own last-touch and first-touch labels plainly instead of behind the
+compact popover, with a link into the visit log when the order carries a
+`visit_id` — orders placed before migration 0080 have none.

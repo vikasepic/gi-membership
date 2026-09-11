@@ -3,16 +3,15 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { STAGE_LABELS } from "@/lib/builtin-apps/product-builder/stages";
+import { shortDate, dateWithYear } from "@/lib/dates";
 import type { SessionRecord } from "@/lib/builtin-apps/product-builder/types";
 
+// Same-year sessions drop the year; the UTC comparison keeps that decision
+// pinned the same way the date itself is, so nobody near a year boundary in
+// one zone sees a session unexpectedly grow or lose its year.
 function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const sameYear = d.getFullYear() === new Date().getFullYear();
-  return d.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-  });
+  const sameYear = new Date(iso).getUTCFullYear() === new Date().getUTCFullYear();
+  return sameYear ? shortDate(iso) : dateWithYear(iso);
 }
 
 /**

@@ -10,6 +10,11 @@ import { buildReceiptEmail } from "@/lib/email";
  * exists to answer.
  */
 
+// 20:00 UTC on 18 August is already past midnight on 19 August in India
+// (UTC+5:30) — the same day-boundary case lib/dates.test.ts exercises. The
+// date assertion below would fail on this machine (which defaults to
+// Asia/Kolkata) if buildReceiptEmail's date ever stopped going through
+// lib/dates.ts's UTC pin.
 const base = {
   email: "buyer@example.com",
   orderId: "a153d1ec-d179-4749-b9c8-1158ef0527e6",
@@ -20,7 +25,7 @@ const base = {
   totalCents: 1150,
   taxCents: 0,
   currency: "usd",
-  paidAt: new Date("2026-08-18T09:00:00Z"),
+  paidAt: new Date("2026-08-18T20:00:00Z"),
 };
 
 describe("a receipt with a discount", () => {

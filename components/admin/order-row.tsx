@@ -4,6 +4,7 @@ import { useState } from "react";
 import { RefundButton } from "@/components/admin/refund-button";
 import { AttributionBlock, SourcePill } from "@/components/admin/attribution-popover";
 import { money } from "@/lib/money";
+import { shortDate, time, fullDateTime } from "@/lib/dates";
 import type { OrderRow as Order, OrderItemRow } from "@/lib/orders";
 
 const PILL: Record<string, string> = {
@@ -12,18 +13,6 @@ const PILL: Record<string, string> = {
   pending: "bg-surface-2 text-muted",
   failed: "bg-primary/12 text-primary",
 };
-
-const when = (iso: string) =>
-  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(iso));
-
-const fullWhen = (iso: string) =>
-  new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(iso));
 
 /**
  * One order, one row — and its detail only when asked for.
@@ -61,7 +50,10 @@ export function OrderRowView({ order }: { order: Order }) {
           open ? "bg-surface-2" : "hover:bg-surface-2"
         }`}
       >
-        <td className="px-3 py-2.5 text-sm text-muted">{when(order.createdAt)}</td>
+        <td className="px-3 py-2.5">
+          <span className="block text-sm font-medium">{shortDate(order.createdAt)}</span>
+          <span className="text-sm text-muted">{time(order.createdAt)}</span>
+        </td>
         <td className="px-3 py-2.5">
           {order.buyerName && <span className="block text-sm font-medium">{order.buyerName}</span>}
           <span className={`text-sm ${order.buyerName ? "text-muted" : "font-medium"}`}>{order.email}</span>
@@ -143,7 +135,7 @@ export function OrderRowView({ order }: { order: Order }) {
               </div>
 
               <dl className="flex min-w-44 flex-col gap-1 text-xs text-muted">
-                <div>{fullWhen(order.createdAt)}</div>
+                <div>{fullDateTime(order.createdAt)}</div>
                 {order.stripePaymentIntentId && (
                   <div className="font-mono text-[11px]">{order.stripePaymentIntentId}</div>
                 )}
@@ -157,7 +149,7 @@ export function OrderRowView({ order }: { order: Order }) {
               </dl>
 
               <div className="min-w-56">
-                <AttributionBlock order={order} />
+                <AttributionBlock order={order} layout="open" />
               </div>
 
               <div className="ml-auto">

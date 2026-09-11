@@ -12,6 +12,16 @@ import { applyAttributionCookie } from "@/lib/attribution-cookie";
 //   plus the landing referrer, for everyone, no JavaScript needed.
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  // The anon id, resolved before the request headers below are forwarded —
+  // reusing the cookie already on the request when there is one, otherwise
+  // minting the same id the response cookie will carry. res.cookies.set()
+  // only reaches the NEXT request; without forwarding it here too, cookies()
+  // in the store layout is blind to it on a new browser's first request, and
+  // recordVisit opens the visit one request late — after the landing page
+  // and referrer that mattered are already gone.
+  const existingAnon = req.cookies.get("gi_anon")?.value;
+  const anon = existingAnon ?? crypto.randomUUID();
+
   // The path, forwarded to the server components. A layout cannot read the URL
   // any other way, and the store layout needs it to keep pasted snippets off
   // the checkout unless one of them says otherwise.
@@ -24,6 +34,7 @@ export async function proxy(req: NextRequest) {
   // four counted pages, and sourceOf never looks past a handful of params —
   // a pathological query string should not eat the header budget everywhere.
   withPath.set("x-search", req.nextUrl.search.slice(0, 2048));
+  withPath.set("x-anon-id", anon);
   const res = NextResponse.next({ request: { headers: withPath } });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -90,8 +101,8 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  if (!req.cookies.get("gi_anon")) {
-    res.cookies.set("gi_anon", crypto.randomUUID(), {
+  if (!existingAnon) {
+    res.cookies.set("gi_anon", anon, {
       httpOnly: true,
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 365,

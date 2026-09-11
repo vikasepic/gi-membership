@@ -12,6 +12,7 @@ import { ensureUserProfile } from "@/lib/users";
 import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { recordError, messageOf } from "@/lib/errors";
+import { recordVisitStep } from "@/lib/visits";
 import { stripeAttributionMetadata, attributionFromMetadata, orderAttributionColumns, type Attribution } from "@/lib/attribution";
 import type { Offer } from "@/lib/types";
 
@@ -138,6 +139,10 @@ export async function startOfferCheckout(args: {
    * cookies, and the intent is the one thing both paths hold.
    */
   attribution?: Attribution | null;
+  /** The visit this checkout happened in, stashed in the intent's metadata:
+   * completeOfferCheckout also runs from the Stripe webhook, which has no
+   * cookies to resolve a visit from. */
+  visitId?: string | null;
 }): Promise<StartResult> {
   const offer = await getOffer(args.offerId);
   if (!offer || !offer.active) return { ok: false, error: "That offer isn’t available any more." };
@@ -245,12 +250,29 @@ export async function startOfferCheckout(args: {
     userId: args.userId,
     offerId: offer.id,
     offerPriceId: chosenPrice?.id ?? "",
+    // On BOTH intent kinds, not just the one-time PaymentIntent below — a
+    // RECURRING host can carry a bump too (see the one-time-bump-on-recurring
+    // -host refusal above), and before this moved here the SetupIntent path
+    // sent nothing about a bump at all, not even the id. The bump's own name
+    // and the exact price they ticked ride alongside the id for the same
+    // reason productTitle/offerName ride alongside theirs: without them, a
+    // bump riding the host's charge is indistinguishable from a host-only
+    // sale of the same total — in the dashboard, in exports, and in Zapier,
+    // which can only filter on what Stripe holds. Same reasoning as
+    // bumpOfferName/bumpPriceId in lib/checkout.ts, the product side of this
+    // same checkout.
+    bumpOfferId: bumpOffer?.id ?? "",
+    bumpOfferName: bumpOffer?.name ?? "",
+    bumpPriceId: bumpOffer ? (bumpPriceId ?? "") : "",
     // The code, not the discount. An amount written here would be an amount
     // the browser could have influenced at preview time.
     couponCode: coupon?.code ?? "",
     // Whether THIS checkout created the account. Read on the way back to
     // decide whether a session may be handed out — see mintOfferLogin.
     newAccount: args.isNewAccount ? "true" : "false",
+    // The visit that started this checkout. Stripe metadata is strings, so a
+    // null visit id becomes "" here and reads back as null in completion.
+    visitId: args.visitId ?? "",
     // Last touch as utm_*, first touch as first_utm_*, plus referrer — for
     // the platform the ads team reads from Stripe, and read back at
     // completion to write the order. Spread last; the keys above are what
@@ -310,19 +332,6 @@ export async function startOfferCheckout(args: {
         metadata: {
           ...metadata,
           discountCents: String(discount),
-          bumpOfferId: bumpOffer?.id ?? "",
-          // The bump's own name, not just its id. There is no second intent on
-          // this path to carry it — without this a bump riding the host's
-          // charge is indistinguishable from a host-only sale of the same total
-          // in the dashboard, in exports, and in Zapier (which can only filter
-          // on what Stripe holds). Same reason productTitle/offerName ride
-          // alongside their own ids in lib/checkout.ts, the product side of
-          // this same checkout.
-          bumpOfferName: bumpOffer?.name ?? "",
-          // The exact price they ticked — offerPriceId's counterpart for the
-          // bump. Without this, completion had no way to tell bumpChoice: 1 from
-          // bumpChoice: 0 and simply assumed the first price the placement shows.
-          bumpPriceId: bumpOffer ? (bumpPriceId ?? "") : "",
           // Whether a bump was resolved, not whether it cost anything — a
           // genuinely $0 bump (a free add-on) is still fully paid for by THIS
           // intent, because there is nothing left to take. Keying this off
@@ -592,6 +601,9 @@ export async function completeOfferCheckout(
       // webhook has no cookie, and the return route's cookie could have moved
       // on to a later ad by the time Stripe sends the buyer back.
       ...orderAttributionColumns(attributionFromMetadata(si.metadata as Record<string, string> | null)),
+      // From the metadata we wrote at start: completion also runs from the
+      // Stripe webhook, which has no cookies to resolve a visit from.
+      visit_id: si.metadata?.visitId || null,
     })
     .select("id")
     .single();
@@ -659,6 +671,11 @@ export async function completeOfferCheckout(
   } else {
     if (!inserted) return { ok: false, error: "order_failed" };
     orderId = inserted.id as string;
+    void recordVisitStep("purchase", {
+      visitId: (si.metadata?.visitId as string | undefined) || null,
+      orderId: inserted!.id as string,
+      valueCents: totalCents,
+    });
   }
 
   try {

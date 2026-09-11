@@ -23,6 +23,7 @@ import { checkoutSkin } from "@/lib/checkout-skin";
 import { CheckoutStage } from "@/components/checkout/v2/stage";
 import { money } from "@/lib/money";
 import { recordPageHit } from "@/lib/traffic";
+import { recordVisitStep } from "@/lib/visits";
 import type { Block } from "@/lib/blocks";
 
 export const metadata = NOINDEX;
@@ -113,6 +114,9 @@ export default async function CheckoutPage({
   // The RESOLVED product, never the ?product= it was given: that value is
   // whatever the visitor typed, and counting it would let anyone add rows.
   void recordPageHit("/checkout", product.slug);
+  // The same moment, on the visit rather than the day's tally. One says
+  // "12 people reached a checkout today"; this says which visit did.
+  void recordVisitStep("checkout");
 
   // A signed-in member never types an email, so reaching this page IS the
   // moment we know they are considering it — the equivalent of the anonymous

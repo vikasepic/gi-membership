@@ -35,6 +35,8 @@ const ICON = {
   templates: "M4 3h16v4H4V3Zm0 6h7v12H4V9Zm9 0h7v5h-7V9Zm0 7h7v5h-7v-5Z",
   settings:
     "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm9 4-2-1.2.3-2.3-2.2-.8-.7-2.2-2.3.3L12 3.8 10.9 5.8l-2.3-.3-.7 2.2-2.2.8.3 2.3L3.8 12l2.2 1.2-.3 2.3 2.2.8.7 2.2 2.3-.3 1.1 2 1.1-2 2.3.3.7-2.2 2.2-.8-.3-2.3L21 12Z",
+  // A funnel: wide at the top, narrow at the bottom. Where traffic goes.
+  attribution: "M3 4h18l-7 8v7l-4 2v-9L3 4Z",
 } as const;
 
 function groups(c: NavCounts): { title: string; items: Item[] }[] {
@@ -61,6 +63,8 @@ function groups(c: NavCounts): { title: string; items: Item[] }[] {
         // First in the group because it is the top of the funnel: traffic,
         // then the checkout it reaches, then the orders that come out.
         { href: "/admin/traffic", label: "Traffic", icon: ICON.orders },
+        // Traffic answers "how many". This answers "who from".
+        { href: "/admin/attribution", label: "Attribution", icon: ICON.attribution },
         // Above Orders, because it is the page an order comes from.
         { href: "/admin/checkout", label: "Checkout", icon: ICON.checkout },
         { href: "/admin/orders", label: "Orders", icon: ICON.orders, badge: n(c.orders) },

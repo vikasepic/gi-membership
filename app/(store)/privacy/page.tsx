@@ -44,10 +44,12 @@ export default async function PrivacyPage() {
             can show you where you left off.
           </li>
           <li>
-            <strong>How you found us</strong> — the page that referred you, any campaign tags in
-            the link, and an anonymous id stored in a cookie. This is collected whether or not you
-            consent to advertising measurement; it is only <em>sent to advertising platforms</em>{" "}
-            if you consent.
+            <strong>How you found us</strong> — the page that referred you, the exact page and
+            link you arrived on, any campaign tags in it, your browser&rsquo;s user agent (which
+            tells us your device type, browser and operating system), and an anonymous id stored
+            in a cookie. We also compute a one-way, salted hash of your IP address; the address
+            itself is never stored. This is collected whether or not you consent to advertising
+            measurement; it is only <em>sent to advertising platforms</em> if you consent.
           </li>
         </ul>
         <p>

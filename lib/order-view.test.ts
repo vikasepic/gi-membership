@@ -28,6 +28,7 @@ const order = (over: Partial<OrderRow> = {}): OrderRow => ({
   utmFirst: {},
   utmLast: {},
   referrer: null,
+  visitId: null,
   createdAt: daysAgo(1),
   items: [{ kind: "product", description: "The Guide", amountCents: 499, stripeSubscriptionId: null }],
   ...over,

@@ -2,14 +2,7 @@ import { listErrorEvents, MAX_ATTEMPTS } from "@/lib/errors";
 import { retryNowAction, repairDriftAction } from "./actions";
 import { findSubscriptionDrift } from "@/lib/subscription-reconcile";
 import { trackingProblems } from "@/lib/tracking";
-
-const when = (iso: string) =>
-  new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(iso));
+import { shortDateTime } from "@/lib/dates";
 
 const relative = (iso: string) => {
   const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
@@ -136,6 +129,8 @@ export default async function AdminErrorsPage() {
         </p>
       ) : (
         <div className="flex flex-col gap-3">
+          {/* Said once for the list, not on every row below. */}
+          <p className="text-xs text-muted">Times are UTC.</p>
           {events.map((e) => {
             const spent = Boolean(e.jobKind) && e.attempts >= MAX_ATTEMPTS && !e.resolvedAt;
             return (
@@ -161,7 +156,7 @@ export default async function AdminErrorsPage() {
                   ) : (
                     <span className="kicker text-muted">Log only</span>
                   )}
-                  <span className="ml-auto text-xs text-muted">{when(e.createdAt)}</span>
+                  <span className="ml-auto text-xs text-muted">{shortDateTime(e.createdAt)}</span>
                 </div>
 
                 <p className="text-sm">{e.message}</p>

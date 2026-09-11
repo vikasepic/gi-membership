@@ -12,6 +12,7 @@ import {
 import { GrantPicker, type GrantOption } from "@/components/admin/grant-picker";
 import { holdsLabel, standingOf, type Standing } from "@/lib/member-view";
 import { money } from "@/lib/money";
+import { dateWithYear } from "@/lib/dates";
 import type { MemberRow as Member } from "@/lib/members";
 import type { AccessRow } from "@/lib/members";
 
@@ -21,11 +22,6 @@ const PILL: Record<Standing, { label: string; className: string }> = {
   lapsed: { label: "lapsed", className: "bg-surface-2 text-muted" },
   none: { label: "no access", className: "bg-surface-2 text-muted" },
 };
-
-const date = (s: string) =>
-  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(
-    new Date(s),
-  );
 
 /**
  * One member, one row — with everything that can go wrong kept behind a click.
@@ -75,7 +71,7 @@ export function MemberRowView({
           </span>
           {member.username && <span className="block text-xs text-muted">{member.email}</span>}
         </td>
-        <td className="px-3 py-2.5 text-sm text-muted">{date(member.createdAt)}</td>
+        <td className="px-3 py-2.5 text-sm text-muted">{dateWithYear(member.createdAt)}</td>
         <td className="px-3 py-2.5">
           <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${pill.className}`}>
             {pill.label}

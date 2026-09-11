@@ -33,6 +33,7 @@ import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
 import { markLeadConverted } from "@/lib/leads";
 import { recordError, messageOf } from "@/lib/errors";
 import { stripeAttributionMetadata, orderAttributionColumns, type Attribution, type Labels } from "@/lib/attribution";
+import { recordVisitStep } from "@/lib/visits";
 import type { Offer } from "@/lib/types";
 
 const OTO_TTL_SECONDS = 15 * 60; // 15 minutes
@@ -102,6 +103,8 @@ export type CheckoutInput = {
    * reads from Stripe can tell a paid sale from an organic one.
    */
   attribution?: Attribution | null;
+  /** The visit this checkout happened in, for the attribution screens. */
+  visitId?: string | null;
 };
 
 export type CheckoutResult =
@@ -356,6 +359,11 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   // withdrawn offer chargeable from a stale page or a replayed POST.
   const owned = await ownershipFor(userId);
   let bumpOffer: Offer | null = null;
+  // The PRICE they ticked, not just the offer — mirrors bumpPriceId in
+  // lib/offer-checkout.ts. Stays null through the old two-offer pairing below:
+  // that picks between two whole OFFERS, each at its own row-level price, not
+  // an id out of a placement's price list, so there is nothing to carry there.
+  let bumpPriceId: string | null = null;
   if (input.bumpChoice !== "none" && product.bumpOfferId) {
     const shown = await getOffer(product.bumpOfferId);
     // The options come from THIS product, not from the request — the same offer
@@ -377,6 +385,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
         };
       }
       picked = offerAtPrice(shown, price);
+      bumpPriceId = price.id;
     } else {
       // The old two-offer pairing, while placements are still on it. Removed
       // with products.bump_alt_offer_id once they have all been moved.
@@ -486,6 +495,8 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
         productPriceId: chosen.id,
         couponCode: coupon?.code ?? "",
         bumpOfferId: bumpOffer?.id ?? "",
+        bumpOfferName: bumpOffer?.name ?? "",
+        bumpPriceId: bumpOffer ? (bumpPriceId ?? "") : "",
         country: country ?? "",
         newAccount,
         // Last touch as utm_*, first touch as first_utm_*, plus referrer.
@@ -523,6 +534,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       stripe_customer_id: customerId,
       stripe_setup_intent_id: si.id,
       visitor_id: visitor,
+      visit_id: input.visitId ?? null,
       ...orderAttributionColumns(input.attribution),
     })
       .select("id")
@@ -610,6 +622,15 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       couponCode: coupon?.code ?? "",
       discountCents: String(coupon?.discountCents ?? 0),
       bumpOfferId: bumpOffer?.id ?? "",
+      // The bump's own name and the exact price they ticked, not just its id.
+      // Without them, a bump riding the host's charge is indistinguishable
+      // from a host-only sale of the same total — in the dashboard, in
+      // exports, and in Zapier, which can only filter on what Stripe holds.
+      // Same reasoning as bumpOfferName on the offer checkout's own
+      // PaymentIntent (offer-checkout.ts) — this side of the checkout just
+      // never got the same treatment.
+      bumpOfferName: bumpOffer?.name ?? "",
+      bumpPriceId: bumpOffer ? (bumpPriceId ?? "") : "",
       // Resolved ONCE, here, from THIS product's placement (product.bumpPriceIds)
       // — bumpOffer is already priced at whatever the placement named, never the
       // bump's own headline. finalizeOrder has only the id by the time it runs
@@ -683,6 +704,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       stripe_customer_id: customerId,
       stripe_payment_intent_id: pi.id,
       visitor_id: visitorId,
+      visit_id: input.visitId ?? null,
       ...orderAttributionColumns(input.attribution),
     })
     .select("id")
@@ -1011,7 +1033,7 @@ export async function fulfilBump(args: {
 export async function finalizeOrder(intentId: string): Promise<void> {
   const db = createServiceClient();
   const COLUMNS =
-    "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents, stripe_setup_intent_id, currency, buyer_country, client_ip, client_user_agent, source_url, subtotal_cents, discount_cents, coupon_code, utm_first, utm_last, referrer";
+    "id, store_id, user_id, status, stripe_customer_id, email, visitor_id, tracking_consent, stripe_tax_calculation_id, tax_cents, stripe_setup_intent_id, currency, buyer_country, client_ip, client_user_agent, source_url, subtotal_cents, discount_cents, coupon_code, utm_first, utm_last, referrer, visit_id";
 
   // Either kind of intent. A one-off product order points at a PaymentIntent; a
   // recurring one points at a SetupIntent, because a trial charges nothing
@@ -1398,6 +1420,19 @@ export async function finalizeOrder(intentId: string): Promise<void> {
   } catch (e) {
     console.error("[finalizeOrder] activecampaign failed (order is still complete):", e);
   }
+
+  // The visit that produced the sale. Recorded regardless of tracking
+  // consent — it is our own attribution row, not a third-party ad event —
+  // and read off the order rather than the request: finalizeOrder also runs
+  // from the Stripe webhook, where there is no visitor. Must stay above the
+  // consent gate below and outside its try block: a buyer who declines or
+  // ignores the cookie banner still needs their purchase milestone written,
+  // or every attribution rate is computed from mismatched populations.
+  void recordVisitStep("purchase", {
+    visitId: (order.visit_id as string | null) ?? null,
+    orderId: order.id as string,
+    valueCents: pi.amount,
+  });
 
   // Report the conversion server-side — ONLY with the buyer's explicit consent,
   // captured at checkout (the webhook has no cookies). EU/UK traffic means GDPR

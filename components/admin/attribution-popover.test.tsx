@@ -20,6 +20,7 @@ const base: OrderRow = {
   utmFirst: {},
   utmLast: {},
   referrer: null,
+  visitId: null,
 };
 
 describe("AttributionBlock", () => {
@@ -65,6 +66,83 @@ describe("AttributionBlock", () => {
   it("says so when there is nothing but a referrer, and renders nothing when there is nothing at all", () => {
     expect(renderToStaticMarkup(<AttributionBlock order={{ ...base, referrer: "https://someblog.example/post" }} />)).toContain("someblog.example");
     expect(renderToStaticMarkup(<AttributionBlock order={base} />)).toBe("");
+  });
+});
+
+describe("the open layout on an expanded order", () => {
+  it("lays last touch and first touch out side by side, both named", () => {
+    const out = renderToStaticMarkup(
+      <AttributionBlock
+        layout="open"
+        order={{
+          ...base,
+          utmLast: { utm_source: "meta", utm_campaign: "Spring Push", utm_adset: "LAL Buyers" },
+          utmFirst: { utm_source: "instaparty", utm_campaign: "Winter B" },
+          referrer: "https://l.facebook.com/l.php",
+        }}
+      />,
+    );
+    expect(out).toContain("Last touch");
+    expect(out).toContain("First touch");
+    expect(out).toContain("Spring Push");
+    expect(out).toContain("instaparty");
+  });
+
+  it("links to the visit when the order has one", () => {
+    const out = renderToStaticMarkup(
+      <AttributionBlock layout="open" order={{ ...base, visitId: "v-123", utmLast: { utm_source: "meta" } }} />,
+    );
+    expect(out).toContain("/admin/attribution/visits");
+  });
+
+  it("carries the order's own visit id on the link (I5), not the bare list page", () => {
+    // The bare "/admin/attribution/visits" default page is the last 30 days,
+    // 100 rows — an older order's visit is just not there. This has to
+    // assert the id itself, not merely the path prefix: a bare link also
+    // contains "/admin/attribution/visits" and would pass a weaker check.
+    const out = renderToStaticMarkup(
+      <AttributionBlock layout="open" order={{ ...base, visitId: "v-123", utmLast: { utm_source: "meta" } }} />,
+    );
+    expect(out).toContain("/admin/attribution/visits?visit=v-123");
+  });
+
+  it("does not draw the link when the order predates visit tracking", () => {
+    const out = renderToStaticMarkup(<AttributionBlock layout="open" order={{ ...base, visitId: null, utmLast: { utm_source: "meta" } }} />);
+    expect(out).not.toContain("/admin/attribution/visits");
+  });
+
+  it("still shows both columns and the visit link for a direct order with no UTM data and no referrer", () => {
+    // The commonest order outside active ad spend: tracked (it has a visit)
+    // but nothing to attribute it to. The shared "nothing at all" guard used
+    // to fire before layout was even considered, hiding this entirely.
+    const out = renderToStaticMarkup(
+      <AttributionBlock layout="open" order={{ ...base, visitId: "v-777", utmLast: {}, utmFirst: {}, referrer: null }} />,
+    );
+    expect(out).toContain("Last touch");
+    expect(out).toContain("First touch");
+    expect(out).toContain("/admin/attribution/visits");
+    // Both columns fall back to the literal "direct" span, not a blank column
+    // — and not the unrelated "direct" the SourcePill label can also emit.
+    expect(out.match(/>direct</g)?.length).toBe(2);
+  });
+
+  it("leaves the compact popover empty for that same direct order, so its behaviour is unchanged", () => {
+    const out = renderToStaticMarkup(
+      <AttributionBlock order={{ ...base, visitId: "v-777", utmLast: {}, utmFirst: {}, referrer: null }} />,
+    );
+    expect(out).toBe("");
+  });
+
+  it("reads an untouched side as direct rather than vanishing, when the other side has labels", () => {
+    const out = renderToStaticMarkup(
+      <AttributionBlock
+        layout="open"
+        order={{ ...base, utmLast: { utm_source: "meta", utm_campaign: "Spring Push" }, utmFirst: {}, referrer: null }}
+      />,
+    );
+    expect(out).toContain("Spring Push");
+    // Exactly one side is empty here, so exactly one "direct" fallback span.
+    expect(out.match(/>direct</g)?.length).toBe(1);
   });
 });
 

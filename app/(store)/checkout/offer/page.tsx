@@ -23,6 +23,7 @@ import { publicCoverUrl } from "@/lib/media";
 import { productDisplay } from "@/lib/courses";
 import { buildBumpView } from "@/lib/bump";
 import { recordPageHit } from "@/lib/traffic";
+import { recordVisitStep } from "@/lib/visits";
 import type { BumpSummary } from "@/components/checkout/checkout-types";
 
 export const metadata = NOINDEX;
@@ -72,6 +73,7 @@ export default async function OfferCheckoutPage({
   // somebody bounced to their library never reached a checkout, and counting
   // them would put a step above the sales page it came from.
   void recordPageHit("/checkout/offer", offer.key);
+  void recordVisitStep("checkout");
 
   // The bump this offer places, priced from its own placement — the same
   // helpers and the same rule the product checkout uses (see

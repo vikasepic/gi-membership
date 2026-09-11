@@ -17,7 +17,7 @@ const canRun =
 
 const createdEmails: string[] = [];
 
-async function buy(withBump: boolean) {
+async function buy(withBump: boolean, visitId?: string | null) {
   const email = `it_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@example.com`;
   createdEmails.push(email);
   const res = await createCheckoutIntent({
@@ -25,6 +25,7 @@ async function buy(withBump: boolean) {
     email,
     fullName: "Test Buyer",
     bumpChoice: withBump ? ("main" as const) : ("none" as const),
+    ...(visitId !== undefined ? { visitId } : {}),
   });
   if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
   const piId = res.clientSecret.split("_secret_")[0];
@@ -300,6 +301,233 @@ describe.skipIf(!canRun)("a recurring bump with no trial (integration)", () => {
   });
 });
 
+// --- The bump's name and chosen price, on the base PaymentIntent's metadata
+//
+// lib/offer-checkout.ts already sends bumpOfferName/bumpPriceId on its
+// one-time PaymentIntent; this product checkout never got the same
+// treatment, so a bump riding the host's charge was indistinguishable in
+// Stripe from a host-only sale of the same total. Needs its own fixture with
+// a real offer_prices row: the seeded placeholder-offer's bump (Content
+// Engine) has none (seed.sql inserts the offer row directly, and nothing
+// backfills a price for it — see supabase/migrations/0048), so bumpChoice: 0
+// — the numeric branch that resolves a specific placement price — would
+// refuse with "bump_unavailable" against it.
+describe.skipIf(!canRun)("bump readability on the product checkout (integration)", () => {
+  const emails: string[] = [];
+  let productId = "";
+  let offerId = "";
+  let priceId = "";
+  let productSlug = "";
+
+  it("puts bumpOfferName and bumpPriceId on the PaymentIntent's metadata, alongside bumpOfferId", async () => {
+    const db = createServiceClient();
+    const storeId = await getStoreId();
+
+    offerId = crypto.randomUUID();
+    const { error: offerErr } = await db.from("offers").insert({
+      id: offerId,
+      store_id: storeId,
+      key: `zz-bump-name-${offerId}`,
+      name: "zz bump name fixture",
+      grant_type: "subscription",
+      grant_app_id: "00000000-0000-0000-0000-0000000000a1", // seeded Content Engine app
+      grant_entitlement_key: "content-engine",
+      billing_type: "one_time",
+      price_cents: 1100,
+      currency: "usd",
+      headline: "fixture",
+      description: "fixture",
+      active: true,
+    });
+    if (offerErr) throw new Error(`fixture offer: ${offerErr.message}`);
+
+    priceId = crypto.randomUUID();
+    const { error: priceErr } = await db.from("offer_prices").insert({
+      id: priceId,
+      offer_id: offerId,
+      billing_type: "one_time",
+      price_cents: 1100,
+      sort_order: 0,
+    });
+    if (priceErr) throw new Error(`fixture price: ${priceErr.message}`);
+
+    productId = crypto.randomUUID();
+    productSlug = `zz-bump-name-host-${productId}`;
+    const { error: productErr } = await db.from("products").insert({
+      id: productId,
+      store_id: storeId,
+      slug: productSlug,
+      title: "zz bump-name host",
+      price_cents: 1900,
+      status: "published",
+      bump_offer_id: offerId,
+    });
+    if (productErr) throw new Error(`fixture product: ${productErr.message}`);
+
+    const email = `it_bn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@example.com`;
+    emails.push(email);
+    const res = await createCheckoutIntent({
+      productSlug,
+      email,
+      fullName: "Test Buyer",
+      bumpChoice: 0, // the numeric branch — an index into a real placement price list
+    });
+    if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
+    const piId = res.clientSecret.split("_secret_")[0];
+    const pi = await stripe().paymentIntents.retrieve(piId);
+
+    expect(pi.metadata.bumpOfferId).toBe(offerId);
+    expect(pi.metadata.bumpOfferName).toBe("zz bump name fixture");
+    expect(pi.metadata.bumpPriceId).toBe(priceId);
+  });
+
+  it('sends "" for bumpOfferName and bumpPriceId when no bump is taken', async () => {
+    const email = `it_bn2_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@example.com`;
+    emails.push(email);
+    const res = await createCheckoutIntent({
+      productSlug, // same host — set up by the test above, which runs first
+      email,
+      fullName: "Test Buyer",
+      bumpChoice: "none",
+    });
+    if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
+    const piId = res.clientSecret.split("_secret_")[0];
+    const pi = await stripe().paymentIntents.retrieve(piId);
+
+    expect(pi.metadata.bumpOfferId).toBe("");
+    expect(pi.metadata.bumpOfferName).toBe("");
+    expect(pi.metadata.bumpPriceId).toBe("");
+  });
+
+  afterAll(async () => {
+    if (!canRun) return;
+    const db = createServiceClient();
+    for (const email of emails) {
+      const { data: user } = await db.from("users").select("id").eq("email", email).maybeSingle();
+      await db.from("orders").delete().eq("email", email); // cascades order_items
+      if (user) {
+        await db.from("users").delete().eq("id", user.id); // cascades ownership
+        await db.auth.admin.deleteUser(user.id);
+      }
+    }
+    if (productId) await db.from("products").delete().eq("id", productId);
+    if (offerId) await db.from("offers").delete().eq("id", offerId); // cascades offer_prices
+  });
+});
+
+// --- Same, on the recurring (SetupIntent) branch ---------------------------
+//
+// The PaymentIntent branch above got bumpOfferName + bumpPriceId; nothing
+// exercised the SetupIntent branch's own bump metadata, so its bumpOfferName
+// key (added at the same time) shipped with no test reading it back, and its
+// missing bumpPriceId went unnoticed. Own fixture (a recurring host, built
+// the way "orders.visit_id (integration)"'s recurring test builds one) rather
+// than reusing the block above's — that one is one-time and asserts on its
+// own productSlug across two ordered tests.
+describe.skipIf(!canRun)(
+  "bump readability on the product checkout's SetupIntent (integration)",
+  () => {
+    const emails: string[] = [];
+    let productId = "";
+    let offerId = "";
+
+    it("carries bumpOfferId, bumpOfferName and bumpPriceId onto the SetupIntent, for a recurring host", async () => {
+      const db = createServiceClient();
+      const storeId = await getStoreId();
+
+      offerId = crypto.randomUUID();
+      const { error: offerErr } = await db.from("offers").insert({
+        id: offerId,
+        store_id: storeId,
+        key: `zz-bump-si-${Date.now()}-${offerId}`,
+        name: "zz bump SetupIntent fixture",
+        grant_type: "subscription",
+        grant_app_id: "00000000-0000-0000-0000-0000000000a1", // seeded Content Engine app
+        grant_entitlement_key: "content-engine",
+        billing_type: "one_time",
+        price_cents: 1100,
+        currency: "usd",
+        headline: "fixture",
+        description: "fixture",
+        active: true,
+      });
+      if (offerErr) throw new Error(`fixture offer: ${offerErr.message}`);
+
+      const priceId = crypto.randomUUID();
+      const { error: priceErr } = await db.from("offer_prices").insert({
+        id: priceId,
+        offer_id: offerId,
+        billing_type: "one_time",
+        price_cents: 1100,
+        sort_order: 0,
+      });
+      if (priceErr) throw new Error(`fixture price: ${priceErr.message}`);
+
+      productId = crypto.randomUUID();
+      const productSlug = `zz-bump-si-host-${Date.now()}-${productId}`;
+      const { error: productErr } = await db.from("products").insert({
+        id: productId,
+        store_id: storeId,
+        slug: productSlug,
+        title: "zz bump-SetupIntent host",
+        price_cents: 900,
+        status: "published",
+        bump_offer_id: offerId,
+      });
+      if (productErr) throw new Error(`fixture product: ${productErr.message}`);
+      // The backfill trigger already gave it a one-off price from price_cents —
+      // replace it with a recurring one so createCheckoutIntent takes the
+      // SetupIntent branch instead of the PaymentIntent branch.
+      await db.from("product_prices").delete().eq("product_id", productId);
+      const { error: recurringPriceErr } = await db.from("product_prices").insert({
+        product_id: productId,
+        billing_type: "recurring",
+        interval: "month",
+        interval_count: 1,
+        trial_days: 7,
+        price_cents: 900,
+        sort_order: 0,
+      });
+      if (recurringPriceErr) throw new Error(`fixture product price: ${recurringPriceErr.message}`);
+
+      const email = `it_bsi_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@example.com`;
+      emails.push(email);
+      const res = await createCheckoutIntent({
+        productSlug,
+        email,
+        fullName: "Test Buyer",
+        bumpChoice: 0, // the numeric branch — an index into a real placement price list
+        priceChoice: 0,
+      });
+      if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
+      // A trial subscription is a SetupIntent, not a PaymentIntent — confirms
+      // this test actually reached the branch it claims to cover.
+      expect(res.mode).toBe("setup");
+      const siId = res.clientSecret.split("_secret_")[0];
+      const si = await stripe().setupIntents.retrieve(siId);
+
+      expect(si.metadata?.bumpOfferId).toBe(offerId);
+      expect(si.metadata?.bumpOfferName).toBe("zz bump SetupIntent fixture");
+      expect(si.metadata?.bumpPriceId).toBe(priceId);
+    });
+
+    afterAll(async () => {
+      if (!canRun) return;
+      const db = createServiceClient();
+      for (const email of emails) {
+        const { data: user } = await db.from("users").select("id").eq("email", email).maybeSingle();
+        await db.from("orders").delete().eq("email", email); // cascades order_items
+        if (user) {
+          await db.from("users").delete().eq("id", user.id); // cascades ownership
+          await db.auth.admin.deleteUser(user.id);
+        }
+      }
+      if (productId) await db.from("products").delete().eq("id", productId);
+      if (offerId) await db.from("offers").delete().eq("id", offerId); // cascades offer_prices
+    });
+  },
+);
+
 // --- Signed-in members buy without signing up again -----------------------
 import { createCheckoutIntent as createIntent } from "@/lib/checkout";
 
@@ -348,5 +576,224 @@ describe.skipIf(!canRun)("signed-in checkout (integration)", () => {
       .single();
     expect(secondOrder!.user_id).toBe(user!.id);
     expect(secondOrder!.stripe_customer_id).toBe(firstOrder!.stripe_customer_id);
+  });
+});
+
+// --- orders.visit_id (Task 4 wiring; fix round 1, Important 2) ------------
+//
+// Nothing before this exercised orders.visit_id, the purchase milestone, or
+// anything else this task wired up — a dropped write here would have
+// shipped green. orders.visit_id is a real FK to visits(id) (0080), so each
+// test makes its own throwaway visit rather than faking a cookie.
+
+async function makeVisit() {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("visits")
+    .insert({
+      store_id: await getStoreId(),
+      anon_id: `zz-visitid-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      landing_path: "/zz",
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`fixture visit: ${error?.message}`);
+  return data.id as string;
+}
+
+describe.skipIf(!canRun)("orders.visit_id (integration)", () => {
+  const visitIds: string[] = [];
+  let recurringProductId = "";
+
+  it("writes visitId onto the order on the one-time (PaymentIntent) branch", async () => {
+    const visitId = await makeVisit();
+    visitIds.push(visitId);
+    const { piId } = await buy(false, visitId);
+
+    const db = createServiceClient();
+    const { data: order } = await db
+      .from("orders")
+      .select("visit_id")
+      .eq("stripe_payment_intent_id", piId)
+      .single();
+    expect(order!.visit_id).toBe(visitId);
+  });
+
+  it("writes visitId onto the order on the recurring (SetupIntent) branch", async () => {
+    const db = createServiceClient();
+    const storeId = await getStoreId();
+    const visitId = await makeVisit();
+    visitIds.push(visitId);
+
+    const slug = `zz-visitid-rec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const { data: product, error } = await db
+      .from("products")
+      .insert({
+        store_id: storeId,
+        slug,
+        title: "zz visit_id recurring fixture",
+        status: "published",
+        currency: "usd",
+        price_cents: 900,
+      })
+      .select("id")
+      .single();
+    if (error || !product) throw new Error(`fixture product: ${error?.message}`);
+    recurringProductId = product.id as string;
+    // The backfill trigger already gave it a one-off price from price_cents.
+    await db.from("product_prices").delete().eq("product_id", product.id);
+    const { error: priceErr } = await db.from("product_prices").insert({
+      product_id: product.id,
+      billing_type: "recurring",
+      interval: "month",
+      interval_count: 1,
+      trial_days: 7,
+      price_cents: 900,
+      sort_order: 0,
+    });
+    if (priceErr) throw new Error(`fixture price: ${priceErr.message}`);
+
+    const email = `it_${Date.now()}_visitrec@example.com`;
+    createdEmails.push(email); // the file's own afterAll (above) cleans this up
+    const res = await createCheckoutIntent({
+      productSlug: slug,
+      email,
+      fullName: "Test Buyer",
+      bumpChoice: "none",
+      priceChoice: 0,
+      visitId,
+    });
+    if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
+    // A trial subscription is a SetupIntent, not a PaymentIntent — confirms
+    // this test actually reached the branch it claims to.
+    expect(res.mode).toBe("setup");
+    const siId = res.clientSecret.split("_secret_")[0];
+
+    const { data: order } = await db
+      .from("orders")
+      .select("visit_id")
+      .eq("stripe_setup_intent_id", siId)
+      .single();
+    expect(order!.visit_id).toBe(visitId);
+  });
+
+  it("finalizeOrder records the purchase milestone against the order's own visit_id", async () => {
+    const visitId = await makeVisit();
+    visitIds.push(visitId);
+    // The purchase milestone is recorded inside finalizeOrder's tracking
+    // block, which is gated on tracking_consent (the brief's own placement —
+    // "in the same try that reports tracking"). Without consent the block
+    // returns before ever reaching it, which is not what this test is about.
+    const email = `it_${Date.now()}_visitpurchase@example.com`;
+    createdEmails.push(email);
+    const res = await createCheckoutIntent({
+      productSlug: "placeholder-offer",
+      email,
+      fullName: "Test Buyer",
+      bumpChoice: "none",
+      visitId,
+      trackingConsent: true,
+    });
+    if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
+    const piId = res.clientSecret.split("_secret_")[0];
+    await stripe().paymentIntents.confirm(piId, {
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/checkout/complete",
+    });
+    await finalizeOrder(piId);
+
+    const db = createServiceClient();
+    const { data: order } = await db
+      .from("orders")
+      .select("id, total_cents")
+      .eq("stripe_payment_intent_id", piId)
+      .single();
+    // The write is fire-and-forget (`void recordVisitStep(...)`) inside
+    // finalizeOrder, so it can still be in flight the instant finalizeOrder
+    // returns. Poll briefly rather than asserting immediately.
+    let steps: { order_id: string | null; value_cents: number | null }[] | null = null;
+    for (let i = 0; i < 20; i++) {
+      const { data } = await db
+        .from("visit_steps")
+        .select("order_id, value_cents")
+        .eq("visit_id", visitId)
+        .eq("step", "purchase");
+      if (data && data.length > 0) {
+        steps = data;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    expect(steps).toHaveLength(1);
+    expect(steps![0].order_id).toBe(order!.id);
+    expect(steps![0].value_cents).toBe(order!.total_cents);
+  });
+
+  it("finalizeOrder records the purchase milestone even when the buyer never gave tracking consent", async () => {
+    // Sibling to the test above, opposite consent value. The milestone is
+    // our own attribution row, not a third-party ad event, so it must not
+    // sit behind the tracking_consent gate the way trackPurchase does — a
+    // buyer who ignores or declines the cookie banner still needs their
+    // purchase counted, or every attribution rate mixes mismatched
+    // populations (checkouts count everyone, purchases would count only
+    // consenting buyers).
+    const visitId = await makeVisit();
+    visitIds.push(visitId);
+    const email = `it_${Date.now()}_visitnoconsent@example.com`;
+    createdEmails.push(email);
+    const res = await createCheckoutIntent({
+      productSlug: "placeholder-offer",
+      email,
+      fullName: "Test Buyer",
+      bumpChoice: "none",
+      visitId,
+      trackingConsent: false,
+    });
+    if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
+    const piId = res.clientSecret.split("_secret_")[0];
+    await stripe().paymentIntents.confirm(piId, {
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/checkout/complete",
+    });
+    await finalizeOrder(piId);
+
+    const db = createServiceClient();
+    const { data: order } = await db
+      .from("orders")
+      .select("id, total_cents, tracking_consent")
+      .eq("stripe_payment_intent_id", piId)
+      .single();
+    expect(order!.tracking_consent).toBe(false);
+
+    // Same fire-and-forget caveat as the consenting-buyer test above.
+    let steps: { order_id: string | null; value_cents: number | null }[] | null = null;
+    for (let i = 0; i < 20; i++) {
+      const { data } = await db
+        .from("visit_steps")
+        .select("order_id, value_cents")
+        .eq("visit_id", visitId)
+        .eq("step", "purchase");
+      if (data && data.length > 0) {
+        steps = data;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    expect(steps).toHaveLength(1);
+    expect(steps![0].order_id).toBe(order!.id);
+    expect(steps![0].value_cents).toBe(order!.total_cents);
+  });
+
+  afterAll(async () => {
+    if (!canRun) return;
+    const db = createServiceClient();
+    if (recurringProductId) {
+      await db.from("product_prices").delete().eq("product_id", recurringProductId);
+      await db.from("products").delete().eq("id", recurringProductId);
+    }
+    // visit_steps cascades off visits (0080); orders.visit_id is ON DELETE
+    // SET NULL, so this is safe regardless of whether the file's own
+    // afterAll (which deletes these tests' orders by email) has run yet.
+    if (visitIds.length) await db.from("visits").delete().in("id", visitIds);
   });
 });
