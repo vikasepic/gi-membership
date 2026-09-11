@@ -30,10 +30,21 @@ export async function recordVisit(): Promise<void> {
     if (isBot(ua)) return;
 
     const jar = await cookies();
-    const anon = jar.get("gi_anon")?.value;
-    // No cookie yet — this is the very first request, and the proxy's
-    // Set-Cookie is on its way back. There is no id to key a visit on; the
-    // next request has one.
+    // proxy.ts resolves the anon id before it writes the Set-Cookie and
+    // forwards that same id as x-anon-id on the request itself, so THIS
+    // render can see it — the cookie jar alone is always one request behind
+    // a brand-new browser's Set-Cookie, which used to make a first-time
+    // visit open on the SECOND request, with the wrong landing_path and a
+    // same-host referer that foreignReferrer correctly discarded. Falling
+    // back to the jar covers every later request, once the cookie exists.
+    //
+    // Trade-off: a client that ignores cookies but still forwards this
+    // header untouched — and that isBot above does not catch — would now
+    // open one visit per request where today it opens none. Worth it: the
+    // alternative is losing the landing page and referrer for every
+    // genuinely new visitor, which is the whole point of this header.
+    const anon = h.get("x-anon-id") ?? jar.get("gi_anon")?.value;
+    // No id at all. There is nothing to key a visit on.
     if (!anon) return;
 
     const path = h.get("x-pathname") ?? "/";
@@ -83,8 +94,13 @@ export async function recordVisit(): Promise<void> {
  */
 export async function currentVisitId(): Promise<string | null> {
   try {
+    const h = await headers();
     const jar = await cookies();
-    const anon = jar.get("gi_anon")?.value;
+    // Same x-anon-id-first read as recordVisit above, for the same reason:
+    // a milestone reached on a brand-new browser's very first request (a
+    // Meta ad linking straight to /checkout, say) would otherwise miss the
+    // visit the layout just opened on this same request.
+    const anon = h.get("x-anon-id") ?? jar.get("gi_anon")?.value;
     if (!anon) return null;
     const db = createServiceClient();
     const { data } = await db

@@ -85,6 +85,30 @@ describe.skipIf(!canRun)("recording a visit (integration)", () => {
     expect(await visitsFor(anon)).toHaveLength(2);
   });
 
+  it("opens a visit from x-anon-id when the gi_anon cookie hasn't landed yet (I1)", async () => {
+    // proxy.ts now forwards the anon id it just resolved as x-anon-id on the
+    // request itself, ahead of the Set-Cookie the browser won't send back
+    // until its NEXT request. This is that first request: the header is
+    // there, the cookie jar is empty, exactly like a brand-new browser's
+    // very first pageview.
+    const anon = fresh("headeronly");
+    REQ.headers = new Map(Object.entries({
+      "x-pathname": "/p/zz-plan",
+      "x-search": "?utm_source=meta&utm_campaign=ZZ%20Plan",
+      "user-agent": UA_PHONE,
+      "x-forwarded-for": "203.0.113.9",
+      "x-anon-id": anon,
+      referer: "https://l.facebook.com/l.php?u=abc",
+    }));
+    REQ.cookies = new Map(); // no gi_anon cookie on this request
+    await recordVisit();
+    const rows = await visitsFor(anon);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].landing_path).toBe("/p/zz-plan");
+    expect(rows[0].referrer).toBe("https://l.facebook.com/l.php?u=abc");
+    expect(rows[0].referrer_host).toBe("l.facebook.com");
+  });
+
   it("records nothing for a bot, and nothing without the anonymous cookie", async () => {
     const bot = fresh("bot");
     request(bot, { "user-agent": "Mozilla/5.0 (compatible; Googlebot/2.1)" });
