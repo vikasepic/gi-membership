@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { money } from "@/lib/money";
 import { shortDateTime } from "@/lib/dates";
-import { labelPairs, outcomeOf, type VisitRow } from "@/lib/visit-reports";
+import { labelPairs, outcomeOf, type VisitRow } from "@/lib/visit-view";
 
 /**
  * One visit, and its detail only when asked for.

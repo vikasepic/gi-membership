@@ -1,8 +1,8 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
-import { UTM_KEYS } from "@/lib/attribution";
 import type { DayRange } from "@/lib/traffic-funnel";
+import type { CampaignRow, SourceRow, VisitRow } from "@/lib/visit-view";
 
 /**
  * Reading the visits back.
@@ -10,40 +10,17 @@ import type { DayRange } from "@/lib/traffic-funnel";
  * Every aggregate is a Postgres function (migration 0081), never a group-by
  * in JavaScript over rows pulled through PostgREST — which truncates at 1000
  * silently and would quietly understate every number on these screens.
+ *
+ * The row types and the pure `outcomeOf`/`labelPairs` arithmetic live in
+ * `lib/visit-view.ts`, which has no `server-only` import — the same split
+ * as `lib/traffic-funnel.ts` sitting pure beside the `server-only`
+ * `lib/traffic.ts`. Re-exported here so this file's non-client callers did
+ * not have to change; a client component must import `lib/visit-view`
+ * directly and never reach this file.
  */
 
-export type CampaignRow = {
-  source: string; medium: string; campaign: string; adset: string; ad: string;
-  visits: number; checkouts: number; orders: number; revenueCents: number;
-};
-export type SourceRow = { key: string; visits: number; orders: number; revenueCents: number };
-export type VisitStep = { step: string; at: string; orderId: string | null; valueCents: number | null };
-export type VisitRow = {
-  id: string; startedAt: string; landingPath: string; landingQuery: string | null;
-  referrer: string | null; referrerHost: string | null;
-  utmFirst: Record<string, string>; utmLast: Record<string, string>;
-  device: string | null; browser: string | null; os: string | null; userAgent: string | null;
-  steps: VisitStep[];
-};
-
-const SHORT: Record<string, string> = {
-  utm_source: "Source", utm_medium: "Medium", utm_campaign: "Campaign",
-  utm_adset: "Ad set", utm_content: "Ad", utm_term: "Term", utm_id: "Campaign id",
-};
-
-/** The labels a reader sees, in UTM_KEYS order rather than object order. */
-export function labelPairs(labels: Record<string, string>): { label: string; value: string }[] {
-  return UTM_KEYS.filter((k) => labels[k]).map((k) => ({ label: SHORT[k], value: labels[k] }));
-}
-
-/** The furthest point a visit reached. */
-export function outcomeOf(v: VisitRow): "bought" | "upsell" | "checkout" | "browsed" {
-  const has = (s: string) => v.steps.some((x) => x.step === s);
-  if (has("purchase")) return "bought";
-  if (has("upsell")) return "upsell";
-  if (has("checkout")) return "checkout";
-  return "browsed";
-}
+export type { CampaignRow, SourceRow, VisitStep, VisitRow } from "@/lib/visit-view";
+export { outcomeOf, labelPairs } from "@/lib/visit-view";
 
 function bounds(range: DayRange): { from: string; to: string } {
   return {

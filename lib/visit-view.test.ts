@@ -1,6 +1,6 @@
-// lib/visit-reports.test.ts
+// lib/visit-view.test.ts
 import { describe, it, expect } from "vitest";
-import { outcomeOf, labelPairs, type VisitRow } from "@/lib/visit-reports";
+import { outcomeOf, labelPairs, type VisitRow } from "@/lib/visit-view";
 
 const visit = (steps: VisitRow["steps"]): VisitRow => ({
   id: "v1", startedAt: "2026-09-11T10:00:00Z", landingPath: "/", landingQuery: null,
