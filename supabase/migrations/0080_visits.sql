@@ -58,6 +58,12 @@ create table if not exists visit_steps (
 
 create index if not exists visit_steps_store_at_idx on visit_steps (store_id, at desc);
 
+-- Belt and braces, per 0067: a future `grant` run by hand, or a Supabase
+-- upgrade restoring its defaults, must not silently reopen these tables to
+-- anon/authenticated. service_role bypasses RLS, so capture is unaffected.
+alter table visits      enable row level security;
+alter table visit_steps enable row level security;
+
 -- Which visit produced this order. Forward-only: rows older than this keep null.
 alter table orders add column if not exists visit_id uuid references visits(id) on delete set null;
 comment on column orders.visit_id is 'The visit this order was placed in. Null for orders predating migration 0080.';
@@ -111,6 +117,14 @@ begin
   return v_id;
 end;
 $$;
+
+-- Only the service role calls this. Postgres grants EXECUTE to PUBLIC by
+-- default, and 0067 revoked function privileges from anon/authenticated but
+-- not from PUBLIC. The insert would still be refused — anon has neither the
+-- table grant nor an RLS policy — but leaving EXECUTE open means that
+-- argument has to be reconstructed by whoever reads this next.
+revoke all privileges on function record_visit(uuid, text, text, text, text, text, jsonb, jsonb, text, text, text, text, text) from public;
+grant execute on function record_visit(uuid, text, text, text, text, text, jsonb, jsonb, text, text, text, text, text) to service_role;
 
 -- Seed what the consented visitor rows already know, once.
 --

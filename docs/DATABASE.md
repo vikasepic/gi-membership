@@ -124,7 +124,7 @@ too.
 | Function | Signature | Purpose |
 |---|---|---|
 | `bump_page_count` | `(uuid, date, text, text, text) → void` | One-statement upsert-increment for traffic counting. Must be one statement: two visitors in the same millisecond would otherwise both read N and both write N+1. `EXECUTE` is granted to `service_role` only. |
-| `record_visit` | `(uuid, text, text, text, text, text, jsonb, jsonb, text, text, text, text, text) → uuid` | Find-or-create for `visits`, in one statement for the same reason as `bump_page_count`: a read then a write from Node lets two page loads in the same millisecond both see no recent visit and both insert. Returns the existing visit's id if `anon_id` had activity in the last 30 minutes, else inserts and returns the new id. Migration 0080. |
+| `record_visit` | `(uuid, text, text, text, text, text, jsonb, jsonb, text, text, text, text, text) → uuid` | Find-or-create for `visits`, in one statement for the same reason as `bump_page_count`: a read then a write from Node lets two page loads in the same millisecond both see no recent visit and both insert. Returns the existing visit's id if `anon_id` had activity in the last 30 minutes, else inserts and returns the new id. `EXECUTE` is granted to `service_role` only. Migration 0080. |
 | `move_course_item` | `(uuid, uuid, int) → void` | Reparent and reorder a curriculum item. In Postgres because the reordering must be atomic. |
 | `swap_course_item_order` | `(uuid, uuid) → void` | Swap two items' sort order atomically. |
 | `set_updated_at` | trigger | Standard `updated_at` touch. On 16 tables. |
@@ -1173,7 +1173,7 @@ not in these tables; it is the `ownership` row for the app.
 
 ### `visit_steps`
 
-*0 rows · 32 kB · RLS disabled*
+*0 rows · 32 kB · RLS enabled*
 
 | Column | Type | Null | Default | Note |
 |---|---|---|---|---|
@@ -1201,15 +1201,41 @@ not in these tables; it is the `ownership` row for the app.
 
 - `CREATE INDEX visit_steps_store_at_idx ON public.visit_steps USING btree (store_id, at DESC)`
 
-Migration 0080. Not RLS-enabled, unlike other tables — new tables inherit no
-`anon`/`authenticated` grants by default (see migration 0067), so PostgREST
-cannot expose either table to those roles regardless.
+Migration 0080. RLS enabled with no policies, same as every other table since
+0067 — service_role bypasses RLS, so the capture path is unaffected.
+
+---
+
+### `visitors`
+
+*75 rows · 112 kB · RLS enabled*
+
+| Column | Type | Null | Default | Note |
+|---|---|---|---|---|
+| `id` | uuid | no | `gen_random_uuid()` |  |
+| `store_id` | uuid | no |  |  |
+| `anon_id` | text | no |  |  |
+| `landing_url` | text | yes |  |  |
+| `referrer` | text | yes |  |  |
+| `utm` | jsonb | no | `'{}'::jsonb` |  |
+| `click_ids` | jsonb | no | `'{}'::jsonb` |  |
+| `user_agent` | text | yes |  |  |
+| `ip_hash` | text | yes |  |  |
+| `first_seen_at` | timestamptz | no | `now()` |  |
+| `last_seen_at` | timestamptz | no | `now()` |  |
+| `created_at` | timestamptz | no | `now()` |  |
+
+**Keys:** `PRIMARY KEY (id)`; `UNIQUE (store_id, anon_id)`
+
+**Foreign keys:**
+
+- `FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE`
 
 ---
 
 ### `visits`
 
-*1 row · 72 kB · RLS disabled*
+*1 row · 72 kB · RLS enabled*
 
 | Column | Type | Null | Default | Note |
 |---|---|---|---|---|
@@ -1251,36 +1277,7 @@ is written from the store layout, so every page is an entry point. Migration
 a null `user_agent`, no `device`/`browser`/`os`, and a `landing_path` that
 still carries the host (the seed's `split_part(url, '://', 2)` was left
 un-stripped because these rows are historical and the visit log labels them
-as such). Not RLS-enabled — see the note on `visit_steps`.
-
----
-
-### `visitors`
-
-*75 rows · 112 kB · RLS enabled*
-
-| Column | Type | Null | Default | Note |
-|---|---|---|---|---|
-| `id` | uuid | no | `gen_random_uuid()` |  |
-| `store_id` | uuid | no |  |  |
-| `anon_id` | text | no |  |  |
-| `landing_url` | text | yes |  |  |
-| `referrer` | text | yes |  |  |
-| `utm` | jsonb | no | `'{}'::jsonb` |  |
-| `click_ids` | jsonb | no | `'{}'::jsonb` |  |
-| `user_agent` | text | yes |  |  |
-| `ip_hash` | text | yes |  |  |
-| `first_seen_at` | timestamptz | no | `now()` |  |
-| `last_seen_at` | timestamptz | no | `now()` |  |
-| `created_at` | timestamptz | no | `now()` |  |
-
-**Keys:** `PRIMARY KEY (id)`; `UNIQUE (store_id, anon_id)`
-
-**Foreign keys:**
-
-- `FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE`
-
----
+as such).
 
 ---
 
