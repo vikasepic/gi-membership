@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { money } from "@/lib/money";
+import { longMonthDay } from "@/lib/dates";
 import type { PurchaseSummary } from "@/lib/purchase-summary";
 
 /**
@@ -15,9 +16,6 @@ import type { PurchaseSummary } from "@/lib/purchase-summary";
  * drawn when it applies to this buyer. A step telling somebody to open an app
  * they did not buy is worse than no step.
  */
-
-const dayMonth = (iso: string) =>
-  new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 
 function Line({ line, currency }: { line: PurchaseSummary["lines"][number]; currency: string }) {
   const body = (
@@ -40,7 +38,7 @@ function Line({ line, currency }: { line: PurchaseSummary["lines"][number]; curr
           // The date is the point. It is the first place a buyer sees when the
           // free part ends, and it is far cheaper than a surprise charge.
           <span className="text-sm text-muted">
-            Free until {dayMonth(line.trialEndsOn)}
+            Free until {longMonthDay(line.trialEndsOn)}
             {line.recurringNote ? `, then ${line.recurringNote}` : ""}
           </span>
         ) : (

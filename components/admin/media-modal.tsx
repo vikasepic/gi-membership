@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { describeMediaAction } from "@/app/admin/media/actions";
+import { dateWithYear } from "@/lib/dates";
 import type { MediaKind } from "@/lib/media-library";
 
 export type PickedMedia = {
@@ -311,7 +312,7 @@ export function Details({
           <Fact label="Weight" value={`${Math.max(1, Math.round(item.size / 1024))}KB`} />
         ) : null}
         {item.createdAt ? (
-          <Fact label="Added" value={new Date(item.createdAt).toLocaleDateString()} />
+          <Fact label="Added" value={dateWithYear(item.createdAt)} />
         ) : null}
       </dl>
 

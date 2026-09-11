@@ -2,6 +2,7 @@
 
 import { useRef, useState, type FormEvent } from "react";
 import { callApi } from "@/lib/builtin-apps/client";
+import { shortDate, dateWithYear } from "@/lib/dates";
 import type {
   GenerationRecord,
   GenerationResult,
@@ -22,14 +23,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   post_idea_too_long: "Keep the post idea under 1,500 characters.",
 };
 
+// Same-year records drop the year; the UTC comparison keeps that decision
+// pinned the same way the date itself is, so nobody near a year boundary in
+// one zone sees a record unexpectedly grow or lose its year.
 function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const sameYear = d.getFullYear() === new Date().getFullYear();
-  return d.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-  });
+  const sameYear = new Date(iso).getUTCFullYear() === new Date().getUTCFullYear();
+  return sameYear ? shortDate(iso) : dateWithYear(iso);
 }
 
 /**
