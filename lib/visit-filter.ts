@@ -1,4 +1,4 @@
-import { outcomeOf, type VisitRow } from "@/lib/visit-reports";
+import { outcomeOf, type VisitRow } from "@/lib/visit-view";
 
 /**
  * The narrowing the visit log's four selects apply.

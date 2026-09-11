@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { VisitRow } from "@/lib/visit-reports";
+import type { VisitRow } from "@/lib/visit-view";
 import { keepVisit } from "@/lib/visit-filter";
 
 const v = (over: Partial<VisitRow>): VisitRow => ({

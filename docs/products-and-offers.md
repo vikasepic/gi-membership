@@ -219,3 +219,35 @@ fields independently, and a link carrying `utm_source` with no
 `utm_campaign` bucketed its view as `direct` and its sale under the source
 name. Routing both functions through `bucketOf` is what closes that gap, not
 a convention either function has to remember on its own.
+
+### Where visits come from, and what the four screens answer
+
+An order's attribution above starts at checkout. Visits start earlier: a row
+is written by `record_visit` (`lib/visits.ts`, migrations 0080/0081) from the
+store LAYOUT, so every page is an entry point — home page included, unlike
+the old `page_counts` counter, which only five paths ever called. Each new
+browser (the `gi_anon` cookie) gets one row, reused across a 30-minute idle
+window rather than one row per page view, and carries the landing path and
+query as the link actually was, the first and last UTM seen, the referring
+host, device/browser/os, and a salted IP hash that stays null until
+`ATTRIBUTION_IP_SALT` is set — the safe failure, not an error. `visit_steps`
+marks checkout, upsell and purchase against the visit that reached them.
+Recorded for everyone, with no consent gate: a landing URL and a campaign
+describe the ad, not the person. Click ids are the one thing that never
+leaves this table for a client to read — `lib/visit-filter.ts` and
+`lib/visit-view.ts` are the pure, non-`server-only` half of the split that
+keeps them off a browser-rendered row. Full design in
+`docs/superpowers/specs/2026-09-11-visit-attribution-design.md`.
+
+Four screens under `/admin/attribution` read it back. **Campaigns**
+(`/admin/attribution`) answers "which campaign, and did it sell" — one row
+per source/medium/campaign/adset/ad with its visits, checkouts, orders and
+revenue. **Referrers** and **Landing pages** (both on
+`/admin/attribution/sources`) answer "which outside site sent them" and
+"which page did they land on", `direct` its own row in the first so neither
+table hides a share of traffic by omitting it. The **visit log**
+(`/admin/attribution/visits`) answers "what did this one visitor do" — every
+visit, one row, filterable by campaign/host/device/outcome — the closest
+thing here to WP Statistics' or GA4's visitor detail view. All four start
+from the day `record_visit` first ran in production; nothing earlier can be
+recovered.

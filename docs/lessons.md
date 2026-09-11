@@ -246,3 +246,75 @@ function they both call (`bucketOf` in `lib/traffic-source.ts`), and write
 the equivalence test on the cases where the inputs actually differ, not the
 case where every field is present and any reasonable ranking gives the same
 answer. (`lib/traffic-source.ts`, `lib/traffic-source.test.ts`)
+
+**2026-09-11 — the tracking was real and the owner still could not see it.**
+The previous branch put campaign labels into orders, into Stripe, and onto
+Meta and GA4 events — every one of those worked. The owner opened the admin
+anyway and got `direct`, for three separate reasons: only five paths ever
+called `recordPageHit`, so the home page left no trace at all; what *was*
+recorded was an aggregate (`page_counts`), with no row anywhere saying "this
+visitor arrived from this link"; and the one place a landing URL survived,
+`visitors.landing_url`, sat behind the consent banner and behind no screen
+that ever displayed it. Rule: a tracking feature is not shipped when the
+data is correct, it is shipped when somebody can find the answer without
+being told where to look. Ship the screen in the same push as the capture,
+and say on the screen which day the data starts.
+(`docs/superpowers/specs/2026-09-11-visit-attribution-design.md`)
+
+**2026-09-11 — a green suite compiled to nothing, three tasks in a row.**
+`components/admin/visit-row.tsx` is `"use client"` and imported `outcomeOf`
+and `labelPairs` from `lib/visit-reports.ts`, which starts `import
+"server-only"` and pulls in the service-role Supabase client through
+`lib/store.ts`. `npx next build` refused to bundle that chain for the
+browser and failed outright — and nothing else on this repo's gate could see
+it coming: `vitest.config.ts` aliases `server-only` to a stub, so even this
+component's own jsdom test ran straight through the guard; `tsc` does not
+model the client/server boundary; ESLint had no rule for it. The import
+landed in the task that built the client component and rode two more green
+tasks before anyone ran `next build`. Rule: this repo's "local green is not
+CI green" has a sibling — a green suite is not a build that compiles, and
+the build is what deploys. `next build` is its own gate, run every task, not
+a thing checked once at the end. (`lib/visit-view.ts`,
+`.superpowers/sdd/2026-09-11-visit-attribution/build-fix-report.md`)
+
+**2026-09-11 — three briefs in a row asserted a `.00` that `money()` will
+never print.** `money()` deliberately drops a whole-dollar `.00`
+(`lib/money.ts`) — house convention, not a bug. Three separate task briefs
+on this branch specified a whole-dollar expected value anyway (`"$343.00"`,
+`"$49.00"`, `"$196.00"`), each written independently by a different
+implementer, and each time the RED test failed against a correctly-behaving
+`money()`. All three implementers caught it and fixed the fixture rather
+than the code. Rule: a money fixture whose expected value lands on a whole
+dollar cannot distinguish a correct formatter from a naive one that always
+prints two decimals — give the fixture cents. (`e22246d`, `112b625`,
+`b0731cb`)
+
+**2026-09-11 — a privacy posture written down in the spec drifted the
+moment code had a locally reasonable excuse not to follow it.** The design's
+own answer was explicit: click ids stay behind the consent banner.
+`sanitizeQuery`, written one task later, kept `fbclid` and its siblings in
+`visits.landing_query` for everyone anyway — its own doc comment reasoned
+"this column exists to answer 'what exactly did they click', and a landing
+URL with fbclid removed answers half of it," which is a sensible argument
+about the column and not about consent. Nothing failed: the task's own tests
+asserted the kept value. It took a reviewer checking the implementation
+against the spec's actual words — "click ids kept only when consent is
+granted" — two tasks later to catch it. Rule: a posture decided once in
+prose has to be re-checked against the code that claims to follow it, not
+against whatever tests that code brought with it — a locally sound reason in
+a comment is not evidence a global rule was kept. (`7a75e2b`)
+
+**2026-09-11 — `??` could not tell an explicit `null` from an argument
+nobody passed.** `recordVisitStep(step, { visitId, ... })` read
+`opts.visitId ?? await currentVisitId()`, so a caller that deliberately
+passed `visitId: null` — the thank-you-page path, for an order whose visit
+genuinely cannot be found — fell through to the cookie's *currently active*
+visit instead, exactly the cookie-based re-attachment this feature's own
+"never from a cookie" rule exists to forbid. Nothing in the checkout suite
+could fail if the wiring were deleted outright: every new field was optional
+or nullable, so `tsc` passed either way and only a review that asked "what
+test would break" found it. Rule: when an argument's absence and its
+explicit falsy value must be handled differently, check with `"visitId" in
+opts`, never `??` — and a nullable field threaded through a money path earns
+a test that fails if the wiring is removed, not just one that exercises the
+populated case. (`aa226e1`)
