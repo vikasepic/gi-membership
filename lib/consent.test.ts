@@ -34,7 +34,10 @@ describe("mayTrack", () => {
     expect(mayTrack("denied")).toBe(false);
   });
 
-  it("blocks tracking while undecided — silence is not consent", () => {
-    expect(mayTrack("unset")).toBe(false);
+  it("tracks while undecided, which is now almost everybody", () => {
+    // The banner went on 11 Sep 2026. Reading "unset" as a refusal is what
+    // silenced roughly a third of all conversions, so this is the assertion
+    // that would catch a revert to opt-in.
+    expect(mayTrack("unset")).toBe(true);
   });
 });

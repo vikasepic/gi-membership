@@ -1434,11 +1434,14 @@ export async function finalizeOrder(intentId: string): Promise<void> {
     valueCents: pi.amount,
   });
 
-  // Report the conversion server-side — ONLY with the buyer's explicit consent,
-  // captured at checkout (the webhook has no cookies). EU/UK traffic means GDPR
-  // applies, and hashed email plus click ids are still personal data.
-  if (order.tracking_consent !== true) return;
-
+  // Report the conversion server-side, for every sale.
+  //
+  // This used to return here unless `order.tracking_consent` was true, which
+  // silenced about a third of all conversions — an ignored banner stored the
+  // same false as a refusal. The banner went on 11 Sep 2026; the column stays
+  // for the history it already holds, and is no longer read. Gating on it now
+  // would also mean a renewal of a pre-change order could never report.
+  //
   // Guarded so a tracking outage can never fail a paid order — finalizeOrder has
   // already committed everything above. The PaymentIntent id doubles as the dedup
   // event_id: the browser pixel (when added) sends the same value, and
@@ -1875,12 +1878,12 @@ async function trackOfferSale(
     const db = createServiceClient();
     const { data: order } = await db
       .from("orders")
-      .select("currency, tracking_consent")
+      .select("currency")
       .eq("id", orderId)
       .maybeSingle();
-    // Consent was captured at checkout and applies to the whole order. Without
-    // it, nothing leaves this server.
-    if (!order || order.tracking_consent !== true) return;
+    // Every offer sale reports. See finalizeOrder for why the consent flag is
+    // no longer read.
+    if (!order) return;
 
     const who = await buyerContextFor(orderId);
     if (!who) return;

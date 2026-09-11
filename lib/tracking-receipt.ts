@@ -21,6 +21,16 @@ export type TrackingReceipt = {
   email: string | null;
   /** For the browser copy, so both halves of a deduplicated event carry the same labels. */
   attribution: Attribution;
+  /**
+   * What was bought, for the browser copy of Purchase and StartTrial.
+   *
+   * The server copy has carried these all along and the browser copy did not.
+   * Both halves share an event_id and Meta keeps whichever lands FIRST — which
+   * on unblocked traffic is usually the browser's — so the surviving Purchase
+   * named no product at all, and nothing built on content_name could see it.
+   */
+  contentName: string | null;
+  contentIds: string[];
 };
 
 export async function purchaseForTracking(paymentIntentId: string): Promise<TrackingReceipt | null> {
@@ -107,12 +117,29 @@ async function receiptFor(column: string, value: string): Promise<TrackingReceip
     // worthless; reporting the price as revenue would say money moved.
     const trialCents = (await trialWorthFor(order.id as string)) || null;
 
+    // What was bought. Its own query rather than an embed: this is a nicety,
+    // and an embed that failed would take the whole receipt — and with it the
+    // browser's only copy of Purchase — down with it.
+    const { data: items } = await db
+      .from("order_items")
+      .select("description, product_id")
+      .eq("order_id", order.id as string);
+    const firstProductId = (items ?? [])[0]?.product_id as string | undefined;
+    const { data: named } = firstProductId
+      ? await db.from("products").select("content_name").eq("id", firstProductId).maybeSingle()
+      : { data: null };
+
     return {
       orderId: order.id as string,
       valueCents: order.total_cents as number,
       currency: (order.currency as string) ?? "usd",
       trialCents,
       email: (order.email as string) ?? null,
+      contentName: contentNameOr(
+        named?.content_name as string | null | undefined,
+        ((items ?? [])[0]?.description as string | undefined) ?? null,
+      ),
+      contentIds: (items ?? []).map((i) => (i.product_id as string) ?? "").filter(Boolean),
       attribution: {
         first: (order.utm_first as Labels | null) ?? {},
         last: (order.utm_last as Labels | null) ?? {},

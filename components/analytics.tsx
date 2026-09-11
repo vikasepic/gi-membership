@@ -8,10 +8,10 @@ import type { PixelMatch } from "@/lib/pixel-match";
 
 // The browser half of tracking.
 //
-// Nothing loads until consent is granted — not the script, not a request to
-// either vendor. A pixel that loads first and "respects consent" afterwards has
-// already told Facebook the page was opened, which is the thing consent was
-// asked about.
+// Loads for every visitor. The consent banner that used to gate this was
+// removed on 11 Sep 2026 — it was silencing about a third of all conversions,
+// since an ignored banner reads the same as a refusal. An explicit opt-out
+// cookie still stops everything; nothing writes one.
 //
 // Advanced matching rides on the init call: `fbq('init', id, {em, fn, ln,
 // external_id})` attaches those to EVERY browser event from then on, which is
@@ -226,36 +226,31 @@ export function adsConversion(
 }
 
 export function Analytics({ ids, match }: { ids: Ids; match?: PixelMatch | null }) {
-  const [allowed, setAllowed] = useState(false);
+  // Starts true, so the pixel mounts on the first render rather than waiting a
+  // round trip through an effect. There is no banner to wait for any more, and
+  // the page an ad click lands on is the one that matters most.
+  const [allowed, setAllowed] = useState(true);
 
   useEffect(() => {
-    const read = () =>
-      setAllowed(
-        mayTrack(
-          parseConsent(
-            document.cookie
-              .split("; ")
-              .find((c) => c.startsWith(`${CONSENT_COOKIE}=`))
-              ?.split("=")[1],
-          ),
-        ),
-      );
-    read();
-    // The banner dispatches this the moment someone accepts, so the pixels
-    // load on that click rather than on the next navigation — otherwise the
-    // page they consented on is the one page never measured.
-    window.addEventListener("gi:consent-granted", read);
-    // And a refusal throws away whatever was waiting on a pixel. Buffering an
-    // event is not permission to send it later.
-    window.addEventListener("gi:consent-denied", dropPendingPixelCalls);
-    // Registered HERE, before `allowed` flips and the script is allowed to
-    // mount, so the listener is always in place before the snippet can shout.
+    // The only thing left to honour is an explicit opt-out, which nothing in
+    // the UI writes — see lib/consent.ts. Almost always absent, so this
+    // almost always leaves the pixel exactly where it started.
+    const denied = !mayTrack(
+      parseConsent(
+        document.cookie
+          .split("; ")
+          .find((c) => c.startsWith(`${CONSENT_COOKIE}=`))
+          ?.split("=")[1],
+      ),
+    );
+    if (denied) {
+      setAllowed(false);
+      // Buffering an event is not permission to send it later.
+      dropPendingPixelCalls();
+    }
+    // Registered before the snippet can shout, so a ready event is never missed.
     window.addEventListener(PIXEL_READY_EVENT, flushPendingPixelCalls);
-    return () => {
-      window.removeEventListener("gi:consent-granted", read);
-      window.removeEventListener("gi:consent-denied", dropPendingPixelCalls);
-      window.removeEventListener(PIXEL_READY_EVENT, flushPendingPixelCalls);
-    };
+    return () => window.removeEventListener(PIXEL_READY_EVENT, flushPendingPixelCalls);
   }, []);
 
   if (!allowed) return null;

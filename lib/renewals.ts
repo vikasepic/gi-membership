@@ -147,24 +147,24 @@ export async function recordRenewal(
   }
 
   if (opts?.track !== false) try {
-    // Consent was given at the checkout this subscription came from, and it
-    // covers what that subscription goes on to charge.
-    if (origin.trackingConsent === true) {
-      const who = await buyerContextFor(orderId);
-      if (who) {
-        await trackServerEvent({
-          ...who,
-          // Keyed on the INVOICE. The order's own id would work too, but the
-          // invoice is the thing Stripe will redeliver, so it is the id both
-          // sides of a retry agree on.
-          eventId: eventIdFor("Purchase", invoice.id ?? orderId),
-          eventName: "Purchase",
-          valueCents: amountCents,
-          currency: (invoice.currency ?? origin.currency) || "usd",
-          orderId,
-          occurredAt: invoice.created ?? Math.floor(Date.now() / 1000),
-        });
-      }
+    // Every renewal reports. This used to be gated on the ORIGINATING order's
+    // stored consent flag, which after the banner's removal would have meant a
+    // subscription sold before 11 Sep 2026 could never report a renewal —
+    // a permanent silence keyed on a column nothing writes any more.
+    const who = await buyerContextFor(orderId);
+    if (who) {
+      await trackServerEvent({
+        ...who,
+        // Keyed on the INVOICE. The order's own id would work too, but the
+        // invoice is the thing Stripe will redeliver, so it is the id both
+        // sides of a retry agree on.
+        eventId: eventIdFor("Purchase", invoice.id ?? orderId),
+        eventName: "Purchase",
+        valueCents: amountCents,
+        currency: (invoice.currency ?? origin.currency) || "usd",
+        orderId,
+        occurredAt: invoice.created ?? Math.floor(Date.now() / 1000),
+      });
     }
   } catch (e) {
     console.error("[recordRenewal] tracking failed (the order is recorded):", e);

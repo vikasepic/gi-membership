@@ -74,8 +74,11 @@ describe("a sale charged to a card already on file", () => {
     expect(fn).toContain("valueCents: nowCents > 0 ? nowCents : offer.priceCents");
   });
 
-  it("sends nothing without consent", () => {
-    expect(fn).toContain('order.tracking_consent !== true) return');
+  it("reports every offer sale, consent flag or not", () => {
+    // The stored flag is history now, not a gate — see lib/consent.ts. Scoped
+    // to this function rather than the file: the column is still SELECTed and
+    // written elsewhere, so a file-wide assertion would pass on the comment.
+    expect(fn).not.toContain("tracking_consent !== true");
   });
 
   it("cannot undo the sale it is reporting", () => {

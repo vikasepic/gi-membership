@@ -98,8 +98,11 @@ describe("what it reports", () => {
     expect(renewals).toContain("occurredAt: invoice.created");
   });
 
-  it("still asks for consent", () => {
-    expect(renewals).toContain("origin.trackingConsent === true");
+  it("does not gate on the originating order's consent flag", () => {
+    // A subscription sold before the banner came down carries
+    // tracking_consent = false forever. Gating on it would mean every renewal
+    // of every pre-11-Sep-2026 subscription reports nothing, permanently.
+    expect(renewals).not.toContain("origin.trackingConsent ===");
   });
 });
 

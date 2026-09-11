@@ -4,7 +4,6 @@ import { AttributionTracker } from "@/components/attribution-tracker";
 import { Analytics } from "@/components/analytics";
 import { publicAnalyticsIds } from "@/lib/env";
 import { pixelMatch } from "@/lib/pixel-match";
-import { ConsentBanner } from "@/components/consent-banner";
 import { StoreBrand } from "@/components/store-brand";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import { listFonts } from "@/lib/fonts";
@@ -62,7 +61,6 @@ export default async function StoreLayout({ children }: { children: React.ReactN
       <AttributionTracker />
       <Analytics ids={publicAnalyticsIds()} match={match} />
       <AppShell settings={settings}>{children}</AppShell>
-      <ConsentBanner />
       <CodeSnippets snippets={settings.codeSnippets} place="bodyEnd" onCheckout={onCheckout} />
     </>
   );

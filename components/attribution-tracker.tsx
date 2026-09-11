@@ -27,12 +27,7 @@ function capture() {
   // `_fbc` is the click id in the format Meta actually accepts —
   // fb.1.<click-time>.<fbclid> — written by the pixel itself, so it carries the
   // real click time rather than a guess. `_fbp` is the browser id, and it is
-  // the single strongest match signal available to a server-side event; it was
-  // never captured at all, so every conversion this store reported was matched
-  // on a hashed email and nothing else.
-  //
-  // Read AFTER consent, because the pixel that writes them does not load until
-  // then — which is also why capture() runs again on the consent event.
+  // the single strongest match signal available to a server-side event.
   const clickIds = { ...pick(CLICK_KEYS) };
   const fbp = cookie("_fbp");
   const fbc = cookie("_fbc");
@@ -46,37 +41,62 @@ function capture() {
       landingUrl: window.location.href,
       referrer: document.referrer,
       // The same seven keys the server keeps (lib/attribution.ts), so the
-      // consented visitor row and the order can never disagree about which
-      // labels exist. The old fixed five dropped utm_adset — the one key the
-      // ads team's template is built around.
+      // visitor row and the order can never disagree about which labels exist.
       utm: parseLabels(window.location.search),
       clickIds,
     }),
   })
-    // Marked done only when the server says it actually STORED something.
-    //
-    // It used to be marked on any reply, including the "no-consent" one — so
-    // the landing capture, which almost always runs before the banner is
-    // answered, set the flag and the capture that runs the moment somebody
-    // accepts returned early. Anybody who consented after landing, which is
-    // everybody, had their click ids dropped.
     .then((r) => r.json().catch(() => ({})))
     .then((r: { stored?: boolean }) => {
-      if (r?.stored) sessionStorage.setItem("gi_tracked", "1");
+      // Finished only once one of Meta's own cookies was in the payload.
+      //
+      // Marking it on any successful store is the trap this component used to
+      // fall into from the other direction: the first run happens before
+      // fbevents.js has loaded, so neither cookie exists yet, and a flag set
+      // there means the run that WOULD have carried them never happens. The
+      // server merges late click ids into the existing row without disturbing
+      // first touch, so running again is safe and is the whole point.
+      if (r?.stored && (fbp || fbc)) sessionStorage.setItem("gi_tracked", "1");
     })
     .catch(() => {});
 }
 
-// Captures UTMs, click ids and referrer on landing — but only once the visitor
-// has opted in, since those are personal data under GDPR and this store takes
-// EU/UK traffic. The server re-checks the consent cookie and refuses to store
-// anything without it, so this is defence in depth rather than the only gate.
+/**
+ * Captures UTMs, click ids and referrer on landing.
+ *
+ * Runs for every visitor — the consent banner that used to gate this was
+ * removed on 11 Sep 2026. An explicit opt-out cookie still stops the server
+ * storing anything (lib/consent.ts); nothing writes one.
+ */
 export function AttributionTracker() {
   useEffect(() => {
-    capture(); // no-ops server-side when consent is absent
-    const onGrant = () => capture();
-    window.addEventListener("gi:consent-granted", onGrant);
-    return () => window.removeEventListener("gi:consent-granted", onGrant);
+    // Immediately, so the campaign that brought them here is recorded even if
+    // the pixel is blocked and the cookies below never appear.
+    capture();
+
+    // Then again once Meta's pixel has written its cookies. `fbevents.js` is
+    // loaded async by the snippet, so `_fbp` appears some hundreds of ms after
+    // this effect — there is no event for it, and the pixel-ready event fires
+    // too early (it marks the inline stub, not the loaded script). Polling the
+    // cookie costs nothing and is the only signal that is never early.
+    if (sessionStorage.getItem("gi_tracked")) return;
+    const poll = setInterval(() => {
+      if (sessionStorage.getItem("gi_tracked")) {
+        clearInterval(poll);
+        return;
+      }
+      // Only re-send when there is something new to send: a blocked pixel
+      // means these never arrive, and re-posting the same payload 30 times
+      // would be 30 wasted requests on a page that takes money.
+      if (cookie("_fbp") || cookie("_fbc")) capture();
+    }, 500);
+    // Give up rather than poll forever — an ad blocker is a permanent answer.
+    const stop = setTimeout(() => clearInterval(poll), 15000);
+
+    return () => {
+      clearInterval(poll);
+      clearTimeout(stop);
+    };
   }, []);
 
   return null;

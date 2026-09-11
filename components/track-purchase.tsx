@@ -28,6 +28,8 @@ export function TrackPurchase({
   adsLabel,
   customEvent,
   attribution,
+  contentName,
+  contentIds,
 }: {
   orderId: string;
   /** What was actually charged today. */
@@ -45,6 +47,9 @@ export function TrackPurchase({
   customEvent?: { name: string; contentName: string } | null;
   /** Off the order row, via the receipt — never off the URL. Same keys the server copy sends. */
   attribution?: Attribution | null;
+  /** What was bought, so the copy Meta keeps names a product. Both off the receipt. */
+  contentName?: string | null;
+  contentIds?: string[];
 }) {
   const sent = useRef(false);
   useEffect(() => {
@@ -52,10 +57,26 @@ export function TrackPurchase({
     sent.current = true;
 
     const campaign = stripeAttributionMetadata(attribution);
+    // What was bought, on the standard events too — not only on the custom one.
+    // Meta keeps whichever copy of a deduplicated event arrives first, and on
+    // unblocked traffic that is this one; without these the surviving Purchase
+    // named no product.
+    const content = {
+      ...(contentName ? { content_name: contentName } : {}),
+      ...(contentIds?.length
+        ? { content_ids: contentIds, content_type: "product", num_items: contentIds.length }
+        : {}),
+    };
 
     track(
       "Purchase",
-      { value: valueCents / 100, currency: currency.toUpperCase(), order_id: orderId, ...campaign },
+      {
+        value: valueCents / 100,
+        currency: currency.toUpperCase(),
+        order_id: orderId,
+        ...content,
+        ...campaign,
+      },
       eventIdFor("Purchase", orderId),
     );
 
@@ -69,6 +90,7 @@ export function TrackPurchase({
           value: trialCents / 100,
           currency: currency.toUpperCase(),
           predicted_ltv: trialCents / 100,
+          ...content,
           ...campaign,
         },
         eventIdFor("StartTrial", orderId),
