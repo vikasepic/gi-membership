@@ -33,12 +33,16 @@ export async function reportReversal(args: {
     const db = createServiceClient();
     const { data: order } = await db
       .from("orders")
-      .select("tracking_consent, livemode")
+      .select("livemode")
       .eq("id", args.orderId)
       .maybeSingle();
     if (!order) return;
-    // Consent given at the checkout covers what happens to that order after.
-    if (order.tracking_consent !== true) return;
+    // Every reversal reports. Gating this on the stored consent flag — as it
+    // did until 11 Sep 2026 — would be the worst of both: the PURCHASE of a
+    // pre-change order was reported under the old rules only if consent was
+    // given, but a refund of one reported under the new rules only if it was
+    // too. Any order whose refund is silenced leaves Meta optimising towards
+    // revenue that came back. See lib/consent.ts.
     // A test-mode order never was revenue, so taking it back is not a refund
     // anybody should hear about.
     if (order.livemode === false) return;

@@ -87,8 +87,9 @@ describe("reporting one", () => {
     expect(reversals).toContain("order.livemode === false) return");
   });
 
-  it("still asks for consent", () => {
-    expect(reversals).toContain("order.tracking_consent !== true) return");
+  it("reports a reversal whatever the order's stored consent flag says", () => {
+    // A silenced refund leaves Meta optimising towards revenue that came back.
+    expect(reversals).not.toContain("order.tracking_consent !== true) return");
   });
 
   it("cannot fail the webhook", () => {
