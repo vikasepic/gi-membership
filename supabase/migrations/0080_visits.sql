@@ -137,8 +137,37 @@ select v.store_id,
        v.anon_id,
        v.first_seen_at,
        v.first_seen_at,
-       coalesce(nullif(split_part(split_part(v.landing_url, '?', 1), '://', 2), ''), '/') ,
-       nullif(split_part(v.landing_url, '?', 2), ''),
+       -- Strip scheme AND host, keep the leading slash, fall back to '/'.
+       -- The old expression only stripped the scheme, so
+       -- 'https://store.com/p/foo?x=1' seeded 'store.com/p/foo' — no leading
+       -- slash, and visit_landing_rollup then groups that apart from every
+       -- other row for the same page.
+       coalesce(nullif(regexp_replace(split_part(v.landing_url, '?', 1), '^https?://[^/]+', ''), ''), '/'),
+       -- Same rule sanitizeQuery (lib/visit-fields.ts) applies to a live
+       -- capture: click ids are dropped case-insensitively on the key
+       -- (this column has no consent gate, and a click id identifies a
+       -- click, not an ad), and any pair whose value carries an '@' is
+       -- dropped outright (an ESP link builds a per-recipient URL). The
+       -- old expression copied the query straight from the URL and did
+       -- neither. Pairs are read with unnest ... with ordinality rather
+       -- than jsonb/regexp tricks so order is preserved and a value may
+       -- itself contain '=' without being misread.
+       (
+         select nullif(left(string_agg(pair, '&' order by ord), 500), '')
+           from unnest(
+                  string_to_array(nullif(split_part(v.landing_url, '?', 2), ''), '&')
+                ) with ordinality as q(pair, ord)
+          where pair <> ''
+            and strpos(pair, '=') > 0
+            and substring(pair from strpos(pair, '=') + 1) <> ''
+            -- '%40' catches the common percent-encoded form of '@' in this
+            -- historical, already-captured data; sanitizeQuery additionally
+            -- decodes before judging, which a one-time seed of real
+            -- captured URLs does not need to replicate byte-for-byte.
+            and substring(pair from strpos(pair, '=') + 1) !~* '@|%40'
+            and lower(left(pair, strpos(pair, '=') - 1)) not in
+                ('fbclid', 'gclid', 'ttclid', 'msclkid', 'wbraid', 'gbraid', '_fbp', '_fbc')
+       ),
        v.referrer,
        nullif(split_part(split_part(coalesce(v.referrer, ''), '://', 2), '/', 1), ''),
        coalesce((select jsonb_object_agg(t.k, t.val) from jsonb_each_text(v.utm) as t(k, val) where t.k like 'utm\_%' and t.val <> ''), '{}'::jsonb),
