@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isMetaId, namedLabel, namedLabels } from "@/lib/meta-id";
+import { isMetaId, namedLabel, namedLabels, nameMetadata } from "@/lib/meta-id";
 
 /**
  * Turning Meta's object ids back into names.
@@ -69,5 +69,33 @@ describe("swapping in the name", () => {
       utm_term: "DPV | Advantage+ Broad",
       utm_content: "120250765617330282",
     });
+  });
+});
+
+describe("the name keys Stripe carries", () => {
+  it("adds a _name key beside the id, never instead of it", () => {
+    // The ads team's other platform filters on `utm_campaign`. Rewriting it in
+    // place would fix one reader by breaking another.
+    const labels = { utm_campaign: "120250826827780282", utm_term: "120250826827840282" };
+    expect(nameMetadata(labels, NAMES)).toEqual({
+      utm_campaign_name: "AJ | Product Validator | Sales | Relaunch",
+      utm_term_name: "DPV | Advantage+ Broad",
+    });
+    // and the caller still spreads the raw keys itself
+    expect(labels.utm_campaign).toBe("120250826827780282");
+  });
+
+  it("says nothing when the campaign already sends a real name", () => {
+    // Those campaigns need no lookup — the name is already in utm_campaign,
+    // and a duplicate _name key would just be noise in the dashboard.
+    expect(nameMetadata({ utm_campaign: "AJ | LAL | Book Writer" }, NAMES)).toEqual({});
+  });
+
+  it("says nothing for an id it cannot name", () => {
+    expect(nameMetadata({ utm_campaign: "120250765617330282" }, NAMES)).toEqual({});
+  });
+
+  it("ignores source and medium, which are never ids", () => {
+    expect(nameMetadata({ utm_source: "fb", utm_medium: "paid" }, NAMES)).toEqual({});
   });
 });

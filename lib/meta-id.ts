@@ -26,6 +26,36 @@ export function namedLabel(value: string, names: Record<string, string>): string
   return names[value.trim()] ?? value;
 }
 
+/**
+ * The label keys that carry a Meta object id under Meta's default ad URLs:
+ * campaign, ad set (which Meta puts in utm_term), and the ad itself.
+ */
+const NAMEABLE = ["utm_campaign", "utm_adset", "utm_content", "utm_term"] as const;
+
+/**
+ * `utm_campaign_name` and friends, for Stripe metadata.
+ *
+ * ADDED alongside the raw ids, never replacing them. The ads team's other
+ * platform reads the id keys, so rewriting `utm_campaign` in place would fix
+ * one reader by breaking another. A `_name` key appears only when the raw value
+ * was an id AND we know what it is called — so a campaign already sending a
+ * real name produces nothing here, which is right: the name is already in
+ * `utm_campaign`.
+ */
+export function nameMetadata(
+  labels: Record<string, string>,
+  names: Record<string, string>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of NAMEABLE) {
+    const raw = labels[k]?.trim();
+    if (!raw || !isMetaId(raw)) continue;
+    const name = names[raw];
+    if (name) out[`${k}_name`] = name;
+  }
+  return out;
+}
+
 /** The same, across a whole label set. */
 export function namedLabels(
   labels: Record<string, string>,

@@ -32,7 +32,8 @@ import { livePrices, chargeNowCents as chargeNowFor } from "@/lib/offer-prices";
 import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
 import { markLeadConverted } from "@/lib/leads";
 import { recordError, messageOf } from "@/lib/errors";
-import { stripeAttributionMetadata, orderAttributionColumns, type Attribution, type Labels } from "@/lib/attribution";
+import { orderAttributionColumns, type Attribution, type Labels } from "@/lib/attribution";
+import { stripeAttributionWithNames } from "@/lib/attribution-names";
 import { recordVisitStep } from "@/lib/visits";
 import type { Offer } from "@/lib/types";
 
@@ -502,7 +503,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
         // Last touch as utm_*, first touch as first_utm_*, plus referrer.
         // Spread last: nothing above uses these names, and the keys another
         // platform already reads stay exactly where they are.
-        ...stripeAttributionMetadata(input.attribution),
+        ...(await stripeAttributionWithNames(input.attribution)),
       },
     });
     if (!si.client_secret) return { ok: false, error: "No client secret" };
@@ -669,7 +670,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       bumpPrepaid: bumpOffer && bumpOffer.billingType === "one_time" ? "true" : "",
       taxCalculationId: tax.calculationId ?? "",
       newAccount,
-      ...stripeAttributionMetadata(input.attribution),
+      ...(await stripeAttributionWithNames(input.attribution)),
     },
   });
 
@@ -825,7 +826,7 @@ export async function fulfilOffer(args: {
     .select("utm_first, utm_last, referrer")
     .eq("id", order.id)
     .maybeSingle();
-  const campaign = stripeAttributionMetadata({
+  const campaign = await stripeAttributionWithNames({
     first: (orderRow?.utm_first as Labels | null) ?? {},
     last: (orderRow?.utm_last as Labels | null) ?? {},
     referrer: (orderRow?.referrer as string | null) ?? null,
@@ -1145,7 +1146,7 @@ export async function finalizeOrder(intentId: string): Promise<void> {
     // read the same metadata. This is the store's highest-value order type —
     // a recurring product sale — and its subscription is the row the ads
     // platform reads.
-    const campaign = stripeAttributionMetadata({
+    const campaign = await stripeAttributionWithNames({
       first: (order.utm_first as Labels | null) ?? {},
       last: (order.utm_last as Labels | null) ?? {},
       referrer: (order.referrer as string | null) ?? null,

@@ -13,7 +13,8 @@ import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupo
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { recordError, messageOf } from "@/lib/errors";
 import { recordVisitStep } from "@/lib/visits";
-import { stripeAttributionMetadata, attributionFromMetadata, orderAttributionColumns, type Attribution } from "@/lib/attribution";
+import { attributionFromMetadata, orderAttributionColumns, type Attribution } from "@/lib/attribution";
+import { stripeAttributionWithNames } from "@/lib/attribution-names";
 import type { Offer } from "@/lib/types";
 
 // Standalone checkout for a single offer, for a member who has no card on file
@@ -277,7 +278,7 @@ export async function startOfferCheckout(args: {
     // the platform the ads team reads from Stripe, and read back at
     // completion to write the order. Spread last; the keys above are what
     // that platform already filters on and they do not move.
-    ...stripeAttributionMetadata(args.attribution),
+    ...(await stripeAttributionWithNames(args.attribution)),
   };
   const description = `${offer.name} — ${await getStoreName()}`;
 
