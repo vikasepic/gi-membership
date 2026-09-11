@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Logo } from "@/components/logo";
 import { publicCoverUrl } from "@/lib/media-url";
 import type { Settings } from "@/lib/settings-schema";
+import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
 import {
   SHELL_CLASS,
   shellHasTabs,
@@ -87,16 +88,17 @@ export function AppShell({
   // out to it; one that has not keeps the page this app renders, so the footer
   // is never a dead link either way.
   //
-  // The earnings disclaimer appears only where there is one — it is not a page
-  // this app has, so a blank setting means the link simply is not there rather
-  // than pointing at a 404.
+  // The refund policy link went on 11 Sep 2026 — Ajit's call. The earnings
+  // disclaimer takes its place and always renders: it is not a page this app
+  // has, so it falls back to the published one rather than to a 404.
   const policies = [
     { label: "Terms", href: settings.termsUrl || "/terms", external: Boolean(settings.termsUrl) },
     { label: "Privacy", href: settings.privacyUrl || "/privacy", external: Boolean(settings.privacyUrl) },
-    { label: "Refunds", href: "/refunds", external: false },
-    ...(settings.earningsUrl
-      ? [{ label: "Earnings disclaimer", href: settings.earningsUrl, external: true }]
-      : []),
+    {
+      label: "Earnings disclaimer",
+      href: settings.earningsUrl || LEGAL_DEFAULTS.earningsUrl,
+      external: true,
+    },
   ];
 
   const socials = [

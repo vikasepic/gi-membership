@@ -8,7 +8,7 @@ values (
   '00000000-0000-0000-0000-000000000001',
   'greater-inside',
   'Greater Inside',
-  '{"currency":"usd","support_email":"connect@vikasbendha.com"}'::jsonb
+  '{"currency":"usd","contactEmail":"support@greaterinside.com"}'::jsonb
 )
 on conflict (id) do nothing;
 

@@ -7,6 +7,7 @@ import { money } from "@/lib/money";
 import { priceLabel, priceTerms, savingAgainst, type OfferPrice } from "@/lib/offer-prices";
 import { OrderBump } from "@/components/checkout/order-bump";
 import type { CheckoutDesign } from "@/lib/checkout-design";
+import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
 import {
   COUNTRIES,
   MIN_CHARGE_CENTS_CLIENT,
@@ -102,6 +103,8 @@ export type CheckoutSlotValue = {
   notePaymentInfo: () => void;
   /** The published terms, where the store has named one. See TrustBlock. */
   termsUrl?: string;
+  /** The store's earnings disclaimer, linked beside the terms. */
+  earningsUrl?: string;
 
   /**
    * What the store chose to show. See lib/checkout-design.
@@ -1090,8 +1093,13 @@ function TrustBlock() {
           terms
         </a>{" "}
         and{" "}
-        <a href="/refunds" className="underline underline-offset-2 hover:text-fg">
-          refund policy
+        <a
+          href={c?.earningsUrl || LEGAL_DEFAULTS.earningsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline underline-offset-2 hover:text-fg"
+        >
+          earnings disclaimer
         </a>
         .
       </p>

@@ -190,7 +190,7 @@ const STARTER_CONTENT: Record<string, Record<string, unknown>> = {
     links: [
       { label: "Privacy Policy", url: "/privacy" },
       { label: "Terms & Conditions", url: "/terms" },
-      { label: "Refunds", url: "/refunds" },
+      { label: "Earnings Disclaimer", url: "https://greaterinside.com/earnings-disclaimer/" },
     ],
   },
 };

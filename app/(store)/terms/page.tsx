@@ -89,12 +89,6 @@ export default async function TermsPage() {
         </p>
       </Clause>
 
-      <Clause heading="Refunds">
-        <p>
-          Set out in full in our <a href="/refunds">refund policy</a>, which forms part of these
-          terms.
-        </p>
-      </Clause>
 
       <Clause heading="What we promise, and what we do not">
         <p>

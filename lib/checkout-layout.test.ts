@@ -73,13 +73,15 @@ describe("the checkout blocks are wired end to end", () => {
   });
 
   it("keeps the disclosure line attached to the button that takes the money", () => {
-    // Naming the terms and the refund right at the point of payment is a
-    // disclosure obligation, not decoration — so it cannot be a block somebody
-    // can delete. It travels inside the pay button.
+    // Naming the terms at the point of payment is a disclosure obligation, not
+    // decoration — so it cannot be a block somebody can delete. It travels
+    // inside the pay button. The refund link became the earnings disclaimer on
+    // 11 Sep 2026; the line itself may not go.
     const src = readFileSync("components/checkout/slots.tsx", "utf8");
     const pay = src.slice(src.indexOf("export function PayButtonSlot"));
     expect(pay).toContain("<TrustBlock />");
-    expect(src).toContain('href="/refunds"');
+    expect(src).toContain("earningsUrl || LEGAL_DEFAULTS.earningsUrl");
+    expect(src).not.toContain('href="/refunds"');
   });
 });
 

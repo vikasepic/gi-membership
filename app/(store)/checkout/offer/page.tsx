@@ -150,6 +150,7 @@ export default async function OfferCheckoutPage({
       skin={skin}
       design={design}
       termsUrl={settings.termsUrl || undefined}
+      earningsUrl={settings.earningsUrl || undefined}
     />
   );
 

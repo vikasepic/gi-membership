@@ -50,6 +50,7 @@ export function CheckoutForm({
   defaultCountry,
   layout,
   termsUrl,
+  earningsUrl,
   skin = "v1",
   design,
 }: {
@@ -70,6 +71,8 @@ export function CheckoutForm({
   layout?: Block[] | null;
   /** The store's published terms, for the line under the pay button. */
   termsUrl?: string;
+  /** The earnings disclaimer, linked beside the terms. */
+  earningsUrl?: string;
   // Present when a member is already signed in — we then ask for nothing but
   // payment, since we already know who they are.
   signedInEmail?: string | null;
@@ -100,6 +103,7 @@ export function CheckoutForm({
         defaultCountry={defaultCountry ?? ""}
         layout={layout ?? null}
         termsUrl={termsUrl}
+        earningsUrl={earningsUrl}
         skin={skin}
         design={design}
       />
@@ -116,6 +120,7 @@ function Inner({
   defaultCountry,
   layout,
   termsUrl,
+  earningsUrl,
   skin = "v1",
   design,
 }: {
@@ -129,6 +134,7 @@ function Inner({
   defaultCountry: string;
   layout: Block[] | null;
   termsUrl?: string;
+  earningsUrl?: string;
   skin?: CheckoutSkin;
   design?: CheckoutDesign;
 }) {
@@ -515,6 +521,7 @@ function Inner({
     canPay: Boolean(stripe),
     notePaymentInfo,
     termsUrl,
+    earningsUrl,
     askCountry,
     design,
   };

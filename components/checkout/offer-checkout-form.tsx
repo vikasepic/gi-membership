@@ -51,6 +51,7 @@ export function OfferCheckoutForm({
   bumpOptions = [],
   skin = "v1",
   termsUrl,
+  earningsUrl,
   design,
 }: {
   offer: OfferSummary;
@@ -66,6 +67,7 @@ export function OfferCheckoutForm({
   /** Which arrangement. See lib/checkout-skin.ts — v1 unless asked for. */
   skin?: CheckoutSkin;
   termsUrl?: string;
+  earningsUrl?: string;
   design?: CheckoutDesign;
 }) {
   const stripePromise = useMemo(() => loadStripe(publishableKey), [publishableKey]);
@@ -91,6 +93,7 @@ export function OfferCheckoutForm({
         bumpOptions={bumpOptions}
         skin={skin}
         termsUrl={termsUrl}
+        earningsUrl={earningsUrl}
         design={design}
       />
     </Elements>
@@ -105,6 +108,7 @@ function Inner({
   bumpOptions,
   skin,
   termsUrl,
+  earningsUrl,
   design,
 }: {
   offer: OfferSummary;
@@ -115,6 +119,7 @@ function Inner({
   bumpOptions: BumpSummary[];
   skin: CheckoutSkin;
   termsUrl?: string;
+  earningsUrl?: string;
   design?: CheckoutDesign;
 }) {
   // Preselected from the sales page, and still changeable — somebody who
@@ -418,6 +423,7 @@ function Inner({
     canPay: Boolean(stripe),
     notePaymentInfo: () => {},
     termsUrl,
+    earningsUrl,
     design,
   };
 

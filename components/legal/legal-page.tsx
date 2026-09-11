@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { legalPlaceholders, type Legal } from "@/lib/legal";
+import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
 
 // Shared shell for the policy pages: one measure, one type scale, one place the
 // "still a draft" warning lives.
@@ -51,7 +52,7 @@ export function LegalPage({
       <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-6 text-sm text-muted">
         <Link href="/terms" className="hover:text-fg">Terms of Service</Link>
         <Link href="/privacy" className="hover:text-fg">Privacy Policy</Link>
-        <Link href="/refunds" className="hover:text-fg">Refund Policy</Link>
+        <a href={LEGAL_DEFAULTS.earningsUrl} target="_blank" rel="noopener noreferrer" className="hover:text-fg">Earnings Disclaimer</a>
       </div>
     </div>
   );

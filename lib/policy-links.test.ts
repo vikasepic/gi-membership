@@ -24,11 +24,16 @@ describe("the footer links to the published policies", () => {
     expect(shell).toContain('settings.privacyUrl || "/privacy"');
   });
 
-  it("leaves the earnings link off when there is nothing to point at", () => {
-    // Unlike the other two, this app renders no earnings page — so a blank
-    // setting must drop the link, not link to a 404.
-    expect(shell).toContain("settings.earningsUrl");
-    expect(shell).toContain("[{ label: \"Earnings disclaimer\"");
+  it("always shows the earnings disclaimer, falling back to the published one", () => {
+    // It replaced the refund link on 11 Sep 2026. This app renders no earnings
+    // page, so a blank setting falls back to the address on the main site
+    // rather than dropping the link or pointing at a 404.
+    expect(shell).toContain("settings.earningsUrl || LEGAL_DEFAULTS.earningsUrl");
+  });
+
+  it("no longer offers a refund policy anywhere in the footer", () => {
+    expect(shell).not.toContain("/refunds");
+    expect(shell).not.toContain("Refunds");
   });
 
   it("opens an external policy as an external link", () => {
@@ -40,7 +45,7 @@ describe("the pages themselves are untouched", () => {
   it("still renders its own policies for anything linking to them", () => {
     // Only the footer moved. The checkout's disclosure line, and any page that
     // links to /terms directly, keeps working.
-    for (const p of ["app/(store)/terms/page.tsx", "app/(store)/privacy/page.tsx", "app/(store)/refunds/page.tsx"]) {
+    for (const p of ["app/(store)/terms/page.tsx", "app/(store)/privacy/page.tsx"]) {
       expect(() => readFileSync(p, "utf8"), p).not.toThrow();
     }
   });
