@@ -1,4 +1,5 @@
 import "server-only";
+import { longDate } from "@/lib/dates";
 
 // Transactional email. Without this a buyer pays, gets an account created at
 // checkout, and is never told how to reach it — and a forgotten password is
@@ -89,11 +90,7 @@ export function buildReceiptEmail(args: {
   const subtotal = args.subtotalCents ?? args.lines.reduce((n, l) => n + l.amountCents, 0);
   const discount = args.discountCents ?? 0;
   const paid = args.paidAt ?? new Date();
-  const date = new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(paid);
+  const date = longDate(paid);
   // The full uuid is what support asks for, but it is not what a buyer reads.
   // The short form is shown; the full one is spelled out at the bottom.
   const shortId = args.orderId.slice(0, 8).toUpperCase();

@@ -8,13 +8,12 @@ import { NOINDEX } from "@/lib/seo";
 import { YourDetails } from "@/components/account/your-details";
 import { getProfile } from "@/lib/profile";
 import { getLegal } from "@/lib/legal";
+import { dateWithYear } from "@/lib/dates";
 
 export const metadata = NOINDEX;
 
-const when = (iso: string | number) =>
-  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(
-    typeof iso === "number" ? new Date(iso * 1000) : new Date(iso),
-  );
+// Purchases carry an ISO string; Stripe invoices carry unix seconds.
+const when = (iso: string | number) => dateWithYear(typeof iso === "number" ? new Date(iso * 1000) : iso);
 
 export default async function AccountPage({
   searchParams,

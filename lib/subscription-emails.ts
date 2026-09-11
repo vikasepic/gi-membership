@@ -6,6 +6,7 @@ import { siteUrl } from "@/lib/env";
 import { money } from "@/lib/money";
 import { buildTrialEndingEmail, buildPaymentFailedEmail, sendEmail } from "@/lib/email";
 import { sendCrmEvent } from "@/lib/crm";
+import { longMonthDay } from "@/lib/dates";
 
 /**
  * The two moments a subscriber hears nothing and quietly leaves.
@@ -72,9 +73,7 @@ async function subscriberFor(stripeSubscriptionId: string) {
 }
 
 const on = (unix: number | null | undefined) =>
-  unix
-    ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long" }).format(new Date(unix * 1000))
-    : "the end of your trial";
+  unix ? longMonthDay(new Date(unix * 1000)) : "the end of your trial";
 
 /** Three days out, from customer.subscription.trial_will_end. */
 export async function sendTrialEndingEmail(sub: Stripe.Subscription): Promise<void> {

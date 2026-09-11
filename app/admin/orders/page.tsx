@@ -146,7 +146,7 @@ export default async function AdminOrdersPage({
           <table className="w-full min-w-[54rem] border-collapse">
             <thead>
               <tr className="border-b border-border bg-surface-2">
-                <Th>Date</Th>
+                <Th>Date (UTC)</Th>
                 <Th>Buyer</Th>
                 <Th>What they bought</Th>
                 <Th>Status</Th>
