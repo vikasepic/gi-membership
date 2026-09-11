@@ -502,6 +502,61 @@ describe.skipIf(!canRun)("orders.visit_id (integration)", () => {
     expect(steps![0].value_cents).toBe(order!.total_cents);
   });
 
+  it("finalizeOrder records the purchase milestone even when the buyer never gave tracking consent", async () => {
+    // Sibling to the test above, opposite consent value. The milestone is
+    // our own attribution row, not a third-party ad event, so it must not
+    // sit behind the tracking_consent gate the way trackPurchase does — a
+    // buyer who ignores or declines the cookie banner still needs their
+    // purchase counted, or every attribution rate mixes mismatched
+    // populations (checkouts count everyone, purchases would count only
+    // consenting buyers).
+    const visitId = await makeVisit();
+    visitIds.push(visitId);
+    const email = `it_${Date.now()}_visitnoconsent@example.com`;
+    createdEmails.push(email);
+    const res = await createCheckoutIntent({
+      productSlug: "placeholder-offer",
+      email,
+      fullName: "Test Buyer",
+      bumpChoice: "none",
+      visitId,
+      trackingConsent: false,
+    });
+    if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
+    const piId = res.clientSecret.split("_secret_")[0];
+    await stripe().paymentIntents.confirm(piId, {
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/checkout/complete",
+    });
+    await finalizeOrder(piId);
+
+    const db = createServiceClient();
+    const { data: order } = await db
+      .from("orders")
+      .select("id, total_cents, tracking_consent")
+      .eq("stripe_payment_intent_id", piId)
+      .single();
+    expect(order!.tracking_consent).toBe(false);
+
+    // Same fire-and-forget caveat as the consenting-buyer test above.
+    let steps: { order_id: string | null; value_cents: number | null }[] | null = null;
+    for (let i = 0; i < 20; i++) {
+      const { data } = await db
+        .from("visit_steps")
+        .select("order_id, value_cents")
+        .eq("visit_id", visitId)
+        .eq("step", "purchase");
+      if (data && data.length > 0) {
+        steps = data;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    expect(steps).toHaveLength(1);
+    expect(steps![0].order_id).toBe(order!.id);
+    expect(steps![0].value_cents).toBe(order!.total_cents);
+  });
+
   afterAll(async () => {
     if (!canRun) return;
     const db = createServiceClient();

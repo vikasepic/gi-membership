@@ -1404,6 +1404,19 @@ export async function finalizeOrder(intentId: string): Promise<void> {
     console.error("[finalizeOrder] activecampaign failed (order is still complete):", e);
   }
 
+  // The visit that produced the sale. Recorded regardless of tracking
+  // consent — it is our own attribution row, not a third-party ad event —
+  // and read off the order rather than the request: finalizeOrder also runs
+  // from the Stripe webhook, where there is no visitor. Must stay above the
+  // consent gate below and outside its try block: a buyer who declines or
+  // ignores the cookie banner still needs their purchase milestone written,
+  // or every attribution rate is computed from mismatched populations.
+  void recordVisitStep("purchase", {
+    visitId: (order.visit_id as string | null) ?? null,
+    orderId: order.id as string,
+    valueCents: pi.amount,
+  });
+
   // Report the conversion server-side — ONLY with the buyer's explicit consent,
   // captured at checkout (the webhook has no cookies). EU/UK traffic means GDPR
   // applies, and hashed email plus click ids are still personal data.
@@ -1426,15 +1439,6 @@ export async function finalizeOrder(intentId: string): Promise<void> {
       currency: pi.currency,
       orderId: order.id as string,
       occurredAt: Math.floor(Date.now() / 1000),
-    });
-
-    // The visit that produced the sale. Read off the order rather than the
-    // request: finalizeOrder also runs from the Stripe webhook, where there
-    // is no visitor.
-    void recordVisitStep("purchase", {
-      visitId: (order.visit_id as string | null) ?? null,
-      orderId: order.id as string,
-      valueCents: pi.amount,
     });
 
     // A trial started on this order. Reported as its own event with the
