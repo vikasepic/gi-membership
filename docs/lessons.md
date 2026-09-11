@@ -318,3 +318,31 @@ explicit falsy value must be handled differently, check with `"visitId" in
 opts`, never `??` — and a nullable field threaded through a money path earns
 a test that fails if the wiring is removed, not just one that exercises the
 populated case. (`aa226e1`)
+
+## A consent gate that fails closed fails silently (11 Sep 2026)
+
+`mayTrack` read `state === "granted"`, so an ignored banner was stored as the
+same `false` as a refusal. In production that was 5 of 14 live paid orders
+reporting NO conversion at all — not mis-attributed, absent — and the only
+visible symptom was an ads team saying campaigns had no conversions. Nothing
+errored, nothing was logged, and `error_events` held not one row from source
+`tracking` in the whole period.
+
+Two things that would have surfaced it years earlier: a count of orders whose
+conversion was skipped, and the knowledge that `META_TEST_EVENT_CODE` left set
+does the same thing for a different reason. If a send can be skipped, count the
+skips.
+
+When the gate came out, two edge cases only existed *because* it had been there:
+
+- `AttributionTracker` relied on the consent event to run a second time. Meta's
+  pixel writes `_fbp`/`_fbc` only after `fbevents.js` loads, which is after the
+  component's first run — so removing the banner without replacing that second
+  trigger would have dropped the strongest match signal on every first visit.
+  The pixel-ready event is NOT a substitute: it marks the inline stub, not the
+  loaded script.
+- The done-flag was set on any successful store, which would have made that
+  second run impossible. A retry flag must record what was actually captured,
+  not that a request succeeded.
+
+Removing a gate means auditing what the gate was incidentally driving.
