@@ -35,6 +35,34 @@ describe.skipIf(!canRun)("milestones on a visit (integration)", () => {
     // The second purchase call must not overwrite the first with a different value.
     expect(data!.find((s) => s.step === "purchase")!.value_cents).toBe(4900);
   });
+
+  // Fix round 1, Important 1 regression: an explicit `null` (what
+  // finalizeOrder always passes, reading order.visit_id) must never fall
+  // back to the cookie's current visit. `??` cannot tell that `null` apart
+  // from an omitted argument — this proves the distinction actually holds.
+  it("does not attach a purchase to the cookie's current visit when the caller passes an explicit null", async () => {
+    const anon = `zz-ms-wrong-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    anonIds.push(anon);
+    REQ.headers = new Map([["x-pathname", "/p/zz"], ["user-agent", "Mozilla/5.0 (Macintosh) Chrome/130.0 Safari/537.36"]]);
+    REQ.cookies = new Map([["gi_anon", anon]]);
+    await recordVisit();
+    // The visit active for THIS cookie right now — what a buggy `??` fallback
+    // would attach the purchase to.
+    const cookieVisitId = await currentVisitId();
+    expect(cookieVisitId).toBeTruthy();
+
+    // finalizeOrder's own call shape: visitId is always an explicit key,
+    // here standing in for an order whose visit_id genuinely came back null.
+    await recordVisitStep("purchase", { visitId: null, orderId: null, valueCents: 100 });
+
+    const db = createServiceClient();
+    const { data } = await db
+      .from("visit_steps")
+      .select("id")
+      .eq("visit_id", cookieVisitId!)
+      .eq("step", "purchase");
+    expect(data).toHaveLength(0);
+  });
 });
 
 afterAll(async () => {

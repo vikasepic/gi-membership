@@ -108,13 +108,24 @@ export async function currentVisitId(): Promise<string | null> {
  * `visitId` is accepted because the purchase milestone is recorded from code
  * that already resolved it — and from the Stripe webhook, which has no
  * cookies at all and could never resolve it here.
+ *
+ * The key is checked with `"visitId" in opts`, never `??`. `??` cannot tell
+ * an explicit `null` from an omitted argument, and the two mean opposite
+ * things: omitted (the page milestones — checkout, upsell) means "nothing
+ * else to go on, resolve it from the cookie"; an explicit `null` (the
+ * purchase milestone, always called with this key present) means "this order
+ * was resolved already and genuinely has no visit — do not guess." Restoring
+ * `??` here silently reattaches a visit-less order to whatever visit is
+ * active on the CURRENT request's cookie, which is exactly the cookie-based
+ * attribution the purchase milestone exists to avoid: on the thank-you page
+ * that cookie belongs to a real browser, not to the order that produced it.
  */
 export async function recordVisitStep(
   step: "checkout" | "upsell" | "purchase",
   opts: { orderId?: string | null; valueCents?: number | null; visitId?: string | null } = {},
 ): Promise<void> {
   try {
-    const visitId = opts.visitId ?? (await currentVisitId());
+    const visitId = "visitId" in opts ? opts.visitId : await currentVisitId();
     if (!visitId) return;
     const db = createServiceClient();
     await db.from("visit_steps").upsert(

@@ -17,7 +17,7 @@ const canRun =
 
 const createdEmails: string[] = [];
 
-async function buy(withBump: boolean) {
+async function buy(withBump: boolean, visitId?: string | null) {
   const email = `it_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@example.com`;
   createdEmails.push(email);
   const res = await createCheckoutIntent({
@@ -25,6 +25,7 @@ async function buy(withBump: boolean) {
     email,
     fullName: "Test Buyer",
     bumpChoice: withBump ? ("main" as const) : ("none" as const),
+    ...(visitId !== undefined ? { visitId } : {}),
   });
   if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
   const piId = res.clientSecret.split("_secret_")[0];
@@ -348,5 +349,169 @@ describe.skipIf(!canRun)("signed-in checkout (integration)", () => {
       .single();
     expect(secondOrder!.user_id).toBe(user!.id);
     expect(secondOrder!.stripe_customer_id).toBe(firstOrder!.stripe_customer_id);
+  });
+});
+
+// --- orders.visit_id (Task 4 wiring; fix round 1, Important 2) ------------
+//
+// Nothing before this exercised orders.visit_id, the purchase milestone, or
+// anything else this task wired up — a dropped write here would have
+// shipped green. orders.visit_id is a real FK to visits(id) (0080), so each
+// test makes its own throwaway visit rather than faking a cookie.
+
+async function makeVisit() {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("visits")
+    .insert({
+      store_id: await getStoreId(),
+      anon_id: `zz-visitid-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      landing_path: "/zz",
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`fixture visit: ${error?.message}`);
+  return data.id as string;
+}
+
+describe.skipIf(!canRun)("orders.visit_id (integration)", () => {
+  const visitIds: string[] = [];
+  let recurringProductId = "";
+
+  it("writes visitId onto the order on the one-time (PaymentIntent) branch", async () => {
+    const visitId = await makeVisit();
+    visitIds.push(visitId);
+    const { piId } = await buy(false, visitId);
+
+    const db = createServiceClient();
+    const { data: order } = await db
+      .from("orders")
+      .select("visit_id")
+      .eq("stripe_payment_intent_id", piId)
+      .single();
+    expect(order!.visit_id).toBe(visitId);
+  });
+
+  it("writes visitId onto the order on the recurring (SetupIntent) branch", async () => {
+    const db = createServiceClient();
+    const storeId = await getStoreId();
+    const visitId = await makeVisit();
+    visitIds.push(visitId);
+
+    const slug = `zz-visitid-rec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const { data: product, error } = await db
+      .from("products")
+      .insert({
+        store_id: storeId,
+        slug,
+        title: "zz visit_id recurring fixture",
+        status: "published",
+        currency: "usd",
+        price_cents: 900,
+      })
+      .select("id")
+      .single();
+    if (error || !product) throw new Error(`fixture product: ${error?.message}`);
+    recurringProductId = product.id as string;
+    // The backfill trigger already gave it a one-off price from price_cents.
+    await db.from("product_prices").delete().eq("product_id", product.id);
+    const { error: priceErr } = await db.from("product_prices").insert({
+      product_id: product.id,
+      billing_type: "recurring",
+      interval: "month",
+      interval_count: 1,
+      trial_days: 7,
+      price_cents: 900,
+      sort_order: 0,
+    });
+    if (priceErr) throw new Error(`fixture price: ${priceErr.message}`);
+
+    const email = `it_${Date.now()}_visitrec@example.com`;
+    createdEmails.push(email); // the file's own afterAll (above) cleans this up
+    const res = await createCheckoutIntent({
+      productSlug: slug,
+      email,
+      fullName: "Test Buyer",
+      bumpChoice: "none",
+      priceChoice: 0,
+      visitId,
+    });
+    if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
+    // A trial subscription is a SetupIntent, not a PaymentIntent — confirms
+    // this test actually reached the branch it claims to.
+    expect(res.mode).toBe("setup");
+    const siId = res.clientSecret.split("_secret_")[0];
+
+    const { data: order } = await db
+      .from("orders")
+      .select("visit_id")
+      .eq("stripe_setup_intent_id", siId)
+      .single();
+    expect(order!.visit_id).toBe(visitId);
+  });
+
+  it("finalizeOrder records the purchase milestone against the order's own visit_id", async () => {
+    const visitId = await makeVisit();
+    visitIds.push(visitId);
+    // The purchase milestone is recorded inside finalizeOrder's tracking
+    // block, which is gated on tracking_consent (the brief's own placement —
+    // "in the same try that reports tracking"). Without consent the block
+    // returns before ever reaching it, which is not what this test is about.
+    const email = `it_${Date.now()}_visitpurchase@example.com`;
+    createdEmails.push(email);
+    const res = await createCheckoutIntent({
+      productSlug: "placeholder-offer",
+      email,
+      fullName: "Test Buyer",
+      bumpChoice: "none",
+      visitId,
+      trackingConsent: true,
+    });
+    if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
+    const piId = res.clientSecret.split("_secret_")[0];
+    await stripe().paymentIntents.confirm(piId, {
+      payment_method: "pm_card_visa",
+      return_url: "http://localhost:3000/checkout/complete",
+    });
+    await finalizeOrder(piId);
+
+    const db = createServiceClient();
+    const { data: order } = await db
+      .from("orders")
+      .select("id, total_cents")
+      .eq("stripe_payment_intent_id", piId)
+      .single();
+    // The write is fire-and-forget (`void recordVisitStep(...)`) inside
+    // finalizeOrder, so it can still be in flight the instant finalizeOrder
+    // returns. Poll briefly rather than asserting immediately.
+    let steps: { order_id: string | null; value_cents: number | null }[] | null = null;
+    for (let i = 0; i < 20; i++) {
+      const { data } = await db
+        .from("visit_steps")
+        .select("order_id, value_cents")
+        .eq("visit_id", visitId)
+        .eq("step", "purchase");
+      if (data && data.length > 0) {
+        steps = data;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    expect(steps).toHaveLength(1);
+    expect(steps![0].order_id).toBe(order!.id);
+    expect(steps![0].value_cents).toBe(order!.total_cents);
+  });
+
+  afterAll(async () => {
+    if (!canRun) return;
+    const db = createServiceClient();
+    if (recurringProductId) {
+      await db.from("product_prices").delete().eq("product_id", recurringProductId);
+      await db.from("products").delete().eq("id", recurringProductId);
+    }
+    // visit_steps cascades off visits (0080); orders.visit_id is ON DELETE
+    // SET NULL, so this is safe regardless of whether the file's own
+    // afterAll (which deletes these tests' orders by email) has run yet.
+    if (visitIds.length) await db.from("visits").delete().in("id", visitIds);
   });
 });
