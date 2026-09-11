@@ -99,6 +99,40 @@ describe("the open layout on an expanded order", () => {
     const out = renderToStaticMarkup(<AttributionBlock layout="open" order={{ ...base, visitId: null, utmLast: { utm_source: "meta" } }} />);
     expect(out).not.toContain("/admin/attribution/visits");
   });
+
+  it("still shows both columns and the visit link for a direct order with no UTM data and no referrer", () => {
+    // The commonest order outside active ad spend: tracked (it has a visit)
+    // but nothing to attribute it to. The shared "nothing at all" guard used
+    // to fire before layout was even considered, hiding this entirely.
+    const out = renderToStaticMarkup(
+      <AttributionBlock layout="open" order={{ ...base, visitId: "v-777", utmLast: {}, utmFirst: {}, referrer: null }} />,
+    );
+    expect(out).toContain("Last touch");
+    expect(out).toContain("First touch");
+    expect(out).toContain("/admin/attribution/visits");
+    // Both columns fall back to the literal "direct" span, not a blank column
+    // — and not the unrelated "direct" the SourcePill label can also emit.
+    expect(out.match(/>direct</g)?.length).toBe(2);
+  });
+
+  it("leaves the compact popover empty for that same direct order, so its behaviour is unchanged", () => {
+    const out = renderToStaticMarkup(
+      <AttributionBlock order={{ ...base, visitId: "v-777", utmLast: {}, utmFirst: {}, referrer: null }} />,
+    );
+    expect(out).toBe("");
+  });
+
+  it("reads an untouched side as direct rather than vanishing, when the other side has labels", () => {
+    const out = renderToStaticMarkup(
+      <AttributionBlock
+        layout="open"
+        order={{ ...base, utmLast: { utm_source: "meta", utm_campaign: "Spring Push" }, utmFirst: {}, referrer: null }}
+      />,
+    );
+    expect(out).toContain("Spring Push");
+    // Exactly one side is empty here, so exactly one "direct" fallback span.
+    expect(out.match(/>direct</g)?.length).toBe(1);
+  });
 });
 
 describe("SourcePill", () => {

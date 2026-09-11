@@ -95,10 +95,15 @@ function OpenBlock({ order }: { order: OrderRow }) {
 }
 
 export function AttributionBlock({ order, layout = "compact" }: { order: OrderRow; layout?: "compact" | "open" }) {
+  // Open always has something to say — a direct order still names both
+  // touches ("direct") and, if it was tracked, links to the visit. Only the
+  // compact popover (nothing to click into) needs the "there is truly
+  // nothing" guard, so it stays scoped to that layout.
+  if (layout === "open") return <OpenBlock order={order} />;
   const hasLast = Object.keys(order.utmLast).length > 0;
   const hasFirst = Object.keys(order.utmFirst).length > 0;
   if (!hasLast && !hasFirst && !order.referrer) return null;
-  return layout === "open" ? <OpenBlock order={order} /> : <CompactBlock order={order} />;
+  return <CompactBlock order={order} />;
 }
 
 export function SourcePill({ order }: { order: OrderRow }) {
