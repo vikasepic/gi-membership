@@ -69,8 +69,28 @@ describe("osOf", () => {
 });
 
 describe("sanitizeQuery", () => {
-  it("keeps the whole query, click ids included — it is the link the ad used", () => {
-    expect(sanitizeQuery("?utm_source=meta&fbclid=IwZXh0bgNhZW0")).toBe("utm_source=meta&fbclid=IwZXh0bgNhZW0");
+  it("drops the click id, but keeps the rest of the query byte-for-byte", () => {
+    // Click ids identify a person's click, not an ad — they stay out of
+    // `visits` and live only in the consent-gated `visitors.landing_url`.
+    expect(sanitizeQuery("?utm_source=meta&fbclid=IwZXh0bgNhZW0")).toBe("utm_source=meta");
+  });
+  it("drops every click id in the list, case-insensitively", () => {
+    expect(
+      sanitizeQuery(
+        "?utm_source=meta&fbclid=a&gclid=b&ttclid=c&msclkid=d&wbraid=e&gbraid=f&_fbp=g&_fbc=h",
+      ),
+    ).toBe("utm_source=meta");
+    expect(sanitizeQuery("?FBCLID=abc&utm_source=meta")).toBe("utm_source=meta");
+  });
+  it("returns null for a query of nothing but click ids", () => {
+    expect(
+      sanitizeQuery("?fbclid=a&gclid=b&ttclid=c&msclkid=d&wbraid=e&gbraid=f&_fbp=g&_fbc=h"),
+    ).toBeNull();
+  });
+  it("keeps a campaign parameter beside a stripped click id, untouched", () => {
+    expect(sanitizeQuery("?utm_campaign=Summer%20Sale|Promo&fbclid=abc")).toBe(
+      "utm_campaign=Summer%20Sale|Promo",
+    );
   });
   it("drops a parameter whose value names a person", () => {
     expect(sanitizeQuery("?utm_campaign=jane@example.com&utm_source=mail")).toBe("utm_source=mail");
@@ -86,7 +106,7 @@ describe("sanitizeQuery", () => {
     expect(() => sanitizeQuery("?%E0%A4%A")).not.toThrow();
   });
   it("keeps the query verbatim rather than re-encoding it through URLSearchParams", () => {
-    expect(sanitizeQuery("?fbclid=Iw|abc")).toBe("fbclid=Iw|abc");
+    expect(sanitizeQuery("?utm_campaign=Iw|abc")).toBe("utm_campaign=Iw|abc");
     expect(sanitizeQuery("?q=a%20b")).toBe("q=a%20b");
     expect(sanitizeQuery("?q=a~b")).toBe("q=a~b");
     expect(sanitizeQuery("?q=(paren)")).toBe("q=(paren)");

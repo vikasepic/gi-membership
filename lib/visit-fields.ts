@@ -73,11 +73,20 @@ function namesAPerson(v: string): boolean {
 }
 
 /**
- * The landing query, kept as the link actually was.
+ * Click ids identify a person's click, not an ad. Same list
+ * `components/attribution-tracker.tsx` reads off the query, plus Meta's two
+ * cookie-derived ones. Compared case-insensitively against the key.
+ */
+const CLICK_ID_KEYS = new Set(["fbclid", "gclid", "ttclid", "msclkid", "wbraid", "gbraid", "_fbp", "_fbc"]);
+
+/**
+ * The landing query, kept as the link actually was — minus click ids.
  *
- * Click ids stay: this column exists to answer "what exactly did they
- * click", and a landing URL with `fbclid` removed answers half of it. What
- * does not stay is a value carrying an address — ESP links build
+ * The campaign labels are what explain a visit; the click id is what
+ * identifies the person who clicked, and this column has no consent gate. A
+ * click id survives in full, query and all, in the consent-gated
+ * `visitors.landing_url` for anyone who accepted the banner. What also does
+ * not stay here is a value carrying an address — ESP links build
  * per-recipient URLs, and one of those in an exported column is a leak.
  *
  * Split and rejoined by hand rather than round-tripped through
@@ -94,8 +103,10 @@ export function sanitizeQuery(search: string | null | undefined): string | null 
   for (const pair of raw.split("&")) {
     if (!pair) continue;
     const eq = pair.indexOf("=");
+    const key = eq === -1 ? pair : pair.slice(0, eq);
     const value = eq === -1 ? "" : pair.slice(eq + 1);
     if (!value || namesAPerson(value)) continue;
+    if (CLICK_ID_KEYS.has(key.toLowerCase())) continue;
     kept.push(pair);
   }
   const out = kept.join("&");
