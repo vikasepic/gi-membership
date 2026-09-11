@@ -10,7 +10,11 @@ import { createHash } from "node:crypto";
  * function has an honest "Other" rather than an invented answer.
  */
 
-const MAX_URLISH = 500;
+// 2000 rather than 500: a single Meta fbclid runs past 180 characters and the
+// campaign set beside it another 150, so the cap that used to fit a cleaned
+// query now has to fit the whole link. The column is `text`; this is a sanity
+// bound, not a storage one.
+const MAX_URLISH = 2000;
 
 export type Device = "phone" | "tablet" | "desktop";
 
@@ -77,17 +81,20 @@ function namesAPerson(v: string): boolean {
  * `components/attribution-tracker.tsx` reads off the query, plus Meta's two
  * cookie-derived ones. Compared case-insensitively against the key.
  */
-const CLICK_ID_KEYS = new Set(["fbclid", "gclid", "ttclid", "msclkid", "wbraid", "gbraid", "_fbp", "_fbc"]);
-
 /**
- * The landing query, kept as the link actually was — minus click ids.
+ * The landing query, kept as the link actually was.
  *
- * The campaign labels are what explain a visit; the click id is what
- * identifies the person who clicked, and this column has no consent gate. A
- * click id survives in full, query and all, in the consent-gated
- * `visitors.landing_url` for anyone who accepted the banner. What also does
- * not stay here is a value carrying an address — ESP links build
- * per-recipient URLs, and one of those in an exported column is a leak.
+ * Click ids used to be stripped here. That rule was written for a column with
+ * no consent gate, sitting beside a `visitors.landing_url` that HAD one — and
+ * both halves of that sentence stopped being true on 11 Sep 2026 when the
+ * banner came down. The same fbclid is already stored in `visitors.click_ids`
+ * and posted to Meta on every conversion, so removing it from here bought no
+ * privacy and cost the one thing this column exists for: telling you whether a
+ * visit was an ad click at all. A visit with no `fbclid` is organic, and that
+ * is not a distinction anybody could make while this stripped it.
+ *
+ * What still does not stay here is a value carrying an address — ESP links
+ * build per-recipient URLs, and one of those in an exported column is a leak.
  *
  * Split and rejoined by hand rather than round-tripped through
  * `URLSearchParams`, which re-encodes on the way out (`a b` -> `a+b`, `|` ->
@@ -103,10 +110,8 @@ export function sanitizeQuery(search: string | null | undefined): string | null 
   for (const pair of raw.split("&")) {
     if (!pair) continue;
     const eq = pair.indexOf("=");
-    const key = eq === -1 ? pair : pair.slice(0, eq);
     const value = eq === -1 ? "" : pair.slice(eq + 1);
     if (!value || namesAPerson(value)) continue;
-    if (CLICK_ID_KEYS.has(key.toLowerCase())) continue;
     kept.push(pair);
   }
   const out = kept.join("&");

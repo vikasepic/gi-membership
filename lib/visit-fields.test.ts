@@ -69,40 +69,29 @@ describe("osOf", () => {
 });
 
 describe("sanitizeQuery", () => {
-  it("drops the click id, but keeps the rest of the query byte-for-byte", () => {
-    // Click ids identify a person's click, not an ad — they stay out of
-    // `visits` and live only in the consent-gated `visitors.landing_url`.
-    expect(sanitizeQuery("?utm_source=meta&fbclid=IwZXh0bgNhZW0")).toBe("utm_source=meta");
-  });
-  it("drops every click id in the list, case-insensitively", () => {
-    expect(
-      sanitizeQuery(
-        "?utm_source=meta&fbclid=a&gclid=b&ttclid=c&msclkid=d&wbraid=e&gbraid=f&_fbp=g&_fbc=h",
-      ),
-    ).toBe("utm_source=meta");
-    expect(sanitizeQuery("?FBCLID=abc&utm_source=meta")).toBe("utm_source=meta");
-  });
-  it("returns null for a query of nothing but click ids", () => {
-    expect(
-      sanitizeQuery("?fbclid=a&gclid=b&ttclid=c&msclkid=d&wbraid=e&gbraid=f&_fbp=g&_fbc=h"),
-    ).toBeNull();
-  });
-  it("keeps a campaign parameter beside a stripped click id, untouched", () => {
-    expect(sanitizeQuery("?utm_campaign=Summer%20Sale|Promo&fbclid=abc")).toBe(
-      "utm_campaign=Summer%20Sale|Promo",
+  it("keeps the click id, which is what says an ad click WAS an ad click", () => {
+    // Stripped until 11 Sep 2026, for a privacy rule that died with the consent
+    // banner. A visit with no fbclid is organic traffic; a visit with one came
+    // from an ad. That distinction was unanswerable while this dropped it.
+    expect(sanitizeQuery("?utm_source=meta&fbclid=IwZXh0bgNhZW0")).toBe(
+      "utm_source=meta&fbclid=IwZXh0bgNhZW0",
     );
   });
-  it("drops a parameter whose value names a person", () => {
-    expect(sanitizeQuery("?utm_campaign=jane@example.com&utm_source=mail")).toBe("utm_source=mail");
+
+  it("keeps every platform's click id", () => {
+    const q = "fbclid=a&gclid=b&ttclid=c&msclkid=d&wbraid=e&gbraid=f&_fbp=g&_fbc=h";
+    expect(sanitizeQuery(`?${q}`)).toBe(q);
   });
-  it("returns null for nothing at all", () => {
-    expect(sanitizeQuery("")).toBeNull();
-    expect(sanitizeQuery("?")).toBeNull();
-    expect(sanitizeQuery(null)).toBeNull();
-    expect(sanitizeQuery("?email=a@b.com")).toBeNull();
+
+  it("still refuses a value carrying an address", () => {
+    // The one thing that must never land here: ESP links build per-recipient
+    // URLs, and one of those in an exported column is a leak.
+    expect(sanitizeQuery("?utm_source=news&email=jane%40example.com")).toBe("utm_source=news");
   });
-  it("caps at 500 characters and never throws on rubbish", () => {
-    expect(sanitizeQuery(`?x=${"y".repeat(900)}`)!.length).toBe(500);
+
+  it("caps at 2000 characters and never throws on rubbish", () => {
+    // A Meta fbclid alone runs past 180 characters; 500 truncated real links.
+    expect(sanitizeQuery(`?x=${"y".repeat(2500)}`)!.length).toBe(2000);
     expect(() => sanitizeQuery("?%E0%A4%A")).not.toThrow();
   });
   it("keeps the query verbatim rather than re-encoding it through URLSearchParams", () => {
@@ -136,9 +125,9 @@ describe("foreignReferrer", () => {
     expect(foreignReferrer(null, SITE)).toBeNull();
     expect(foreignReferrer("   ", SITE)).toBeNull();
   });
-  it("caps the url at 500 characters", () => {
-    const r = foreignReferrer(`https://a.test/${"p".repeat(900)}`, SITE)!;
-    expect(r.url.length).toBe(500);
+  it("caps the url at 2000 characters", () => {
+    const r = foreignReferrer(`https://a.test/${"p".repeat(2500)}`, SITE)!;
+    expect(r.url.length).toBe(2000);
     expect(r.host).toBe("a.test");
   });
   it("keeps a fediverse profile referral — the @ guard is for the query, not the path", () => {
