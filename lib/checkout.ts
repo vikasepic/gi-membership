@@ -496,6 +496,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
         couponCode: coupon?.code ?? "",
         bumpOfferId: bumpOffer?.id ?? "",
         bumpOfferName: bumpOffer?.name ?? "",
+        bumpPriceId: bumpOffer ? (bumpPriceId ?? "") : "",
         country: country ?? "",
         newAccount,
         // Last touch as utm_*, first touch as first_utm_*, plus referrer.

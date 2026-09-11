@@ -415,6 +415,119 @@ describe.skipIf(!canRun)("bump readability on the product checkout (integration)
   });
 });
 
+// --- Same, on the recurring (SetupIntent) branch ---------------------------
+//
+// The PaymentIntent branch above got bumpOfferName + bumpPriceId; nothing
+// exercised the SetupIntent branch's own bump metadata, so its bumpOfferName
+// key (added at the same time) shipped with no test reading it back, and its
+// missing bumpPriceId went unnoticed. Own fixture (a recurring host, built
+// the way "orders.visit_id (integration)"'s recurring test builds one) rather
+// than reusing the block above's — that one is one-time and asserts on its
+// own productSlug across two ordered tests.
+describe.skipIf(!canRun)(
+  "bump readability on the product checkout's SetupIntent (integration)",
+  () => {
+    const emails: string[] = [];
+    let productId = "";
+    let offerId = "";
+
+    it("carries bumpOfferId, bumpOfferName and bumpPriceId onto the SetupIntent, for a recurring host", async () => {
+      const db = createServiceClient();
+      const storeId = await getStoreId();
+
+      offerId = crypto.randomUUID();
+      const { error: offerErr } = await db.from("offers").insert({
+        id: offerId,
+        store_id: storeId,
+        key: `zz-bump-si-${Date.now()}-${offerId}`,
+        name: "zz bump SetupIntent fixture",
+        grant_type: "subscription",
+        grant_app_id: "00000000-0000-0000-0000-0000000000a1", // seeded Content Engine app
+        grant_entitlement_key: "content-engine",
+        billing_type: "one_time",
+        price_cents: 1100,
+        currency: "usd",
+        headline: "fixture",
+        description: "fixture",
+        active: true,
+      });
+      if (offerErr) throw new Error(`fixture offer: ${offerErr.message}`);
+
+      const priceId = crypto.randomUUID();
+      const { error: priceErr } = await db.from("offer_prices").insert({
+        id: priceId,
+        offer_id: offerId,
+        billing_type: "one_time",
+        price_cents: 1100,
+        sort_order: 0,
+      });
+      if (priceErr) throw new Error(`fixture price: ${priceErr.message}`);
+
+      productId = crypto.randomUUID();
+      const productSlug = `zz-bump-si-host-${Date.now()}-${productId}`;
+      const { error: productErr } = await db.from("products").insert({
+        id: productId,
+        store_id: storeId,
+        slug: productSlug,
+        title: "zz bump-SetupIntent host",
+        price_cents: 900,
+        status: "published",
+        bump_offer_id: offerId,
+      });
+      if (productErr) throw new Error(`fixture product: ${productErr.message}`);
+      // The backfill trigger already gave it a one-off price from price_cents —
+      // replace it with a recurring one so createCheckoutIntent takes the
+      // SetupIntent branch instead of the PaymentIntent branch.
+      await db.from("product_prices").delete().eq("product_id", productId);
+      const { error: recurringPriceErr } = await db.from("product_prices").insert({
+        product_id: productId,
+        billing_type: "recurring",
+        interval: "month",
+        interval_count: 1,
+        trial_days: 7,
+        price_cents: 900,
+        sort_order: 0,
+      });
+      if (recurringPriceErr) throw new Error(`fixture product price: ${recurringPriceErr.message}`);
+
+      const email = `it_bsi_${Date.now()}_${Math.random().toString(36).slice(2, 8)}@example.com`;
+      emails.push(email);
+      const res = await createCheckoutIntent({
+        productSlug,
+        email,
+        fullName: "Test Buyer",
+        bumpChoice: 0, // the numeric branch — an index into a real placement price list
+        priceChoice: 0,
+      });
+      if (!res.ok) throw new Error(`createCheckoutIntent failed: ${res.error}`);
+      // A trial subscription is a SetupIntent, not a PaymentIntent — confirms
+      // this test actually reached the branch it claims to cover.
+      expect(res.mode).toBe("setup");
+      const siId = res.clientSecret.split("_secret_")[0];
+      const si = await stripe().setupIntents.retrieve(siId);
+
+      expect(si.metadata?.bumpOfferId).toBe(offerId);
+      expect(si.metadata?.bumpOfferName).toBe("zz bump SetupIntent fixture");
+      expect(si.metadata?.bumpPriceId).toBe(priceId);
+    });
+
+    afterAll(async () => {
+      if (!canRun) return;
+      const db = createServiceClient();
+      for (const email of emails) {
+        const { data: user } = await db.from("users").select("id").eq("email", email).maybeSingle();
+        await db.from("orders").delete().eq("email", email); // cascades order_items
+        if (user) {
+          await db.from("users").delete().eq("id", user.id); // cascades ownership
+          await db.auth.admin.deleteUser(user.id);
+        }
+      }
+      if (productId) await db.from("products").delete().eq("id", productId);
+      if (offerId) await db.from("offers").delete().eq("id", offerId); // cascades offer_prices
+    });
+  },
+);
+
 // --- Signed-in members buy without signing up again -----------------------
 import { createCheckoutIntent as createIntent } from "@/lib/checkout";
 
