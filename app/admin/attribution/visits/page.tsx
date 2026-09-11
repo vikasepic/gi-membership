@@ -46,9 +46,20 @@ export default async function VisitsPage({
   const host = pick(one(params.host), hostsPresent);
   const device = pick(one(params.device), devicesPresent);
   const outcome = pick(one(params.outcome), OUTCOMES);
-  const filtered = campaign || host || device || outcome;
 
-  const shown = all.filter((v) => keepVisit(v, { campaign, host, device, outcome }));
+  // The "See the visit" link on the Orders page (attribution-popover.tsx)
+  // carries an id here. Whitelisted against the ids actually loaded, exactly
+  // like the four selects — never parsed, so an id outside this range/limit
+  // can only come back "". `visitRequested` keeps that distinct from "no id
+  // in the URL at all", so a stale link says so plainly instead of quietly
+  // falling through to the unfiltered list it isn't in.
+  const visitParam = one(params.visit) ?? "";
+  const visitIdsPresent = all.map((v) => v.id);
+  const visit = pick(visitParam, visitIdsPresent);
+  const visitNotFound = Boolean(visitParam) && !visit;
+  const filtered = campaign || host || device || outcome || Boolean(visitParam);
+
+  const shown = visitNotFound ? [] : all.filter((v) => keepVisit(v, { campaign, host, device, outcome, visit }));
 
   const href = (over: Record<string, string>) => {
     const q = new URLSearchParams();
@@ -58,6 +69,11 @@ export default async function VisitsPage({
     if (device) q.set("device", device);
     if (outcome) q.set("outcome", outcome);
     if (limit !== "100") q.set("limit", limit);
+    // Carried as the raw param, not the whitelisted `visit` — a preset click
+    // is exactly the "widen the range" the not-found message points at, and
+    // the id it's looking for may only become valid once the wider range
+    // loads it.
+    if (visitParam) q.set("visit", visitParam);
     for (const [k, v] of Object.entries(over)) v ? q.set(k, v) : q.delete(k);
     const s = q.toString();
     return s ? `/admin/attribution/visits?${s}` : "/admin/attribution/visits";
@@ -105,12 +121,14 @@ export default async function VisitsPage({
       {/* The four selects below only narrow the rows this page already
           loaded — they never reach further into history than Rows does. */}
       <p className="text-xs text-muted">
-        Filters narrow the {all.length.toLocaleString("en-US")} most recent visits loaded for this range, not
-        your full history — raise Rows to look further back within the same window.
+        {visit
+          ? "Showing one visit, from the link on its order. Clear to see the full range."
+          : `Filters narrow the ${all.length.toLocaleString("en-US")} most recent visits loaded for this range, not your full history — raise Rows to look further back within the same window.`}
       </p>
 
       <form action="/admin/attribution/visits" className="flex flex-wrap items-center gap-2">
         {preset !== "30" && <input type="hidden" name="preset" value={preset} />}
+        {visitParam && <input type="hidden" name="visit" value={visitParam} />}
         <Picker
           name="campaign"
           value={campaign}
@@ -156,7 +174,11 @@ export default async function VisitsPage({
 
       {shown.length === 0 ? (
         <p className="rounded-2xl border border-border bg-surface px-5 py-10 text-center text-muted">
-          {all.length === 0 ? "No visits in this range yet." : "Nothing matches that. Widen the range, or clear the filters."}
+          {visitNotFound
+            ? "That visit isn't in the last " + all.length.toLocaleString("en-US") + " loaded for this range — widen the range or raise Rows to find it."
+            : all.length === 0
+              ? "No visits in this range yet."
+              : "Nothing matches that. Widen the range, or clear the filters."}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-border bg-surface">

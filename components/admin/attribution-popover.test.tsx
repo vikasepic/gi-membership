@@ -95,6 +95,17 @@ describe("the open layout on an expanded order", () => {
     expect(out).toContain("/admin/attribution/visits");
   });
 
+  it("carries the order's own visit id on the link (I5), not the bare list page", () => {
+    // The bare "/admin/attribution/visits" default page is the last 30 days,
+    // 100 rows — an older order's visit is just not there. This has to
+    // assert the id itself, not merely the path prefix: a bare link also
+    // contains "/admin/attribution/visits" and would pass a weaker check.
+    const out = renderToStaticMarkup(
+      <AttributionBlock layout="open" order={{ ...base, visitId: "v-123", utmLast: { utm_source: "meta" } }} />,
+    );
+    expect(out).toContain("/admin/attribution/visits?visit=v-123");
+  });
+
   it("does not draw the link when the order predates visit tracking", () => {
     const out = renderToStaticMarkup(<AttributionBlock layout="open" order={{ ...base, visitId: null, utmLast: { utm_source: "meta" } }} />);
     expect(out).not.toContain("/admin/attribution/visits");

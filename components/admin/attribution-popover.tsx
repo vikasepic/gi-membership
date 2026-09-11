@@ -84,9 +84,19 @@ function OpenBlock({ order }: { order: OrderRow }) {
         <Column heading="First touch" labels={order.utmFirst} />
       </div>
       {order.referrer && <Referrer url={order.referrer} />}
-      {/* Orders placed before migration 0080 carry no visit_id — nothing to link to. */}
+      {/* Orders placed before migration 0080 carry no visit_id — nothing to
+          link to. The id rides on the URL (?visit=) rather than the bare
+          list page: the visits page defaults to the last 30 days / 100
+          rows, so an older order's visit would otherwise just not be
+          there. The visits page whitelists it against the ids it actually
+          loaded — same rule as its other four filters — and says plainly
+          when the visit falls outside the current range instead of quietly
+          showing the unfiltered list that doesn't contain it. */}
       {order.visitId && (
-        <Link href="/admin/attribution/visits" className="w-fit text-xs text-muted underline-offset-4 hover:underline">
+        <Link
+          href={`/admin/attribution/visits?visit=${encodeURIComponent(order.visitId)}`}
+          className="w-fit text-xs text-muted underline-offset-4 hover:underline"
+        >
           See the visit →
         </Link>
       )}
