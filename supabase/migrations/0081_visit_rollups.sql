@@ -24,7 +24,11 @@ as $$
     left join visit_steps s_checkout on s_checkout.visit_id = v.id and s_checkout.step = 'checkout'
     left join visit_steps s_purchase on s_purchase.visit_id = v.id and s_purchase.step = 'purchase'
    where v.store_id = p_store and v.started_at >= p_from and v.started_at < p_to
-   group by 1,2,3,4,5;
+   group by 1,2,3,4,5
+   -- PostgREST's 1000-row cap applies to a set-returning function same as any
+   -- table select. Without this, whatever truncates is whatever the planner
+   -- happened to emit last, not the least important rows.
+   order by visits desc;
 $$;
 
 create or replace function visit_referrer_rollup(p_store uuid, p_from timestamptz, p_to timestamptz)
@@ -32,13 +36,14 @@ returns table (key text, visits bigint, orders bigint, revenue_cents bigint)
 language sql stable
 as $$
   select coalesce(nullif(v.referrer_host,''), 'direct') as key,
-         count(distinct v.id),
-         count(distinct s.visit_id),
-         coalesce(sum(s.value_cents), 0)
+         count(distinct v.id) as visits,
+         count(distinct s.visit_id) as orders,
+         coalesce(sum(s.value_cents), 0) as revenue_cents
     from visits v
     left join visit_steps s on s.visit_id = v.id and s.step = 'purchase'
    where v.store_id = p_store and v.started_at >= p_from and v.started_at < p_to
-   group by 1;
+   group by 1
+   order by visits desc;
 $$;
 
 create or replace function visit_landing_rollup(p_store uuid, p_from timestamptz, p_to timestamptz)
@@ -46,13 +51,14 @@ returns table (key text, visits bigint, orders bigint, revenue_cents bigint)
 language sql stable
 as $$
   select v.landing_path as key,
-         count(distinct v.id),
-         count(distinct s.visit_id),
-         coalesce(sum(s.value_cents), 0)
+         count(distinct v.id) as visits,
+         count(distinct s.visit_id) as orders,
+         coalesce(sum(s.value_cents), 0) as revenue_cents
     from visits v
     left join visit_steps s on s.visit_id = v.id and s.step = 'purchase'
    where v.store_id = p_store and v.started_at >= p_from and v.started_at < p_to
-   group by 1;
+   group by 1
+   order by visits desc;
 $$;
 
 -- Only the service role calls these. Postgres grants EXECUTE to PUBLIC by
