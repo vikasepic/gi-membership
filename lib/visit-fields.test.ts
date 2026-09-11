@@ -45,6 +45,12 @@ describe("browserOf", () => {
     expect(browserOf("curl/8.4.0")).toBe("Other");
     expect(browserOf(null)).toBe("Other");
   });
+  it("reads mobile Edge, which sends EdgA/ or EdgiOS/ instead of Edg/", () => {
+    const ANDROID_EDGE = "Mozilla/5.0 (Linux; Android 10; SM-G960F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.116 Mobile Safari/537.36 EdgA/46.3.4.5155";
+    const IOS_EDGE = "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 EdgiOS/46.3.14 Mobile/15E148 Safari/604.1";
+    expect(browserOf(ANDROID_EDGE)).toBe("Edge");
+    expect(browserOf(IOS_EDGE)).toBe("Edge");
+  });
 });
 
 describe("osOf", () => {
@@ -79,6 +85,18 @@ describe("sanitizeQuery", () => {
     expect(sanitizeQuery(`?x=${"y".repeat(900)}`)!.length).toBe(500);
     expect(() => sanitizeQuery("?%E0%A4%A")).not.toThrow();
   });
+  it("keeps the query verbatim rather than re-encoding it through URLSearchParams", () => {
+    expect(sanitizeQuery("?fbclid=Iw|abc")).toBe("fbclid=Iw|abc");
+    expect(sanitizeQuery("?q=a%20b")).toBe("q=a%20b");
+    expect(sanitizeQuery("?q=a~b")).toBe("q=a~b");
+    expect(sanitizeQuery("?q=(paren)")).toBe("q=(paren)");
+  });
+  it("still drops a value naming a person even when it arrives percent-encoded", () => {
+    expect(sanitizeQuery("?utm_campaign=jane%40example.com&utm_source=mail")).toBe("utm_source=mail");
+  });
+  it("keeps a value containing = intact, rather than splitting on every =", () => {
+    expect(sanitizeQuery("?token=a=b=c")).toBe("token=a=b=c");
+  });
 });
 
 describe("foreignReferrer", () => {
@@ -102,6 +120,13 @@ describe("foreignReferrer", () => {
     const r = foreignReferrer(`https://a.test/${"p".repeat(900)}`, SITE)!;
     expect(r.url.length).toBe(500);
     expect(r.host).toBe("a.test");
+  });
+  it("keeps a fediverse profile referral — the @ guard is for the query, not the path", () => {
+    expect(foreignReferrer("https://mastodon.social/@someone", SITE)).toEqual({
+      url: "https://mastodon.social/@someone",
+      host: "mastodon.social",
+    });
+    expect(foreignReferrer("https://mastodon.social/@someone?ref=jane@example.com", SITE)).toBeNull();
   });
 });
 

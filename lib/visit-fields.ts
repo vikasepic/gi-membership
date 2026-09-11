@@ -33,10 +33,12 @@ export function deviceOf(ua: string | null | undefined): Device {
  * Order matters and is the only hard part. Edge and Samsung Internet both
  * carry `Chrome` in their strings, and Chrome carries `Safari` in its — so
  * the most specific claim has to be tested first or everything reads Chrome.
+ * Edge's mobile builds send `EdgA/` (Android) and `EdgiOS/` (iOS), not the
+ * desktop `Edg/`, so the family match has to allow either suffix.
  */
 export function browserOf(ua: string | null | undefined): string {
   const s = ua ?? "";
-  if (/Edg\//i.test(s)) return "Edge";
+  if (/Edg(A|iOS)?\//i.test(s)) return "Edge";
   if (/SamsungBrowser/i.test(s)) return "Samsung Internet";
   if (/Firefox\/|FxiOS/i.test(s)) return "Firefox";
   if (/Chrome\/|CriOS/i.test(s)) return "Chrome";
@@ -55,8 +57,20 @@ export function osOf(ua: string | null | undefined): string {
   return "Other";
 }
 
-/** A value that names a person. Same guard the campaign labels use. */
-const namesAPerson = (v: string) => v.includes("@");
+/**
+ * A value that names a person. Decodes first — an ESP link may
+ * percent-encode the address — and judges an escape it cannot decode as
+ * itself rather than throwing.
+ */
+function namesAPerson(v: string): boolean {
+  let decoded = v;
+  try {
+    decoded = decodeURIComponent(v);
+  } catch {
+    // malformed escape; judge the raw value
+  }
+  return decoded.includes("@");
+}
 
 /**
  * The landing query, kept as the link actually was.
@@ -65,22 +79,26 @@ const namesAPerson = (v: string) => v.includes("@");
  * click", and a landing URL with `fbclid` removed answers half of it. What
  * does not stay is a value carrying an address — ESP links build
  * per-recipient URLs, and one of those in an exported column is a leak.
+ *
+ * Split and rejoined by hand rather than round-tripped through
+ * `URLSearchParams`, which re-encodes on the way out (`a b` -> `a+b`, `|` ->
+ * `%7C`, `~` -> `%7E`, `(` -> `%28`) — this column exists to reproduce the
+ * link exactly as clicked, and this store's Meta campaign names are full of
+ * raw pipes and spaces. A pair is split on its FIRST `=` only, since a value
+ * may legitimately contain one.
  */
 export function sanitizeQuery(search: string | null | undefined): string | null {
   const raw = (search ?? "").replace(/^\?/, "");
   if (!raw) return null;
-  let params: URLSearchParams;
-  try {
-    params = new URLSearchParams(raw);
-  } catch {
-    return null;
+  const kept: string[] = [];
+  for (const pair of raw.split("&")) {
+    if (!pair) continue;
+    const eq = pair.indexOf("=");
+    const value = eq === -1 ? "" : pair.slice(eq + 1);
+    if (!value || namesAPerson(value)) continue;
+    kept.push(pair);
   }
-  const kept = new URLSearchParams();
-  for (const [k, v] of params) {
-    if (!v || namesAPerson(v)) continue;
-    kept.append(k, v);
-  }
-  const out = kept.toString();
+  const out = kept.join("&");
   return out ? out.slice(0, MAX_URLISH) : null;
 }
 
@@ -92,15 +110,20 @@ export function sanitizeQuery(search: string | null | undefined): string | null 
  * and the referring page's own query is part of that answer. An internal
  * move — sales page to checkout — is not a referral and is dropped, or every
  * navigation in the store would look like incoming traffic.
+ *
+ * The address guard only reads the query. A path can legitimately name a
+ * person — `https://mastodon.social/@someone` is a fediverse profile, not an
+ * ESP leak — and the risk the guard exists for lives in the query string.
  */
 export function foreignReferrer(
   referer: string | null | undefined,
   siteUrl: string | undefined,
 ): { url: string; host: string } | null {
   const ref = (referer ?? "").trim();
-  if (!ref || namesAPerson(ref)) return null;
+  if (!ref) return null;
   try {
     const u = new URL(ref);
+    if (namesAPerson(u.search)) return null;
     if (siteUrl && u.hostname === new URL(siteUrl).hostname) return null;
     return { url: ref.slice(0, MAX_URLISH), host: u.hostname };
   } catch {
