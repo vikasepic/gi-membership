@@ -20,6 +20,7 @@ const base: OrderRow = {
   utmFirst: {},
   utmLast: {},
   referrer: null,
+  visitId: null,
 };
 
 describe("AttributionBlock", () => {
@@ -65,6 +66,38 @@ describe("AttributionBlock", () => {
   it("says so when there is nothing but a referrer, and renders nothing when there is nothing at all", () => {
     expect(renderToStaticMarkup(<AttributionBlock order={{ ...base, referrer: "https://someblog.example/post" }} />)).toContain("someblog.example");
     expect(renderToStaticMarkup(<AttributionBlock order={base} />)).toBe("");
+  });
+});
+
+describe("the open layout on an expanded order", () => {
+  it("lays last touch and first touch out side by side, both named", () => {
+    const out = renderToStaticMarkup(
+      <AttributionBlock
+        layout="open"
+        order={{
+          ...base,
+          utmLast: { utm_source: "meta", utm_campaign: "Spring Push", utm_adset: "LAL Buyers" },
+          utmFirst: { utm_source: "instaparty", utm_campaign: "Winter B" },
+          referrer: "https://l.facebook.com/l.php",
+        }}
+      />,
+    );
+    expect(out).toContain("Last touch");
+    expect(out).toContain("First touch");
+    expect(out).toContain("Spring Push");
+    expect(out).toContain("instaparty");
+  });
+
+  it("links to the visit when the order has one", () => {
+    const out = renderToStaticMarkup(
+      <AttributionBlock layout="open" order={{ ...base, visitId: "v-123", utmLast: { utm_source: "meta" } }} />,
+    );
+    expect(out).toContain("/admin/attribution/visits");
+  });
+
+  it("does not draw the link when the order predates visit tracking", () => {
+    const out = renderToStaticMarkup(<AttributionBlock layout="open" order={{ ...base, visitId: null, utmLast: { utm_source: "meta" } }} />);
+    expect(out).not.toContain("/admin/attribution/visits");
   });
 });
 

@@ -149,7 +149,7 @@ export function OrderRowView({ order }: { order: Order }) {
               </dl>
 
               <div className="min-w-56">
-                <AttributionBlock order={order} />
+                <AttributionBlock order={order} layout="open" />
               </div>
 
               <div className="ml-auto">

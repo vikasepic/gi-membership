@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { UTM_KEYS, sameLabels, type Labels } from "@/lib/attribution";
+import Link from "next/link";
+import { sameLabels, type Labels } from "@/lib/attribution";
+import { labelPairs } from "@/lib/visit-view";
 import { sourceLabel } from "@/lib/order-view";
 import type { OrderRow } from "@/lib/orders";
 
@@ -11,27 +13,25 @@ import type { OrderRow } from "@/lib/orders";
  * Two shapes of the same facts. SourcePill is the row's cell: "meta ·
  * paid_social" and, on click, a small popover with every label — a click,
  * not a hover, because hover does not exist on a phone. AttributionBlock is
- * the same list inline, for the expanded row, so a screenshot of an order
- * shows its campaign without anybody clicking.
+ * the same list inline: `layout="compact"` (the default) for that popover,
+ * `layout="open"` for the expanded row, where the owner asked for
+ * attribution to be plain and open rather than one more click away — both
+ * label sets side by side, unabbreviated, with a link to the visit itself.
+ *
+ * `labelPairs` comes from `lib/visit-view.ts`, a pure module with no
+ * `server-only` import — this file is a client component, and importing the
+ * `server-only` `lib/visit-reports.ts` here breaks `npx next build` without
+ * `tsc` or the test suite ever seeing it (both were caught doing exactly
+ * that earlier on this branch).
  */
-
-const SHORT: Record<string, string> = {
-  utm_source: "Source",
-  utm_medium: "Medium",
-  utm_campaign: "Campaign",
-  utm_adset: "Ad set",
-  utm_content: "Ad",
-  utm_term: "Term",
-  utm_id: "Campaign id",
-};
 
 function Rows({ labels }: { labels: Labels }) {
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
-      {UTM_KEYS.filter((k) => labels[k]).map((k) => (
-        <div key={k} className="contents">
-          <dt className="text-muted">{SHORT[k]}</dt>
-          <dd className="break-words">{labels[k]}</dd>
+      {labelPairs(labels).map((p) => (
+        <div key={p.label} className="contents">
+          <dt className="text-muted">{p.label}</dt>
+          <dd className="break-words">{p.value}</dd>
         </div>
       ))}
     </dl>
@@ -47,10 +47,20 @@ function Referrer({ url }: { url: string }) {
   );
 }
 
-export function AttributionBlock({ order }: { order: OrderRow }) {
+/** One named column of labels, for the open layout. Both touches show, even when empty — collapsing "same as last" is a compact-space saving, not a fact to hide once there is room to be plain. */
+function Column({ heading, labels }: { heading: string; labels: Labels }) {
+  const pairs = labelPairs(labels);
+  return (
+    <div className="flex min-w-40 flex-1 flex-col gap-1.5">
+      <span className="kicker text-muted">{heading}</span>
+      {pairs.length === 0 ? <span className="text-xs text-muted">direct</span> : <Rows labels={labels} />}
+    </div>
+  );
+}
+
+function CompactBlock({ order }: { order: OrderRow }) {
   const hasLast = Object.keys(order.utmLast).length > 0;
   const hasFirst = Object.keys(order.utmFirst).length > 0;
-  if (!hasLast && !hasFirst && !order.referrer) return null;
   const firstDiffers = hasFirst && !sameLabels(order.utmFirst, order.utmLast);
   return (
     <div className="flex flex-col gap-2">
@@ -64,6 +74,31 @@ export function AttributionBlock({ order }: { order: OrderRow }) {
       {order.referrer && <Referrer url={order.referrer} />}
     </div>
   );
+}
+
+function OpenBlock({ order }: { order: OrderRow }) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap gap-x-8 gap-y-3">
+        <Column heading="Last touch" labels={order.utmLast} />
+        <Column heading="First touch" labels={order.utmFirst} />
+      </div>
+      {order.referrer && <Referrer url={order.referrer} />}
+      {/* Orders placed before migration 0080 carry no visit_id — nothing to link to. */}
+      {order.visitId && (
+        <Link href="/admin/attribution/visits" className="w-fit text-xs text-muted underline-offset-4 hover:underline">
+          See the visit →
+        </Link>
+      )}
+    </div>
+  );
+}
+
+export function AttributionBlock({ order, layout = "compact" }: { order: OrderRow; layout?: "compact" | "open" }) {
+  const hasLast = Object.keys(order.utmLast).length > 0;
+  const hasFirst = Object.keys(order.utmFirst).length > 0;
+  if (!hasLast && !hasFirst && !order.referrer) return null;
+  return layout === "open" ? <OpenBlock order={order} /> : <CompactBlock order={order} />;
 }
 
 export function SourcePill({ order }: { order: OrderRow }) {
