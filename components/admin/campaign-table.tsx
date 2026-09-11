@@ -30,7 +30,7 @@ export function CampaignTable({
   if (rows.length === 0) {
     return (
       <p className="rounded-2xl border border-border bg-surface px-5 py-10 text-center text-muted">
-        No visits in this range yet. Visits are recorded from the day this shipped; nothing before it can be recovered.
+        No visits in this range yet. Visits are recorded from the day this shipped; a one-time seed also recovered what consented visitors had already captured before then.
       </p>
     );
   }
