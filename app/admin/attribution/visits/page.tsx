@@ -97,6 +97,9 @@ export default async function VisitsPage({
             {p.label}
           </Link>
         ))}
+        <Link href="/admin/attribution/sources" className="ml-auto text-xs text-muted underline-offset-4 hover:underline">
+          Referrers and landing pages →
+        </Link>
       </div>
 
       {/* The four selects below only narrow the rows this page already
