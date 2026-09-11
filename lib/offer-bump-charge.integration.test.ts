@@ -413,6 +413,42 @@ describe.skipIf(!canRun)("completing a bumped offer checkout (integration)", () 
     // subscription rather than skip the charge as already-paid.
     expect(pi.metadata.bumpPrepaid).toBe("");
   });
+
+  // The RECURRING host opens a SetupIntent, not the PaymentIntent every test
+  // above checks — and before this task, the shared `metadata` object built
+  // for both intent kinds carried no bump keys at all, so this path sent
+  // NOTHING about a resolved bump, not even the id.
+  it("carries the bump onto the SetupIntent too, when the HOST itself is recurring", async () => {
+    const bumpId = await offerOf(1500, {
+      billing_type: "recurring",
+      interval: "month",
+      trial_days: null,
+    });
+    const hostId = await offerOf(4700, {
+      bump_offer_id: bumpId,
+      billing_type: "recurring",
+      interval: "month",
+      trial_days: 7,
+    });
+    const { userId, email } = await member();
+
+    const res = await startOfferCheckout({ userId, email, offerId: hostId, bumpChoice: 0 });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.mode).toBe("setup");
+
+    const db = createServiceClient();
+    const { data: bumpPrice } = await db
+      .from("offer_prices")
+      .select("id")
+      .eq("offer_id", bumpId)
+      .single();
+
+    const si = await stripe().setupIntents.retrieve(res.clientSecret.split("_secret_")[0]);
+    expect(si.metadata?.bumpOfferId).toBe(bumpId);
+    expect(si.metadata?.bumpOfferName).toBe("zz bump-charge fixture");
+    expect(si.metadata?.bumpPriceId).toBe(bumpPrice!.id);
+  });
 });
 
 afterAll(async () => {

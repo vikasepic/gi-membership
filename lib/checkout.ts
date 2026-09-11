@@ -359,6 +359,11 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
   // withdrawn offer chargeable from a stale page or a replayed POST.
   const owned = await ownershipFor(userId);
   let bumpOffer: Offer | null = null;
+  // The PRICE they ticked, not just the offer — mirrors bumpPriceId in
+  // lib/offer-checkout.ts. Stays null through the old two-offer pairing below:
+  // that picks between two whole OFFERS, each at its own row-level price, not
+  // an id out of a placement's price list, so there is nothing to carry there.
+  let bumpPriceId: string | null = null;
   if (input.bumpChoice !== "none" && product.bumpOfferId) {
     const shown = await getOffer(product.bumpOfferId);
     // The options come from THIS product, not from the request — the same offer
@@ -380,6 +385,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
         };
       }
       picked = offerAtPrice(shown, price);
+      bumpPriceId = price.id;
     } else {
       // The old two-offer pairing, while placements are still on it. Removed
       // with products.bump_alt_offer_id once they have all been moved.
@@ -489,6 +495,7 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
         productPriceId: chosen.id,
         couponCode: coupon?.code ?? "",
         bumpOfferId: bumpOffer?.id ?? "",
+        bumpOfferName: bumpOffer?.name ?? "",
         country: country ?? "",
         newAccount,
         // Last touch as utm_*, first touch as first_utm_*, plus referrer.
@@ -614,6 +621,15 @@ export async function createCheckoutIntent(input: CheckoutInput): Promise<Checko
       couponCode: coupon?.code ?? "",
       discountCents: String(coupon?.discountCents ?? 0),
       bumpOfferId: bumpOffer?.id ?? "",
+      // The bump's own name and the exact price they ticked, not just its id.
+      // Without them, a bump riding the host's charge is indistinguishable
+      // from a host-only sale of the same total — in the dashboard, in
+      // exports, and in Zapier, which can only filter on what Stripe holds.
+      // Same reasoning as bumpOfferName on the offer checkout's own
+      // PaymentIntent (offer-checkout.ts) — this side of the checkout just
+      // never got the same treatment.
+      bumpOfferName: bumpOffer?.name ?? "",
+      bumpPriceId: bumpOffer ? (bumpPriceId ?? "") : "",
       // Resolved ONCE, here, from THIS product's placement (product.bumpPriceIds)
       // — bumpOffer is already priced at whatever the placement named, never the
       // bump's own headline. finalizeOrder has only the id by the time it runs
