@@ -425,6 +425,25 @@ export async function paidByOffer(range: DayRange): Promise<BoughtRow[]> {
     if (orders.length === 0) return [];
     const sourceOfId = new Map(orders.map((o) => [o.id, sourceOfOrder(o.utm_last, o.referrer)]));
 
+    // Which of those orders took the bump. The same read the product side
+    // does, for the same reason: an offer checkout can carry a bump too, and
+    // counting it only on the product funnels left every offer row reading 0
+    // while an order sat there with a $29 bump on it.
+    const bumped = new Set<string>();
+    for (const batch of chunks(orders.map((o) => o.id), 200)) {
+      for (const r of await allRows<{ order_id: string }>((from, to) =>
+        db
+          .from("order_items")
+          .select("order_id")
+          .in("order_id", batch)
+          .eq("kind", "bump")
+          .order("id", { ascending: true })
+          .range(from, to),
+      )) {
+        bumped.add(r.order_id);
+      }
+    }
+
     const { data: offers } = await db
       .from("offers")
       .select("id, key")
@@ -448,7 +467,14 @@ export async function paidByOffer(range: DayRange): Promise<BoughtRow[]> {
     }
     const out: BoughtRow[] = [];
     for (const [product, bySource] of seen) {
-      for (const [source, set] of bySource) out.push({ product, source, orders: set.size });
+      for (const [source, set] of bySource) {
+        out.push({
+          product,
+          source,
+          orders: set.size,
+          bumps: [...set].filter((id) => bumped.has(id)).length,
+        });
+      }
     }
     return out;
   } catch {
