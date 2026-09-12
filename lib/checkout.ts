@@ -34,6 +34,7 @@ import { markLeadConverted } from "@/lib/leads";
 import { recordError, messageOf } from "@/lib/errors";
 import { orderAttributionColumns, type Attribution, type Labels } from "@/lib/attribution";
 import { stripeAttributionWithNames } from "@/lib/attribution-names";
+import { stampOrderMetadata } from "@/lib/order-stripe-metadata";
 import { recordVisitStep } from "@/lib/visits";
 import type { Offer } from "@/lib/types";
 
@@ -1435,6 +1436,11 @@ export async function finalizeOrder(intentId: string): Promise<void> {
     valueCents: pi.amount,
   });
 
+  // The basket, onto the intent the card was charged against. Here rather than
+  // at intent creation because the order did not exist then and the bump was
+  // not resolved. Fire-and-forget, like the milestone above it.
+  void stampOrderMetadata(order.id as string);
+
   // Report the conversion server-side, for every sale.
   //
   // This used to return here unless `order.tracking_consent` was true, which
@@ -2011,6 +2017,9 @@ export async function acceptStandingOffer(
   });
 
   await trackOfferSale(order.id as string, offer, result);
+  // The upsell is a new line on the same order, so the basket on the base
+  // intent is now out of date.
+  void stampOrderMetadata(order.id as string);
 
   return { ok: true };
 }
@@ -2145,6 +2154,7 @@ export async function acceptOto(
     stripe_payment_intent_id: result.paymentIntentId ?? null,
   });
   await trackOfferSale(order.id as string, offer, result);
+  void stampOrderMetadata(order.id as string);
   return { ok: true };
 }
 
