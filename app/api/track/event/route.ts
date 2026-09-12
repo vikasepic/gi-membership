@@ -1,9 +1,10 @@
 import { cookies, headers } from "next/headers";
-import { createServiceClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
 import { EVENTS, META_BOTH_SIDES, type EventName } from "@/lib/analytics/events";
 import { trackServerEvent } from "@/lib/tracking";
+import { matchIdentity } from "@/lib/tracking-fields";
 import { UTM_COOKIE, attributionFromCookie } from "@/lib/attribution";
 
 /**
@@ -66,6 +67,29 @@ export async function POST(req: Request) {
   const h = await headers();
   const anon = jar.get("gi_anon")?.value;
 
+  // Who this is, in the SAME terms the browser's pixel uses.
+  //
+  // `pixelMatch` initialises the pixel with external_id = hashed(user.id) for a
+  // signed-in reader and hashed(anon) for everyone else, and that value rides
+  // every browser event from then on. This endpoint sent no external_id at all,
+  // so each pair arrived with the key on one side only — which is what Meta
+  // reports as 44% External ID coverage on AddToCart, and part of why the match
+  // quality score sits at 6.0. Same value on both sides or the key is worthless.
+  //
+  // The address is the other half: a signed-in reader's is already known, and
+  // hashing it here costs nothing. Body first, because a checkout knows the
+  // address before the account does.
+  let identity = matchIdentity(null, anon, body.email);
+  try {
+    const {
+      data: { user },
+    } = await (await createClient()).auth.getUser();
+    identity = matchIdentity(user ? { id: user.id, email: user.email } : null, anon, body.email);
+  } catch {
+    // A reader we cannot identify is one we describe anonymously, not an event
+    // we drop. The anon id above is still a real, stable external id.
+  }
+
   // The click ids belong to the visitor row, not to the request body — the
   // browser could send anything, and first touch is the version worth keeping.
   let clickIds: Record<string, string> = {};
@@ -85,7 +109,8 @@ export async function POST(req: Request) {
   await trackServerEvent({
     eventId: body.eventId,
     eventName: event,
-    email: body.email ?? "",
+    email: identity.email,
+    userId: identity.userId,
     valueCents: Math.max(0, Math.round(body.valueCents ?? 0)),
     currency: body.currency || "usd",
     // No order yet on any of these — the anonymous id is what ties the funnel

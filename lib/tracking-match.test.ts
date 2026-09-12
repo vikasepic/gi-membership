@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { buildMetaEvent, type PurchaseEvent } from "@/lib/tracking";
-import { fbcFrom, nameParts, countryHash, hashed } from "@/lib/tracking-fields";
+import { fbcFrom, nameParts, countryHash, hashed, matchIdentity } from "@/lib/tracking-fields";
 
 /**
  * Everything Meta matches a conversion on.
@@ -179,5 +179,42 @@ describe("a refusal from Meta", () => {
     // a malformed field could be discarded for months.
     expect(tracking).toContain("if (!res.ok)");
     expect(tracking).toContain('source: "tracking"');
+  });
+});
+
+describe("the id both sides have to agree on", () => {
+  // pixelMatch initialises the browser pixel with hashed(user.id) when signed
+  // in and hashed(anon) otherwise. The server copy of an upper-funnel event
+  // sent no external_id at all until 12 Sep 2026, so every pair carried the key
+  // on one side only — Meta reported 44% External ID coverage on AddToCart.
+  it("uses the anonymous cookie for a reader who is not signed in", () => {
+    expect(matchIdentity(null, "anon-7", undefined)).toEqual({ userId: "anon-7", email: "" });
+  });
+
+  it("uses the account id once they are signed in, which is what the pixel switches to", () => {
+    expect(matchIdentity({ id: "user-9", email: "a@b.test" }, "anon-7", undefined)).toEqual({
+      userId: "user-9",
+      email: "a@b.test",
+    });
+  });
+
+  it("produces the SAME external_id the browser would send", () => {
+    // The whole point. A different value on each side is worth no more than
+    // sending nothing.
+    const { userId } = matchIdentity(null, "anon-7", undefined);
+    const p = buildMetaEvent({ ...base, userId });
+    expect(p.data[0].user_data.external_id).toEqual([hashed("anon-7")]);
+  });
+
+  it("prefers a typed address over the account's, because checkout knows first", () => {
+    expect(matchIdentity({ id: "u", email: "old@b.test" }, "a", "typed@b.test").email).toBe(
+      "typed@b.test",
+    );
+  });
+
+  it("sends no external_id when there is genuinely nothing to send", () => {
+    const { userId } = matchIdentity(null, undefined, undefined);
+    expect(userId).toBeUndefined();
+    expect(buildMetaEvent({ ...base, userId }).data[0].user_data.external_id).toBeUndefined();
   });
 });

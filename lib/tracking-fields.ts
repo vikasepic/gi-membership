@@ -75,3 +75,28 @@ export function countryHash(country: string | null | undefined): string | undefi
 export function compact<T extends Record<string, unknown>>(o: T): Partial<T> {
   return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== null && v !== "")) as Partial<T>;
 }
+
+/**
+ * Who an event belongs to, in the terms the BROWSER pixel already uses.
+ *
+ * `pixelMatch` initialises the pixel with `external_id = hashed(user.id)` for a
+ * signed-in reader and `hashed(anon)` for everyone else, and that value then
+ * rides every browser event. A server copy that picks a different value, or
+ * none, leaves the pair matched on one side only — which is exactly what Meta
+ * reported as 44% External ID coverage on AddToCart.
+ *
+ * So the rule is not "send an id", it is "send THE SAME id". The anonymous
+ * cookie is a real, stable identifier and is the right answer for a reader who
+ * has not signed in; it is never a fallback to something weaker.
+ *
+ * The address follows the same logic with one exception: the body wins, because
+ * a checkout knows the address the reader just typed before the account does.
+ */
+export function matchIdentity(
+  user: { id: string; email?: string | null } | null,
+  anon: string | undefined,
+  bodyEmail: string | undefined,
+): { userId: string | undefined; email: string } {
+  if (!user) return { userId: anon, email: bodyEmail ?? "" };
+  return { userId: user.id, email: bodyEmail || user.email || "" };
+}
