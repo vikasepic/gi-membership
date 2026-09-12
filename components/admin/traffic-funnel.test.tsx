@@ -25,6 +25,7 @@ const PRODUCT: Funnel = {
     { day: "2026-09-05", hits: 112 },
   ],
   salesViews: 412,
+  bumps: 0,
 };
 
 describe("a product's funnel card", () => {

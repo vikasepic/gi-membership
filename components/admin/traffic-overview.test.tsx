@@ -18,6 +18,7 @@ const ROWS: OverviewRow[] = [
       { day: "2026-09-09", hits: 60 },
     ],
     topSource: { source: "meta", hits: 60 },
+    bumps: 0,
   },
   {
     key: null,
@@ -28,6 +29,7 @@ const ROWS: OverviewRow[] = [
     drop: null,
     daily: [],
     topSource: { source: "direct", hits: 70 },
+    bumps: null,
   },
 ];
 
@@ -133,7 +135,8 @@ describe("the traffic table", () => {
       { ...ROWS[0], steps: [500, 200, 150, 0], drop: { to: 1, percent: 60 } },
     ];
     mount({ source: "meta" }, rows);
-    const cell = [...document.querySelectorAll("tbody tr")][0].querySelectorAll("td")[5];
+    // 6, not 5: the Bump column sits between Bought and the drop.
+    const cell = [...document.querySelectorAll("tbody tr")][0].querySelectorAll("td")[6];
     expect(cell.textContent).toBe("60% at the checkout");
   });
 
@@ -141,6 +144,21 @@ describe("the traffic table", () => {
     mount();
     const cells = [...document.querySelectorAll("tbody tr")][1].querySelectorAll("td");
     expect(cells[1].textContent).toBe("70");
-    for (const i of [2, 3, 4]) expect(cells[i].textContent).toBe("—");
+    // 5 is the bump: a page with no funnel has no sales to count it against.
+    for (const i of [2, 3, 4, 5]) expect(cells[i].textContent).toBe("—");
+  });
+
+  it("counts the bump beside the sale, not as a step somebody drops out of", () => {
+    // The header that started this: "Upsell" read as upsells SOLD. It is the
+    // number of people who SAW the page — 12 of them, while 0 were bought.
+    const rows: OverviewRow[] = [{ ...ROWS[0], steps: [500, 200, 12, 14], bumps: 5 }];
+    mount({ source: "meta" }, rows);
+    const cells = [...document.querySelectorAll("tbody tr")][0].querySelectorAll("td");
+    expect(cells[3].textContent).toBe("12"); // saw the upsell
+    expect(cells[4].textContent).toBe("14"); // bought
+    expect(cells[5].textContent).toBe("5"); // of those, took the bump
+    // And the header may never read as a count of upsells sold again.
+    expect(document.body.textContent).toContain("Saw upsell");
+    expect(document.body.textContent).toContain("Bump");
   });
 });

@@ -20,7 +20,7 @@ export type CountRow = {
   product: string;
   hits: number;
 };
-export type BoughtRow = { product: string; source: string; orders: number };
+export type BoughtRow = { product: string; source: string; orders: number; /** Of those orders, how many took the bump. Absent on older callers; read as 0. */ bumps?: number };
 export type ProductName = { slug: string; title: string; hasUpsell: boolean };
 
 export type SourceSplit = { source: string; hits: number; orders: number };
@@ -56,6 +56,14 @@ export type Funnel = {
   daily: DayPoint[];
   /** Sales-page views, the default order. */
   salesViews: number;
+  /**
+   * How many of this funnel's sales included the order bump.
+   *
+   * Beside the steps, never one of them: the bump is answered at the checkout,
+   * between two stages, so nobody can drop out "at the bump" and putting it in
+   * the funnel would make `biggestDrop` describe a stage that does not exist.
+   */
+  bumps: number;
 };
 
 export type OtherPage = { path: string; hits: number; sources: SourceSplit[] };
@@ -129,12 +137,17 @@ export function buildFunnels(
   // First occurrence of a (product, source) pair wins, for the reason the
   // owners map gives above; the per-owner total is the sum of those.
   const boughtBySource = new Map<string, Map<string, number>>();
+  const bumpsBySource = new Map<string, Map<string, number>>();
   for (const b of bought) {
     const m = per(boughtBySource, b.product, () => new Map<string, number>());
     if (!m.has(b.source)) m.set(b.source, b.orders);
+    const bm = per(bumpsBySource, b.product, () => new Map<string, number>());
+    if (!bm.has(b.source)) bm.set(b.source, b.bumps ?? 0);
   }
   const boughtOf = new Map<string, number>();
   for (const [product, m] of boughtBySource) boughtOf.set(product, [...m.values()].reduce((a, n) => a + n, 0));
+  const bumpsOf = new Map<string, number>();
+  for (const [product, m] of bumpsBySource) bumpsOf.set(product, [...m.values()].reduce((a, n) => a + n, 0));
 
   const sales = new Map<string, number>();
   const checkout = new Map<string, number>();
@@ -211,6 +224,7 @@ export function buildFunnels(
         // was a gap.
         daily: days.map((day) => ({ day, hits: byDay.get(day) ?? 0 })),
         salesViews: sales.get(key) ?? 0,
+        bumps: bumpsOf.get(key) ?? 0,
       };
     })
     .sort((a, b) => b.salesViews - a.salesViews || a.key.localeCompare(b.key));

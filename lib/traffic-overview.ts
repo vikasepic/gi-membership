@@ -27,9 +27,18 @@ export type OverviewRow = {
   drop: { to: number; percent: number } | null;
   daily: DayPoint[];
   topSource: { source: string; hits: number } | null;
+  /**
+   * How many of this row's sales included the order bump. Null for a page that
+   * owns no funnel, where there are no sales to count against.
+   *
+   * Not a step: the bump is answered at the checkout, between two stages, so
+   * nobody drops out "at the bump" and it must stay out of `steps` or the drop
+   * would name a stage that does not exist.
+   */
+  bumps: number | null;
 };
 
-export type Sort = "page" | "views" | "checkout" | "upsell" | "bought" | "drop" | "source";
+export type Sort = "page" | "views" | "checkout" | "upsell" | "bought" | "bumps" | "drop" | "source";
 export type Dir = "asc" | "desc";
 export type Kind = "all" | "product" | "offer" | "other";
 
@@ -40,7 +49,7 @@ export type OverviewFilter = { kind: Kind; source: string; q: string; sort: Sort
  *  drill-in build. */
 export type LinkFilter = OverviewFilter & { preset: string };
 
-const SORTS: readonly Sort[] = ["page", "views", "checkout", "upsell", "bought", "drop", "source"];
+const SORTS: readonly Sort[] = ["page", "views", "checkout", "upsell", "bought", "bumps", "drop", "source"];
 const KINDS: readonly Kind[] = ["all", "product", "offer", "other"];
 
 const one = (v: string | string[] | undefined): string | undefined =>
@@ -111,6 +120,7 @@ export function overviewRows(view: FunnelView, ordersKnown = true): OverviewRow[
     drop: biggestDrop(ordersKnown ? f.steps : f.steps.slice(0, 3)),
     daily: f.daily,
     topSource: f.sources[0] ?? null,
+    bumps: f.bumps,
   }));
 
   const others: OverviewRow[] = view.others.map((o) => ({
@@ -122,6 +132,7 @@ export function overviewRows(view: FunnelView, ordersKnown = true): OverviewRow[
     drop: null,
     daily: [],
     topSource: o.sources[0] ?? null,
+    bumps: null,
   }));
 
   return [...funnels, ...others];
@@ -170,6 +181,10 @@ export function applyOverview(rows: OverviewRow[], filter: OverviewFilter): Over
         if (!b.drop) return -1;
         return sign * (a.drop.percent - b.drop.percent) || a.title.localeCompare(b.title);
       }
+      case "bumps":
+        // Not a step, so it cannot go through `at`. A page with no funnel has
+        // no sales to count bumps against and sorts as zero rather than last.
+        return sign * ((a.bumps ?? 0) - (b.bumps ?? 0)) || a.title.localeCompare(b.title);
       default: {
         const i = { views: 0, checkout: 1, upsell: 2, bought: 3 }[filter.sort]!;
         return sign * (at(a, i) - at(b, i)) || a.title.localeCompare(b.title);

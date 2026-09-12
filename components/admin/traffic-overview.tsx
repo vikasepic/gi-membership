@@ -9,8 +9,9 @@ const COLUMNS: { key: Sort; label: string; right?: boolean }[] = [
   { key: "page", label: "Page" },
   { key: "views", label: "Views", right: true },
   { key: "checkout", label: "Checkout", right: true },
-  { key: "upsell", label: "Upsell", right: true },
+  { key: "upsell", label: "Saw upsell", right: true },
   { key: "bought", label: "Bought", right: true },
+  { key: "bumps", label: "Bump", right: true },
   { key: "drop", label: "Biggest drop" },
   { key: "source", label: "Top source" },
 ];
@@ -149,6 +150,16 @@ export function TrafficOverview({
                     </td>
                   );
                 })}
+                {/* Beside the sale, not among the steps: a bump is answered at
+                    the checkout, so nobody drops out at it. An em dash where
+                    there are no sales to count it against. */}
+                <td className="px-4 py-3 text-right tabular-nums">
+                  {r.bumps === null ? (
+                    <span className="text-muted">—</span>
+                  ) : (
+                    formatCount(r.bumps)
+                  )}
+                </td>
                 <td className="px-4 py-3 text-sm">
                   {r.drop ? (
                     <span className="text-primary">

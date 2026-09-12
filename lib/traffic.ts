@@ -32,7 +32,7 @@ export type CountRow = {
   product: string;
   hits: number;
 };
-export type BoughtRow = { product: string; source: string; orders: number };
+export type BoughtRow = { product: string; source: string; orders: number; /** Of those orders, how many took the bump. Absent on older callers; read as 0. */ bumps?: number };
 export type ProductName = { slug: string; title: string; hasUpsell: boolean };
 
 /**
@@ -327,6 +327,27 @@ export async function paidByProduct(range: DayRange): Promise<BoughtRow[]> {
       );
     }
 
+    // Which of those orders took the bump. Its own read rather than a wider
+    // `kind` filter above, because the product read is what decides WHICH
+    // funnel an order belongs to and must not grow a second row per order.
+    // A bump is not a funnel step — it is answered at the checkout, between
+    // two steps, so it can never be a stage anybody drops out of. It rides
+    // beside the count of sales instead.
+    const bumped = new Set<string>();
+    for (const batch of chunks(ids, 200)) {
+      for (const r of await allRows<{ order_id: string }>((from, to) =>
+        db
+          .from("order_items")
+          .select("order_id")
+          .in("order_id", batch)
+          .eq("kind", "bump")
+          .order("id", { ascending: true })
+          .range(from, to),
+      )) {
+        bumped.add(r.order_id);
+      }
+    }
+
     const { data: products } = await db
       .from("products")
       .select("id, slug")
@@ -350,7 +371,14 @@ export async function paidByProduct(range: DayRange): Promise<BoughtRow[]> {
     }
     const out: BoughtRow[] = [];
     for (const [product, bySource] of seen) {
-      for (const [source, set] of bySource) out.push({ product, source, orders: set.size });
+      for (const [source, set] of bySource) {
+        out.push({
+          product,
+          source,
+          orders: set.size,
+          bumps: [...set].filter((id) => bumped.has(id)).length,
+        });
+      }
     }
     return out;
   } catch {

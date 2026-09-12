@@ -19,6 +19,7 @@ const VIEW: FunnelView = {
       sources: [{ source: "meta", hits: 60, orders: 3 }, { source: "direct", hits: 40, orders: 1 }],
       daily: [{ day: "2026-09-09", hits: 100 }],
       salesViews: 100,
+      bumps: 0,
     },
     {
       key: "digital-product-validator",
@@ -29,6 +30,7 @@ const VIEW: FunnelView = {
       sources: [{ source: "direct", hits: 40, orders: 10 }],
       daily: [{ day: "2026-09-09", hits: 40 }],
       salesViews: 40,
+      bumps: 0,
     },
   ],
   others: [{ path: "/", hits: 70, sources: [{ source: "direct", hits: 70, orders: 0 }] }],
@@ -84,6 +86,7 @@ describe("when the order count isn't known (a source filter)", () => {
         sources: [],
         daily: [],
         salesViews: steps[0],
+        bumps: 0,
       },
     ],
     others: [],
