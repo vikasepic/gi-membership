@@ -108,6 +108,19 @@ describe.skipIf(!canRun)("one access record per thing bought (integration)", () 
     expect(await subscribedToApp(userId, APP)).toBe(false);
   });
 
+  it("keeps a cancelled app off the library shelf", async () => {
+    // The shelf listed every row with an app on it, cancelled included, and
+    // its "Open the app" posted to an action that rightly refuses a cancelled
+    // row: a button that goes nowhere, above the "Still available" card that
+    // is the real way back in. Same three statuses as subscribedToApp.
+    const db = createServiceClient();
+    await db.from("ownership").insert({ ...row(SEEDED_OFFER), status: "canceled" });
+    await db.from("ownership").insert({ ...row(secondOfferId), status: "trialing" });
+    const { listOwnedApps } = await import("@/lib/library");
+    const shelf = await listOwnedApps(userId);
+    expect(shelf.map((a) => a.status)).toEqual(["trialing"]);
+  });
+
   it("revives the offer-less row on a resubscribe under a new subscription id, without touching a sibling offer row", async () => {
     // Reproduces the churned-then-returning app subscriber from
     // t3-findings.md: the offer-less row this function owns is stuck on the

@@ -62,11 +62,16 @@ export async function listOwnedApps(
   }[]
 > {
   const db = createServiceClient();
+  // Live rows only, the same three subscribedToApp counts. A cancelled row is
+  // a record that they once had it: on the shelf it drew a card whose "Open
+  // the app" posted to an action that refused it, above the "Still available"
+  // card that is the real way back in.
   const { data: owns } = await db
     .from("ownership")
     .select("app_id, status, offer_id")
     .eq("user_id", userId)
-    .not("app_id", "is", null);
+    .not("app_id", "is", null)
+    .in("status", ["active", "trialing", "past_due"]);
   const rows = owns ?? [];
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.app_id as string);
