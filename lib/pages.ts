@@ -49,11 +49,20 @@ export const sectionsFor = (owner: OwnerType) =>
  * so opening the editor shows a complete page to work from instead of ten empty
  * boxes — and so a page can be switched on before anyone has written a word.
  */
-export async function getPageSections(owner: OwnerType, ownerId: string): Promise<SectionRow[]> {
+export async function getPageSections(
+  owner: OwnerType,
+  ownerId: string,
+  /**
+   * `draft: true` is the editor and the preview: each row is its draft laid
+   * over its live columns. The default is what every visitor gets: live
+   * columns only, and a row that was never published is not there at all.
+   */
+  opts: { draft?: boolean } = {},
+): Promise<SectionRow[]> {
   const db = createServiceClient();
   const { data, error } = await db
     .from("page_sections")
-    .select("section_key, position, enabled, style, accent, variant, content, background, css_id, css_class, layout, updated_at")
+    .select("section_key, position, enabled, style, accent, variant, content, background, css_id, css_class, layout, updated_at, draft, published_at")
     .eq("owner_type", owner)
     .eq("owner_id", ownerId)
     .order("position");
@@ -67,25 +76,40 @@ export async function getPageSections(owner: OwnerType, ownerId: string): Promis
   // handed to the page exactly as stored. Headings and card titles render
   // their HTML now, so "exactly as stored" is the difference between a bold
   // word and a script tag on a live sales page. Verified by putting one there.
-  const stored = new Map(
-    camelize<SectionRow[]>(data ?? []).map((r) => [
-      r.sectionKey,
-      { ...r, content: sanitizeSectionContent((r.content ?? {}) as Record<string, unknown>) },
-    ]),
-  );
+  const stored = new Map<string, SectionRow>();
+  for (const raw of data ?? []) {
+    const r = raw as Record<string, unknown>;
+    const draft = (r.draft as Record<string, unknown> | null) ?? null;
+    if (!opts.draft && r.published_at === null) continue;
+    // The draft is stored in the table's own spelling, so laying it over the
+    // row gives camelize one shape to convert.
+    const { draft: _d, published_at: _p, ...live } = r;
+    const row = camelize<SectionRow>(opts.draft && draft ? { ...live, ...draft } : live);
+    stored.set(row.sectionKey, {
+      ...row,
+      hasDraft: draft !== null,
+      content: sanitizeSectionContent((row.content ?? {}) as Record<string, unknown>),
+    });
+  }
   // Merge onto the canonical list rather than returning what happens to be in
   // the table: a section added to the code later must appear on existing pages.
   return defaultRows(sectionsFor(owner)).map((d) => stored.get(d.sectionKey) ?? d);
 }
 
-/** True when anyone has configured this page at all. */
-export async function hasPageSections(owner: OwnerType, ownerId: string): Promise<boolean> {
+/** True when anyone has configured this page at all. Live rows only unless told otherwise. */
+export async function hasPageSections(
+  owner: OwnerType,
+  ownerId: string,
+  opts: { includeDrafts?: boolean } = {},
+): Promise<boolean> {
   const db = createServiceClient();
-  const { count, error } = await db
+  let q = db
     .from("page_sections")
     .select("id", { count: "exact", head: true })
     .eq("owner_type", owner)
     .eq("owner_id", ownerId);
+  if (!opts.includeDrafts) q = q.not("published_at", "is", null);
+  const { count, error } = await q;
   if (error) return false;
   return (count ?? 0) > 0;
 }
@@ -375,6 +399,8 @@ export type PageSettings = {
   metaTitle: string;
   metaDescription: string;
   shareImagePath: string;
+  /** True when a draft is waiting. Only a read sets it; a save ignores it. */
+  hasDraft?: boolean;
 };
 
 export const NO_PAGE_SETTINGS: PageSettings = {
@@ -398,7 +424,12 @@ export const NO_PAGE_SETTINGS: PageSettings = {
  */
 const SEO_COLUMNS = "meta_title, meta_description, share_image_path";
 
-export async function getPageSettings(owner: OwnerType, ownerId: string): Promise<PageSettings> {
+export async function getPageSettings(
+  owner: OwnerType,
+  ownerId: string,
+  /** `draft: true` lays the pending SEO and code over the live row. Editor and preview only. */
+  opts: { draft?: boolean } = {},
+): Promise<PageSettings> {
   const db = createServiceClient();
   const read = async (columns: string) =>
     db
@@ -408,11 +439,13 @@ export async function getPageSettings(owner: OwnerType, ownerId: string): Promis
       .eq("owner_id", ownerId)
       .maybeSingle();
 
-  const full = await read(`custom_css, custom_js, snippets, ${SEO_COLUMNS}`);
+  const full = await read(`custom_css, custom_js, snippets, draft, ${SEO_COLUMNS}`);
   const { data, error } = full.error ? await read("custom_css, custom_js, snippets") : full;
   // A page renders without its custom code; it does not render without the
   // page. So a failure here is empty custom code, not a 500 on a sales page.
   if (error || !data) return NO_PAGE_SETTINGS;
+  const { draft: rawDraft, ...live } = data as unknown as Record<string, unknown>;
+  const draft = (rawDraft as Record<string, unknown> | null) ?? null;
   const row = camelize<{
     customCss: string;
     customJs: string;
@@ -420,8 +453,9 @@ export async function getPageSettings(owner: OwnerType, ownerId: string): Promis
     metaTitle: string | null;
     metaDescription: string | null;
     shareImagePath: string | null;
-  }>(data);
+  }>(opts.draft && draft ? { ...live, ...draft } : live);
   return {
+    hasDraft: draft !== null,
     customCss: row.customCss ?? "",
     customJs: row.customJs ?? "",
     // Coerced, not asserted. These columns arrived after the rows did, so an

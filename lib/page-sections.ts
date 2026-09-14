@@ -798,6 +798,8 @@ export type SectionRow = {
    * stored — there is nothing to lose on its first save.
    */
   updatedAt?: string | null;
+  /** True when the row carries unpublished work. Set by the reads in lib/pages. */
+  hasDraft?: boolean;
 };
 
 export type SectionView = {
