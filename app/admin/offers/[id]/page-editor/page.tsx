@@ -24,8 +24,8 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
   if (!offer) notFound();
 
   const [rows, settings, pageSources, preview, store] = await Promise.all([
-    getPageSections("offer", id),
-    getPageSettings("offer", id),
+    getPageSections("offer", id, { draft: true }),
+    getPageSettings("offer", id, { draft: true }),
     listPageSources(),
     // The store's fonts and site typography. The admin renders no StoreBrand,
     // so without this the preview draws in the app's own fonts.
@@ -116,7 +116,7 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
           <CopyLink
             url={`${siteUrl()}/o/${offer.key}`}
             label="Copy the link"
-            note="The same nine sections at an address you can paste into an ad or an email. Live once you save a section; buying goes through the normal checkout."
+            note="The same nine sections at an address you can paste into an ad or an email. Live once you publish the page; buying goes through the normal checkout."
           />
           <PageSeo
             ownerType="offer"
@@ -164,7 +164,9 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
           declineLabel: offer.declineLabel,
         }}
         preview={preview}
-        liveHref={`/admin/offers/${id}/preview?template=sections`}
+        previewHref={`/o/${offer.key}?preview=1`}
+        publishNote={!offer.active ? "The offer is switched off, so buyers can't see it yet." : undefined}
+        settingsHasDraft={settings.hasDraft}
       />
         </div>
       </div>

@@ -26,7 +26,7 @@ export default async function HomePageEditor() {
   const storeId = await getStoreId();
 
   const [rows, pageSources, preview, store] = await Promise.all([
-    getPageSections("store", storeId),
+    getPageSections("store", storeId, { draft: true }),
     listPageSources(),
     // The store's fonts and site typography. The admin renders no StoreBrand,
     // so without this the preview draws in the app's own fonts.
@@ -93,7 +93,7 @@ export default async function HomePageEditor() {
             money={{ priceLabel: null, termsLabel: null }}
             preview={preview}
             store={store}
-            liveHref="/"
+            previewHref="/?preview=1"
           />
         </div>
       </div>

@@ -77,8 +77,16 @@ describe("the page-level warnings and helpers", () => {
     has("DeviceSwitch");
   });
 
-  it("still links to the whole page as buyers see it", () => {
-    has("liveHref");
+  it("still links to the whole page, now as a preview of the drafts", () => {
+    has("previewHref");
+  });
+
+  it("saves drafts, publishes the page, and previews from the bar", () => {
+    has("publishPageAction");
+    has("discardDraftAction");
+    has('"Publish page"');
+    has("Discard draft");
+    has('title="Saved, not published"');
   });
 });
 
@@ -88,7 +96,7 @@ describe("what the route provides", () => {
   });
 
   it("still says the link only goes live once something is saved", () => {
-    has("Live as soon as you save any section");
+    has("Live as soon as you publish");
   });
 
   it("still offers page-level custom CSS and JS", () => {

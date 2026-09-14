@@ -140,6 +140,9 @@ export function BlockEditor({
   onChange,
   onClose,
   onSave,
+  onPublish,
+  onPreview,
+  lastSavedAt,
   preview,
   owner = "product",
   ownerOfferId,
@@ -159,6 +162,12 @@ export function BlockEditor({
    * says Done.
    */
   onSave?: () => Promise<void>;
+  /** Saves, then publishes this section. Absent hides Publish. */
+  onPublish?: () => Promise<void>;
+  /** Opens the preview at this section, after a save. Absent hides the eye. */
+  onPreview?: () => Promise<void>;
+  /** When the page last saved, for the header. */
+  lastSavedAt?: number | null;
   /**
    * Which kind of page this band belongs to.
    *

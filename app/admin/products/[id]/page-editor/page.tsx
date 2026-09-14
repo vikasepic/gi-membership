@@ -23,8 +23,8 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
   if (!product) notFound();
 
   const [rows, settings, pageSources, preview, store, display] = await Promise.all([
-    getPageSections("product", id),
-    getPageSettings("product", id),
+    getPageSections("product", id, { draft: true }),
+    getPageSettings("product", id, { draft: true }),
     listPageSources(),
     // The store's fonts and site typography. The admin renders no StoreBrand,
     // so without this the preview draws in the app's own fonts.
@@ -103,7 +103,7 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
             label="Public link"
             note={
               product.status === "published"
-                ? "Live as soon as you save any section. Before that this address shows the short product page."
+                ? "Live as soon as you publish the page. Before that this address shows the short product page."
                 : `This product is a ${product.status}, so the address 404s for everyone until you publish it — whatever is saved here.`
             }
           />
@@ -144,7 +144,13 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
         initial={rows}
         money={{ priceLabel: money(product.priceCents, product.currency), termsLabel: null }}
         preview={preview}
-        liveHref={`/p/${product.slug}`}
+        previewHref={`/p/${product.slug}?preview=1`}
+        publishNote={
+          product.status !== "published"
+            ? "The product itself is still a draft, so buyers can't see it yet."
+            : undefined
+        }
+        settingsHasDraft={settings.hasDraft}
       />
         </div>
       </div>

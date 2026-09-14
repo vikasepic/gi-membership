@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { saveSectionAction } from "@/app/admin/pages/actions";
+import { saveSectionAction, publishPageAction, discardDraftAction } from "@/app/admin/pages/actions";
 import { usePresence, PresenceNote } from "@/components/admin/presence";
 import type { StoreRender } from "@/components/page/storefront-blocks";
 import { copyToClipboard, readClipboard, onClipboardChange, type Clip } from "@/lib/clipboard";
@@ -52,7 +52,9 @@ export function PageEditor({
   ownerId,
   initial,
   money,
-  liveHref,
+  previewHref,
+  publishNote,
+  settingsHasDraft,
   pageSources = [],
   preview,
 }: {
@@ -62,7 +64,12 @@ export function PageEditor({
   ownerId: string;
   initial: SectionRow[];
   money: PageMoney;
-  liveHref: string;
+  /** The real page with ?preview=1, which shows drafts to an admin. */
+  previewHref: string;
+  /** Shown after a page publish when the owner itself is not live yet. */
+  publishNote?: string;
+  /** Whether SEO or custom code have a draft waiting; counts toward "not published". */
+  settingsHasDraft?: boolean;
   /** Other pages that could be used as a template. */
   pageSources?: PageSource[];
   /** The store's fonts and site typography, so the preview is not a lie. */
@@ -75,8 +82,13 @@ export function PageEditor({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [published, setPublished] = useState<string | null>(null);
+  const [settingsDraft, setSettingsDraft] = useState(!!settingsHasDraft);
 
   const dirtyKeys = Object.keys(dirty).filter((k) => dirty[k]);
+  const draftKeys = rows.filter((r) => r.hasDraft).map((r) => r.sectionKey);
+  const unpublished = dirtyKeys.length + draftKeys.length + (settingsDraft ? 1 : 0);
 
   // The store's type, in the admin, reaching only what wears the class — the
   // admin's own chrome keeps its own.
@@ -149,6 +161,7 @@ export function PageEditor({
     if (dirtyKeys.length === 0 || saving) return null;
     setSaving(true);
     setSaveError(null);
+    setPublished(null);
     for (const key of dirtyKeys) {
       const row = rows.find((r) => r.sectionKey === key);
       if (!row) continue;
@@ -180,13 +193,92 @@ export function PageEditor({
       setDirty((d) => ({ ...d, [key]: false }));
       // Move the baseline forward, or the next save compares against a stamp
       // the database has already replaced and reports a conflict with nobody.
-      if (res.updatedAt) {
-        setRows((rs) => rs.map((r) => (r.sectionKey === key ? { ...r, updatedAt: res.updatedAt } : r)));
-      }
+      // And it is a draft now, until somebody publishes it.
+      setRows((rs) =>
+        rs.map((r) =>
+          r.sectionKey === key ? { ...r, hasDraft: true, updatedAt: res.updatedAt ?? r.updatedAt } : r,
+        ),
+      );
     }
     setSaving(false);
     setSavedAt(Date.now());
     return null;
+  }
+
+  /**
+   * Save what is dirty, then make it live. One section or the page.
+   *
+   * Save first, because Publish is the button people press when they are
+   * done, and "done" includes the change they just typed. A save that fails
+   * stops the publish: nothing half-done goes live.
+   */
+  async function publish(sectionKey?: string): Promise<string | null> {
+    if (publishing) return null;
+    setPublishing(true);
+    setPublished(null);
+    const failed = await saveAll();
+    if (failed) {
+      setPublishing(false);
+      return failed;
+    }
+    const fd = new FormData();
+    fd.append("ownerType", ownerType);
+    fd.append("ownerId", ownerId);
+    fd.append("sectionKey", sectionKey ?? "");
+    const res = await publishPageAction({}, fd);
+    setPublishing(false);
+    if (res.error) {
+      setSaveError(res.error);
+      return res.error;
+    }
+    const stamps = res.updatedAt ?? {};
+    setRows((rs) =>
+      rs.map((r) =>
+        !sectionKey || r.sectionKey === sectionKey
+          ? { ...r, hasDraft: false, updatedAt: stamps[r.sectionKey] ?? r.updatedAt }
+          : r,
+      ),
+    );
+    if (!sectionKey) setSettingsDraft(false);
+    setPublished(sectionKey ? "Section published." : publishNote ? `Page published. ${publishNote}` : "Published.");
+    return null;
+  }
+
+  /**
+   * Save, then open the preview.
+   *
+   * The tab is opened before the await: a window.open that follows an await
+   * is what browsers treat as a popup and block. `alreadySaved` is for the
+   * builder, which has just saved through its own button and only needs the
+   * tab.
+   */
+  async function openPreview(hash?: string, opts: { alreadySaved?: boolean } = {}): Promise<void> {
+    const w = window.open("about:blank", "_blank");
+    if (!opts.alreadySaved) {
+      const failed = await saveAll();
+      if (failed) {
+        w?.close();
+        return;
+      }
+    }
+    if (w) w.location.href = `${previewHref}${hash ? `#${hash}` : ""}`;
+  }
+
+  async function discard(row: SectionRow) {
+    const title = sectionDef(row.sectionKey)?.title ?? row.sectionKey;
+    if (!window.confirm(`Throw away the draft of ${title} and go back to what is live?`)) return;
+    const fd = new FormData();
+    fd.append("ownerType", ownerType);
+    fd.append("ownerId", ownerId);
+    fd.append("sectionKey", row.sectionKey);
+    const res = await discardDraftAction({}, fd);
+    if (res.error || !res.row) {
+      setSaveError(res.error ?? "Could not discard that draft.");
+      return;
+    }
+    const live = res.row;
+    setRows((rs) => rs.map((r) => (r.sectionKey === row.sectionKey ? live : r)));
+    setDirty((d) => ({ ...d, [row.sectionKey]: false }));
   }
 
   // The scroll-into-view that used to run here is gone with the accordion:
@@ -261,6 +353,12 @@ export function PageEditor({
           danger: true,
         },
         {
+          label: "Discard draft",
+          onSelect: () => void discard(row),
+          disabled: row.hasDraft ? undefined : "Nothing saved that is not live",
+          danger: true,
+        },
+        {
           label: row.enabled ? "Hide this section" : "Show this section",
           onSelect: () => patch(row.sectionKey, { enabled: !row.enabled }),
         },
@@ -283,14 +381,16 @@ export function PageEditor({
       )}
       <ContextMenu state={menu} onClose={() => setMenu(null)} />
       <div className="sticky top-2 z-30 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface/95 px-3 py-2 backdrop-blur">
-        <button
-          type="button"
-          onClick={() => void saveAll()}
-          disabled={saving || dirtyKeys.length === 0}
-          className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
-        >
-          {saving ? "Saving…" : dirtyKeys.length ? `Save ${dirtyKeys.length} change${dirtyKeys.length > 1 ? "s" : ""}` : "Saved"}
-        </button>
+        <span className="text-xs text-muted" aria-live="polite">
+          {saveError
+            ? saveError
+            : published
+              ? published
+              : savedAt
+                ? `Last saved ${new Date(savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+                : `${rows.length} sections`}
+          {unpublished > 0 && !saveError && <> · {unpublished} not published</>}
+        </span>
         <PresenceNote editors={editors} what={openDef ? `the ${openDef.title} section` : "this section"} />
         <CopyPage
           ownerType={ownerType}
@@ -301,15 +401,6 @@ export function PageEditor({
             return !!view && blocksForSection(view).length > 0;
           })}
         />
-        <span className="text-xs text-muted" aria-live="polite">
-          {saveError
-            ? saveError
-            : dirtyKeys.length
-              ? "Unsaved changes — kept as you type"
-              : savedAt
-                ? "All changes saved."
-                : `${rows.length} sections`}
-        </span>
         {pageIsBlank && (
           <button
             type="button"
@@ -321,14 +412,39 @@ export function PageEditor({
           </button>
         )}
         <DeviceSwitch device={device} onChange={setDevice} className="ml-auto" />
-        <a
-          href={liveHref}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-lg border border-border px-3 py-1.5 text-xs transition-colors hover:border-fg"
+        {/* The GHL order, which is the one people already know: look, keep,
+            ship. Save keeps a draft; only Publish page moves anything live. */}
+        <button
+          type="button"
+          onClick={() => void openPreview()}
+          aria-label="Preview the page with drafts"
+          title="Preview the page with drafts"
+          className="rounded-lg border border-border px-2.5 py-1.5 text-sm transition-colors hover:border-fg"
         >
-          Preview whole page ↗
-        </a>
+          👁
+        </button>
+        <button
+          type="button"
+          onClick={() => void saveAll()}
+          disabled={saving || dirtyKeys.length === 0}
+          aria-label="Save draft"
+          title={
+            dirtyKeys.length
+              ? `Save ${dirtyKeys.length} change${dirtyKeys.length > 1 ? "s" : ""} as a draft`
+              : "Save draft"
+          }
+          className="rounded-lg border border-border px-2.5 py-1.5 text-sm transition-colors hover:border-fg disabled:opacity-50"
+        >
+          {saving ? "…" : "💾"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void publish()}
+          disabled={publishing || saving || unpublished === 0}
+          className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover disabled:opacity-50"
+        >
+          {publishing ? "Publishing…" : "Publish page"}
+        </button>
       </div>
 
       {/* The spine: every section at once on the left, the selected one filling
@@ -365,6 +481,12 @@ export function PageEditor({
               const failed = await saveAll();
               if (failed) throw new Error(failed);
             }}
+            onPublish={async () => {
+              const failed = await publish(openRow.sectionKey);
+              if (failed) throw new Error(failed);
+            }}
+            onPreview={() => openPreview(openRow.cssId || `section-${openRow.sectionKey}`, { alreadySaved: true })}
+            lastSavedAt={savedAt}
           />
         ) : (
           <p className="p-6 text-sm text-muted">Pick a section on the left.</p>
@@ -451,6 +573,13 @@ function SectionRail({
               </span>
               {isDirty ? (
                 <span className="size-1.5 shrink-0 rounded-full bg-primary" title="Unsaved" />
+              ) : row.hasDraft ? (
+                <span
+                  className="shrink-0 rounded bg-primary/10 px-1 text-[0.62rem] font-medium text-primary"
+                  title="Saved, not published"
+                >
+                  Draft
+                </span>
               ) : empty ? (
                 <span className="shrink-0 text-[0.62rem] text-muted" title="Empty — it will not render">
                   Empty
@@ -498,6 +627,9 @@ function SectionPanel({
   owner,
   store,
   onSave,
+  onPublish,
+  onPreview,
+  lastSavedAt,
   ownerOfferId,
 }: {
   row: SectionRow;
@@ -510,8 +642,13 @@ function SectionPanel({
   owner: OwnerType;
   ownerOfferId?: string;
   store?: StoreRender;
-  /** Writes every changed section. Handed to the builder so it can finish. */
+  /** Writes every changed section as a draft. Handed to the builder so it can finish. */
   onSave: () => Promise<void>;
+  /** Saves, then publishes this one section. */
+  onPublish: () => Promise<void>;
+  /** Opens the preview at this section; the builder has already saved. */
+  onPreview: () => Promise<void>;
+  lastSavedAt: number | null;
 }) {
   const def = sectionDef(row.sectionKey)!;
   const content = useMemo<Draft>(
@@ -570,6 +707,9 @@ function SectionPanel({
           ownerOfferId={ownerOfferId}
           store={store}
           onSave={onSave}
+          onPublish={onPublish}
+          onPreview={onPreview}
+          lastSavedAt={lastSavedAt}
         />
 
       </div>
@@ -623,6 +763,9 @@ function BlockCanvasField({
   preview,
   owner,
   onSave,
+  onPublish,
+  onPreview,
+  lastSavedAt,
   ownerOfferId,
   store,
 }: {
@@ -646,6 +789,9 @@ function BlockCanvasField({
    */
   store?: StoreRender;
   onSave: () => Promise<void>;
+  onPublish: () => Promise<void>;
+  onPreview: () => Promise<void>;
+  lastSavedAt: number | null;
 }) {
   const [open, setOpen] = useState(false);
   // The global designs this store has, so a pointer on the canvas draws what it
@@ -715,6 +861,9 @@ function BlockCanvasField({
           onChange={onChange}
           onClose={() => setOpen(false)}
           onSave={onSave}
+          onPublish={onPublish}
+          onPreview={onPreview}
+          lastSavedAt={lastSavedAt}
           preview={preview}
           store={store}
           owner={owner}
