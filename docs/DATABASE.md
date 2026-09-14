@@ -125,6 +125,7 @@ too.
 |---|---|---|
 | `bump_page_count` | `(uuid, date, text, text, text) → void` | One-statement upsert-increment for traffic counting. Must be one statement: two visitors in the same millisecond would otherwise both read N and both write N+1. `EXECUTE` is granted to `service_role` only. |
 | `record_visit` | `(uuid, text, text, text, text, text, jsonb, jsonb, text, text, text, text, text) → uuid` | Find-or-create for `visits`, in one statement for the same reason as `bump_page_count`: a read then a write from Node lets two page loads in the same millisecond both see no recent visit and both insert. Returns the existing visit's id if `anon_id` had activity in the last 30 minutes, else inserts and returns the new id. `EXECUTE` is granted to `service_role` only. Migration 0080. |
+| `publish_page_drafts` | `(text, uuid, text default null) → int` | Copies a page's drafts into the live columns of `page_sections` (and, without a section key, `page_settings`) in one transaction, clears `draft`, stamps `published_at`. Save writes only `draft`; this is the only thing that makes a section live. `EXECUTE` is granted to `service_role` only. Migration 0084. |
 | `move_course_item` | `(uuid, uuid, int) → void` | Reparent and reorder a curriculum item. In Postgres because the reordering must be atomic. |
 | `swap_course_item_order` | `(uuid, uuid) → void` | Swap two items' sort order atomically. |
 | `set_updated_at` | trigger | Standard `updated_at` touch. On 16 tables. |
@@ -803,6 +804,8 @@ not in these tables; it is the `ownership` row for the app.
 | `css_id` | text | yes |  | Optional DOM id for this band, so #it can be linked to. Sanitised on write. |
 | `css_class` | text | yes |  | Optional class list for this band, for page-level custom CSS. Sanitised on write. |
 | `layout` | jsonb | yes |  | How the band holds its content: {width: boxed\|full\|custom, maxWidth, padX, padY}. Null m… |
+| `draft` | jsonb | yes |  | Pending section, same keys as the live columns in snake_case. Null: nothing unpublished. 0084 |
+| `published_at` | timestamptz | yes | `now()` | Null: never published; live reads treat the row as absent. 0084 |
 
 **Keys:** `PRIMARY KEY (id)`; `UNIQUE (owner_type, owner_id, section_key)`
 
@@ -838,6 +841,7 @@ not in these tables; it is the `ownership` row for the app.
 | `meta_title` | text | no | `''::text` | The <title> and og:title for this page. Empty falls back to the product or offer name, the… |
 | `meta_description` | text | no | `''::text` |  |
 | `share_image_path` | text | no | `''::text` | Storage path of the 1200x630 card behind a shared link. Empty falls back to the page's cov… |
+| `draft` | jsonb | yes |  | Pending SEO and custom code. Null: nothing unpublished. 0084 |
 
 **Keys:** `PRIMARY KEY (id)`; `UNIQUE (owner_type, owner_id)`
 
