@@ -3,13 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { duplicateRow, remapBlockPriceIds, remapPriceIds } from "@/lib/duplicate";
 import { offerKeyProblem } from "@/lib/offer-key";
-import {
-  copyPage,
-  getPageSettings,
-  hasPageSections,
-  savePageSettings,
-  type OwnerType,
-} from "@/lib/pages";
+import { copyPageRows, hasPageSections, type OwnerType } from "@/lib/pages";
 
 /**
  * Copying a product or an offer.
@@ -213,10 +207,11 @@ async function duplicate(kind: Kind, id: string, key: string): Promise<Duplicate
   }
 
   await attempt("The sales page was not copied", async () => {
-    // A record with no sales page is ordinary, and copyPage throws on an empty
-    // source — asked first so that ordinary case is not reported as a problem.
-    if (!(await hasPageSections(kind.ownerType, id))) return;
-    await copyPage(
+    // Rows copied as they are, drafts and publish state included: the copy
+    // should be in the state the original is in. copyPage is the other thing
+    // ("use that page as my template") and lands as drafts on purpose.
+    if (!(await hasPageSections(kind.ownerType, id, { includeDrafts: true }))) return;
+    await copyPageRows(
       { ownerType: kind.ownerType, ownerId: id },
       { ownerType: kind.ownerType, ownerId: newId },
     );
@@ -230,14 +225,20 @@ async function duplicate(kind: Kind, id: string, key: string): Promise<Duplicate
     if (!kind.ownPricesOnPage || byOldId.size === 0) return;
     const { data: rows, error } = await db
       .from("page_sections")
-      .select("id, content")
+      .select("id, content, draft")
       .eq("owner_type", kind.ownerType)
       .eq("owner_id", newId);
     if (error) throw new Error(error.message);
     for (const row of rows ?? []) {
+      // Both copies of the content: the live one and the one still in draft.
       const content = remapBlockPriceIds(row.content, byOldId);
-      if (!content) continue;
-      const { error: upErr } = await db.from("page_sections").update({ content }).eq("id", row.id);
+      const d = row.draft as { content?: unknown } | null;
+      const draftContent = d ? remapBlockPriceIds(d.content, byOldId) : null;
+      if (!content && !draftContent) continue;
+      const patch: Record<string, unknown> = {};
+      if (content) patch.content = content;
+      if (draftContent) patch.draft = { ...d, content: draftContent };
+      const { error: upErr } = await db.from("page_sections").update(patch).eq("id", row.id);
       if (upErr) throw new Error(upErr.message);
     }
   });
@@ -249,13 +250,20 @@ async function duplicate(kind: Kind, id: string, key: string): Promise<Duplicate
     // copy of a page that had silently lost its SEO and its custom code.
     const { data: row, error } = await db
       .from("page_settings")
-      .select("owner_id")
+      .select("custom_css, custom_js, snippets, meta_title, meta_description, share_image_path, draft")
       .eq("owner_type", kind.ownerType)
       .eq("owner_id", id)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!row) return;
-    await savePageSettings(kind.ownerType, newId, await getPageSettings(kind.ownerType, id));
+    // The row as it is, draft included, for the same reason as the sections.
+    const { error: upErr } = await db
+      .from("page_settings")
+      .upsert(
+        { ...row, store_id: await getStoreId(), owner_type: kind.ownerType, owner_id: newId },
+        { onConflict: "owner_type,owner_id" },
+      );
+    if (upErr) throw new Error(upErr.message);
   });
 
   // Not a failure — a consequence of the copy having a new key, and the only

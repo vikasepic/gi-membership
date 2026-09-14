@@ -1,6 +1,7 @@
 import { describe, it, expect, afterAll } from "vitest";
-import { saveSection, getPageSections, copyPage, listPageSources } from "@/lib/pages";
+import { saveSection, getPageSections, hasPageSections, copyPage, listPageSources } from "@/lib/pages";
 import { createServiceClient } from "@/lib/supabase/server";
+import { SECTIONS } from "@/lib/page-sections";
 
 const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -38,9 +39,12 @@ describe.skipIf(!canRun)("copying a page", () => {
     await saveSection("product", A, "hero", input("Hero A"));
 
     const n = await copyPage({ ownerType: "product", ownerId: A }, { ownerType: "product", ownerId: B });
-    expect(n).toBe(2);
+    // Every band, not only the two A filled: the copy is one whole design.
+    expect(n).toBe(SECTIONS.length);
 
-    const rows = await getPageSections("product", B);
+    // As drafts: B's visitors see nothing new until somebody publishes.
+    expect(await hasPageSections("product", B)).toBe(false);
+    const rows = await getPageSections("product", B, { draft: true });
     const problem = rows.find((r) => r.sectionKey === "problem")!;
     expect((problem.content as { headline: string }).headline).toBe("From A");
     // The band and the accent travel too: a section pasted without its
@@ -55,7 +59,7 @@ describe.skipIf(!canRun)("copying a page", () => {
     await saveSection("product", B, "guarantee", input("Only on B"));
     await copyPage({ ownerType: "product", ownerId: A }, { ownerType: "product", ownerId: B });
 
-    const stored = await getPageSections("product", B);
+    const stored = await getPageSections("product", B, { draft: true });
     // getPageSections merges onto the canonical list, so a section with no row
     // comes back at its default rather than missing — check the content.
     const guarantee = stored.find((r) => r.sectionKey === "guarantee");

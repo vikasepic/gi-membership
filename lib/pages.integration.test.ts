@@ -24,7 +24,7 @@ describe.skipIf(!canRun)("page sections (integration)", () => {
   it("returns a full default page before anything is saved", async () => {
     const id = owner();
     expect(await hasPageSections("product", id)).toBe(false);
-    const rows = await getPageSections("product", id);
+    const rows = await getPageSections("product", id, { draft: true });
     expect(rows.map((r) => r.sectionKey)).toEqual(SECTION_KEYS);
     // Every one renders, so a page can be switched on before it is written.
     expect(rows.every((r) => buildSectionView(r) !== null)).toBe(true);
@@ -51,7 +51,7 @@ describe.skipIf(!canRun)("page sections (integration)", () => {
       content: { heading: "CTA edited second" },
     });
 
-    const rows = await getPageSections("product", id);
+    const rows = await getPageSections("product", id, { draft: true });
     const solution = rows.find((r) => r.sectionKey === "solution")!;
     const cta = rows.find((r) => r.sectionKey === "cta")!;
     expect(textOf(buildSectionView(solution)!.c, "heading")).toBe("Solution edited first");
@@ -70,7 +70,7 @@ describe.skipIf(!canRun)("page sections (integration)", () => {
     });
     const { data } = await db().from("page_sections").select("id").eq("owner_id", id).eq("section_key", "hero");
     expect(data).toHaveLength(1);
-    const rows = await getPageSections("product", id);
+    const rows = await getPageSections("product", id, { draft: true });
     expect(textOf(buildSectionView(rows.find((r) => r.sectionKey === "hero")!)!.c, "headline")).toBe("Two");
   });
 
@@ -81,14 +81,14 @@ describe.skipIf(!canRun)("page sections (integration)", () => {
     await saveSection("product", id, "proof", {
       enabled: false, style: "sand", accent: null, variant: null, content: { heading: "Kept" },
     });
-    const off = (await getPageSections("product", id)).find((r) => r.sectionKey === "proof")!;
+    const off = (await getPageSections("product", id, { draft: true })).find((r) => r.sectionKey === "proof")!;
     expect(off.enabled).toBe(false);
     expect(buildSectionView(off)).toBeNull();
 
     await saveSection("product", id, "proof", {
       enabled: true, style: "sand", accent: null, variant: null, content: { heading: "Kept" },
     });
-    const on = (await getPageSections("product", id)).find((r) => r.sectionKey === "proof")!;
+    const on = (await getPageSections("product", id, { draft: true })).find((r) => r.sectionKey === "proof")!;
     expect(textOf(buildSectionView(on)!.c, "heading")).toBe("Kept");
   });
 
@@ -109,7 +109,7 @@ describe.skipIf(!canRun)("page sections (integration)", () => {
       variant: "spiral",
       content: {},
     });
-    const row = (await getPageSections("product", id)).find((r) => r.sectionKey === "benefits")!;
+    const row = (await getPageSections("product", id, { draft: true })).find((r) => r.sectionKey === "benefits")!;
     expect(row.style).toBe("rose");   // the section's own default
     expect(row.variant).toBeNull();
   });
@@ -126,8 +126,8 @@ describe.skipIf(!canRun)("page sections (integration)", () => {
     });
     owners.push(OFFER);
 
-    const p = await getPageSections("product", productId);
-    const o = await getPageSections("offer", OFFER);
+    const p = await getPageSections("product", productId, { draft: true });
+    const o = await getPageSections("offer", OFFER, { draft: true });
     expect(textOf(buildSectionView(p.find((r) => r.sectionKey === "hero")!)!.c, "headline")).toBe("Product copy");
     expect(textOf(buildSectionView(o.find((r) => r.sectionKey === "hero")!)!.c, "headline")).toBe("Offer copy");
   });
@@ -141,7 +141,7 @@ describe.skipIf(!canRun)("page sections (integration)", () => {
       variant: null,
       content: { steps: [{ title: "A", body: "one" }, { title: "B", body: "two" }] },
     });
-    const row = (await getPageSections("product", id)).find((r) => r.sectionKey === "solution")!;
+    const row = (await getPageSections("product", id, { draft: true })).find((r) => r.sectionKey === "solution")!;
     expect(listOf(buildSectionView(row)!.c.steps, ["title", "body"])).toEqual([
       { title: "A", body: "one" },
       { title: "B", body: "two" },

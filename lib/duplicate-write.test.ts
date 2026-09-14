@@ -58,7 +58,7 @@ vi.mock("@/lib/supabase/server", () => {
 
 const pages = {
   hasPageSections: vi.fn(async () => false),
-  copyPage: vi.fn(async () => 0),
+  copyPageRows: vi.fn(async () => 0),
   getPageSettings: vi.fn(async () => ({
     customCss: "",
     customJs: "",
@@ -110,7 +110,7 @@ beforeEach(() => {
   updated = [];
   vi.clearAllMocks();
   pages.hasPageSections.mockResolvedValue(false);
-  pages.copyPage.mockResolvedValue(0);
+  pages.copyPageRows.mockResolvedValue(0);
 });
 
 describe("what the copy is inserted with", () => {
@@ -173,7 +173,7 @@ describe("what the copy could not carry", () => {
     // learns that the page they were duplicating is not on the copy.
     base("products");
     pages.hasPageSections.mockResolvedValue(true);
-    pages.copyPage.mockRejectedValue(new Error("insert timed out"));
+    pages.copyPageRows.mockRejectedValue(new Error("insert timed out"));
 
     const { id, warnings } = await duplicateProduct("prod-old", "guide-two");
     expect(id).toBe("new-1");

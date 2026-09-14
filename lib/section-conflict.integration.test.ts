@@ -28,7 +28,7 @@ const input = (headline: string) => ({
 });
 
 const stampOf = async () =>
-  (await getPageSections(OWNER, OWNER_ID)).find((r) => r.sectionKey === "problem")?.updatedAt ?? null;
+  (await getPageSections(OWNER, OWNER_ID, { draft: true })).find((r) => r.sectionKey === "problem")?.updatedAt ?? null;
 
 afterAll(async () => {
   if (!canRun) return;
@@ -55,7 +55,7 @@ describe.skipIf(!canRun)("saving a section someone else has changed", () => {
     );
 
     // And theirs is what survived — the point of the whole exercise.
-    const rows = await getPageSections(OWNER, OWNER_ID);
+    const rows = await getPageSections(OWNER, OWNER_ID, { draft: true });
     expect((rows.find((r) => r.sectionKey === "problem")?.content as { headline: string }).headline).toBe(
       "Theirs",
     );

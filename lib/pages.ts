@@ -203,96 +203,161 @@ export async function saveSection(
   const style = BAND_STYLE_KEYS.includes(input.style as never) ? input.style : def.defaultStyle;
   const variant = def.variants?.some((v) => v.key === input.variant) ? input.variant : null;
 
-  const db = createServiceClient();
-  const row = {
-      store_id: await getStoreId(),
-      owner_type: owner,
-      owner_id: ownerId,
-      section_key: def.key,
-      position,
-      enabled: input.enabled,
-      style,
-      // Validated before it can reach a style attribute — a hex, or one of the
-      // store's global colours, which is a reference of a shape we wrote.
-      accent: input.accent ? normalizeColor(input.accent, def.defaultStyle) : null,
-      variant,
-      content: input.content,
-      // Normalised through the same reader a block's background uses — one
-      // shape, one set of rules, one renderer.
-      background:
-        input.background && input.background.type !== "none"
-          ? normalizeBackground(input.background)
-          : null,
-      css_id: cssIdent(input.cssId),
-      css_class: cssClasses(input.cssClass),
-      // Stored only once it says something. A band left at the built-in
-      // measure keeps a null here, so "never touched" and "deliberately
-      // boxed at 1040 with the standard air" stay distinguishable — and the
-      // renderer can go on emitting the classes it always did.
-      layout: (() => {
-        const l = normalizeSectionLayout(input.layout);
-        return layoutIsDefault(l) ? null : l;
-      })(),
-      updated_at: new Date().toISOString(),
+  // Everything below is validated here, once, and copied as-is by
+  // publish_page_drafts(). Same keys as the live columns so the copy is dumb.
+  const draft = {
+    enabled: input.enabled,
+    style,
+    // Validated before it can reach a style attribute — a hex, or one of the
+    // store's global colours, which is a reference of a shape we wrote.
+    accent: input.accent ? normalizeColor(input.accent, def.defaultStyle) : null,
+    variant,
+    content: input.content,
+    // Normalised through the same reader a block's background uses — one
+    // shape, one set of rules, one renderer.
+    background:
+      input.background && input.background.type !== "none"
+        ? normalizeBackground(input.background)
+        : null,
+    css_id: cssIdent(input.cssId),
+    css_class: cssClasses(input.cssClass),
+    // Stored only once it says something. A band left at the built-in
+    // measure keeps a null here, so "never touched" and "deliberately
+    // boxed at 1040 with the standard air" stay distinguishable — and the
+    // renderer can go on emitting the classes it always did.
+    layout: (() => {
+      const l = normalizeSectionLayout(input.layout);
+      return layoutIsDefault(l) ? null : l;
+    })(),
   };
-
-  if (baseUpdatedAt) {
-    const landed = await updateIfUnchanged(owner, ownerId, def.key, baseUpdatedAt, row);
-    if (landed) return landed;
-    // Either the row moved under us, or there is no row yet. Only the first is
-    // a conflict — a section saved for the first time has nothing to lose.
-    const { data: current } = await db
-      .from("page_sections")
-      .select("updated_at")
-      .eq("owner_type", owner)
-      .eq("owner_id", ownerId)
-      .eq("section_key", def.key)
-      .maybeSingle();
-    if (current) throw new StaleSectionError(current.updated_at as string);
-  }
-
-  // Read the stamp back rather than trusting the one we sent: a BEFORE UPDATE
-  // trigger sets updated_at = now(), so the value that lands is the database's,
-  // not ours. Returning ours would hand the editor a baseline that never
-  // matches, and the next save would report a conflict with nobody.
-  const { data, error } = await db
-    .from("page_sections")
-    .upsert(row, { onConflict: "owner_type,owner_id,section_key" })
-    .select("updated_at")
-    .maybeSingle();
-  if (error) throw new Error(`saveSection: ${error.message}`);
-  return (data?.updated_at as string) ?? null;
+  return writeDraft(owner, ownerId, def.key, position, draft, baseUpdatedAt);
 }
 
 /**
- * Write, but only onto the row we read.
+ * Put a draft on a row, or start the row as a draft.
  *
- * The check and the write are one statement on purpose. Reading the row,
- * comparing in JavaScript and then writing leaves a window in which the other
- * person's save lands between the two and is overwritten anyway — the same bug,
- * made narrower rather than fixed. `eq("updated_at", …)` closes it: Postgres
- * matches zero rows if anything moved, and zero rows is the answer.
+ * Update first, insert only when there is no row: an upsert would have to
+ * name published_at, and naming it on an existing row would either clobber a
+ * publish with null or mark a draft as published. Two statements, each of
+ * which can only do the right thing.
  *
- * Returns the new stamp when it landed, or null when it did not.
+ * With a baseline, the update is also the stale check. The check and the
+ * write are one statement on purpose: reading the row, comparing in
+ * JavaScript and then writing leaves a window in which the other person's
+ * save lands between the two and is overwritten anyway. `eq("updated_at", …)`
+ * matches zero rows if anything moved, and zero rows on a row that exists is
+ * the conflict. Returns the stamp the trigger wrote, which is the baseline
+ * for the next save: returning ours would hand the editor a stamp that never
+ * matches, and the next save would report a conflict with nobody.
  */
-async function updateIfUnchanged(
+async function writeDraft(
   owner: OwnerType,
   ownerId: string,
   sectionKey: string,
-  baseUpdatedAt: string,
-  row: Record<string, unknown>,
+  position: number,
+  draft: Record<string, unknown>,
+  baseUpdatedAt?: string | null,
 ): Promise<string | null> {
   const db = createServiceClient();
-  const { data } = await db
+  let q = db
     .from("page_sections")
-    .update(row)
+    .update({ draft, updated_at: new Date().toISOString() })
+    .eq("owner_type", owner)
+    .eq("owner_id", ownerId)
+    .eq("section_key", sectionKey);
+  if (baseUpdatedAt) q = q.eq("updated_at", baseUpdatedAt);
+  const { data, error } = await q.select("updated_at");
+  if (error) throw new Error(`saveSection: ${error.message}`);
+  if ((data ?? []).length > 0) return (data![0].updated_at as string) ?? null;
+
+  // Nothing landed: the row moved, or there is no row yet. Only the first is
+  // a conflict; a section saved for the first time has nothing to lose.
+  const { data: current } = await db
+    .from("page_sections")
+    .select("updated_at")
     .eq("owner_type", owner)
     .eq("owner_id", ownerId)
     .eq("section_key", sectionKey)
-    .eq("updated_at", baseUpdatedAt)
-    .select("updated_at");
-  // The stamp the trigger wrote, which is the baseline for the next save.
-  return (data ?? []).length > 0 ? ((data![0].updated_at as string) ?? null) : null;
+    .maybeSingle();
+  if (current) throw new StaleSectionError(current.updated_at as string);
+
+  const { data: made, error: insErr } = await db
+    .from("page_sections")
+    .insert({
+      store_id: await getStoreId(),
+      owner_type: owner,
+      owner_id: ownerId,
+      section_key: sectionKey,
+      position,
+      // Live columns hold the defaults; the draft is the only thing said so far.
+      enabled: true,
+      style: draft.style,
+      content: {},
+      draft,
+      published_at: null,
+    })
+    .select("updated_at")
+    .maybeSingle();
+  if (insErr) throw new Error(`saveSection: ${insErr.message}`);
+  return (made?.updated_at as string) ?? null;
+}
+
+/**
+ * Copy drafts into the live columns. One section, or the whole page with its
+ * settings. One transaction on the database side; see 0084.
+ */
+export async function publishPage(
+  owner: OwnerType,
+  ownerId: string,
+  sectionKey?: string,
+): Promise<{ published: number; updatedAt: Record<string, string> }> {
+  const db = createServiceClient();
+  const { data, error } = await db.rpc("publish_page_drafts", {
+    p_owner_type: owner,
+    p_owner_id: ownerId,
+    p_section_key: sectionKey ?? null,
+  });
+  if (error) throw new Error(`publishPage: ${error.message}`);
+  // The stamps the trigger wrote, so the editor's next save has a baseline
+  // that matches rather than a conflict with nobody.
+  let q = db
+    .from("page_sections")
+    .select("section_key, updated_at")
+    .eq("owner_type", owner)
+    .eq("owner_id", ownerId)
+    .order("section_key");
+  if (sectionKey) q = q.eq("section_key", sectionKey);
+  const { data: rows } = await q;
+  return {
+    published: Number(data ?? 0),
+    updatedAt: Object.fromEntries((rows ?? []).map((r) => [r.section_key as string, r.updated_at as string])),
+  };
+}
+
+/**
+ * Throw the draft away. A section that was never published has nothing to go
+ * back to, so its row goes; the default the editor shows is what comes back.
+ */
+export async function discardDraft(owner: OwnerType, ownerId: string, sectionKey: string): Promise<SectionRow> {
+  const db = createServiceClient();
+  const { error: delErr } = await db
+    .from("page_sections")
+    .delete()
+    .eq("owner_type", owner)
+    .eq("owner_id", ownerId)
+    .eq("section_key", sectionKey)
+    .is("published_at", null);
+  if (delErr) throw new Error(`discardDraft: ${delErr.message}`);
+  const { error } = await db
+    .from("page_sections")
+    .update({ draft: null })
+    .eq("owner_type", owner)
+    .eq("owner_id", ownerId)
+    .eq("section_key", sectionKey);
+  if (error) throw new Error(`discardDraft: ${error.message}`);
+  const row = (await getPageSections(owner, ownerId)).find((r) => r.sectionKey === sectionKey);
+  if (!row) throw new Error(`discardDraft: unknown section ${sectionKey}`);
+  return row;
 }
 
 /**
@@ -476,30 +541,22 @@ export async function savePageSettings(
   input: PageSettings,
 ): Promise<void> {
   const db = createServiceClient();
-  const write = async (seo: Record<string, string>) =>
-    db.from("page_settings").upsert(
-    {
-      store_id: await getStoreId(),
-      owner_type: owner,
-      owner_id: ownerId,
-      custom_css: input.customCss,
-      custom_js: input.customJs,
-      snippets: codeSnippetsSchema.safeParse(input.snippets).data ?? [],
-      ...seo,
-    },
-      { onConflict: "owner_type,owner_id" },
-    );
-
-  // Same reason as the read: a deploy can land before 0052 does, and an upsert
-  // naming a column that does not exist fails the WHOLE write — which would
-  // mean nobody could save custom code either. The second attempt drops the
-  // three new fields rather than the save.
-  const first = await write({
+  // The draft, in the table's spelling so publish_page_drafts() copies it
+  // column for column. The live columns keep their defaults on a first save.
+  const draft = {
+    custom_css: input.customCss,
+    custom_js: input.customJs,
+    snippets: codeSnippetsSchema.safeParse(input.snippets).data ?? [],
     meta_title: input.metaTitle.trim(),
     meta_description: input.metaDescription.trim(),
     share_image_path: input.shareImagePath.trim(),
-  });
-  const { error } = first.error ? await write({}) : first;
+  };
+  const { error } = await db
+    .from("page_settings")
+    .upsert(
+      { store_id: await getStoreId(), owner_type: owner, owner_id: ownerId, draft },
+      { onConflict: "owner_type,owner_id" },
+    );
   if (error) throw new Error(`savePageSettings: ${error.message}`);
 }
 
@@ -596,9 +653,11 @@ function retruthPrices(
  * page, so a copied page sells the thing it was copied ONTO. That is the only
  * behaviour that makes "use this as a template" safe on a store taking money.
  *
- * Replaces the target's sections rather than merging. A half-copied page — some
- * bands from one design, some from another — is not a thing anybody asked for,
- * and telling which was which afterwards is impossible.
+ * Lands as a draft on every band of the target, and deletes nothing: what the
+ * target's visitors see does not move until somebody publishes. Every band,
+ * not only the ones the source filled, because a half-copied page — some
+ * bands from one design, some from another — is not a thing anybody asked
+ * for, and telling which was which afterwards is impossible.
  */
 export async function copyPage(
   from: { ownerType: OwnerType; ownerId: string },
@@ -614,33 +673,56 @@ export async function copyPage(
   if ((from.ownerType === "store") !== (to.ownerType === "store")) {
     throw new Error("The home page and a sales page are built from different sections, so one cannot be copied onto the other.");
   }
+  if (!(await hasPageSections(from.ownerType, from.ownerId, { includeDrafts: true }))) {
+    throw new Error("That page has nothing on it.");
+  }
+  // The source as its own editor sees it: drafts over live.
+  const source = await getPageSections(from.ownerType, from.ownerId, { draft: true });
+  const real = await realPriceLabel(to.ownerType, to.ownerId);
+  const list = sectionsFor(to.ownerType);
+  for (const [i, def] of list.entries()) {
+    const r = source.find((s) => s.sectionKey === def.key);
+    if (!r) continue;
+    await writeDraft(to.ownerType, to.ownerId, def.key, i, {
+      enabled: r.enabled,
+      style: r.style,
+      accent: r.accent ?? null,
+      variant: r.variant ?? null,
+      content: retruthPrices((r.content ?? {}) as Record<string, unknown>, real),
+      background: r.background ?? null,
+      css_id: r.cssId ?? null,
+      css_class: r.cssClass ?? null,
+      layout: r.layout ?? null,
+    });
+  }
+  return list.length;
+}
+
+/**
+ * Copy a page's rows exactly, drafts and publish state included.
+ *
+ * For duplicating a product or offer: the copy should be in the same state
+ * the original is in, live where it was live and drafted where it was
+ * drafted. copyPage is the other thing, "use that page as my template", and
+ * it lands as drafts on purpose.
+ */
+export async function copyPageRows(
+  from: { ownerType: OwnerType; ownerId: string },
+  to: { ownerType: OwnerType; ownerId: string },
+): Promise<number> {
   const db = createServiceClient();
   const storeId = await getStoreId();
-
   const { data: source, error } = await db
     .from("page_sections")
-    .select("section_key, position, enabled, style, accent, variant, content, background, css_id, css_class, layout")
+    .select("section_key, position, enabled, style, accent, variant, content, background, css_id, css_class, layout, draft, published_at")
     .eq("owner_type", from.ownerType)
     .eq("owner_id", from.ownerId);
-  if (error) throw new Error(`copyPage read: ${error.message}`);
-  if (!source || source.length === 0) throw new Error("That page has nothing on it.");
-
-  await db
-    .from("page_sections")
-    .delete()
-    .eq("owner_type", to.ownerType)
-    .eq("owner_id", to.ownerId);
-
-  const real = await realPriceLabel(to.ownerType, to.ownerId);
+  if (error) throw new Error(`copyPageRows read: ${error.message}`);
+  if (!source || source.length === 0) return 0;
+  await db.from("page_sections").delete().eq("owner_type", to.ownerType).eq("owner_id", to.ownerId);
   const { error: writeErr } = await db.from("page_sections").insert(
-    source.map((r) => ({
-      ...r,
-      content: retruthPrices((r.content ?? {}) as Record<string, unknown>, real),
-      store_id: storeId,
-      owner_type: to.ownerType,
-      owner_id: to.ownerId,
-    })),
+    source.map((r) => ({ ...r, store_id: storeId, owner_type: to.ownerType, owner_id: to.ownerId })),
   );
-  if (writeErr) throw new Error(`copyPage write: ${writeErr.message}`);
+  if (writeErr) throw new Error(`copyPageRows write: ${writeErr.message}`);
   return source.length;
 }

@@ -3,7 +3,7 @@ import { describe, it, expect, afterAll } from "vitest";
 import { blockCssAt, blockRules } from "@/lib/block-style";
 import { normalizeBlocks, type Block } from "@/lib/blocks";
 import { bandTheme } from "@/lib/page-sections";
-import { saveSection } from "@/lib/pages";
+import { publishPage, saveSection } from "@/lib/pages";
 import { createServiceClient } from "@/lib/supabase/server";
 
 const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -50,6 +50,9 @@ async function seed(): Promise<void> {
     cssId: "",
     cssClass: "",
   });
+  // Published, because readBack reads the live column: the claim under test
+  // is what a visitor gets.
+  await publishPage("product", OWNER, "hero");
 }
 
 async function readBack(): Promise<Block> {
@@ -165,6 +168,7 @@ describe.skipIf(!canRun)("a desktop-only value, across the migration", () => {
         ],
       },
     });
+    await publishPage("product", OWNER, "hero");
     runMigration();
     const row = await readBack();
     const inner = row.columns?.[0]?.[0];

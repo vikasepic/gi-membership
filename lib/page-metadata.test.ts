@@ -100,9 +100,4 @@ describe("a deploy that lands before the migration", () => {
     const fn = src.slice(src.indexOf("export async function getPageSettings"));
     expect(fn).toContain('read("custom_css, custom_js, snippets")');
   });
-
-  it("still saves custom code when the new columns are missing", () => {
-    const fn = src.slice(src.indexOf("export async function savePageSettings"));
-    expect(fn).toContain("write({})");
-  });
 });

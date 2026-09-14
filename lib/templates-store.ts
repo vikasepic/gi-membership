@@ -226,14 +226,19 @@ export async function globalUsage(id: string): Promise<GlobalUsage[]> {
   const db = createServiceClient();
   const { data, error } = await db
     .from("page_sections")
-    .select("owner_type, owner_id, section_key, content")
+    .select("owner_type, owner_id, section_key, content, draft")
     .eq("store_id", await getStoreId());
   if (error) throw new Error(`globalUsage: ${error.message}`);
   const out: GlobalUsage[] = [];
   for (const row of data ?? []) {
-    const content = row.content as { blocks?: unknown } | null;
-    if (!content || !Array.isArray(content.blocks)) continue;
-    if (globalIdsIn(normalizeBlocks(content.blocks)).includes(id)) {
+    // The draft counts too: a design only a draft points at would otherwise
+    // be deletable, and the draft would publish a pointer to nothing.
+    const sources = [row.content, (row.draft as { content?: unknown } | null)?.content];
+    const hit = sources.some((c) => {
+      const content = c as { blocks?: unknown } | null;
+      return !!content && Array.isArray(content.blocks) && globalIdsIn(normalizeBlocks(content.blocks)).includes(id);
+    });
+    if (hit) {
       out.push({
         owner: String(row.owner_type),
         ownerId: String(row.owner_id),

@@ -9,7 +9,7 @@ import {
   getSavedTemplate,
   globalUsage,
 } from "@/lib/templates-store";
-import { saveSection } from "@/lib/pages";
+import { publishPage, saveSection } from "@/lib/pages";
 import { newBlock } from "@/lib/blocks";
 
 // Needs a real database. Skipped rather than failed without one, so the suite
@@ -150,6 +150,15 @@ describe.skipIf(!canRun)("global blocks", () => {
     await usePointerOnAPage(id, true);
     expect(await globalUsage(id)).toHaveLength(1);
     await expect(deleteTemplate(id)).rejects.toThrow(/still used/i);
+  });
+
+  it("sees a pointer on a published page as well as in a draft", async () => {
+    // usePointerOnAPage saves a draft, so every test above is the draft case.
+    // This is the live one: the pointer only in the published content.
+    const id = await saveTemplate({ name: "Live", blocks: [heading("CTA")], kind: "global" });
+    await usePointerOnAPage(id);
+    await publishPage("product", OWNER, "benefits");
+    expect(await globalUsage(id)).toHaveLength(1);
   });
 
   it("deletes once nothing points at it", async () => {

@@ -6,6 +6,7 @@ import {
   getPageSections,
   getPageSettings,
   hasPageSections,
+  publishPage,
   savePageSettings,
   saveSection,
 } from "@/lib/pages";
@@ -171,6 +172,32 @@ describe.skipIf(!canRun)("duplicating an offer (integration)", () => {
       },
     });
 
+    // Live AND still in draft on the source, so the copy carries both and
+    // both have to be re-pointed: a draft that kept the old ids would publish
+    // the stale menu the moment somebody pressed Publish on the copy.
+    await publishPage("offer", src.id, "hero");
+    const { data: seed } = await createServiceClient()
+      .from("page_sections")
+      .select("draft")
+      .eq("owner_type", "offer")
+      .eq("owner_id", src.id)
+      .eq("section_key", "hero")
+      .single();
+    expect(seed?.draft).toBeNull();
+    const { data: live } = await createServiceClient()
+      .from("page_sections")
+      .select("content")
+      .eq("owner_type", "offer")
+      .eq("owner_id", src.id)
+      .eq("section_key", "hero")
+      .single();
+    await createServiceClient()
+      .from("page_sections")
+      .update({ draft: { content: live!.content } })
+      .eq("owner_type", "offer")
+      .eq("owner_id", src.id)
+      .eq("section_key", "hero");
+
     const { id: copyId, warnings } = await duplicateOffer(src.id, `zz-dup-copy-${crypto.randomUUID()}`);
     made.push(copyId);
     expect(warnings).toEqual([]);
@@ -178,20 +205,23 @@ describe.skipIf(!canRun)("duplicating an offer (integration)", () => {
     const db = createServiceClient();
     const { data: rows } = await db
       .from("page_sections")
-      .select("content")
+      .select("content, draft")
       .eq("owner_type", "offer")
       .eq("owner_id", copyId);
     const { data: prices } = await db.from("offer_prices").select("id, price_cents").eq("offer_id", copyId);
     const copyIdFor = (cents: number) => prices!.find((p) => p.price_cents === cents)!.id as string;
 
-    const blocks = (rows![0].content as { blocks: Record<string, never>[] }).blocks;
     const props = (b: unknown) => (b as { props: { priceIds: string[] } }).props;
-    const cols = (blocks[1] as unknown as { columns: unknown[][] }).columns;
-    // The copy's own prices, in the same order, still one of two.
-    expect(props(blocks[0]).priceIds).toEqual([copyIdFor(2900)]);
-    expect(props(cols[0][0]).priceIds).toEqual([copyIdFor(19900)]);
-    // Untouched: it never named this offer's prices in the first place.
-    expect(props(cols[1][0]).priceIds).toEqual([other.priceIds[0]]);
+    const draftContent = (rows![0].draft as { content: unknown }).content;
+    for (const content of [rows![0].content, draftContent]) {
+      const blocks = (content as { blocks: Record<string, never>[] }).blocks;
+      const cols = (blocks[1] as unknown as { columns: unknown[][] }).columns;
+      // The copy's own prices, in the same order, still one of two.
+      expect(props(blocks[0]).priceIds).toEqual([copyIdFor(2900)]);
+      expect(props(cols[0][0]).priceIds).toEqual([copyIdFor(19900)]);
+      // Untouched: it never named this offer's prices in the first place.
+      expect(props(cols[1][0]).priceIds).toEqual([other.priceIds[0]]);
+    }
   });
 
   it("warns that a coded upsell page does not follow the new key", async () => {
@@ -428,6 +458,8 @@ describe.skipIf(!canRun)("duplicating a product (integration)", () => {
       metaDescription: "D",
       shareImagePath: "",
     });
+    // A live page on the original, so the copy's live read is what is checked.
+    await publishPage("product", src.id);
 
     const { id: copyId, warnings } = await duplicateProduct(src.id, `zz-dup-copy-${crypto.randomUUID()}`);
     madeProducts.push(copyId);
