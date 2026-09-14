@@ -18,7 +18,9 @@ describe("the basket Stripe carries", () => {
       { kind: "product", description: "Digital Product Validator", amount_cents: 1900, created_at: at("10:00") },
       { kind: "bump", description: "150 Digital Product Ideas", amount_cents: 1100, created_at: at("10:01") },
     ];
-    expect(basketMetadata("ord-1", items, 3000, "usd")).toEqual({
+    // The four keys the backfill wrote. The upsell keys arrived later and are
+    // pinned by their own test below; toMatchObject keeps this one about these.
+    expect(basketMetadata("ord-1", items, 3000, "usd")).toMatchObject({
       orderId: "ord-1",
       items: "product:Digital Product Validator:$19.00 | bump:150 Digital Product Ideas:$11.00",
       itemCount: "2",
@@ -80,5 +82,34 @@ describe("the basket Stripe carries", () => {
     ];
     basketMetadata("o", items, 2, "usd");
     expect(items[0].description).toBe("B");
+  });
+});
+
+describe("the upsell on the intent", () => {
+  it("gets its own keys, the way the bump has", () => {
+    // Seen 14 Sep 2026: an accepted Funnel App trial showed up on the intent
+    // only inside `items`, while the bump has bumpOfferId/bumpOfferName. The
+    // subscription carries the rest; the intent names it so one object tells
+    // the whole order.
+    const items: BasketItem[] = [
+      { kind: "product", description: "Digital Product Validator", amount_cents: 1900 },
+      { kind: "oto", description: "Funnel App", amount_cents: 0, offer_id: "off-1", stripe_subscription_id: "sub_1" },
+    ];
+    expect(basketMetadata("ord-1", items, 1900, "usd")).toMatchObject({
+      upsellOfferId: "off-1",
+      upsellOfferName: "Funnel App",
+      upsellAmount: "$0.00",
+      upsellSubscriptionId: "sub_1",
+    });
+  });
+
+  it("writes empty upsell keys when none was taken, so a re-stamp clears a stale one", () => {
+    const items: BasketItem[] = [{ kind: "product", description: "X", amount_cents: 900 }];
+    expect(basketMetadata("ord-1", items, 900, "usd")).toMatchObject({
+      upsellOfferId: "",
+      upsellOfferName: "",
+      upsellAmount: "",
+      upsellSubscriptionId: "",
+    });
   });
 });

@@ -40,7 +40,7 @@ export async function stampOrderMetadata(orderId: string): Promise<void> {
 
     const { data: rows } = await db
       .from("order_items")
-      .select("kind, description, amount_cents, created_at")
+      .select("kind, description, amount_cents, created_at, offer_id, stripe_subscription_id")
       .eq("order_id", orderId);
 
     const items = rows ?? [];
@@ -66,6 +66,8 @@ export type BasketItem = {
   description: string;
   amount_cents: number;
   created_at?: string;
+  offer_id?: string | null;
+  stripe_subscription_id?: string | null;
 };
 
 /**
@@ -91,8 +93,16 @@ export function basketMetadata(
       String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")),
   );
 
+  // The upsell, named on the intent the way the bump is (bumpOfferId, ...).
+  // Its subscription carries the rest; this is so one object tells the whole
+  // order. Empty strings, not absent keys, so a re-stamp clears a stale one.
+  const oto = sorted.find((i) => i.kind === "oto");
   return {
     orderId,
+    upsellOfferId: oto?.offer_id ?? "",
+    upsellOfferName: oto?.description ?? "",
+    upsellAmount: oto ? money(Number(oto.amount_cents) || 0) : "",
+    upsellSubscriptionId: oto?.stripe_subscription_id ?? "",
     items: sorted
       .map((i) => `${i.kind}:${i.description}:${money(Number(i.amount_cents) || 0)}`)
       .join(" | ")
