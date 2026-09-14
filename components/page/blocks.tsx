@@ -720,12 +720,25 @@ function Inner({
 
     case "memberships":
       return store ? (
-        <MembershipsBlock store={store} title={str(p.title)} showOwned={p.showOwned !== false} />
+        <MembershipsBlock
+          store={store}
+          title={str(p.title)}
+          showOwned={p.showOwned !== false}
+          layout={p.layout === "tiles" ? "tiles" : "cards"}
+          billing={p.billing === "recurring" || p.billing === "one_time" ? p.billing : "all"}
+        />
       ) : null;
 
     case "featured":
       return store ? (
-        <FeaturedBlock store={store} title={str(p.title)} note={str(p.note)} />
+        <FeaturedBlock
+          store={store}
+          title={str(p.title)}
+          note={str(p.note)}
+          product={str(p.product)}
+          tag={str(p.tag)}
+          line={str(p.line)}
+        />
       ) : null;
 
     // The live checkout. These need no payload prop of their own: each one

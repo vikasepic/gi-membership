@@ -21,6 +21,8 @@ export type CatalogItem = {
   currency?: string;
   owned?: boolean;
   accessHref?: string;
+  /** A short label above the name: "Best seller", "New". The Featured block sets it. */
+  tag?: string;
 };
 
 export function ProductCard({ item, index = 0 }: { item: CatalogItem; index?: number }) {
@@ -59,6 +61,7 @@ export function ProductCard({ item, index = 0 }: { item: CatalogItem; index?: nu
             The wash behind the cover stays. That is a colour, not a claim. */}
       </div>
       <div className="flex flex-1 flex-col gap-2 p-5">
+        {item.tag && <span className="kicker w-fit rounded-full bg-primary/10 px-2.5 py-1 text-primary">{item.tag}</span>}
         <h3 className="text-lg leading-snug">{item.title}</h3>
         <p className="flex-1 text-sm text-muted">{item.tagline}</p>
         {/* Owned: the price is no longer the point — say so and offer the way in. */}

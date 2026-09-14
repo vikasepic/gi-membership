@@ -2367,6 +2367,9 @@ function ControlField({
   onClear?: () => void;
   onPickAlt?: (alt: string) => void;
 }) {
+  // For the product picker. Read before the early return so the hook order
+  // holds whichever control this is.
+  const canvasStore = useContext(CanvasStore);
   if (isGroup(control)) return null;
   const value = readControl(block, control, device);
   // Only style controls have a wider device to inherit from; a heading's text
@@ -2638,6 +2641,28 @@ function ControlField({
           {control.options.map(([v, l]) => (
             <option key={v} value={v}>
               {l}
+            </option>
+          ))}
+        </select>,
+      );
+    }
+
+    case "product": {
+      // The live catalogue, from the canvas's own store. Outside the home
+      // page editor there is none, and the picker says so rather than
+      // offering an empty list that looks like a store with nothing in it.
+      const products = canvasStore?.products ?? [];
+      return row(
+        <select
+          className={input}
+          value={String(value ?? "")}
+          aria-label={control.label}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">First in the catalogue</option>
+          {products.map((p) => (
+            <option key={p.slug} value={p.slug}>
+              {p.title}
             </option>
           ))}
         </select>,

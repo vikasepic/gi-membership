@@ -55,6 +55,8 @@ export type Control =
   | (Base & { kind: "richtext" })
   | (Base & { kind: "image" })
   | (Base & { kind: "select"; options: [string, string][] })
+  /** One of the store's published products, by slug. Empty means the first in the catalogue. */
+  | (Base & { kind: "product" })
   /**
    * Several of a list, or none of it.
    *
@@ -555,6 +557,20 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
     content: [
       { kind: "text", key: "title", label: "Heading", hint: "Left empty there is no heading." },
       {
+        kind: "select",
+        key: "layout",
+        label: "Layout",
+        options: [["cards", "Full cards"], ["tiles", "Row of tiles"]],
+        hint: "Full cards tell each one as a product, one under another. Tiles put them side by side, three to a row.",
+      },
+      {
+        kind: "select",
+        key: "billing",
+        label: "Show",
+        options: [["all", "Everything"], ["recurring", "Monthly plans only"], ["one_time", "One-time tools only"]],
+        hint: "Which offers appear, and in what order, is each offer's Home order.",
+      },
+      {
         kind: "toggle",
         key: "showOwned",
         label: "Show ones they have",
@@ -566,6 +582,9 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
 
   featured: {
     content: [
+      { kind: "product", key: "product", label: "Which product", hint: "Left at the first in the catalogue, it follows the catalogue's order." },
+      { kind: "text", key: "tag", label: "Tag on the card", placeholder: "Featured" },
+      { kind: "text", key: "line", label: "Line under the name", hint: "Empty uses the product's own tagline." },
       { kind: "text", key: "title", label: "Heading" },
       { kind: "text", key: "note", label: "Line under it" },
     ],

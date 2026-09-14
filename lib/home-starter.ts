@@ -62,7 +62,7 @@ export function homeStarterBlocks(): Record<string, Block[]> {
     props: { title: HOME_COPY.catalogTitle, limit: 0, columns: 3, showPrice: true },
   });
   const memberships = newBlock("memberships", {
-    props: { title: HOME_COPY.membershipTitle, showOwned: true },
+    props: { title: HOME_COPY.membershipTitle, showOwned: true, layout: "cards", billing: "all" },
   });
 
   return {

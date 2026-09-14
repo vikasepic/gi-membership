@@ -778,8 +778,8 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     showPrice: true,
   },
   catalog: { title: "", limit: 0, columns: 3, showPrice: true },
-  memberships: { title: "", showOwned: true },
-  featured: { title: "", note: "" },
+  memberships: { title: "", showOwned: true, layout: "cards", billing: "all" },
+  featured: { title: "", note: "", product: "", tag: "", line: "" },
   // The checkout five. Every default is what the hand-written panel does
   // today, so a store that opens the editor and saves without touching
   // anything gets the checkout it already had.

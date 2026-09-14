@@ -79,23 +79,88 @@ export function MembershipsBlock({
   store,
   title,
   showOwned,
+  layout = "cards",
+  billing = "all",
 }: {
   store: StoreRender;
   title: string;
   /** Whether a member still sees the one they already have, marked Active. */
   showOwned: boolean;
+  /** Full cards one under another, or tiles three to a row. */
+  layout?: "cards" | "tiles";
+  /** Which offers: every one on the home page, only the monthly, or only the one-time. */
+  billing?: "all" | "recurring" | "one_time";
 }) {
-  const items = showOwned ? store.memberships : store.memberships.filter((m) => !m.owned);
+  const items = store.memberships
+    .filter((m) => showOwned || !m.owned)
+    .filter((m) => billing === "all" || m.offer.billingType === billing);
   if (items.length === 0) return null;
   return (
     <div className="flex flex-col gap-7">
       {title && <h2 className="text-xl md:text-2xl">{title}</h2>}
-      <div className="flex flex-col gap-10">
-        {items.map((m) => (
-          <MembershipCard key={m.offer.id} view={m} />
-        ))}
-      </div>
+      {layout === "tiles" ? (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((m) => (
+            <MembershipTile key={m.offer.id} view={m} />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-10">
+          {items.map((m) => (
+            <MembershipCard key={m.offer.id} view={m} />
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+/**
+ * A subscription as one of several: the same shape as a catalogue card, so a
+ * row of tools reads as a shelf beside the products.
+ *
+ * Links to the offer's own page rather than carrying the buy: a tile is a
+ * doorway, and the argument for the thing lives behind it.
+ */
+export function MembershipTile({ view }: { view: MembershipView }) {
+  const { offer, href, owned } = view;
+  const price = money(offer.priceCents, offer.currency);
+  const billing = membershipTerms(offer, price);
+  return (
+    <Link
+      href={owned ? "/library" : href}
+      className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-surface transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.45)]"
+    >
+      <div className="relative aspect-[16/10] w-full overflow-hidden bg-surface-2">
+        {offer.imageUrl && (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={offer.imageUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+          />
+        )}
+      </div>
+      <div className="flex flex-1 flex-col gap-2 p-5">
+        <h3 className="text-lg leading-snug">{offer.name.split("—")[0].trim()}</h3>
+        <p className="flex-1 text-sm text-muted">{offer.headline}</p>
+        <div className="mt-2 flex items-center justify-between border-t border-border pt-3">
+          {owned ? (
+            <span className="kicker text-plum">Active</span>
+          ) : (
+            <span className="flex items-baseline gap-1">
+              <span className="font-display text-lg">{price}</span>
+              <span className="text-xs text-muted">{billing.suffix ?? "One-time"}</span>
+            </span>
+          )}
+          <span className="text-sm text-muted transition-colors group-hover:text-fg">
+            {owned ? "Open →" : "View →"}
+          </span>
+        </div>
+      </div>
+    </Link>
   );
 }
 
@@ -203,13 +268,23 @@ export function FeaturedBlock({
   store,
   title,
   note,
+  product = "",
+  tag = "",
+  line = "",
 }: {
   store: StoreRender;
   title: string;
   note: string;
+  /** The product's slug. Empty, or one that has gone, falls back to the catalogue's first. */
+  product?: string;
+  /** The label on the card. "Best seller" is the one this was built for. */
+  tag?: string;
+  /** Replaces the product's tagline on the card. Empty keeps it. */
+  line?: string;
 }) {
-  const item = store.featured;
-  if (!item) return null;
+  const chosen = (product && store.products.find((p) => p.slug === product)) || store.featured;
+  if (!chosen) return null;
+  const item = { ...chosen, tag: tag || undefined, tagline: line || chosen.tagline };
   return (
     <div className="flex flex-col gap-4">
       {title && <span className="kicker text-muted">{title}</span>}
