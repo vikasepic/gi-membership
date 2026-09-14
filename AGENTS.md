@@ -64,6 +64,9 @@ same PR — that is how the next person's Claude avoids your mistake.
 - **A test must be able to fail.** `textContent` never contains markup, so
   `not.toContain(">4<")` passes forever; a comment naming an assertion's
   target does not test it; a source-text assertion is not a behaviour test.
+- **Saving a page writes a draft.** `page_sections.draft` and `page_settings.draft`
+  are what the editor and `?preview=1` read; visitors read the live columns,
+  and only `publishPage()` moves one into the other. See `docs/lessons.md`.
 - **A grant records its target at that moment.** Fix an offer's grant before
   granting anyone; a wrong one means revoke, then re-grant.
 - **After any deploy, a tab left open breaks on its next navigation** (404 or

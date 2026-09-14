@@ -346,3 +346,16 @@ When the gate came out, two edge cases only existed *because* it had been there:
   not that a request succeeded.
 
 Removing a gate means auditing what the gate was incidentally driving.
+
+## Save is a draft (14 Sep 2026)
+
+Since 0084, `saveSection` and `savePageSettings` write `draft` and nothing a
+visitor can see. Live content moves only through `publish_page_drafts()`
+(`publishPage` in lib/pages.ts). Three things this changes for anyone writing
+code or tests here:
+
+- A test that saves and then reads what a visitor sees must publish in
+  between, or read with `{ draft: true }` and say which it means.
+- A row with `published_at is null` is invisible to `getPageSections` and
+  `hasPageSections` by default. `includeDrafts: true` is for the admin only.
+- `revalidatePath` for public routes belongs on publish, never on save.

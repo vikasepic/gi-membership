@@ -164,7 +164,7 @@ export function PageSeo({
               {pending ? "Saving…" : "Save"}
             </button>
             {state.error && <span className="text-sm text-primary">{state.error}</span>}
-            {state.saved && !state.error && <span className="text-sm text-muted">Saved.</span>}
+            {state.saved && !state.error && <span className="text-sm text-muted">Saved as a draft. Publish the page to make it live.</span>}
           </div>
         </div>
 

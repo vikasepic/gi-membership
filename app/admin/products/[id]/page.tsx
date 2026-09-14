@@ -22,7 +22,8 @@ export default async function EditProductPage({
     listOfferOptions(),
     listCourses(),
     coursesForProduct(id),
-    hasPageSections("product", id),
+    // A page being drafted counts as built in the admin; only visitors need it published.
+    hasPageSections("product", id, { includeDrafts: true }),
     // How many people are on each price. A price somebody is on may be hidden
     // but never repriced — the editor says so on the row rather than letting
     // the save fail with a message about a row nobody can see.

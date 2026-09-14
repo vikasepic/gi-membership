@@ -33,7 +33,8 @@ export default async function AdminProductsPage() {
   // page renders perfectly and converts nobody.
   const pages = new Map(
     await Promise.all(
-      products.map(async (p) => [p.id, await hasPageSections("product", p.id)] as const),
+      // A page being drafted counts as built in the admin; only visitors need it published.
+      products.map(async (p) => [p.id, await hasPageSections("product", p.id, { includeDrafts: true })] as const),
     ),
   );
   const wiring = new Map(

@@ -33,7 +33,8 @@ export default async function EditOfferPage({
 
   // The offer's own sales page needs both: the offer live, and a page actually
   // built. Either missing and /o/<key> is a 404.
-  const built = await hasPageSections("offer", offer.id);
+  // A page being drafted counts as built in the admin; only visitors need it published.
+  const built = await hasPageSections("offer", offer.id, { includeDrafts: true });
   const liveReason = !offer.active
     ? "the offer is switched off"
     : !built
