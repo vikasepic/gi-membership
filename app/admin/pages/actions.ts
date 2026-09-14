@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import { codeSnippetsSchema } from "@/lib/code-snippets";
-import { getPageSettings, savePageSettings, saveSection, seedPage, seedHomeFromDefault, seedCheckoutFromDefault, copyPage, StaleSectionError, type OwnerType } from "@/lib/pages";
+import { getPageSettings, savePageSettings, saveSection, seedPage, seedHomeFromDefault, seedCheckoutFromDefault, copyPage, publishPage, discardDraft, StaleSectionError, type OwnerType } from "@/lib/pages";
+import type { SectionRow } from "@/lib/page-sections";
 import { sectionDef } from "@/lib/page-sections";
 import { sanitizeSectionContent } from "@/lib/sanitize-html";
 import { priceProblems, priceProblemMessage } from "@/lib/page-price-truth";
@@ -118,13 +119,54 @@ export async function saveSectionAction(
     return { error: err instanceof Error ? err.message : "Could not save." };
   }
 
+  // A draft is invisible to visitors, so only the editor needs to reload.
+  // The store's caches clear on publish.
   revalidatePath(adminPathFor(owner, ownerId));
-  // The storefront IS a page, so saving one of its bands has to clear it. The
-  // two lines below cover sales pages and the upsell and reach neither.
-  if (owner === "store") revalidatePath("/", "layout");
-  revalidatePath("/p", "layout");
-  revalidatePath("/checkout/oto");
   return { savedKey: sectionKey, updatedAt };
+}
+
+export type PublishState = { error?: string; published?: number; updatedAt?: Record<string, string> };
+
+/**
+ * Make the drafts live: one section when a key is given, otherwise the page
+ * and its SEO and custom code together. Clears the whole store's cache rather
+ * than guessing which paths a page appears on: the storefront lists offers, a
+ * product page names an offer, an upsell renders an offer's sections.
+ */
+export async function publishPageAction(_prev: PublishState, formData: FormData): Promise<PublishState> {
+  await requireAdmin();
+  const owner = String(formData.get("ownerType") ?? "") as OwnerType;
+  const ownerId = String(formData.get("ownerId") ?? "");
+  const sectionKey = String(formData.get("sectionKey") ?? "");
+  if (!["product", "offer", "store", "checkout"].includes(owner) || !ownerId) return { error: "Unknown page." };
+  try {
+    const res = await publishPage(owner, ownerId, sectionKey || undefined);
+    revalidatePath(adminPathFor(owner, ownerId));
+    revalidatePath("/", "layout");
+    return res;
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not publish." };
+  }
+}
+
+export type DiscardState = { error?: string; row?: SectionRow };
+
+/** Drop one section's draft. Answers with the live row, which is what the editor should now show. */
+export async function discardDraftAction(_prev: DiscardState, formData: FormData): Promise<DiscardState> {
+  await requireAdmin();
+  const owner = String(formData.get("ownerType") ?? "") as OwnerType;
+  const ownerId = String(formData.get("ownerId") ?? "");
+  const sectionKey = String(formData.get("sectionKey") ?? "");
+  if (!["product", "offer", "store", "checkout"].includes(owner) || !ownerId || !sectionKey) {
+    return { error: "Unknown section." };
+  }
+  try {
+    const row = await discardDraft(owner, ownerId, sectionKey);
+    revalidatePath(adminPathFor(owner, ownerId));
+    return { row };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not discard that draft." };
+  }
 }
 
 export async function enablePageAction(formData: FormData): Promise<void> {
@@ -167,7 +209,10 @@ export async function savePageSettingsAction(
     // A field the form did not post is a field nobody was editing, so it keeps
     // what it had. The same rule the store-wide settings save follows, and for
     // the same reason: it was learnt by blanking something.
-    const current = await getPageSettings(owner, ownerId);
+    //
+    // The base is the draft, so two panels saving in turn build one draft
+    // rather than each restarting from what is live.
+    const current = await getPageSettings(owner, ownerId, { draft: true });
     const text = (key: string, cap: number, fallback: string) =>
       formData.has(key) ? String(formData.get(key) ?? "").slice(0, cap) : fallback;
 
@@ -189,7 +234,6 @@ export async function savePageSettingsAction(
       shareImagePath: text("shareImagePath", 300, current.shareImagePath),
     });
     revalidatePath(`/admin/${owner === "product" ? "products" : "offers"}/${ownerId}/page-editor`);
-    revalidatePath("/", "layout");
     return { saved: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not save." };
@@ -222,8 +266,7 @@ export async function copyPageAction(
   try {
     const n = await copyPage({ ownerType: fromType, ownerId: fromId }, { ownerType: owner, ownerId });
     revalidatePath(adminPathFor(owner, ownerId));
-    revalidatePath("/p", "layout");
-    return { message: `${n} sections copied. Reload to edit them.` };
+    return { message: `${n} sections copied as drafts. Reload to edit them, then publish the page.` };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not copy that page." };
   }
