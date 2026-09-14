@@ -9,6 +9,7 @@ vi.stubGlobal("fetch", post);
 // under jsdom, which would make "no script" pass whether or not the pixel
 // mounted. A plain tag in place is what makes the assertion below real.
 vi.mock("next/script", () => ({
+  // eslint-disable-next-line @next/next/no-sync-scripts -- a stand-in for next/script, never served
   default: (p: { id?: string; src?: string }) => <script id={p.id} src={p.src} />,
 }));
 
