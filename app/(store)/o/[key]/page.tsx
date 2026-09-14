@@ -18,6 +18,8 @@ import { altSaving } from "@/lib/offers";
 import { pageMetadata, absoluteUrl } from "@/lib/page-metadata";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import { recordPageHit } from "@/lib/traffic";
+import { isDraftPreview } from "@/lib/draft-preview";
+import { PreviewBar } from "@/components/page/preview-bar";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -42,18 +44,21 @@ export const dynamic = "force-dynamic";
  */
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ key: string }>;
+  searchParams: Promise<{ preview?: string }>;
 }): Promise<Metadata> {
   try {
     const { key } = await params;
+    const preview = await isDraftPreview(await searchParams);
     const offer = await getOfferByKey(key);
-    if (!offer || !offer.active) return {};
+    if (!offer || (!offer.active && !preview)) return {};
     const [page, store] = await Promise.all([
-      getPageSettings("offer", offer.id),
+      getPageSettings("offer", offer.id, { draft: preview }),
       getSettingsOrDefaults(),
     ]);
-    const meta = pageMetadata({
+    const base = pageMetadata({
       page,
       // The headline sells; the internal name does not. An offer called
       // "Funnel App - Yearly (v2)" is an admin's filing, not a page title.
@@ -61,6 +66,7 @@ export async function generateMetadata({
       store,
       url: absoluteUrl(`/o/${key}`),
     });
+    const meta = preview ? { ...base, robots: { index: false, follow: false } } : base;
     // The offer's own artwork, where nothing better was chosen for the page.
     const image = page.shareImagePath.trim() ? null : offer.imageUrl;
     if (!image) return meta;
@@ -74,14 +80,23 @@ export async function generateMetadata({
   }
 }
 
-export default async function OfferSalesPage({ params }: { params: Promise<{ key: string }> }) {
+export default async function OfferSalesPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ key: string }>;
+  searchParams: Promise<{ preview?: string }>;
+}) {
   const { key } = await params;
+  // An admin looking at drafts. Reads drafts, skips the owner gate, and
+  // counts nothing; see lib/draft-preview.ts.
+  const preview = await isDraftPreview(await searchParams);
   const listed = await getOfferByKey(key);
-  if (!listed || !listed.active) notFound();
-  if (!(await hasPageSections("offer", listed.id))) notFound();
+  if (!listed || (!listed.active && !preview)) notFound();
+  if (!(await hasPageSections("offer", listed.id, { includeDrafts: preview }))) notFound();
 
   // Not awaited — a count is worth less than a page load.
-  void recordPageHit(`/o/${key}`, key);
+  if (!preview) void recordPageHit(`/o/${key}`, key);
 
   // Who is reading it decides what it may promise: a free trial is a thing you
   // get once, so anyone who has had this one is shown what they will be
@@ -91,8 +106,8 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
   const offer = await offerAsSoldTo(user?.email ?? null, listed);
 
   const [rows, settings] = await Promise.all([
-    getPageSections("offer", offer.id),
-    getPageSettings("offer", offer.id),
+    getPageSections("offer", offer.id, { draft: preview }),
+    getPageSettings("offer", offer.id, { draft: preview }),
   ]);
   // Whatever this page points at, in one query — see the product page.
   const globals = await resolveGlobals(rows);
@@ -118,11 +133,14 @@ export default async function OfferSalesPage({ params }: { params: Promise<{ key
     // a gap under the header is right for a page in a column and wrong for one
     // whose first band is a full-width colour.
     <div className="-mt-6 mx-[calc(50%-50vw)] w-screen overflow-x-clip">
-      <TrackView
-        event="ViewContent"
-        stableKey={offer.key}
-        params={{ content_ids: [offer.key], content_type: "product", content_name: offer.name }}
-      />
+      {preview && <PreviewBar />}
+      {!preview && (
+        <TrackView
+          event="ViewContent"
+          stableKey={offer.key}
+          params={{ content_ids: [offer.key], content_type: "product", content_name: offer.name }}
+        />
+      )}
       <SalesPage
         rows={rows}
         settings={settings}

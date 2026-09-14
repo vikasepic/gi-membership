@@ -232,6 +232,13 @@ export function Analytics({ ids, match }: { ids: Ids; match?: PixelMatch | null 
   const [allowed, setAllowed] = useState(true);
 
   useEffect(() => {
+    // A preview is the editor looking, not a visitor. Same exit as an
+    // opt-out: unmount, and drop anything the snippet already queued.
+    if (new URLSearchParams(window.location.search).get("preview") === "1") {
+      setAllowed(false);
+      dropPendingPixelCalls();
+      return;
+    }
     // The only thing left to honour is an explicit opt-out, which nothing in
     // the UI writes — see lib/consent.ts. Almost always absent, so this
     // almost always leaves the pixel exactly where it started.

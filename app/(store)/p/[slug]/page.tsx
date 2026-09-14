@@ -16,6 +16,8 @@ import { SalesPage } from "@/components/page/sales-page";
 import { pageMetadata, absoluteUrl } from "@/lib/page-metadata";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import { recordPageHit } from "@/lib/traffic";
+import { isDraftPreview } from "@/lib/draft-preview";
+import { PreviewBar } from "@/components/page/preview-bar";
 import type { Metadata } from "next";
 
 /**
@@ -30,28 +32,34 @@ import type { Metadata } from "next";
  */
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ preview?: string }>;
 }): Promise<Metadata> {
   try {
     const { slug } = await params;
+    const preview = await isDraftPreview(await searchParams);
     const product = await getProductBySlug(slug);
-    if (!product || product.status !== "published") return {};
+    if (!product || (product.status !== "published" && !preview)) return {};
     const [page, store, display] = await Promise.all([
-      getPageSettings("product", product.id),
+      getPageSettings("product", product.id, { draft: preview }),
       getSettingsOrDefaults(),
       productDisplay([product.id]),
     ]);
-    return pageMetadata({
-      page,
-      fallback: {
-        title: product.title,
-        description: product.tagline,
-        coverPath: product.coverPath ?? display.get(product.id)?.coverPath ?? null,
-      },
-      store,
-      url: absoluteUrl(`/p/${product.slug}`),
-    });
+    return {
+      ...pageMetadata({
+        page,
+        fallback: {
+          title: product.title,
+          description: product.tagline,
+          coverPath: product.coverPath ?? display.get(product.id)?.coverPath ?? null,
+        },
+        store,
+        url: absoluteUrl(`/p/${product.slug}`),
+      }),
+      ...(preview ? { robots: { index: false, follow: false } } : {}),
+    };
   } catch {
     return {};
   }
@@ -59,17 +67,22 @@ export async function generateMetadata({
 
 export default async function ProductPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ preview?: string }>;
 }) {
   const { slug } = await params;
+  // An admin looking at drafts. Reads drafts, skips the owner gate, and
+  // counts nothing; see lib/draft-preview.ts.
+  const preview = await isDraftPreview(await searchParams);
   const product = await getProductBySlug(slug);
-  if (!product || product.status !== "published") notFound();
+  if (!product || (product.status !== "published" && !preview)) notFound();
 
   // Counted here rather than in middleware: this is one of four pages worth
   // counting, and middleware runs on far more. Not awaited — a count is worth
   // less than a page load.
-  void recordPageHit(`/p/${slug}`, slug);
+  if (!preview) void recordPageHit(`/p/${slug}`, slug);
 
   const owned = (await ownedProductIdsForViewer()).has(product.id);
   const accessHref = owned ? await accessHrefForProduct(product.id) : "/library";
@@ -86,10 +99,10 @@ export default async function ProductPage({
   // Shown to owners too. Gating it on "not owned" meant the person most likely
   // to be looking — whoever just wrote the page and owns a copy — was the one
   // who never saw it. Owning it changes the button, not the page.
-  if (await hasPageSections("product", product.id)) {
+  if (await hasPageSections("product", product.id, { includeDrafts: preview })) {
     const [rows, settings] = await Promise.all([
-      getPageSections("product", product.id),
-      getPageSettings("product", product.id),
+      getPageSections("product", product.id, { draft: preview }),
+      getPageSettings("product", product.id, { draft: preview }),
     ]);
     // Whatever this page points at, in one query. A pointer whose design has
     // gone resolves to nothing and renders nothing, so the page is shorter
@@ -117,11 +130,14 @@ export default async function ProductPage({
       // showed as a stripe of the shell's own background between the header and
       // the band, which reads as a rendering fault rather than as spacing.
       <div className="-mt-6 mx-[calc(50%-50vw)] w-screen overflow-x-clip">
-        <TrackView
-          event="ViewContent"
-          stableKey={product.slug}
-          params={{ content_ids: [product.slug], content_type: "product", content_name: product.title }}
-        />
+        {preview && <PreviewBar />}
+        {!preview && (
+          <TrackView
+            event="ViewContent"
+            stableKey={product.slug}
+            params={{ content_ids: [product.slug], content_type: "product", content_name: product.title }}
+          />
+        )}
         <SalesPage
           rows={rows}
           settings={settings}

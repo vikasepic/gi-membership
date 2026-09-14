@@ -70,6 +70,8 @@ function capture() {
  */
 export function AttributionTracker() {
   useEffect(() => {
+    // A preview is somebody checking their own work, not a visit.
+    if (new URLSearchParams(window.location.search).get("preview") === "1") return;
     // Immediately, so the campaign that brought them here is recorded even if
     // the pixel is blocked and the cookies below never appear.
     capture();

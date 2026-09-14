@@ -10,6 +10,8 @@ import type { Product } from "@/lib/types";
 import { money } from "@/lib/money";
 import { HOME_COPY } from "@/lib/home-starter";
 import { getPageSections } from "@/lib/pages";
+import { isDraftPreview } from "@/lib/draft-preview";
+import { PreviewBar } from "@/components/page/preview-bar";
 import { getStoreId } from "@/lib/store";
 import { blocksForSection } from "@/lib/section-to-blocks";
 import { buildSectionView } from "@/lib/page-sections";
@@ -107,7 +109,10 @@ async function StoreData() {
  * path changed, so switching the feature on is a decision somebody makes rather
  * than something that happens to them on a deploy.
  */
-export default async function Home() {
+export default async function Home({ searchParams }: { searchParams: Promise<{ preview?: string }> }) {
+  // An admin looking at drafts. The layout's client trackers already bail
+  // on the flag, and this page counts nothing of its own.
+  const preview = await isDraftPreview(await searchParams);
   const d = await StoreData();
 
   // Resolved here rather than in the blocks: an offer's link depends on whether
@@ -130,7 +135,7 @@ export default async function Home() {
       : null,
   };
 
-  const rows = await getPageSections("store", await getStoreId());
+  const rows = await getPageSections("store", await getStoreId(), { draft: preview });
   // "Built" means a band with something in it. A row can exist with nothing on
   // it — opening the editor and closing it writes one — and a page of empty
   // bands must not replace the storefront with a blank screen.
@@ -142,6 +147,7 @@ export default async function Home() {
   if (built) {
     return (
       <div className="flex flex-col">
+        {preview && <PreviewBar />}
         {rows.map((row) => (
           <SectionBand
             key={row.sectionKey}

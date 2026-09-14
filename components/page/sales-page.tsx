@@ -161,7 +161,8 @@ export function SectionBand({
     <Band
       view={view}
       background={row.background}
-      cssId={row.cssId}
+      // A band with no id of its own still needs one the preview can jump to.
+      cssId={row.cssId || `section-${row.sectionKey}`}
       cssClass={row.cssClass}
       layout={row.layout}
     >

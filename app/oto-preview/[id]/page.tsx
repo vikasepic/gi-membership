@@ -81,7 +81,9 @@ export default async function OtoPreviewFrame({
   // component map cannot supply — so it is resolved here rather than
   // pretending every template has the same shape.
   if ((template || offer.otoTemplate) === "sections") {
-    const rows = await getPageSections("offer", offer.id);
+    // Drafts included: this is the admin's preview, and the draft is what
+    // they came to look at.
+    const rows = await getPageSections("offer", offer.id, { draft: true });
     // Whatever this page points at, in one query — see the product page.
     return <SectionsOto view={view} rows={rows} globals={await resolveGlobals(rows)} />;
   }

@@ -83,7 +83,8 @@ describe("saving one panel does not blank the other", () => {
     // on the store-wide settings, which is why this is pinned here.
     const src = readFileSync("app/admin/pages/actions.ts", "utf8");
     const fn = src.slice(src.indexOf("export async function savePageSettingsAction"));
-    expect(fn).toContain("getPageSettings(owner, ownerId)");
+    // Over the draft, so the two panels build one draft between them.
+    expect(fn).toContain("getPageSettings(owner, ownerId, { draft: true })");
     expect(fn).toContain("formData.has(");
   });
 });
