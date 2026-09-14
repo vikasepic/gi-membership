@@ -164,7 +164,6 @@ export function OfferPriceFields({
                   <input
                     aria-label="Label"
                     placeholder="optional"
-                    maxLength={40}
                     className={inputClass}
                     value={p.label}
                     onChange={(e) => edit(i, { label: e.target.value })}
