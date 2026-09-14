@@ -182,10 +182,11 @@ describe("leaving the builder", () => {
   it("offers one way out, not two that do the same thing", () => {
     // "Back to the page" and "Done" both called onClose. A secondary beside a
     // primary reads as "leave" beside "keep", so one of them looked like
-    // losing work.
+    // losing work. Back throws the edits away and asks first; what is
+    // counted here is the exits that KEEP them, and there must be one.
     mount([newBlock("heading")]);
     const ways = [...document.querySelectorAll("header button")].filter((b) =>
-      /back|done|close|^save$/i.test(b.textContent ?? ""),
+      /done|close|^save$/i.test(b.textContent ?? ""),
     );
     expect(ways).toHaveLength(1);
   });
@@ -502,6 +503,8 @@ describe("undo and redo", () => {
  *
  * "Done" sent you back to a page still holding unsaved work, with a Save
  * button of its own — two steps, and the second one easy to walk away from.
+ * Save now writes a draft and stays open, so what was just saved is still
+ * the thing on the canvas; Back is the way out.
  */
 describe("the Save button", () => {
   function mountWithSave(onSave: () => Promise<void>) {
@@ -536,7 +539,7 @@ describe("the Save button", () => {
     expect(btn, "the button says Save when it can").toBeTruthy();
     await act(async () => btn.click());
     expect(wrote).toBe(1);
-    expect(wasClosed(), "and closes onto a saved page").toBe(true);
+    expect(wasClosed(), "and stays on the section it just saved").toBe(false);
   });
 
   it("stays open and says why when the write fails", async () => {
@@ -556,9 +559,10 @@ describe("the Save button", () => {
  *
  * When "Done" became "Save" there was suddenly no way to leave without saving —
  * a worse trap than the one it fixed, because somebody trying a colour on a
- * live sales page had no way to put it back.
+ * live sales page had no way to put it back. It is called Back now, and it
+ * still asks first.
  */
-describe("discarding", () => {
+describe("going back", () => {
   it("puts back what the editor opened with", () => {
     const editor = mount([newBlock("heading")]);
     // Add a block the way the palette does — this is a real edit, streamed
@@ -570,17 +574,18 @@ describe("discarding", () => {
     // refuse. Accept it, since what is under test is what happens after.
     const original = window.confirm;
     window.confirm = () => true;
-    click(byText("button", "Discard")!);
+    click(byText("button", "← Back")!);
     window.confirm = original;
 
     expect(editor.blocks).toHaveLength(1);
   });
 
-  it("is not called Cancel", () => {
+  it("is called Back, not Cancel", () => {
     // There is already a Cancel on this screen — the take-apart confirmation —
     // and one word for two different abandonments is how the wrong one gets
     // pressed.
     mount([newBlock("heading")]);
-    expect(byText("button", "Discard")).toBeTruthy();
+    expect(byText("button", "← Back")).toBeTruthy();
+    expect(byText("button", "Cancel")).toBeFalsy();
   });
 });

@@ -543,6 +543,35 @@ export function BlockEditor({
   const [exported, setExported] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  // The header's clock, and the two seconds the button says "Saved" for.
+  const [savedAt, setSavedAt] = useState<number | null>(lastSavedAt ?? null);
+  const [justSaved, setJustSaved] = useState(false);
+
+  /**
+   * Save from in here and stay.
+   *
+   * Left OPEN on failure, with the reason. Closing onto a page that did not
+   * write is how an afternoon's work is lost while the screen says it went
+   * fine. Answers whether it landed, because Publish and the eye both need
+   * to know before they go on.
+   */
+  async function save(): Promise<boolean> {
+    if (!onSave || busy) return false;
+    setBusy(true);
+    setSaveFailed(null);
+    try {
+      await onSave();
+      setSavedAt(Date.now());
+      setJustSaved(true);
+      setTimeout(() => setJustSaved(false), 2000);
+      return true;
+    } catch (e) {
+      setSaveFailed(e instanceof Error ? e.message : "That did not save. Try again.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
 
   /**
    * Keep this section as a design, under a name.
@@ -730,6 +759,12 @@ export function BlockEditor({
         onClose();
         return;
       }
+      // The other reflex. Without it the browser offers to save the HTML.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void save();
+        return;
+      }
       const intent = undoIntent(e);
       if (!intent) return;
       e.preventDefault();
@@ -745,7 +780,7 @@ export function BlockEditor({
       document.body.style.overflow = previous;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onClose, history, blocks]);
+  }, [onClose, history, blocks, onSave, busy]);
 
   // One value for the whole screen; the controls that need it are four levels
   // down inside a switch statement.
@@ -813,8 +848,35 @@ export function BlockEditor({
         onInsert={insertTemplate}
       />
       <header className="flex items-center gap-3 border-b border-border bg-surface px-4 py-2.5">
-        <strong className="font-display text-sm">Builder</strong>
-        <span className="text-sm text-muted">{title}</span>
+        {/* "Back", and it asks before losing anything. There is already a
+            Cancel on this screen, on the take-apart confirmation, and two of
+            them a keystroke apart is a word that means two things. Escape is
+            the same exit and still needs no label; see the key handler. */}
+        <button
+          type="button"
+          onClick={() => {
+            if (busy) return;
+            // Only ask when there is something to lose. A confirm on a
+            // no-op is a dialog people learn to dismiss without reading.
+            const changed = JSON.stringify(opening.current) !== JSON.stringify(blocks);
+            if (changed && !window.confirm("Go back and throw away the changes made in here since you opened it?")) {
+              return;
+            }
+            if (changed) onChange(opening.current);
+            onClose();
+          }}
+          className="rounded-full border border-border px-3 py-1.5 text-sm text-muted transition-colors hover:border-fg hover:text-fg"
+        >
+          ← Back
+        </button>
+        <span className="text-sm">
+          <strong className="font-display">{title}</strong>
+          {savedAt !== null && (
+            <span className="ml-2 text-xs text-muted">
+              Last saved {new Date(savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+        </span>
         <DeviceSwitch device={device} onChange={pickDevice} className="mx-auto" />
         <div className="flex items-center gap-0.5">
           {/* Visible as well as bound to the keyboard: a shortcut nobody knows
@@ -855,67 +917,69 @@ export function BlockEditor({
         <span className="text-xs text-muted">
           {blocks.length === 0 ? "Empty" : `${blocks.length} block${blocks.length === 1 ? "" : "s"}`}
         </span>
-        {/* "Discard", not "Cancel". There is already a Cancel on this screen —
-            the one on the take-apart confirmation — and two of them at once is
-            a word that means two things a keystroke apart. This one also says
-            what it does: Cancel is what you press to abandon a dialog, and
-            this abandons an afternoon. */}
-        <button
-          type="button"
-          onClick={() => {
-            if (busy) return;
-            // Only ask when there is something to lose. A confirm on a
-            // no-op is a dialog people learn to dismiss without reading.
-            const changed = JSON.stringify(opening.current) !== JSON.stringify(blocks);
-            if (changed && !window.confirm("Throw away the changes made in here since you opened it?")) {
-              return;
-            }
-            if (changed) onChange(opening.current);
-            onClose();
-          }}
-          className="rounded-full border border-border px-4 py-2 text-sm text-muted transition-colors hover:border-fg hover:text-fg"
-        >
-          Discard
-        </button>
         {saveFailed && (
           <span className="max-w-[28rem] truncate text-xs text-primary" title={saveFailed}>
             {saveFailed}
           </span>
         )}
-        {/* One button, not two. "Back to the page" sat beside this one and
-            called the same onClose, and a secondary beside a primary reads as
-            "leave" beside "keep" — so the pair taught people that one of the
-            two loses work. Escape is the other way out and still needs no
-            label; see the key handler.
-
-            It says Save now, and means it. Edits stream into the draft either
-            way, but "Done" then sent you back to a page still holding unsaved
-            work with a Save button of its own — two steps, and the second one
-            easy to walk away from. It only says Save where there is something
-            to save it with. */}
-        <button
-          type="button"
-          onClick={async () => {
-            if (!onSave) return onClose();
-            if (busy) return;
-            setBusy(true);
-            setSaveFailed(null);
-            try {
-              await onSave();
-              onClose();
-            } catch (e) {
-              // Left OPEN on failure, with the reason. Closing onto a page that
-              // did not write is how an afternoon's work is lost while the
-              // screen says it went fine.
-              setSaveFailed(e instanceof Error ? e.message : "That did not save. Try again.");
-            }
-            setBusy(false);
-          }}
-          disabled={busy}
-          className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-60"
-        >
-          {onSave ? (busy ? "Saving…" : "Save") : "Done"}
-        </button>
+        {/* The GHL order, which is the one people already know: look, keep,
+            ship. Save keeps a draft and stays; Publish is the only button
+            here that changes what a buyer sees. The two screens that open
+            this without onSave, the template editor and the nested global
+            editor, have their own idea of saving and get a plain Done. */}
+        {onSave ? (
+          <>
+            {onPreview && (
+              <IconBtn
+                label="Save a draft and preview this section"
+                onClick={() => {
+                  void save().then((ok) => {
+                    if (ok) void onPreview();
+                  });
+                }}
+                disabled={busy}
+              >
+                👁
+              </IconBtn>
+            )}
+            <button
+              type="button"
+              onClick={() => void save()}
+              disabled={busy}
+              className="rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-fg disabled:opacity-60"
+            >
+              {busy ? "Saving…" : justSaved ? "Saved" : "Save"}
+            </button>
+            {onPublish && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!(await save())) return;
+                  setBusy(true);
+                  try {
+                    await onPublish();
+                  } catch (e) {
+                    setSaveFailed(e instanceof Error ? e.message : "That did not publish.");
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+                disabled={busy}
+                className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-60"
+              >
+                Publish
+              </button>
+            )}
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg hover:bg-primary-hover"
+          >
+            Done
+          </button>
+        )}
       </header>
 
       <div className="grid min-h-0 flex-1 grid-cols-[190px_1fr_300px]">
