@@ -20,7 +20,7 @@ page view can publish every draft on the page at once.
 |---|---|
 | Eye icon with unsaved edits on screen | Save a draft first, then open the preview |
 | SEO and custom CSS/JS | Draft them too; page Publish sends them with the sections |
-| Which pages | All: product, offer (sales page and upsell), home, checkout |
+| Which pages | Product, offer (sales page and upsell), home. The checkout has no section editor, only the seed, so nothing writes checkout drafts and it needs no preview |
 | GHL ideas | Placement only: Back, last saved, devices, then preview / save / Publish at the right. Nothing else |
 
 ## Data
@@ -99,7 +99,7 @@ draft publishes a pointer to nothing.
 | `savePageSettings` | upserts live columns | merges into `draft`, over the current draft or live |
 | `copyPage` ("Copy another page") | deletes target rows, inserts source | writes each target section's `draft` from the source's draft-over-live. Target sections the source lacks get a draft of their defaults. Nothing is deleted |
 | Paste section, "Start from the template" | editor state, then Save | unchanged; Save now means draft |
-| `seedFromStarter` (home, checkout) | `saveSection` | lands as draft through `saveSection` |
+| `seedFromStarter` (home, checkout) | `saveSection` | **unchanged, stays live.** It only fills empty bands with the built-in page visitors already see, and refuses to touch a band with anything in it, so nothing new becomes visible |
 | `seedPage` ("switch the page on") | inserts empty live rows | unchanged: empty defaults, live, as today |
 | `duplicate-write.ts` (duplicate product/offer) | copies rows | copies `draft` and `published_at` as they are |
 | `saveGlobalBlocksAction` (global designs) | live on save | **unchanged, out of scope.** A global is shared by many pages, so no single page's Publish can own it. The "Edit globally" confirmation says it goes live on every page that uses it |
@@ -151,11 +151,10 @@ Routes:
 | Offer | `/o/[key]?preview=1` |
 | Offer upsell | existing `/admin/offers/[id]/preview`; `/oto-preview/[id]` reads drafts |
 | Home | `/?preview=1` |
-| Checkout | existing `/checkout-preview`; passes draft mode into `CheckoutPage` |
 
-A section preview is the same URL with `#<section anchor>`. Sections render no
-id unless a CSS id is set, so the renderer adds `data-section="<key>"`, and a
-few lines of script scroll to it after load.
+A section preview is the same URL with `#section-<key>`. A band with no CSS id
+of its own renders `id="section-<key>"`, so the browser's own hash scroll does
+the rest.
 
 **Tracking must not fire on a preview.** `Analytics` and `AttributionTracker`
 live in the store layout, which cannot see search params, so both skip when the
@@ -214,6 +213,9 @@ database and are there next time.
   saved. The presence note already shows who else is on a section.
 - No version history or rollback past the live version.
 - Global designs stay live-on-save (see Writes).
+- The store layout's server-side `recordVisit()` cannot see search params, so
+  a preview still writes a visit row. Page hits, pixel and GA events, and the
+  attribution POST are all skipped.
 
 ## Deploy order
 
