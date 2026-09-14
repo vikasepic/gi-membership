@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { bandTheme } from "@/lib/page-sections";
+import { newBlock } from "@/lib/blocks";
 
 vi.mock("@/app/admin/templates/actions", () => ({ saveTemplateAction: vi.fn(), saveGlobalBlocksAction: vi.fn() }));
 vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false })));
@@ -86,6 +87,33 @@ describe("the builder header", () => {
     expect(onPublish).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
     expect(document.body.textContent).toContain("changed by someone else");
+  });
+
+  it("after a save, Back leaves without asking and without reverting", async () => {
+    // Seen 15 Sep 2026: Save, then Back, and the browser asked "throw away
+    // the changes made in here since you opened it?". OK put the pre-save
+    // blocks back on the canvas, which then read as an unsaved change.
+    const onChange = vi.fn();
+    const onClose = vi.fn();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const el = mount({
+      blocks: [newBlock("heading", { props: { text: "edited", tag: "h2" } })],
+      onSave: async () => {},
+      onChange,
+      onClose,
+    });
+    await act(async () => button(el, "Save")!.click());
+    await act(async () => button(el, "← Back")!.click());
+    expect(confirm).not.toHaveBeenCalled();
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    confirm.mockRestore();
+  });
+
+  it("says Published after a publish", async () => {
+    const el = mount({ onSave: async () => {}, onPublish: async () => {} });
+    await act(async () => button(el, "Publish")!.click());
+    expect(button(el, "Published")).toBeDefined();
   });
 
   it("Cmd+S saves", async () => {

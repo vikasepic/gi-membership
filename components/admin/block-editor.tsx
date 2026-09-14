@@ -546,6 +546,7 @@ export function BlockEditor({
   // The header's clock, and the two seconds the button says "Saved" for.
   const [savedAt, setSavedAt] = useState<number | null>(lastSavedAt ?? null);
   const [justSaved, setJustSaved] = useState(false);
+  const [justPublished, setJustPublished] = useState(false);
 
   /**
    * Save from in here and stay.
@@ -561,6 +562,9 @@ export function BlockEditor({
     setSaveFailed(null);
     try {
       await onSave();
+      // What is on the canvas is now what is stored, so Back has nothing to
+      // ask about and nothing older to put back.
+      opening.current = blocks;
       setSavedAt(Date.now());
       setJustSaved(true);
       setTimeout(() => setJustSaved(false), 2000);
@@ -958,6 +962,8 @@ export function BlockEditor({
                   setBusy(true);
                   try {
                     await onPublish();
+                    setJustPublished(true);
+                    setTimeout(() => setJustPublished(false), 2000);
                   } catch (e) {
                     setSaveFailed(e instanceof Error ? e.message : "That did not publish.");
                   } finally {
@@ -967,7 +973,7 @@ export function BlockEditor({
                 disabled={busy}
                 className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg hover:bg-primary-hover disabled:opacity-60"
               >
-                Publish
+                {justPublished ? "Published" : "Publish"}
               </button>
             )}
           </>
