@@ -28,7 +28,7 @@ invoices) and one thing on the way out (a subscription that ended because
 it was paid in full keeps ownership instead of revoking it).
 
 Rejected: `cancel_at` (date arithmetic that a delayed retry can land on the
-wrong side of; iterations count invoices, which is what we mean) and
+wrong side of; a phase duration of N periods is billed as N invoices) and
 charging instalments ourselves from a cron (off-session charges, which the
 RBI mandate rules already forced the bump away from).
 
@@ -66,15 +66,18 @@ when `price.installments` is set:
 scheduleInstalments(sub, price):
   schedule = subscriptionSchedules.create({ from_subscription: sub.id })
   phases =
-    trial ? [ { items, trial: true, end_date: sub.trial_end },
-              { items, iterations: price.installments } ]
-          : [ { items, iterations: price.installments } ]
+    billing = { items, duration: { interval, interval_count: interval_count × installments } }
+    trial ? [ { items, trial: true, start_date, end_date: sub.trial_end }, billing ]
+          : [ { ...billing, start_date } ]
   subscriptionSchedules.update(schedule.id, { end_behavior: "cancel", phases })
 ```
 
 `items` is the subscription's own price at quantity 1. A separate trial
 phase, rather than a trial inside the billing phase, so the billing phase
-counts exactly N invoices whatever the trial length. Idempotent on
+spans exactly N periods whatever the trial length. Stripe's current API
+takes a phase `duration` rather than an iteration count, and wants the
+first phase anchored with the `start_date` the schedule it built from the
+subscription reports; both learnt from the test-mode run. Idempotent on
 `plan_${sub.id}` so the thank-you page and the webhook racing each other
 make one schedule.
 
@@ -202,7 +205,7 @@ not count), `markPlanPaidOff` against the local database.
 
 Integration, Stripe test mode, inside `describe.skipIf(!canRun)`: buy an
 offer on a `3 × $1` monthly plan, assert the subscription has a schedule
-with `end_behavior: cancel` and a billing phase of 3 iterations (and a
+with `end_behavior: cancel` and a billing phase three months long (and a
 trial phase when `trial_days` is set), then refund the order and assert the
 schedule and subscription are canceled.
 

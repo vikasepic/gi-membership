@@ -359,3 +359,18 @@ code or tests here:
 - A row with `published_at is null` is invisible to `getPageSections` and
   `hasPageSections` by default. `includeDrafts: true` is for the admin only.
 - `revalidatePath` for public routes belongs on publish, never on save.
+
+## Stripe refuses to cancel a subscription a schedule manages (15 Sep 2026)
+
+Cancel the schedule and the subscription goes with it; release the schedule
+if you only want to set `cancel_at_period_end`. `endSubscription` and
+`releaseSchedule` in `lib/payment-plans-stripe.ts` know which is which. A
+paid-off plan is decided by counting paid invoices with `amount_paid > 0`,
+because the end-of-schedule event looks the same as Stripe giving up.
+
+Two things the test-mode run taught that the types did not: a schedule
+phase takes a `duration`, not `iterations` (the SDK still compiled the
+old name), and the first phase must carry the `start_date` the schedule
+built `from_subscription` reports. And `refundOrder` returns early for an
+order with no payment intent, which is every subscription order, so
+anything a refund must always do has to run on that branch too.

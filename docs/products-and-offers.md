@@ -261,3 +261,25 @@ can be recovered. The fourth, the **Orders page**'s expanded row
 order's own last-touch and first-touch labels plainly instead of behind the
 compact popover, with a link into the visit log when the order carries a
 `visit_id` — orders placed before migration 0080 have none.
+
+## Payment plans
+
+A plan is a recurring price with `installments` set (2 to 24). It uses the
+subscription path unchanged and adds a Stripe subscription schedule whose
+billing phase spans exactly that many periods of the price
+(`lib/payment-plans-stripe.ts`), with a trial as its own phase in front when
+the price has one. When the schedule ends, `customer.subscription.deleted`
+counts the subscription's paid invoices: enough means `markPlanPaidOff`
+(ownership stays active, subscription id cleared, apps pushed); fewer means
+cancelled, as any subscription. The pure decisions live in
+`lib/payment-plans.ts`.
+
+The offer's own price columns mirror its headline price through a trigger;
+`installments` has no column, so `hydrateOffer` mirrors it in code. Without
+that a plan bought with no explicit price choice (the library's one-tap, a
+bump) would bill as an open-ended subscription.
+
+A refund ends every subscription the order started (Stripe will not cancel
+a scheduled subscription directly, so a plan's schedule is cancelled
+instead); a member's own cancel releases the schedule first so
+`cancel_at_period_end` can be set.
