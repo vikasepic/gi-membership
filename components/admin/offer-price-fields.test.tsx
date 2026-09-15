@@ -28,6 +28,28 @@ describe("a way to pay's name", () => {
     act(() => root.unmount());
   });
 
+  it("offers instalments under Bills and shows How many", () => {
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<OfferPriceFields prices={[newOfferPrice("p1")]} currency="usd" name="prices" />));
+    const bills = host.querySelector<HTMLSelectElement>('select[aria-label="Bills"]')!;
+    expect([...bills.options].map((o) => o.textContent)).toContain("In instalments");
+    const posted = () => JSON.parse(host!.querySelector<HTMLInputElement>('input[name="prices"]')!.value);
+    act(() => {
+      bills.value = "plan";
+      bills.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(host.querySelector<HTMLInputElement>('input[aria-label="How many"]')!.value).toBe("3");
+    expect(posted()[0]).toMatchObject({ billingType: "recurring", interval: "month", installments: 3 });
+    act(() => {
+      bills.value = "one_time";
+      bills.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(posted()[0].installments).toBeNull();
+    act(() => root.unmount());
+  });
+
   it("keeps the whole name through the save", () => {
     const raw = JSON.stringify([{ ...newOfferPrice("p1"), label: LONG, priceCents: 2900 }]);
     expect(pricesField.parse(raw)[0].label).toBe(LONG);

@@ -174,18 +174,29 @@ export function OfferPriceFields({
                   <select
                     aria-label="Bills"
                     className={inputClass}
-                    value={p.billingType === "one_time" ? "one_time" : (p.interval ?? "month")}
+                    value={
+                      p.billingType === "one_time" ? "one_time" : p.installments ? "plan" : (p.interval ?? "month")
+                    }
                     onChange={(e) =>
                       edit(
                         i,
                         e.target.value === "one_time"
                           ? // A one-time purchase has nothing to trial, so the
                             // trial goes with it rather than lingering unused.
-                            { billingType: "one_time", interval: null, trialDays: null }
-                          : {
-                              billingType: "recurring",
-                              interval: e.target.value as OfferPrice["interval"],
-                            },
+                            { billingType: "one_time", interval: null, trialDays: null, installments: null }
+                          : e.target.value === "plan"
+                            ? // A plan: three monthly payments to start from,
+                              // the interval still editable beside it.
+                              {
+                                billingType: "recurring",
+                                interval: p.interval ?? "month",
+                                installments: p.installments ?? 3,
+                              }
+                            : {
+                                billingType: "recurring",
+                                interval: e.target.value as OfferPrice["interval"],
+                                installments: null,
+                              },
                       )
                     }
                   >
@@ -195,12 +206,32 @@ export function OfferPriceFields({
                         Every {iv}
                       </option>
                     ))}
+                    <option value="plan">In instalments</option>
                   </select>
                 </label>
 
+                {p.installments !== null && (
+                  <label className="flex flex-col gap-1 text-[0.68rem] text-muted">
+                    How many
+                    <input
+                      aria-label="How many"
+                      type="number"
+                      min={2}
+                      max={24}
+                      className={inputClass}
+                      value={p.installments}
+                      onChange={(e) =>
+                        edit(i, { installments: Math.min(24, Math.max(2, Number(e.target.value) || 2)) })
+                      }
+                    />
+                  </label>
+                )}
+
                 <label className="flex flex-col gap-1 text-[0.68rem] text-muted">
-                  {/* This is what makes fortnightly possible: every 2 weeks. */}
-                  Every
+                  {/* This is what makes fortnightly possible: every 2 weeks. On
+                      a plan the Bills dropdown no longer names the unit, so it
+                      is said here. */}
+                  {p.installments ? `Every (${p.interval ?? "month"}s)` : "Every"}
                   <input
                     aria-label="Interval count"
                     type="number"

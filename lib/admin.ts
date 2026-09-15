@@ -456,7 +456,7 @@ export async function savePrices(
 
   const { data: existingRows, error: readErr } = await db
     .from(TABLE[owner])
-    .select("id, billing_type, interval, interval_count, trial_days, price_cents")
+    .select("id, billing_type, interval, interval_count, trial_days, installments, price_cents")
     .eq(OWNER_COL[owner], ownerId);
   if (readErr) throw new Error(`savePrices: ${readErr.message}`);
   const existing = new Map((existingRows ?? []).map((r) => [r.id as string, r]));
@@ -482,6 +482,7 @@ export async function savePrices(
       interval: p.billingType === "recurring" ? p.interval : null,
       interval_count: Math.max(1, Math.round(p.intervalCount || 1)),
       trial_days: p.billingType === "recurring" ? p.trialDays : null,
+      installments: p.billingType === "recurring" ? p.installments : null,
       price_cents: p.priceCents,
       compare_at_cents: p.compareAtCents,
       sort_order: i,
@@ -494,7 +495,8 @@ export async function savePrices(
         was.billing_type !== row.billing_type ||
         was.interval !== row.interval ||
         was.interval_count !== row.interval_count ||
-        was.trial_days !== row.trial_days;
+        was.trial_days !== row.trial_days ||
+        was.installments !== row.installments;
       if (moved && (usage[p.id] ?? 0) > 0) {
         throw new Error(
           `${usage[p.id]} ${usage[p.id] === 1 ? "person is" : "people are"} on ${money(was.price_cents as number)} — its terms cannot change. Add a new way to pay and hide this one.`,
