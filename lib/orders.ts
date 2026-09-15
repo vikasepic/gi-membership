@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { stripe } from "@/lib/stripe";
 import { revokeOwnershipForOrder } from "@/lib/subscription-sync";
+import { endSubscription } from "@/lib/payment-plans-stripe";
 import type { Labels } from "@/lib/attribution";
 import { metaNamesFor } from "@/lib/meta-names";
 import { namedLabels } from "@/lib/meta-id";
@@ -181,6 +182,23 @@ export async function refundOrder(orderId: string): Promise<RefundResult> {
       return { ok: true, alreadyRefunded: true };
     }
     return { ok: false, error: message };
+  }
+
+  // A refunded subscription must stop billing. For a plan that means its
+  // schedule; for anything else, the subscription itself. Errors are logged
+  // rather than thrown: the refund went through, and a subscription that was
+  // already ended must not report it as failed.
+  const { data: subs } = await db
+    .from("order_items")
+    .select("stripe_subscription_id")
+    .eq("order_id", orderId)
+    .not("stripe_subscription_id", "is", null);
+  for (const row of subs ?? []) {
+    try {
+      await endSubscription(row.stripe_subscription_id as string);
+    } catch (e) {
+      console.error("[refundOrder] could not end subscription:", e);
+    }
   }
 
   // revokeOwnershipForOrder also flips the order to refunded.

@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getStoreName, getProductBySlug, getProductById, getOffer } from "@/lib/store";
 import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerForChoice, offerWithCouponTrial, type Ownership } from "@/lib/offers";
+import { isPlan } from "@/lib/payment-plans";
+import { scheduleInstalments } from "@/lib/payment-plans-stripe";
 import { priceForChoice, shownPrices, type OfferPrice } from "@/lib/offer-prices";
 import type { BumpChoice } from "@/lib/bump";
 import { offerAsSoldTo, recordTrialStart } from "@/lib/trial-history";
@@ -872,11 +874,17 @@ export async function fulfilOffer(args: {
           orderId: order.id,
           offerId: offer.id,
           offerName: offer.name,
+          // For the webhook that decides between "paid off" and "cancelled"
+          // when the subscription ends.
+          ...(isPlan(offer) ? { installments: String(offer.installments) } : {}),
           ...campaign,
         },
       },
       { idempotencyKey: idem },
     );
+    // A plan: the schedule is what stops it after N. Sent to Stripe on every
+    // fulfil, idempotent on the subscription, so a retry cannot make two.
+    if (isPlan(offer)) await scheduleInstalments(sub, offer.installments!);
     // The trial that actually ran, which is the coupon's when it carries one.
     // Reading the price's own value here recorded nothing for a promotional
     // trial — leaving the buyer free to take a second free trial afterwards —
@@ -1187,6 +1195,7 @@ export async function finalizeOrder(intentId: string): Promise<void> {
           productId: prod.id,
           productTitle: prod.title,
           productPriceId: price.id,
+          ...(isPlan(price) ? { installments: String(price.installments) } : {}),
           ...campaign,
         },
       },
@@ -1194,6 +1203,8 @@ export async function finalizeOrder(intentId: string): Promise<void> {
       // each other produce ONE subscription rather than two.
       { idempotencyKey: `basesub_${intentId}` },
     );
+    // A plan: the schedule is what stops it after N. See the offer path.
+    if (isPlan(price)) await scheduleInstalments(sub, price.installments!);
     baseSubscriptionId = sub.id;
   }
 

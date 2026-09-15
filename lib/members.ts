@@ -1,6 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
+import { releaseSchedule } from "@/lib/payment-plans-stripe";
 import { getStoreId, getOffer } from "@/lib/store";
 import { applyPendingEntitlements, pushAppEntitlement } from "@/lib/app-sync";
 
@@ -80,6 +81,9 @@ export async function listMembers(): Promise<MemberRow[]> {
 // Cancel at period end rather than immediately: the customer keeps what they
 // already paid for until the term runs out, which is what "cancel" means to them.
 export async function cancelSubscription(subscriptionId: string): Promise<void> {
+  // A plan's schedule owns the subscription until it is released; Stripe
+  // refuses cancel_at_period_end on one it still manages.
+  await releaseSchedule(subscriptionId);
   await stripe().subscriptions.update(subscriptionId, { cancel_at_period_end: true });
 }
 
