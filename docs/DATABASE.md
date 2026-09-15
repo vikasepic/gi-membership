@@ -474,6 +474,7 @@ not in these tables; it is the `ownership` row for the app.
 | `archived` | boolean | no | `false` |  |
 | `created_at` | timestamptz | no | `now()` |  |
 | `updated_at` | timestamptz | no | `now()` |  |
+| `installments` | integer | yes |  | Set on a recurring row: charge this many times, then stop and keep the grant. 2 to 24. Null: an ordinary subscription. 0085 |
 
 **Keys:** `PRIMARY KEY (id)`
 
@@ -932,6 +933,7 @@ not in these tables; it is the `ownership` row for the app.
 | `archived` | boolean | no | `false` |  |
 | `created_at` | timestamptz | no | `now()` |  |
 | `updated_at` | timestamptz | no | `now()` |  |
+| `installments` | integer | yes |  | Set on a recurring row: charge this many times, then stop and keep the grant. 2 to 24. Null: an ordinary subscription. 0085 |
 
 **Keys:** `PRIMARY KEY (id)`
 
