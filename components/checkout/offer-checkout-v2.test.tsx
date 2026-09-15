@@ -41,6 +41,7 @@ const price = (over: Partial<OfferPrice>): OfferPrice => ({
   interval: "month",
   intervalCount: 1,
   trialDays: 7,
+  installments: null,
   priceCents: 2900,
   compareAtCents: null,
   archived: false,
@@ -55,6 +56,7 @@ const offer = {
   description: "Pages, checkouts and follow-up in one place.",
   chargeNowCents: 0,
   trialDays: 7,
+  installments: null,
   recurring: { priceCents: 2900, interval: "month" },
   acceptLabel: "Start my trial",
   currency: "usd",
@@ -152,6 +154,7 @@ describe("an offer bought on the redesign", () => {
       interval: null,
       priceCents: 2900,
       trialDays: null,
+      installments: null,
     } as never);
     const onceAndMonthly: OfferPrice[] = [
       {
@@ -161,6 +164,7 @@ describe("an offer bought on the redesign", () => {
         interval: null,
         intervalCount: 1,
         trialDays: null,
+        installments: null,
         priceCents: 4700,
         compareAtCents: null,
         archived: false,

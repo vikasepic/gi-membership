@@ -45,6 +45,7 @@ const price = (over: Partial<OfferPrice>): OfferPrice => ({
   interval: "month",
   intervalCount: 1,
   trialDays: 7,
+  installments: null,
   priceCents: 2900,
   compareAtCents: null,
   archived: false,
@@ -62,6 +63,7 @@ const CE1M26 = {
   discountCents: 2900,
   clamped: false,
   trialDays: 30,
+  installments: null,
 };
 
 let root: { unmount: () => void } | null = null;

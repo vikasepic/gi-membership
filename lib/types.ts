@@ -108,6 +108,8 @@ export type Offer = {
   interval: Interval | null;
   intervalCount: number | null;
   trialDays: number | null;
+  /** Projected from the chosen price by offerAtPrice; the offer row has no column. */
+  installments?: number | null;
   priceCents: number;
   compareAtCents: number | null;
   currency: string;

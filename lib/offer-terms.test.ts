@@ -28,3 +28,20 @@ describe("membershipTerms", () => {
     expect(t.terms).not.toContain("null");
   });
 });
+
+describe("membership terms on a plan", () => {
+  it("says the plan sentence with a count instead of a per-interval suffix", () => {
+    const r = membershipTerms(
+      { billingType: "recurring", interval: "month", intervalCount: 1, trialDays: null, installments: 3 },
+      "$199",
+    );
+    expect(r).toEqual({ suffix: " × 3", terms: "3 monthly payments of $199, then it's yours" });
+  });
+  it("leaves an ordinary subscription alone", () => {
+    const r = membershipTerms(
+      { billingType: "recurring", interval: "month", intervalCount: 1, trialDays: null, installments: null },
+      "$29",
+    );
+    expect(r.suffix).toBe("/month");
+  });
+});

@@ -204,3 +204,41 @@ describe("a page's prices versus a placement's", () => {
     expect(shownPrices(all, ["o"]).some((p) => p.archived)).toBe(false);
   });
 });
+
+describe("a payment plan", () => {
+  const plan: OfferPrice = price({
+    id: "plan",
+    billingType: "recurring",
+    interval: "month",
+    intervalCount: 1,
+    installments: 3,
+    priceCents: 19900,
+  });
+
+  it("labels the count, not a term", () => {
+    expect(priceLabel(plan, "usd")).toBe("3 × $199");
+  });
+  it("says the whole arrangement in the terms", () => {
+    expect(priceTerms(plan, "usd")).toBe("3 monthly payments of $199, then it's yours");
+    expect(priceTerms({ ...plan, trialDays: 7 }, "usd")).toBe(
+      "7 days free, then 3 monthly payments of $199, then it's yours",
+    );
+    expect(priceTerms({ ...plan, trialDays: 7 }, "usd", 0)).toBe("3 monthly payments of $199, then it's yours");
+  });
+  it("charges the first instalment today, or nothing through a trial", () => {
+    expect(chargeNowCents(plan)).toBe(19900);
+    expect(chargeNowCents({ ...plan, trialDays: 7 })).toBe(0);
+  });
+  it("summarises with the total, so the admin sees what the plan really costs", () => {
+    expect(priceSummary(plan, "usd")).toBe("3 × $199 monthly ($597 total)");
+    expect(priceSummary({ ...plan, intervalCount: 2 }, "usd")).toBe("3 × $199 every 2 months ($597 total)");
+  });
+  it("is never a saving and never saved against", () => {
+    expect(savingAgainst(MONTHLY, plan)).toBeNull();
+    expect(savingAgainst(plan, MONTHLY)).toBeNull();
+    expect(savingAgainst(ONCE, plan)).toBeNull();
+  });
+  it("starts null on a new price", () => {
+    expect(newOfferPrice("x").installments).toBeNull();
+  });
+});

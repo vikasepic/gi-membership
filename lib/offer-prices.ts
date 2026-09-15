@@ -1,4 +1,5 @@
 import { money } from "@/lib/money";
+import { cadenceWords, isPlan, planSentence } from "@/lib/payment-plans";
 
 /**
  * One way to buy a thing.
@@ -33,6 +34,8 @@ export type OfferPrice = {
   interval: "day" | "week" | "month" | "year" | null;
   intervalCount: number;
   trialDays: number | null;
+  /** Set: charge this many times, then stop. A payment plan. See lib/payment-plans.ts. */
+  installments: number | null;
   priceCents: number;
   compareAtCents: number | null;
   /** Hidden from new buyers. Never deleted while anybody is on it. */
@@ -76,6 +79,7 @@ export function newOfferPrice(id: string): OfferPrice {
     interval: null,
     intervalCount: 1,
     trialDays: null,
+    installments: null,
     priceCents: 0,
     compareAtCents: null,
     archived: false,
@@ -103,6 +107,8 @@ export function everyLabel(price: Pick<OfferPrice, "interval" | "intervalCount">
 export function priceLabel(price: OfferPrice, currency: string): string {
   const amount = money(price.priceCents, currency);
   if (price.billingType !== "recurring") return amount;
+  // A plan is a count, not a term: "3 × $199" says what the buyer commits to.
+  if (isPlan(price)) return `${price.installments} × ${amount}`;
   return `${amount}/${everyLabel(price)}`;
 }
 
@@ -127,6 +133,9 @@ export function priceTerms(
   couponTrialDays: number | null = null,
 ): string | null {
   if (price.billingType !== "recurring") return null;
+  if (isPlan(price)) {
+    return planSentence({ ...price, installments: price.installments! }, money(price.priceCents, currency), couponTrialDays);
+  }
   const then = `then ${money(price.priceCents, currency)} every ${everyLabel(price)}`;
   const trialDays = couponTrialDays ?? price.trialDays;
   if (trialDays && trialDays > 0) {
@@ -151,6 +160,13 @@ export function chargeNowCents(price: OfferPrice): number {
  */
 export function priceSummary(price: OfferPrice, currency: string): string {
   const head = price.label.trim() ? `${price.label.trim()} — ` : "";
+  // With the total: the admin is the one person who needs to see that
+  // 3 × $199 is $597, not $497 spread out.
+  if (isPlan(price)) {
+    const n = price.installments!;
+    const { adverb, every } = cadenceWords(price);
+    return `${head}${n} × ${money(price.priceCents, currency)} ${adverb ?? every} (${money(price.priceCents * n, currency)} total)`;
+  }
   const terms = priceTerms(price, currency);
   if (!terms) return `${head}${priceLabel(price, currency)}, one-time`;
   return `${head}${priceLabel(price, currency)}, ${terms}`;
@@ -256,6 +272,9 @@ export function needsAnswer(optionCount: number, choice: PriceChoice | null): bo
  * per cent.
  */
 export function savingAgainst(base: OfferPrice, other: OfferPrice): string | null {
+  // A plan spreads the cost; it is not a discount, and a per-day comparison
+  // would call it one, or a markup, depending on the arithmetic.
+  if (isPlan(base) || isPlan(other)) return null;
   if (base.billingType !== "recurring" || other.billingType !== "recurring") return null;
   const a = perDay(base);
   const b = perDay(other);

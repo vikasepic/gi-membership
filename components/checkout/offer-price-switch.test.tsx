@@ -31,6 +31,7 @@ const price = (id: string, interval: "month" | "year", cents: number, trialDays:
   interval,
   intervalCount: 1,
   trialDays,
+  installments: null,
   priceCents: cents,
   compareAtCents: null,
   archived: false,
@@ -112,6 +113,7 @@ describe("switching how you pay, with a code already applied", () => {
       clamped: false,
       recurringDiscount: false,
       trialDays: 30,
+      installments: null,
     });
     const host = mount();
     await applyCode(host, "SAVE");
@@ -131,6 +133,7 @@ describe("switching how you pay, with a code already applied", () => {
       clamped: false,
       recurringDiscount: false,
       trialDays: 30,
+      installments: null,
     });
     const host = mount();
     await applyCode(host, "MONTHLYONLY");

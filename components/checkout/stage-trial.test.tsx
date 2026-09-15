@@ -47,6 +47,7 @@ const MONTHLY: OfferPrice = {
   interval: "month",
   intervalCount: 1,
   trialDays: 7,
+  installments: null,
   priceCents: 2900,
   compareAtCents: null,
   archived: false,
@@ -143,6 +144,7 @@ const CE1M26 = {
   clamped: false,
   recurringDiscount: true,
   trialDays: 30,
+  installments: null,
 };
 
 const stage = (host: HTMLElement) => host.querySelector(".checkout-v2-stage")!.textContent ?? "";

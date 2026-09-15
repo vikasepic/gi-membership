@@ -30,12 +30,18 @@ export const pricesField = z
             interval: z.enum(["day", "week", "month", "year"]).nullable().default(null),
             intervalCount: z.coerce.number().int().min(1).default(1),
             trialDays: z.coerce.number().int().min(0).nullable().default(null),
+            // A payment plan: charge this many times, then stop. 2 to 24, the
+            // same rule the database states.
+            installments: z.coerce.number().int().min(2).max(24).nullable().default(null),
             priceCents: z.coerce.number().int().min(0),
             compareAtCents: z.coerce.number().int().min(0).nullable().default(null),
             archived: z.boolean().default(false),
           })
           .refine((p) => p.billingType !== "recurring" || p.interval !== null, {
             message: "A recurring price needs an interval",
+          })
+          .refine((p) => p.installments === null || p.billingType === "recurring", {
+            message: "A payment plan is a recurring price",
           })
           .refine((p) => p.billingType !== "one_time" || p.trialDays === null, {
             message: "A one-off purchase has nothing to trial",

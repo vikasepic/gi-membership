@@ -45,6 +45,7 @@ const MONTHLY: OfferPrice = {
   interval: "month",
   intervalCount: 1,
   trialDays: 7,
+  installments: null,
   priceCents: 2900,
   compareAtCents: null,
   archived: false,
@@ -110,6 +111,7 @@ const CE1M26 = {
   clamped: false,
   recurringDiscount: true,
   trialDays: 30,
+  installments: null,
 };
 
 describe.each(["v2", "v1"] as const)("a coupon that changes the trial (%s)", (skin) => {

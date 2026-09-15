@@ -22,7 +22,7 @@ export const PRODUCT_COLUMNS =
   // every reader of a product is a reader of its prices, and a second round
   // trip per product on a storefront that lists them all is a query nobody
   // would write on purpose.
-  "product_prices(id, label, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, sort_order, archived)";
+  "product_prices(id, label, billing_type, interval, interval_count, trial_days, installments, price_cents, compare_at_cents, sort_order, archived)";
 
 /**
  * A row from `products` with its prices, as a Product.
@@ -66,7 +66,7 @@ export const OFFER_COLUMNS =
   // reader of an offer is a reader of its prices, and a second round trip per
   // offer on a storefront that lists them all is a query nobody would write on
   // purpose. camelize already recurses into nested arrays.
-  "offer_prices(id, label, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, sort_order, archived)";
+  "offer_prices(id, label, billing_type, interval, interval_count, trial_days, installments, price_cents, compare_at_cents, sort_order, archived)";
 
 /**
  * A row from `offers` with its prices, as an Offer.

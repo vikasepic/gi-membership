@@ -513,6 +513,7 @@ describe("styling the ways to pay", () => {
         interval: "month" as const,
         intervalCount: 1,
         trialDays: null,
+        installments: null,
         priceCents: 2900,
         compareAtCents: null,
         archived: false,

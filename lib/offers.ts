@@ -146,6 +146,7 @@ export function offerAtPrice<T extends PriceFields>(offer: T, price: OfferPrice 
     interval: price.interval,
     intervalCount: price.intervalCount,
     trialDays: price.trialDays,
+    installments: price.installments,
     priceCents: price.priceCents,
     compareAtCents: price.compareAtCents,
   };
@@ -156,6 +157,7 @@ type PriceFields = {
   interval: string | null;
   intervalCount: number | null;
   trialDays: number | null;
+  installments?: number | null;
   priceCents: number;
   compareAtCents: number | null;
 };

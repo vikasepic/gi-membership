@@ -36,6 +36,7 @@ const price = (over: Partial<OfferPrice>): OfferPrice => ({
   interval: "month",
   intervalCount: 1,
   trialDays: 7,
+  installments: null,
   priceCents: 2900,
   compareAtCents: null,
   archived: false,

@@ -111,7 +111,7 @@ export async function listOfferOptions(includeDrafts = false): Promise<OfferOpti
       // offer's prices", and a second query per offer in a dropdown of twelve
       // is a round trip nobody would write on purpose.
       "id, name, grant_type, grant_app_id, grant_entitlement_key, price_cents, currency, interval, trial_days, billing_type, active, " +
-        "offer_prices(id, label, billing_type, interval, interval_count, trial_days, price_cents, compare_at_cents, sort_order, archived)",
+        "offer_prices(id, label, billing_type, interval, interval_count, trial_days, installments, price_cents, compare_at_cents, sort_order, archived)",
     )
     .eq("store_id", await getStoreId());
   const { data, error } = await (includeDrafts ? q : q.eq("active", true)).order("created_at", {

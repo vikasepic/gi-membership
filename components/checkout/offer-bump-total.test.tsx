@@ -51,6 +51,7 @@ const oneTime: OfferPrice = {
   interval: null,
   intervalCount: 1,
   trialDays: null,
+  installments: null,
   priceCents: 4700,
   compareAtCents: null,
   archived: false,
@@ -62,6 +63,7 @@ const recurring: OfferPrice = {
   interval: "month",
   intervalCount: 1,
   trialDays: null,
+  installments: null,
   priceCents: 2900,
   compareAtCents: null,
   archived: false,
@@ -86,6 +88,7 @@ const bump = buildBumpView({
   interval: null,
   priceCents: 2900,
   trialDays: null,
+  installments: null,
 } as never);
 
 let root: { unmount: () => void } | null = null;
@@ -218,6 +221,7 @@ describe("the bump's effect on an offer checkout's total", () => {
       clamped: false,
       recurringDiscount: false,
       trialDays: null,
+      installments: null,
     });
     const host = mount();
     await applyCode(host, "SAVE10");
@@ -243,6 +247,7 @@ describe("the bump's effect on an offer checkout's total", () => {
       clamped: true,
       recurringDiscount: false,
       trialDays: null,
+      installments: null,
     });
     const host = mount();
     await applyCode(host, "FREE100");
