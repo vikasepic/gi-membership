@@ -24,7 +24,16 @@ vi.mock("@/lib/stripe", async (orig) => ({
   // completeOfferCheckout and finalizeOrder are both mocked out below, so
   // nothing in this test path ever reaches paymentIntents/setupIntents.retrieve
   // — only constructEvent, to get a fixed event past signature verification.
-  stripe: () => ({ webhooks: { constructEvent: () => fakeEvent } }),
+  stripe: () => ({ webhooks: { constructEvent: () => fakeEvent }, invoices: { list: invoicesList } }),
+}));
+
+const invoicesList = vi.fn(async (): Promise<{ data: { status: string; amount_paid: number }[] }> => ({ data: [] }));
+const syncSubscriptionOwnership = vi.fn(async () => {});
+const markPlanPaidOff = vi.fn(async () => ({ paidOff: 1 }));
+vi.mock("@/lib/subscription-sync", async (orig) => ({
+  ...(await orig<typeof import("@/lib/subscription-sync")>()),
+  syncSubscriptionOwnership,
+  markPlanPaidOff,
 }));
 
 const finalizeOrder = vi.fn(async () => {});
@@ -151,5 +160,57 @@ describe("payment_intent.succeeded / an offer failure that can heal on retry", (
     completeOfferCheckout.mockResolvedValueOnce({ ok: true });
     const res = await post();
     expect(res.status).toBe(200);
+  });
+});
+
+/**
+ * What the end of a payment plan means.
+ *
+ * A schedule that ran its course and one Stripe gave up on after failed
+ * retries both end in customer.subscription.deleted. The invoices are what
+ * tell them apart, and only a paid invoice with money on it counts: the $0
+ * one a trial opens with is not an instalment.
+ */
+describe("customer.subscription.deleted on a plan", () => {
+  beforeEach(() => {
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+    syncSubscriptionOwnership.mockClear();
+    markPlanPaidOff.mockClear();
+    invoicesList.mockReset();
+  });
+  const deleted = (installments?: string) => {
+    fakeEvent = {
+      type: "customer.subscription.deleted",
+      data: { object: { id: "sub_p", metadata: installments ? { installments } : {} } },
+    };
+  };
+  const invoices = (paid: number[]) =>
+    invoicesList.mockResolvedValue({ data: paid.map((amount_paid) => ({ status: "paid", amount_paid })) });
+
+  it("pays off after every instalment is paid", async () => {
+    deleted("3");
+    invoices([19900, 19900, 19900]);
+    await post();
+    expect(markPlanPaidOff).toHaveBeenCalledWith("sub_p");
+    expect(syncSubscriptionOwnership).not.toHaveBeenCalled();
+  });
+  it("cancels when Stripe gave up early", async () => {
+    deleted("3");
+    invoices([19900, 19900]);
+    await post();
+    expect(syncSubscriptionOwnership).toHaveBeenCalledWith("sub_p", "canceled");
+    expect(markPlanPaidOff).not.toHaveBeenCalled();
+  });
+  it("does not count the trial's $0 invoice", async () => {
+    deleted("3");
+    invoices([0, 19900, 19900]);
+    await post();
+    expect(syncSubscriptionOwnership).toHaveBeenCalledWith("sub_p", "canceled");
+  });
+  it("treats a subscription with no instalments as it always did", async () => {
+    deleted();
+    await post();
+    expect(syncSubscriptionOwnership).toHaveBeenCalledWith("sub_p", "canceled");
+    expect(invoicesList).not.toHaveBeenCalled();
   });
 });

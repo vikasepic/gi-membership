@@ -39,6 +39,28 @@ export function hasAccess(status: OwnershipStatus): boolean {
   return status !== "canceled";
 }
 
+/**
+ * A plan ran its course: every instalment is paid, so the buyer owns it.
+ *
+ * The row keeps its status and loses its subscription id, which is what
+ * makes it read as a plain purchase everywhere from now on: ownershipFor,
+ * the library, the reconciler (which skips rows with no subscription) and
+ * the connected apps, which are pushed here so they stop waiting on a
+ * subscription that no longer exists. A second call matches nothing.
+ */
+export async function markPlanPaidOff(stripeSubscriptionId: string): Promise<{ paidOff: number }> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("ownership")
+    .update({ status: "active", stripe_subscription_id: null })
+    .eq("stripe_subscription_id", stripeSubscriptionId)
+    .select("id");
+  if (error) throw new Error(`markPlanPaidOff: ${error.message}`);
+  const ids = (data ?? []).map((r) => r.id as string);
+  if (ids.length > 0) await pushOwnershipStateToApps(ids);
+  return { paidOff: ids.length };
+}
+
 // Apply a subscription's current state to the ownership row that tracks it,
 // then tell the connected app. Without that second step a cancellation updated
 // our records and left the app still serving the customer.

@@ -8,8 +8,10 @@ import { completeOfferCheckout } from "@/lib/offer-checkout";
 import { sendPaymentFailedEmail, sendTrialEndingEmail } from "@/lib/subscription-emails";
 import {
   syncSubscriptionOwnership,
+  markPlanPaidOff,
   revokeOwnershipForPaymentIntent,
 } from "@/lib/subscription-sync";
+import { planOutcome } from "@/lib/payment-plans";
 
 // Stripe webhook — the authoritative order finalizer and subscription-state
 // owner. Calls the SAME idempotent finalizeOrder as the thank-you page, so the
@@ -72,6 +74,18 @@ export async function POST(req: Request) {
     case "customer.subscription.updated":
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
+      // A plan that ended is either paid off or given up on, and the event
+      // looks the same either way. The invoices know which: only a paid one
+      // with money on it is an instalment, so a trial's $0 opener is not.
+      const installments = Number(sub.metadata?.installments ?? 0);
+      if (event.type === "customer.subscription.deleted" && installments >= 2) {
+        const invoices = await stripe().invoices.list({ subscription: sub.id, status: "paid", limit: 100 });
+        const paid = invoices.data.filter((i) => (i.amount_paid ?? 0) > 0).length;
+        if (planOutcome(installments, paid) === "paid_off") {
+          await markPlanPaidOff(sub.id);
+          break;
+        }
+      }
       const status = event.type === "customer.subscription.deleted" ? "canceled" : sub.status;
       await syncSubscriptionOwnership(sub.id, status);
       break;
