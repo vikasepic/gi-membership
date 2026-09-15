@@ -5,6 +5,7 @@ import { PaymentElement } from "@stripe/react-stripe-js";
 import type { StripePaymentElementOptions } from "@stripe/stripe-js";
 import { money } from "@/lib/money";
 import { priceLabel, priceTerms, savingAgainst, type OfferPrice } from "@/lib/offer-prices";
+import { isPlan } from "@/lib/payment-plans";
 import { OrderBump } from "@/components/checkout/order-bump";
 import type { CheckoutDesign } from "@/lib/checkout-design";
 import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
@@ -577,6 +578,12 @@ export function OrderSummarySlot(p: {
             <div className="flex items-center justify-between gap-4 text-sm">
               <span className="text-navy" style={label}>
                 {c.coupon.label}
+                {/* Stripe applies a coupon to every invoice for as long as
+                    the coupon says, so on a plan it is money off each
+                    instalment, not off the total once. */}
+                {c.pricePick !== null && c.prices[c.pricePick] && isPlan(c.prices[c.pricePick]) && (
+                  <span className="text-muted"> off each payment</span>
+                )}
               </span>
               <span className="shrink-0 text-navy" style={value}>
                 −{money(c.coupon.discountCents, c.product.currency)}

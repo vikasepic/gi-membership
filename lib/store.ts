@@ -81,7 +81,13 @@ export function hydrateOffer(row: unknown): Offer {
   // select that did not ask for the column, would otherwise hand `undefined`
   // to code that maps over it — on the provision call, which is the one that
   // decides what somebody who has paid can actually open.
-  return { ...o, grantChannels: o.grantChannels ?? [], prices: sortPrices(o.offerPrices ?? []) };
+  const prices = sortPrices(o.offerPrices ?? []);
+  // The offer's own price columns mirror its headline price through a
+  // trigger; `installments` has no column, so it is mirrored here. Without
+  // this a plan bought with no explicit choice (the library's one-tap, a
+  // bump) would bill as an open-ended subscription.
+  const headline = prices.find((p) => !p.archived) ?? prices[0];
+  return { ...o, grantChannels: o.grantChannels ?? [], prices, installments: headline?.installments ?? null };
 }
 
 // Memoised per request: nearly every read in the app resolves the store first,

@@ -10,15 +10,21 @@ import { stripe } from "@/lib/stripe";
  * retry can land on the wrong side of.
  */
 
-type SubLike = { id: string; trial_end: number | null; items: { data: { price: { id: string } }[] } };
+type SubLike = {
+  id: string;
+  trial_end: number | null;
+  items: { data: { price: { id: string; recurring?: { interval: string; interval_count: number } | null } }[] };
+};
 
 /**
  * Wrap a just-created subscription in a schedule of exactly N invoices.
  *
- * A trial gets its own phase. Inside the billing phase it would eat into the
- * iterations, and "7 days free then 3 payments" would bill twice.
- * Idempotent on the subscription: the thank-you page and the webhook race
- * to fulfil, and one schedule is the right number.
+ * The billing phase is a duration, not a count: this API version says
+ * "three months of a monthly price", which Stripe bills as three invoices.
+ * A trial gets its own phase ahead of it, or it would eat into those months
+ * and "7 days free then 3 payments" would bill twice. Idempotent on the
+ * subscription: the thank-you page and the webhook race to fulfil, and one
+ * schedule is the right number.
  */
 export async function scheduleInstalments(sub: SubLike, installments: number): Promise<string> {
   const s = stripe();
@@ -26,9 +32,22 @@ export async function scheduleInstalments(sub: SubLike, installments: number): P
     { from_subscription: sub.id },
     { idempotencyKey: `plan_${sub.id}` },
   );
-  const items = [{ price: sub.items.data[0].price.id, quantity: 1 }];
-  const billing = { items, iterations: installments };
-  const phases = sub.trial_end ? [{ items, trial: true, end_date: sub.trial_end }, billing] : [billing];
+  const price = sub.items.data[0].price;
+  const items = [{ price: price.id, quantity: 1 }];
+  const recurring = price.recurring ?? { interval: "month", interval_count: 1 };
+  const billing = {
+    items,
+    duration: {
+      interval: recurring.interval as "day" | "week" | "month" | "year",
+      interval_count: (recurring.interval_count || 1) * installments,
+    },
+  };
+  // The first phase has to be anchored where the subscription already
+  // started; the schedule Stripe built from it knows when that was.
+  const start_date = schedule.phases[0]?.start_date;
+  const phases = sub.trial_end
+    ? [{ items, trial: true, start_date, end_date: sub.trial_end }, billing]
+    : [{ ...billing, start_date }];
   await s.subscriptionSchedules.update(schedule.id, { end_behavior: "cancel", phases });
   return schedule.id;
 }

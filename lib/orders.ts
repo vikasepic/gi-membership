@@ -164,6 +164,9 @@ export async function refundOrder(orderId: string): Promise<RefundResult> {
     // A $0 trial-start order books no PaymentIntent. Nothing was charged, so
     // there is nothing to give back — but access must still be withdrawn, so
     // revoke by order id rather than by a PaymentIntent that doesn't exist.
+    // And the subscription it started must stop, or the trial converts to a
+    // charge on an order the admin has just refunded.
+    await endSubscriptionsOf(orderId);
     await revokeOwnershipForOrder(orderId);
     return { ok: true };
   }
@@ -178,16 +181,27 @@ export async function refundOrder(orderId: string): Promise<RefundResult> {
     // Stripe refuses a second refund on a fully-refunded charge. That is the
     // outcome we wanted, so reconcile our records rather than reporting failure.
     if (/already been refunded|has already been refunded/i.test(message)) {
+      await endSubscriptionsOf(orderId);
       await revokeOwnershipForOrder(orderId);
       return { ok: true, alreadyRefunded: true };
     }
     return { ok: false, error: message };
   }
 
-  // A refunded subscription must stop billing. For a plan that means its
-  // schedule; for anything else, the subscription itself. Errors are logged
-  // rather than thrown: the refund went through, and a subscription that was
-  // already ended must not report it as failed.
+  await endSubscriptionsOf(orderId);
+  // revokeOwnershipForOrder also flips the order to refunded.
+  await revokeOwnershipForOrder(orderId);
+  return { ok: true };
+}
+
+/**
+ * A refunded subscription must stop billing. For a plan that means its
+ * schedule; for anything else, the subscription itself. Errors are logged
+ * rather than thrown: the refund went through, and a subscription that was
+ * already ended must not report it as failed.
+ */
+async function endSubscriptionsOf(orderId: string): Promise<void> {
+  const db = createServiceClient();
   const { data: subs } = await db
     .from("order_items")
     .select("stripe_subscription_id")
@@ -200,10 +214,6 @@ export async function refundOrder(orderId: string): Promise<RefundResult> {
       console.error("[refundOrder] could not end subscription:", e);
     }
   }
-
-  // revokeOwnershipForOrder also flips the order to refunded.
-  await revokeOwnershipForOrder(orderId);
-  return { ok: true };
 }
 
 /** The order a Stripe charge belongs to, for a webhook that has only the intent. */

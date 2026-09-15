@@ -106,6 +106,23 @@ describe("an offer bought on the redesign", () => {
     expect(text).toContain("Have a discount code?");
   });
 
+  it("says a plan the way the sales page does", () => {
+    // Beside a monthly, so there is a choice to draw. One price draws no list.
+    const plan = price({ id: "plan", installments: 3, trialDays: null, priceCents: 19900 });
+    const el = render(
+      <OfferCheckoutForm
+        offer={offer}
+        signedInEmail="m@e.com"
+        publishableKey="pk"
+        prices={[price({ id: "mo" }), plan]}
+        chosen={1}
+        skin="v2"
+      />,
+    );
+    expect(el.textContent).toContain("3 × $199");
+    expect(el.textContent).toContain("3 monthly payments of $199, then it's yours");
+  });
+
   it("prices the yearly against the monthly without being told the answer", () => {
     const el = render(
       <OfferCheckoutForm offer={offer} signedInEmail="m@e.com" publishableKey="pk" prices={prices} chosen={1} skin="v2" />,
