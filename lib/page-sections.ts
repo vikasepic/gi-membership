@@ -1,5 +1,5 @@
-import { normalizeColor, readableInk, tint } from "@/lib/color";
-import { normalizeBlocks, walkBlocks, type Background } from "@/lib/blocks";
+import { luminance, normalizeColor, readableInk, tint } from "@/lib/color";
+import { emptyBackground, normalizeBlocks, walkBlocks, type Background } from "@/lib/blocks";
 
 // The ten-section sales page.
 //
@@ -115,6 +115,25 @@ export function bandPatch(
       // band's PANEL there, which is a different colour from its ground.
       type: background.image ? "classic" : "none",
     },
+  };
+}
+
+/**
+ * A colour of the store's own as the band, which no swatch offers.
+ *
+ * Painted the way a template paints one: a classic fill in the section's
+ * background, over a preset. The preset still decides the ink, so it is
+ * chosen for the colour rather than left wherever it was: a dark fill under
+ * Paper's near-black ink is a band nobody can read.
+ */
+export function customBandPatch(
+  background: Background | null | undefined,
+  hex: string,
+): { style: string; background: Background } {
+  const base = background ?? emptyBackground();
+  return {
+    style: luminance(hex) < 0.3 ? "navy" : "paper",
+    background: { ...base, type: "classic", color: hex },
   };
 }
 

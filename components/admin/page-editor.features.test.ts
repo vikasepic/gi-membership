@@ -24,7 +24,7 @@ const has = (needle: string) => expect(both, needle).toContain(needle);
 describe("saving", () => {
   it("still writes one section at a time", () => {
     // What stops a save of one section discarding another.
-    has("for (const key of dirtyKeys)");
+    has("for (const key of keys)");
     has("saveSectionAction");
   });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { saveSectionAction, publishPageAction, discardDraftAction } from "@/app/admin/pages/actions";
 import { usePresence, PresenceNote } from "@/components/admin/presence";
 import type { StoreRender } from "@/components/page/storefront-blocks";
@@ -88,6 +88,21 @@ export function PageEditor({
 
   const dirtyKeys = Object.keys(dirty).filter((k) => dirty[k]);
   const draftKeys = rows.filter((r) => r.hasDraft).map((r) => r.sectionKey);
+
+  // What saveAll reads, kept current by hand.
+  //
+  // The builder's Publish runs `save()` and then `onPublish()` inside ONE
+  // click handler. Between the two React has re-rendered, but the handler's
+  // `onPublish` is the closure from before the save, whose `rows` still hold
+  // the old updated_at and whose `dirty` still says the section is dirty. So
+  // the publish saved a second time against a stale baseline and reported
+  // "changed by someone else" with nobody else there. Refs see the truth
+  // whichever render the caller came from.
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  const savingRef = useRef(false);
   const unpublished = dirtyKeys.length + draftKeys.length + (settingsDraft ? 1 : 0);
 
   // The store's type, in the admin, reaching only what wears the class — the
@@ -158,12 +173,14 @@ export function PageEditor({
    * await is not readable by the caller that awaited it.
    */
   async function saveAll(): Promise<string | null> {
-    if (dirtyKeys.length === 0 || saving) return null;
+    const keys = Object.keys(dirtyRef.current).filter((k) => dirtyRef.current[k]);
+    if (keys.length === 0 || savingRef.current) return null;
+    savingRef.current = true;
     setSaving(true);
     setSaveError(null);
     setPublished(null);
-    for (const key of dirtyKeys) {
-      const row = rows.find((r) => r.sectionKey === key);
+    for (const key of keys) {
+      const row = rowsRef.current.find((r) => r.sectionKey === key);
       if (!row) continue;
       const def = sectionDef(row.sectionKey);
       const fd = new FormData();
@@ -187,19 +204,22 @@ export function PageEditor({
       if (res.error) {
         const message = `${def?.title ?? row.sectionKey}: ${res.error}`;
         setSaveError(message);
+        savingRef.current = false;
         setSaving(false);
         return message;
       }
-      setDirty((d) => ({ ...d, [key]: false }));
       // Move the baseline forward, or the next save compares against a stamp
       // the database has already replaced and reports a conflict with nobody.
-      // And it is a draft now, until somebody publishes it.
-      setRows((rs) =>
-        rs.map((r) =>
-          r.sectionKey === key ? { ...r, hasDraft: true, updatedAt: res.updatedAt ?? r.updatedAt } : r,
-        ),
-      );
+      // And it is a draft now, until somebody publishes it. The refs first,
+      // so a caller still holding this render's closures sees it too.
+      const moved = (r: SectionRow) =>
+        r.sectionKey === key ? { ...r, hasDraft: true, updatedAt: res.updatedAt ?? r.updatedAt } : r;
+      dirtyRef.current = { ...dirtyRef.current, [key]: false };
+      rowsRef.current = rowsRef.current.map(moved);
+      setDirty((d) => ({ ...d, [key]: false }));
+      setRows((rs) => rs.map(moved));
     }
+    savingRef.current = false;
     setSaving(false);
     setSavedAt(Date.now());
     return null;

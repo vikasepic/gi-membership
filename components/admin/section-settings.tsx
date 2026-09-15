@@ -2,6 +2,7 @@
 
 import {
   BAND_STYLES,
+  customBandPatch,
   BAND_STYLE_KEYS,
   BAND_WIDTH,
   SECTION_LIMITS,
@@ -288,6 +289,21 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
                 />
               ))}
             </div>
+          </div>
+
+          <div className="grid grid-cols-[92px_minmax(0,1fr)] items-start gap-2.5">
+            <span className="pt-1.5 text-xs text-fg">Custom</span>
+            {/* A brand colour as the band, which no swatch offers. Clearing it
+                goes back to the preset; picking a swatch above clears it too. */}
+            <ColorControl
+              label="Custom band colour"
+              value={section.background?.color ?? null}
+              empty="a swatch above"
+              fallback={BAND_STYLES[band].bg}
+              onChange={(v) =>
+                section.onChange(v ? customBandPatch(section.background, v) : bandPatch(section.background, section.style ?? "paper"))
+              }
+            />
           </div>
 
           <div className="grid grid-cols-[92px_minmax(0,1fr)] items-start gap-2.5">

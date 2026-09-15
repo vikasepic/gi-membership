@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bandPatch } from "@/lib/page-sections";
+import { bandPatch, customBandPatch } from "@/lib/page-sections";
 import { emptyBackground } from "@/lib/blocks";
 
 // A template's band colour is written into the section's `background` as a
@@ -35,5 +35,19 @@ describe("picking a band colour", () => {
     // The common case. A patch here would be a pointless write on every click.
     expect(bandPatch(emptyBackground(), "rose").background).toBeUndefined();
     expect(bandPatch(null, "rose").background).toBeUndefined();
+  });
+});
+
+describe("a custom band colour", () => {
+  it("paints the fill a template would, and picks a preset whose ink reads on it", () => {
+    const dark = customBandPatch(null, "#571900");
+    expect(dark.background).toMatchObject({ type: "classic", color: "#571900" });
+    expect(dark.style).toBe("navy");
+    const light = customBandPatch(emptyBackground(), "#fff4e6");
+    expect(light.style).toBe("paper");
+  });
+  it("keeps a picture that is already there", () => {
+    const withImage = { ...emptyBackground(), type: "classic" as const, image: "library/x.webp" };
+    expect(customBandPatch(withImage, "#11325b").background.image).toBe("library/x.webp");
   });
 });

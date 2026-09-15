@@ -5,8 +5,9 @@ import { createRoot } from "react-dom/client";
 import { defaultRows, SECTIONS } from "@/lib/page-sections";
 
 const publish = vi.fn(async (_fd: FormData) => ({ published: 2, updatedAt: { hero: "2026-09-14T10:00:00Z" } }));
+const saveSection = vi.fn(async (_fd: FormData) => ({ savedKey: "hero", updatedAt: "2026-09-14T09:00:00Z" }));
 vi.mock("@/app/admin/pages/actions", () => ({
-  saveSectionAction: vi.fn(async () => ({ savedKey: "hero", updatedAt: "2026-09-14T09:00:00Z" })),
+  saveSectionAction: (_p: unknown, fd: FormData) => saveSection(fd),
   publishPageAction: (_p: unknown, fd: FormData) => publish(fd),
   discardDraftAction: vi.fn(async () => ({ row: defaultRows(SECTIONS)[0] })),
   copyPageAction: vi.fn(async () => ({})),
@@ -21,6 +22,7 @@ afterEach(() => {
   host?.remove();
   host = null;
   publish.mockClear();
+  saveSection.mockClear();
 });
 
 function mount(rows = defaultRows(SECTIONS)) {
@@ -42,6 +44,28 @@ function mount(rows = defaultRows(SECTIONS)) {
 
 const button = (el: HTMLElement, text: string) =>
   [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === text) as HTMLButtonElement;
+
+describe("save then publish from one render", () => {
+  it("does not save a second time against the stale baseline", async () => {
+    // Seen 15 Sep 2026: the builder's Publish runs save() then onPublish()
+    // in one click. onPublish is the closure from before the save, so it
+    // saved again with the old updated_at and reported "changed by someone
+    // else" with nobody else there. Both clicks here fire from the same
+    // render, which is the same situation.
+    const el = mount();
+    const toggle = el.querySelector<HTMLButtonElement>('button[role="switch"]')!;
+    await act(async () => toggle.click());
+    const save = [...el.querySelectorAll("button")].find((b) => b.getAttribute("aria-label") === "Save draft")!;
+    const pub = button(el, "Publish page");
+    await act(async () => {
+      save.click();
+      pub.click();
+    });
+    expect(saveSection).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(el.textContent).not.toContain("changed by someone else");
+  });
+});
 
 describe("publishing from the page bar", () => {
   it("is disabled with nothing to publish, and a saved draft enables it", () => {
