@@ -1105,7 +1105,12 @@ export function BlockEditor({
             for the section changes the panel and nothing you are looking at —
             the canvas IS the band, and it was painting only its colour. */}
         <div
-          className="min-w-0 overflow-y-auto p-6"
+          // The page's band wears the section's id and class, so this one
+          // does too: page CSS written against `#section-hero` has to find
+          // the same element here or the canvas shows a page that is not the
+          // page. Same fallback name the live band uses.
+          id={section ? section.cssId || (section.sectionKey ? `section-${section.sectionKey}` : undefined) : undefined}
+          className={`min-w-0 overflow-y-auto p-6 ${section?.cssClass ?? ""}`}
           style={{ background: theme.bg, ...sectionBackdrop }}
         >
           {/* Later in the document than the section preview's copy of the same

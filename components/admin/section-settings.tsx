@@ -30,6 +30,8 @@ export type SectionEdit = {
   /** A picture or a wash over the band's colour. */
   background?: Background | null;
   cssId?: string | null;
+  /** Which section this is — what the band is called when it has no id of its own. */
+  sectionKey?: string;
   cssClass?: string | null;
   /** How wide the band holds its content, and how much air. */
   layout?: unknown;

@@ -723,6 +723,7 @@ function SectionPanel({
             background: (row.background as never) ?? null,
             cssId: row.cssId ?? null,
             cssClass: row.cssClass ?? null,
+            sectionKey: row.sectionKey,
             layout: row.layout ?? null,
             onChange,
           }}
