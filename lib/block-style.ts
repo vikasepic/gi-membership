@@ -1010,7 +1010,7 @@ export function blockRules(block: Block, theme: BandTheme): string {
   if (capped) out.push(capped);
 
   if (block.type === "row") out.push(...rowRules(block, sel, theme));
-  if (block.type === "cards") out.push(...cardsRules(block, sel));
+  if (block.type === "cards" || block.type === "stats") out.push(...cardsRules(block, sel));
 
   // After the frame and the per-device boxes, so `display:none` wins on source
   // order against whatever `display` those set — and before the custom CSS,
@@ -1134,7 +1134,13 @@ function rowRules(block: Block, sel: string, theme: BandTheme): string[] {
  * `repeat(NaN,…)`, which drops the grid to a single column with no explanation.
  */
 export function cardsAcross(block: Block, device: Device): number {
-  const raw = Number(propsFor(block, device).columns);
+  const props = propsFor(block, device);
+  const raw = Number(props.columns);
+  // Figures: 0 means "as many as there are", the shape every strip had
+  // before Across reached it.
+  if (block.type === "stats" && !(raw > 0)) {
+    return Math.min(Math.max(Array.isArray(props.items) ? props.items.length : 3, 1), 6);
+  }
   // Six, the same ceiling a row of columns has. Four is the right limit for
   // cards with words in them and the wrong one for a strip of logos, which is
   // a grid of six small pictures and nothing else — capped at four it wrapped
@@ -1144,7 +1150,7 @@ export function cardsAcross(block: Block, device: Device): number {
 
 const cardsTrackAt = (block: Block, device: Device) => `repeat(${cardsAcross(block, device)}, minmax(0,1fr))`;
 
-const acrossIsPerDevice = (block: Block) =>
+export const acrossIsPerDevice = (block: Block) =>
   hasOverride(block, "tablet", "columns", "props") || hasOverride(block, "mobile", "columns", "props");
 
 /**

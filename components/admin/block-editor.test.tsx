@@ -229,19 +229,15 @@ describe("the image control keeps a way to get a picture in", () => {
       <ImageControl label={<span>Image</span>} value="" onChange={() => {}} {...props} />,
     );
 
-  it("opens the media window", () => {
-    // Upload used to be a file input here and a library button beside it. Both
-    // are inside the window now, so this is the one control.
-    expect(render1()).toContain("Select image");
+  it("is one row until opened", () => {
+    // The library button and the URL field live in a drawer under the row,
+    // so a panel with six images is six rows rather than six stacked forms.
+    expect(render1()).toContain("Choose");
+    expect(render1()).not.toContain("…or paste a URL");
   });
 
   it("says replace once there is something to replace", () => {
-    expect(render1({ value: "https://x.test/a.jpg" })).toContain("Replace image");
-  });
-
-  it("still takes a pasted URL", () => {
-    // An image hosted somewhere else never goes through the library at all.
-    expect(render1()).toContain("…or paste a URL");
+    expect(render1({ value: "https://x.test/a.jpg" })).toContain("Replace");
   });
 
   it("previews what is already set", () => {

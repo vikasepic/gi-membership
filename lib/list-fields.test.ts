@@ -23,3 +23,9 @@ describe("a card's fields", () => {
     expect(keys({})).toEqual(["title", "body", "amount", "icon"]);
   });
 });
+
+describe("one image on every card", () => {
+  it("hides the per-card image once a shared one is set", () => {
+    expect(keys({ media: "image", sharedImage: "library/one.webp" })).toEqual(["title", "body", "amount"]);
+  });
+});

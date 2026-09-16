@@ -896,6 +896,18 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         addLabel: "Add a figure",
       },
       { kind: "select", key: "layout", label: "Layout", options: [["strip", "Strip"], ["boxed", "Boxed"], ["card", "Stacked card"]], hint: "Boxed puts each figure in its own outlined box." },
+      // Per device, the same way cards are: four across on a laptop is two by
+      // two on a phone. "As many as there are" is what every strip drew before
+      // this existed, so an old block keeps its shape.
+      {
+        kind: "select",
+        key: "columns",
+        label: "In a row",
+        hint: "How many sit side by side. Set it again on tablet and phone if four should become two.",
+        options: [["0", "As many as there are"], ["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"], ["6", "6"]],
+        responsive: true,
+        when: (b) => b.props.layout !== "card",
+      },
     ],
     style: [...TYPOGRAPHY],
   },
@@ -958,7 +970,7 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
           // Each follows the Media setting below: a field that draws nothing
           // on the card is clutter on the panel.
           { key: "icon", label: "Icon (SVG or image URL)", kind: "textarea", showWhen: (p) => (p.media ?? "icon") === "icon" },
-          { key: "image", label: "Image", kind: "image", showWhen: (p) => p.media === "image" },
+          { key: "image", label: "Image", kind: "image", showWhen: (p) => p.media === "image" && !p.sharedImage },
         ],
         addLabel: "Add a card",
       },
@@ -972,6 +984,13 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         label: "Media",
         hint: "Which of the two fields on each card is shown in the tile.",
         options: [["icon", "Icon"], ["image", "Image"], ["none", "None"]],
+      },
+      {
+        kind: "image",
+        key: "sharedImage",
+        label: "One image on every card",
+        hint: "Set, it replaces each card's own picture. Clear it to pick per card again.",
+        when: (b) => b.props.media === "image",
       },
       // Shown only on the skin that renders them. Every one of these fields was
       // visible on all five skins with a hint explaining when it applied, which

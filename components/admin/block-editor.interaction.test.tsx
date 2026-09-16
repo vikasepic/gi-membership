@@ -444,7 +444,7 @@ describe("a card's picture", () => {
     // screen has a picker; typing a bucket path is how you get a broken image
     // and no way to tell which character is wrong.
     const panel = withMedia("image");
-    expect([...panel.querySelectorAll("button")].map((x) => x.textContent?.trim())).toContain("Select image");
+    expect([...panel.querySelectorAll("button")].map((x) => x.textContent?.trim())).toContain("Choose");
   });
 
   it("shows only the artwork field the card actually draws", () => {

@@ -636,7 +636,7 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     autoFlow: "row",
     justifyItems: "",
   },
-  stats: { items: [], layout: "strip" },
+  stats: { items: [], layout: "strip", columns: 0 },
   pricing: { items: [], highlightLast: true, totalLabel: "", totalAmount: "" },
   faq: { items: [], layout: "accordion" },
   // Everything after `note` is presentation with no value of its own: null
@@ -867,6 +867,8 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   cards: {
     items: [],
     columns: 3,
+    // One picture for every card, over each card's own. Empty: per card.
+    sharedImage: "",
     numbered: false,
     // A shelf that scrolls sideways rather than a grid that wraps. False is
     // what every cards block has always been.

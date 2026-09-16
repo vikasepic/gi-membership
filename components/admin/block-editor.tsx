@@ -3034,30 +3034,73 @@ export function ImageControl({
   onPickAlt?: (alt: string) => void;
 }) {
   const src = imageSrc(value);
+  // One row when closed: a thumbnail and a button. The two ways in, the
+  // library and a pasted address, sit in a drawer under it, so a panel with
+  // six images on it is six rows rather than six stacked forms. Inline
+  // rather than floating: the inspector scrolls, and a popover near its
+  // bottom edge is a popover you cannot see.
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState(value);
+  useEffect(() => setUrl(value), [value]);
 
   return (
     <div className="flex flex-col gap-1.5">
       {label}
-      {src && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="aspect-[4/3] w-full rounded-lg border border-border object-cover" />
+      <div className="flex items-center gap-2">
+        <span className="size-10 shrink-0 overflow-hidden rounded-md border border-border bg-surface-2">
+          {src && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={src} alt="" className="h-full w-full object-cover" />
+          )}
+        </span>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="rounded-full border border-border px-3 py-1 text-xs transition-colors hover:border-primary"
+        >
+          {src ? "Replace" : "Choose"}
+        </button>
+        {src && (
+          <button type="button" onClick={() => onChange("")} className="text-[0.66rem] text-muted hover:text-primary">
+            Clear
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-2 p-2">
+          {/* The same image on three pages should be one file, not three uploads
+              under three names. Its description comes with it. */}
+          <MediaButton
+            kind="image"
+            label="From the library"
+            onPick={(item) => {
+              onChange(item.path);
+              if (item.alt) onPickAlt?.(item.alt);
+              setOpen(false);
+            }}
+          />
+          <form
+            className="flex items-center gap-1"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onChange(url.trim());
+              setOpen(false);
+            }}
+          >
+            <input
+              className={input}
+              value={url}
+              placeholder="…or paste a URL"
+              aria-label="Image URL"
+              onChange={(e) => setUrl(e.target.value)}
+            />
+            <button type="submit" className="shrink-0 rounded border border-border px-2 py-1 text-xs hover:border-fg">
+              Use
+            </button>
+          </form>
+        </div>
       )}
-      {/* The same image on three pages should be one file, not three uploads
-          under three names. Its description comes with it. */}
-      <MediaButton
-        kind="image"
-        label={src ? "Replace image" : "Select image"}
-        onPick={(item) => {
-          onChange(item.path);
-          if (item.alt) onPickAlt?.(item.alt);
-        }}
-      />
-      <input
-        className={input}
-        value={value}
-        placeholder="…or paste a URL"
-        onChange={(e) => onChange(e.target.value)}
-      />
     </div>
   );
 }

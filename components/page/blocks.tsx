@@ -29,6 +29,7 @@ import {
   blockCssAt,
   blockRules,
   blockTextRules,
+  acrossIsPerDevice,
   cardsTrack,
   columnCss,
   dimCss,
@@ -1631,6 +1632,13 @@ function Inner({
       const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
       if (items.length === 0) return null;
       const card = str(p.layout) === "card";
+      // Across, once somebody has set it. Zero everywhere is the wrapping
+      // strip every figures block drew before the control existed, kept
+      // byte for byte; a count hands the shape to the same grid the cards
+      // block uses, with `--cards` carrying a value per device.
+      const gridded = Number(p.columns) > 0 || acrossIsPerDevice(block);
+      const track = gridded ? cardsTrack(block, at) : null;
+      const gridStyle = track ? ({ "--cards": track } as React.CSSProperties) : undefined;
       // Each figure in its own outlined box, side by side.
       //
       // Two boxed figures in a panel is a row of two columns, and a row inside
@@ -1641,11 +1649,11 @@ function Inner({
       if (str(p.layout) === "boxed") {
         const line = `${s.borderWidth || 1}px solid ${s.borderColor ?? c.rule}`;
         return (
-          <div className="flex flex-wrap gap-3">
+          <div className={gridded ? "grid grid-cols-[var(--cards)] gap-3" : "flex flex-wrap gap-3"} style={gridStyle}>
             {items.map((it, i) => (
               <div
                 key={i}
-                className="min-w-0 flex-1 px-4 py-3"
+                className={gridded ? "min-w-0 px-4 py-3" : "min-w-0 flex-1 px-4 py-3"}
                 style={{ border: line, borderRadius: `${s.radius || 12}px` }}
               >
                 <div className="font-display text-[1.6rem] font-bold leading-tight" style={{ color: c.fg, ...type }}>
@@ -1676,12 +1684,14 @@ function Inner({
       ) : (
         // Separated by hairlines and hugging the left, the way the model page
         // sets them. Spread across the whole band they stop reading as a group.
-        <div className="flex flex-wrap items-stretch">
+        <div className={gridded ? "grid grid-cols-[var(--cards)] gap-x-6 gap-y-4" : "flex flex-wrap items-stretch"} style={gridStyle}>
           {items.map((it, i) => (
             <div
               key={i}
-              className="pr-6"
-              style={i ? { borderLeft: `1px solid ${c.rule}`, paddingLeft: "1.5rem" } : undefined}
+              className={gridded ? "min-w-0" : "pr-6"}
+              // Hairlines only in the wrapping strip: in a grid the first
+              // figure of the second row would wear one on the row's edge.
+              style={!gridded && i ? { borderLeft: `1px solid ${c.rule}`, paddingLeft: "1.5rem" } : undefined}
             >
               <div className="font-display text-[1.15rem] font-bold" style={{ color: c.fg, ...type }}><Inline html={str(it.value)} /></div>
               <div className="mt-0.5 text-[0.78rem]" style={{ color: theme.muted }}><Inline html={str(it.label)} /></div>
@@ -1913,7 +1923,8 @@ function IconTile({
   // pasted icon is only read when it is set to Icon. Switching between them
   // hides the other one rather than throwing it away, so it is a switch and not
   // a decision you have to undo by retyping.
-  const picture = media === "image" ? imageSrc(item.image) : null;
+  // One picture for every card wins over the card's own; see sharedImage.
+  const picture = media === "image" ? imageSrc(str(p.sharedImage) || str(item.image)) : null;
   if (media === "image" ? !picture : !raw.trim()) return null;
   const src = picture ?? (/^https?:\/\//i.test(raw.trim()) ? raw.trim() : null);
 
