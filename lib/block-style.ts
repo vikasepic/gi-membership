@@ -1011,6 +1011,7 @@ export function blockRules(block: Block, theme: BandTheme): string {
 
   if (block.type === "row") out.push(...rowRules(block, sel, theme));
   if (block.type === "cards" || block.type === "stats") out.push(...cardsRules(block, sel));
+  if (block.type === "timeline") out.push(...timelineRules(block, sel));
 
   // After the frame and the per-device boxes, so `display:none` wins on source
   // order against whatever `display` those set — and before the custom CSS,
@@ -1227,4 +1228,54 @@ export function customCss(code: string, selector: string): string {
 /** A tinted version of the band accent, for soft fills inside a block. */
 export function softAccent(theme: BandTheme, alpha = 0.1): string {
   return tint(theme.accent, alpha);
+}
+
+/**
+ * The schedule's measurements, as custom properties.
+ *
+ * Every length the block draws with — where the line runs, how big the dot
+ * is, each line's type size — is per device, and the renderer's markup reads
+ * them all through `var(--tl-…)`. The values live in the stylesheet so a
+ * phone's own numbers win by media query; the builder canvas sets the same
+ * names inline for the width it is drawing, the way the cards track does.
+ */
+const TIMELINE_VARS: [string, string][] = [
+  ["--tl-rail", "rail"],
+  ["--tl-gap", "gap"],
+  ["--tl-col", "numberWidth"],
+  ["--tl-num-top", "numberTop"],
+  ["--tl-line-w", "lineWidth"],
+  ["--tl-dot", "dotSize"],
+  ["--tl-dot-top", "dotTop"],
+  ["--tl-item-gap", "itemGap"],
+  ["--tl-eyebrow", "eyebrowSize"],
+  ["--tl-num", "numberSize"],
+  ["--tl-date", "dateSize"],
+  ["--tl-title", "titleSize"],
+  ["--tl-rule-w", "ruleWidth"],
+  ["--tl-text", "textSize"],
+];
+
+export function timelineVars(block: Block, device: Device): Record<string, string> {
+  const p = propsFor(block, device);
+  return Object.fromEntries(
+    TIMELINE_VARS.map(([v, k]) => [v, `${typeof p[k] === "number" && Number.isFinite(p[k]) ? p[k] : 0}px`]),
+  );
+}
+
+const declare = (vars: Record<string, string>) =>
+  Object.entries(vars)
+    .map(([k, v]) => `${k}:${v}`)
+    .join(";");
+
+function timelineRules(block: Block, sel: string): string[] {
+  let wider = timelineVars(block, "desktop");
+  const out = [`${sel}{${declare(wider)}}`];
+  for (const device of ["tablet", "mobile"] as const) {
+    const here = timelineVars(block, device);
+    const changed = Object.fromEntries(Object.entries(here).filter(([k, v]) => wider[k] !== v));
+    if (Object.keys(changed).length > 0) out.push(`@media (max-width:${DEVICE_MAX[device]}px){${sel}{${declare(changed)}}}`);
+    wider = here;
+  }
+  return out;
 }

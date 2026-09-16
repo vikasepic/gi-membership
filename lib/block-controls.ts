@@ -912,6 +912,72 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
     style: [...TYPOGRAPHY],
   },
 
+  timeline: {
+    content: [
+      {
+        kind: "list",
+        key: "items",
+        label: "Entries",
+        hint: "One per session, in the order they happen.",
+        item: [
+          { key: "label", label: "Word above the number", kind: "text" },
+          { key: "number", label: "Number", kind: "text" },
+          { key: "date", label: "Date", kind: "text" },
+          { key: "title", label: "Title", kind: "text" },
+          { key: "text", label: "Text", kind: "textarea" },
+        ],
+        addLabel: "Add an entry",
+      },
+      group("Line and dots"),
+      { kind: "color", key: "lineColor", label: "Line colour" },
+      { kind: "number", key: "lineWidth", label: "Line thickness", min: 0, max: 8, step: 1, unit: "px", responsive: true },
+      { kind: "number", key: "rail", label: "Line from the left", min: 20, max: 300, step: 1, unit: "px", responsive: true, hint: "Where the line runs. The dots sit on it." },
+      { kind: "color", key: "dotColor", label: "Dot colour" },
+      { kind: "number", key: "dotSize", label: "Dot size", min: 0, max: 40, step: 1, unit: "px", responsive: true },
+      { kind: "number", key: "dotTop", label: "Dot from the top", min: 0, max: 80, step: 1, unit: "px", responsive: true, hint: "Of each entry. Move it to sit beside the date." },
+      group("Spacing"),
+      { kind: "number", key: "numberWidth", label: "Number column", min: 30, max: 200, step: 1, unit: "px", responsive: true, hint: "The width the word and number are centred in." },
+      { kind: "number", key: "numberTop", label: "Number from the top", min: 0, max: 80, step: 1, unit: "px", responsive: true },
+      { kind: "number", key: "gap", label: "Line to text", min: 0, max: 200, step: 1, unit: "px", responsive: true },
+      { kind: "number", key: "itemGap", label: "Between entries", min: 0, max: 200, step: 1, unit: "px", responsive: true },
+      group("Word above the number"),
+      { kind: "select", key: "eyebrowFont", label: "Font", options: [["", "Page default"]] },
+      { kind: "number", key: "eyebrowSize", label: "Size", min: 8, max: 120, step: 1, unit: "px", responsive: true },
+      { kind: "select", key: "eyebrowWeight", label: "Weight", options: [["", "Inherit"], ...["300", "400", "500", "600", "700", "800", "900"].map((w) => [w, w] as [string, string])] },
+      { kind: "color", key: "eyebrowColor", label: "Colour" },
+      group("Number"),
+      { kind: "select", key: "numberFont", label: "Font", options: [["", "Page default"]] },
+      { kind: "number", key: "numberSize", label: "Size", min: 8, max: 120, step: 1, unit: "px", responsive: true },
+      { kind: "select", key: "numberWeight", label: "Weight", options: [["", "Inherit"], ...["300", "400", "500", "600", "700", "800", "900"].map((w) => [w, w] as [string, string])] },
+      { kind: "toggle", key: "numberItalic", label: "Italic" },
+      { kind: "color", key: "numberColor", label: "Colour" },
+      group("Date"),
+      { kind: "select", key: "dateFont", label: "Font", options: [["", "Page default"]] },
+      { kind: "number", key: "dateSize", label: "Size", min: 8, max: 120, step: 1, unit: "px", responsive: true },
+      { kind: "select", key: "dateWeight", label: "Weight", options: [["", "Inherit"], ...["300", "400", "500", "600", "700", "800", "900"].map((w) => [w, w] as [string, string])] },
+      { kind: "toggle", key: "dateItalic", label: "Italic" },
+      { kind: "color", key: "dateColor", label: "Colour" },
+      group("Title"),
+      { kind: "select", key: "titleFont", label: "Font", options: [["", "Page default"]] },
+      { kind: "number", key: "titleSize", label: "Size", min: 8, max: 120, step: 1, unit: "px", responsive: true },
+      { kind: "select", key: "titleWeight", label: "Weight", options: [["", "Inherit"], ...["300", "400", "500", "600", "700", "800", "900"].map((w) => [w, w] as [string, string])] },
+      { kind: "toggle", key: "titleItalic", label: "Italic" },
+      { kind: "color", key: "titleColor", label: "Colour" },
+      group("Rule under the title"),
+      { kind: "number", key: "ruleWidth", label: "Width", min: 0, max: 400, step: 1, unit: "px", responsive: true, hint: "0 removes it." },
+      { kind: "number", key: "ruleThickness", label: "Thickness", min: 1, max: 8, step: 1, unit: "px", responsive: true },
+      { kind: "color", key: "ruleColor", label: "Colour" },
+      group("Text"),
+      { kind: "select", key: "textFont", label: "Font", options: [["", "Page default"]] },
+      { kind: "number", key: "textSize", label: "Size", min: 8, max: 120, step: 1, unit: "px", responsive: true },
+      { kind: "select", key: "textWeight", label: "Weight", options: [["", "Inherit"], ...["300", "400", "500", "600", "700", "800", "900"].map((w) => [w, w] as [string, string])] },
+      { kind: "toggle", key: "textItalic", label: "Italic" },
+      { kind: "color", key: "textColor", label: "Colour" },
+      { kind: "number", key: "textLineHeight", label: "Text line height", min: 1, max: 2.4, step: 0.05 },
+    ],
+    style: [],
+  },
+
   pricing: {
     content: [
       {
@@ -1701,7 +1767,11 @@ export function controlsFor(
 }
 
 /** The Font select, filled in with what the site actually has. */
-const FONT_KEYS = new Set(["fontFamily", "digitFont", "labelFont", "headingFont", "subheadingFont"]);
+const FONT_KEYS = new Set([
+  "fontFamily", "digitFont", "labelFont", "headingFont", "subheadingFont",
+  // The schedule's five lines, each its own face.
+  "eyebrowFont", "numberFont", "dateFont", "titleFont", "textFont",
+]);
 
 /**
  * The offer select, filled in with what the store has.
@@ -2044,6 +2114,7 @@ export const PALETTE: { type: BlockType; label: string; props?: Record<string, u
   { type: "row", label: "Container" },
   { type: "cards", label: "Cards" },
   { type: "stats", label: "Figures" },
+  { type: "timeline", label: "Schedule" },
   { type: "pricing", label: "Price table" },
   { type: "pricecard", label: "Price card" },
   { type: "faq", label: "FAQ" },
@@ -2188,7 +2259,7 @@ export function sections(controls: Control[]): { title: string | null; controls:
 export const PALETTE_GROUPS: { title: string; types: string[] }[] = [
   { title: "Basic", types: ["Heading", "Text", "Image", "Video", "Buy button", "Button", "List", "Slides"] },
   { title: "Layout", types: ["Container", "Divider", "Spacer"] },
-  { title: "Sales", types: ["Ways to pay", "Cards", "Figures", "Price card", "Price table", "FAQ", "Countdown", "Sticky bar", "HTML"] },
+  { title: "Sales", types: ["Ways to pay", "Cards", "Figures", "Schedule", "Price card", "Price table", "FAQ", "Countdown", "Sticky bar", "HTML"] },
   { title: "Storefront", types: ["Catalogue", "Memberships", "Featured"] },
   {
     title: "Checkout",
@@ -2235,6 +2306,7 @@ export const BLOCK_ICON: Record<BlockType, string> = {
   spacer: "M12 3 8 8h3v8H8l4 5 4-5h-3V8h3l-4-5Z",
   cards: "M3 5h8v6H3V5Zm10 0h8v6h-8V5ZM3 13h8v6H3v-6Zm10 0h8v6h-8v-6Z",
   stats: "M4 18h3V9H4v9Zm6.5 0h3V4h-3v14ZM17 18h3v-6h-3v6Z",
+  timeline: "M7 3h2v18H7V3Zm1 3a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm0 8a2 2 0 1 1 0 4 2 2 0 0 1 0-4Zm4-8h9v2h-9V6Zm0 8h9v2h-9v-2Z",
   pricing: "M3 5h18v2H3V5Zm0 4h18v10H3V9Zm2 2v6h14v-6H5Z",
   pricecard: "M4 5h16v3H4V5Zm0 5h16v9H4v-9Zm2 2v5h12v-5H6Z",
   faq: "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm1.7-6.2-.9.9c-.6.6-.8 1-.8 2.3h-2v-.5c0-1 .4-1.8 1-2.5l1.2-1.3c.4-.3.6-.8.6-1.3a2 2 0 1 0-4 0H8a4 4 0 1 1 8 0c0 .8-.3 1.6-.9 2.2Z",

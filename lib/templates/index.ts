@@ -21,6 +21,7 @@ import { template as confirmationBox } from "./confirmation-box";
 import { template as faqAccordion } from "./faq-accordion";
 import { template as faqOpenColumns } from "./faq-open-columns";
 import { template as curriculumDays } from "./curriculum-days";
+import { template as classSchedule } from "./class-schedule";
 import { template as bonusPanel } from "./bonus-panel";
 import { template as guaranteePanel } from "./guarantee-panel";
 import { template as howItWorksStages } from "./how-it-works-stages";
@@ -67,6 +68,7 @@ const BUILT_INS: Template[] = [
   faqAccordion,
   faqOpenColumns,
   curriculumDays,
+  classSchedule,
   bonusPanel,
   guaranteePanel,
   howItWorksStages,

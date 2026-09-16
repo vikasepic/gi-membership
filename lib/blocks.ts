@@ -28,6 +28,10 @@ export const BLOCK_TYPES = [
   // without blocks that hold them, moving to the builder would have quietly
   // flattened them into paragraphs.
   "stats",
+  // A dated list down a vertical line: a class schedule, a launch timeline.
+  // Its rail, its dot and its numbered column are one drawing, not three
+  // blocks in a row, which is why it cannot be composed from the others.
+  "timeline",
   "pricing",
   "faq",
   // A grid of titled cards. Decomposing these into heading + text blocks threw
@@ -637,6 +641,51 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     justifyItems: "",
   },
   stats: { items: [], layout: "strip", columns: 0 },
+  // Every figure is the reference design's own, measured off the live page:
+  // the rail 110px in, a 15px dot, a 50px numeral, an 85px rule. Colours are
+  // the design's too rather than null, because this block has no skin to
+  // fall back on — its parts are the design. Sizes are per device.
+  timeline: {
+    items: [],
+    rail: 110,
+    gap: 40,
+    numberWidth: 65,
+    numberTop: 12,
+    lineWidth: 1,
+    lineColor: "#000000",
+    dotSize: 15,
+    dotTop: 10,
+    dotColor: "#c8653d",
+    itemGap: 20,
+    eyebrowSize: 18,
+    eyebrowWeight: "700",
+    eyebrowFont: "",
+    eyebrowColor: "#000000",
+    numberSize: 50,
+    numberWeight: "700",
+    numberItalic: true,
+    numberFont: "",
+    numberColor: "#c8653d",
+    dateSize: 16,
+    dateWeight: "700",
+    dateItalic: false,
+    dateFont: "",
+    dateColor: "#000000",
+    titleSize: 20,
+    titleWeight: "500",
+    titleItalic: true,
+    titleFont: "",
+    titleColor: "#000000",
+    ruleWidth: 85,
+    ruleThickness: 1,
+    ruleColor: "#111111",
+    textSize: 16,
+    textWeight: "400",
+    textItalic: true,
+    textFont: "",
+    textColor: "#000000",
+    textLineHeight: 1.8,
+  },
   pricing: { items: [], highlightLast: true, totalLabel: "", totalAmount: "" },
   faq: { items: [], layout: "accordion" },
   // Everything after `note` is presentation with no value of its own: null
@@ -1010,6 +1059,14 @@ const STARTER_PROPS: Partial<Record<BlockType, Record<string, unknown>>> = {
     items: [
       { value: "00", label: "What this number counts", detail: "" },
       { value: "00", label: "What this number counts", detail: "" },
+    ],
+  },
+  timeline: {
+    // A placeholder date rather than a real Monday: a date that could pass
+    // for a session someone can turn up to is the wrong thing to ship.
+    items: [
+      { label: "Class", number: "01", date: "Day, Month 0", title: "What this session covers.", text: "One or two sentences on what they leave with." },
+      { label: "Class", number: "02", date: "Day, Month 0", title: "What this session covers.", text: "One or two sentences on what they leave with." },
     ],
   },
   pricing: {
@@ -2078,6 +2135,7 @@ export function blockRendersNothing(block: Block): boolean {
     case "iconlist":
     case "slides":
     case "stats":
+    case "timeline":
     case "faq":
     case "cards":
       return list(p.items) === 0;

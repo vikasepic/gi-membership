@@ -38,6 +38,7 @@ import {
   headingTag,
   softAccent,
   typographyCss,
+  timelineVars,
 } from "@/lib/block-style";
 import { imageSrc, type BandTheme } from "@/lib/page-sections";
 import { videoEmbed, type VideoSource } from "@/lib/video-embed";
@@ -1625,6 +1626,80 @@ function Inner({
           ))}
         </div>
         </>
+      );
+    }
+
+    case "timeline": {
+      const items = Array.isArray(p.items) ? (p.items as Record<string, unknown>[]) : [];
+      if (items.length === 0) return null;
+      // The face, weight, slant and ink of one of the five lines. Sizes are
+      // not here: they are per device and arrive as custom properties.
+      const line = (part: string): React.CSSProperties => ({
+        ...(str(p[`${part}Font`]) ? { fontFamily: familyToken(str(p[`${part}Font`])) } : {}),
+        ...(str(p[`${part}Weight`]) ? { fontWeight: Number(str(p[`${part}Weight`])) } : {}),
+        ...(bool(p[`${part}Italic`]) ? { fontStyle: "italic" } : {}),
+        ...(str(p[`${part}Color`]) ? { color: str(p[`${part}Color`]) } : {}),
+      });
+      // Inline only where a width is being drawn. On the live page the
+      // stylesheet holds them, so a phone's own numbers win by media query.
+      const vars = at ? (timelineVars(block, at) as React.CSSProperties) : undefined;
+      return (
+        <div className="relative" style={vars}>
+          <span
+            aria-hidden
+            className="absolute bottom-0 top-0"
+            style={{ left: "var(--tl-rail)", width: "var(--tl-line-w)", background: str(p.lineColor) || "currentColor" }}
+          />
+          <div className="grid" style={{ rowGap: "var(--tl-item-gap)" }}>
+            {items.map((it, i) => (
+              <div key={i} className="relative grid" style={{ gridTemplateColumns: "var(--tl-col) minmax(0,1fr)" }}>
+                <span
+                  aria-hidden
+                  className="absolute rounded-full"
+                  style={{
+                    left: "calc(var(--tl-rail) - var(--tl-dot) / 2)",
+                    top: "var(--tl-dot-top)",
+                    width: "var(--tl-dot)",
+                    height: "var(--tl-dot)",
+                    background: str(p.dotColor) || "currentColor",
+                  }}
+                />
+                <div className="text-center" style={{ paddingTop: "var(--tl-num-top)" }}>
+                  {str(it.label) && (
+                    <Inline as="span" className="block" style={{ fontSize: "var(--tl-eyebrow)", lineHeight: 1, ...line("eyebrow") }} html={str(it.label)} />
+                  )}
+                  {str(it.number) && (
+                    <Inline as="span" className="block" style={{ fontSize: "var(--tl-num)", lineHeight: 1.3, ...line("number") }} html={str(it.number)} />
+                  )}
+                </div>
+                <div style={{ paddingLeft: "calc(var(--tl-rail) + var(--tl-gap) - var(--tl-col))" }}>
+                  {str(it.date) && (
+                    <Inline as="div" style={{ margin: "8px 0 16px", fontSize: "var(--tl-date)", lineHeight: 1.2, ...line("date") }} html={str(it.date)} />
+                  )}
+                  {str(it.title) && (
+                    <Inline as="div" style={{ marginBottom: 16, fontSize: "var(--tl-title)", lineHeight: 1.4, ...line("title") }} html={str(it.title)} />
+                  )}
+                  {num(p.ruleWidth, 0) > 0 && (
+                    <hr
+                      style={{
+                        width: "var(--tl-rule-w)",
+                        height: num(p.ruleThickness, 1),
+                        border: 0,
+                        margin: "20px 0",
+                        background: str(p.ruleColor) || "currentColor",
+                      }}
+                    />
+                  )}
+                  {str(it.text) && (
+                    <div style={{ fontSize: "var(--tl-text)", lineHeight: num(p.textLineHeight, 1.8), whiteSpace: "pre-line", ...line("text") }}>
+                      {withLineBreaks(str(it.text))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       );
     }
 
