@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { planMoney } from "@/lib/plan-money";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getOfferById } from "@/lib/admin";
@@ -162,6 +163,7 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
         money={{
           priceLabel: view.nowLabel,
           termsLabel: view.termsLabel,
+          ...planMoney(offer),
           // The decline, drawn in the editor as the upsell will draw it.
           //
           // The live page supplies this, never the block — a sales page has

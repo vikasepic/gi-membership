@@ -729,6 +729,7 @@ function SectionPanel({
           }}
           onChange={(next) => setField("blocks", next)}
           preview={preview}
+          money={money}
           owner={owner}
           ownerOfferId={ownerOfferId}
           store={store}
@@ -787,6 +788,7 @@ function BlockCanvasField({
   section,
   onChange,
   preview,
+  money,
   owner,
   onSave,
   onPublish,
@@ -798,6 +800,7 @@ function BlockCanvasField({
   row: SectionRow;
   title: string;
   section: SectionEdit;
+  money: PageMoney;
   onChange: (next: Block[]) => void;
   preview?: SitePreview;
   /** Passed through to the tray: the storefront blocks are one page's only. */
@@ -891,6 +894,7 @@ function BlockCanvasField({
           onPreview={onPreview}
           lastSavedAt={lastSavedAt}
           preview={preview}
+          money={money}
           store={store}
           owner={owner}
           ownerOfferId={ownerOfferId}

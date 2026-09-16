@@ -70,3 +70,22 @@ describe("a template preview always shows the design", () => {
     expect(box.style.height).toBe("240px");
   });
 });
+
+describe("a design built on the offer's money", () => {
+  it("still shows its price card on the shelf", () => {
+    // The investment panel's card has a blank price so a page draws the
+    // offer's own; the shelf has no offer, and the card vanished from the
+    // preview. Sample figures stand in until it is on a page.
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const r = createRoot(host);
+    const t = listTemplates().find((x) => x.id === "investment-panel")!;
+    act(() => {
+      r.render(<TemplatePreview template={t} theme={bandTheme("paper")} height={300} />);
+    });
+    expect(host.textContent).toContain("Join The Waitlist");
+    expect(host.textContent).toContain("$997");
+    act(() => r.unmount());
+    host.remove();
+  });
+});

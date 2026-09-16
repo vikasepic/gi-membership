@@ -141,6 +141,7 @@ export function BlockEditor({
   theme,
   title,
   section,
+  money,
   onChange,
   onClose,
   onSave,
@@ -194,6 +195,14 @@ export function BlockEditor({
    * thing you were judging the colour against.
    */
   section?: SectionEdit;
+  /**
+   * The page's own money — its price, terms, compare-at and plan.
+   *
+   * Without it a price card left blank (the right way to build one: the
+   * figure is the offer's) drew nothing in this canvas, because the only
+   * money here was the per-offer list the Sells picker uses.
+   */
+  money?: BlockMoney;
   onChange: (next: Block[]) => void;
   onClose: () => void;
   /**
@@ -821,8 +830,8 @@ export function BlockEditor({
         buyHref: `/checkout/offer?offer=${o.id}`,
       };
     }
-    return { byOffer };
-  }, [offerOptions]);
+    return { ...money, byOffer };
+  }, [offerOptions, money]);
 
   const overlay = (
     <CanvasDevice.Provider value={device}>

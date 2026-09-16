@@ -21,6 +21,21 @@ const PREVIEW_WIDTH = BAND_WIDTH;
  * is the whole point — fitting the width alone is what cropped every design
  * taller than its tile and showed the top of a design instead of the design.
  */
+/**
+ * Stand-in figures for the shelf.
+ *
+ * A price card is built with its price blank so it draws the offer's own,
+ * and until the design sits on a page there is no offer. Without these the
+ * library showed the investment panel as a list beside an empty column.
+ * Sample money, never anybody's: the page supplies the real figures.
+ */
+const SAMPLE_MONEY = {
+  priceLabel: "$497",
+  compareAtLabel: "$997",
+  planLabel: "3 monthly payments of $199",
+  trialLabel: "7 days",
+};
+
 export function TemplatePreview({
   template,
   theme,
@@ -123,7 +138,7 @@ export function TemplatePreview({
           className={`${PREVIEW_SCOPE} @container pointer-events-none`}
           style={{ ...pad, color: previewTheme.fg }}
         >
-          <Blocks blocks={template.blocks} theme={previewTheme} at="desktop" />
+          <Blocks blocks={template.blocks} theme={previewTheme} at="desktop" money={SAMPLE_MONEY} />
         </div>
       </div>
     </div>
