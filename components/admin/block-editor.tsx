@@ -107,6 +107,7 @@ const CanvasStore = createContext<StoreRender | undefined>(undefined);
  */
 export type GlobalIndex = Map<string, { name: string; blocks: Block[] }>;
 const Globals = createContext<GlobalIndex>(new Map());
+import { cssAtDevice } from "@/lib/css-at-device";
 import { backgroundCss, blockClass, blockCssAt, blockCustomRules, blockTextRules, columnCss, columnOwnWidth, effectiveWidths, mobilePaddingNotice, rowIsGrid, rowLayout, stacksAt } from "@/lib/block-style";
 import { imageSrc, normalizeSectionLayout, sectionBox,
   sectionAt,
@@ -253,7 +254,9 @@ export function BlockEditor({
         ? [
             preview.fontCss,
             siteTypographyCssAt(preview.typography, device, `.${PREVIEW_SCOPE}`),
-            preview.pageCss ? inlineCss(preview.pageCss) : "",
+            // Its media queries answered for the width being drawn — see
+            // cssAtDevice. Left as written, a phone rule never fires here.
+            preview.pageCss ? inlineCss(cssAtDevice(preview.pageCss, device)) : "",
           ]
             .filter(Boolean)
             .join("\n")
@@ -1109,7 +1112,6 @@ export function BlockEditor({
               rules — this overlay is portalled to the end of the body — so
               while the builder is open its width is the one that wins. The
               preview underneath it is covered anyway. */}
-          {previewCss && <style dangerouslySetInnerHTML={{ __html: previewCss }} />}
           {/* @container, because the page has one and the canvas did not.
               A cards grid is `grid-cols-1 @xl:grid-cols-[var(--cards)]`, and a
               container query with no container ancestor never matches — so the
@@ -1209,6 +1211,10 @@ export function BlockEditor({
           </div>
           </div>
           </CanvasFrame>
+          {/* After every block's own rules, as the page puts it after every
+              section's: a rule someone wrote to override a band's `!important`
+              background has to come later in the sheet to win. */}
+          {previewCss && <style dangerouslySetInnerHTML={{ __html: previewCss }} />}
         </div>
 
         {/* Inspector */}
@@ -1422,7 +1428,13 @@ export function BlockEditor({
                 {section.controls.map((c) =>
                   isGroup(c) ? null : (
                     <ControlField
-                      key={`${c.kind}:${c.key}`}
+                      // The block's id in the key, so moving between two
+                      // blocks of the same type remounts every control. The
+                      // rich text editor takes its words once, on mount:
+                      // keyed by kind alone it kept the previous block's
+                      // paragraph on screen after the click, and the next
+                      // keystroke wrote that paragraph into the new block.
+                      key={`${selected.id}:${c.kind}:${c.key}`}
                       control={c}
                       block={selected}
                       device={device}
@@ -1726,7 +1738,7 @@ function CanvasBlock({
   // the flat band accent in the builder and as the gradient to a buyer. The
   // canvas exists to be what the page is; a rule it silently drops is the one
   // thing it may not do.
-  const textRules = blockTextRules(block, device) + blockCustomRules(block);
+  const textRules = blockTextRules(block, device) + cssAtDevice(blockCustomRules(block), device);
   // The element the guide measures — held in state, not a ref, because a ref
   // filled in after the first paint never tells anybody it happened. The
   // callback is stable so React attaches it once rather than on every render.

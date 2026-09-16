@@ -39,6 +39,10 @@ import {
   softAccent,
   typographyCss,
   timelineVars,
+  deviceVars,
+  anyDeviceSets,
+  PRICING_VARS,
+  PRICECARD_VARS,
 } from "@/lib/block-style";
 import { imageSrc, type BandTheme } from "@/lib/page-sections";
 import { videoEmbed, type VideoSource } from "@/lib/video-embed";
@@ -109,6 +113,14 @@ export type BlockMoney = {
    */
   altPriceLabel?: string | null;
   altTermsLabel?: string | null;
+  /**
+   * The struck-through figure, from the offer's own compare-at price. Passed
+   * in for the same reason the price is: a "$997" typed into a card outlives
+   * the price it was mocking.
+   */
+  compareAtLabel?: string | null;
+  /** "3 monthly payments of $199" — the offer's payment plan, when it has one. */
+  planLabel?: string | null;
   /** "7 days" — derived from the offer, so changing the trial changes the page. */
   trialLabel?: string | null;
   /**
@@ -1790,8 +1802,32 @@ function Inner({
       // with what the card charges.
       const ourAmount = (i: number, typed: string) =>
         highlight && i === items.length - 1 && !typed ? str(money?.priceLabel) : typed;
+      // Everything below is null until somebody sets it, and a null adds
+      // nothing to the markup — a table saved before these controls existed
+      // renders byte for byte what it always did. Sizes and paddings are per
+      // device and reach the page as custom properties; see deviceVars.
+      const sized = (key: string, v: string) => (anyDeviceSets(block, key) ? { fontSize: `var(${v})` } : {});
+      const face = (key: string) => (str(p[key]) ? { fontFamily: familyToken(str(p[key])) } : {});
+      const bold = (key: string) => (str(p[key]) ? { fontWeight: Number(str(p[key])) } : {});
+      const ink = (key: string) => (str(p[key]) ? { color: str(p[key]) } : {});
+      const own = (css: React.CSSProperties) => (Object.keys(css).length ? css : undefined);
+      const labelType = own({ ...face("labelFont"), ...sized("labelSize", "--pt-label"), ...bold("labelWeight"), ...ink("labelColor") });
+      const amountType = own({ ...face("amountFont"), ...sized("amountSize", "--pt-amount"), ...bold("amountWeight"), ...ink("amountColor") });
+      const padded = anyDeviceSets(block, "rowPadY") || anyDeviceSets(block, "rowPadX");
+      const rowPad = padded ? { padding: "var(--pt-pad-y, 12px) var(--pt-pad-x, 16px)" } : {};
+      const rule = `${num(p.ruleWidth, 1)}px solid ${str(p.ruleColor) || c.rule}`;
+      const head = str(p.headLabel) || str(p.headAmount);
+      const headType = own({ ...face("headFont"), ...sized("headSize", "--pt-head"), ...(p.headSize == null ? {} : { lineHeight: 1.2 }), ...ink("headColor") });
+      const totalType = { ...face("totalFont"), ...bold("totalWeight"), ...ink("totalColor") };
+      const vars = at ? (deviceVars(block, at, PRICING_VARS) as React.CSSProperties) : undefined;
       return (
-        <div className="flex flex-col">
+        <div className="flex flex-col" style={vars}>
+          {head && (
+            <div className="flex items-baseline gap-3 px-4 py-3 font-display font-bold" style={{ color: c.fg, ...rowPad, ...headType }}>
+              <span><Inline html={str(p.headLabel)} /></span>
+              <span className="ml-auto" style={own(ink("headAmountColor"))}><Inline html={str(p.headAmount)} /></span>
+            </div>
+          )}
           {items.map((it, i) => {
             const ours = highlight && i === items.length - 1;
             return (
@@ -1799,26 +1835,27 @@ function Inner({
                 key={i}
                 className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3"
                 style={{
-                  borderTop: i ? `1px solid ${c.rule}` : undefined,
+                  borderTop: i || head ? rule : undefined,
                   background: ours ? c.fill : undefined,
                   borderRadius: ours ? 12 : undefined,
                   color: c.fg,
                   ...type,
+                  ...rowPad,
                 }}
               >
-                <span className={ours ? "font-semibold" : undefined}><Inline html={str(it.label)} /></span>
+                <span className={ours ? "font-semibold" : undefined} style={labelType}><Inline html={str(it.label)} /></span>
                 {str(it.note) && <span className="text-[0.8rem]" style={{ color: theme.muted }}>{str(it.note)}</span>}
-                <span className="ml-auto font-display font-bold">{ourAmount(i, str(it.amount))}</span>
+                <span className="ml-auto font-display font-bold" style={amountType}>{ourAmount(i, str(it.amount))}</span>
               </div>
             );
           })}
           {(str(p.totalLabel) || str(p.totalAmount)) && (
             <div
               className="flex items-baseline gap-3 px-4 py-3 font-display font-bold"
-              style={{ borderTop: `2px solid ${c.rule}`, color: c.fg }}
+              style={{ borderTop: `${num(p.totalRuleWidth, 2)}px solid ${str(p.ruleColor) || c.rule}`, color: c.fg, ...rowPad, ...totalType }}
             >
-              <span>{str(p.totalLabel)}</span>
-              <span className="ml-auto">{str(p.totalAmount)}</span>
+              <span style={own({ ...sized("totalLabelSize", "--pt-total-label"), ...(p.totalLabelSize == null ? {} : { lineHeight: 1.2 }) })}>{str(p.totalLabel)}</span>
+              <span className="ml-auto" style={own({ ...sized("totalAmountSize", "--pt-total-amount"), ...(p.totalAmountSize == null ? {} : { lineHeight: 1.2 }) })}>{str(p.totalAmount)}</span>
             </div>
           )}
         </div>
@@ -1891,6 +1928,7 @@ function Inner({
       const altPrice = str(p.altPrice) || str(money?.altPriceLabel) || "";
       const altPeriod = str(p.altPeriod) || str(money?.altTermsLabel) || "";
       if (!price) return null;
+      if (str(p.skin) === "panel") return <PricePanel block={block} p={p} at={at} money={money} cta={cta} theme={theme} colors={c} price={price} period={period} altPrice={altPrice} altPeriod={altPeriod} />;
       const ink = readableOn(c.fill);
       return (
         <div className="text-center" style={{ background: c.fill, color: ink, borderRadius: 20, padding: "1.9rem 1.6rem" }}>
@@ -1970,6 +2008,189 @@ function Inner({
       );
     }
   }
+}
+
+/**
+ * The two-tone price panel: a tab on the top edge, a title, the regular price
+ * struck through, a labelled price with its terms under it, and the button on
+ * a darker footer that runs to the card's own edges.
+ *
+ * Its own component rather than branches inside the classic card, so the
+ * classic markup — which every price card on every live page draws — stays
+ * exactly what it was. Sizes are per device and arrive as custom properties;
+ * see PRICECARD_VARS. Colours and faces are inline: a card is one colour on
+ * every device.
+ */
+function PricePanel({
+  block,
+  p,
+  at,
+  money,
+  cta,
+  theme,
+  colors,
+  price,
+  period,
+  altPrice,
+  altPeriod,
+}: {
+  block: Block;
+  p: Record<string, unknown>;
+  at?: Device;
+  money?: BlockMoney;
+  cta?: CtaRender;
+  theme: BandTheme;
+  colors: ReturnType<typeof blockColors>;
+  price: string;
+  period: string;
+  altPrice: string;
+  altPeriod: string;
+}) {
+  const fill = str(p.cardColor) || colors.fill;
+  const ink = readableOn(fill);
+  const sized = (key: string, v: string) => (anyDeviceSets(block, key) ? { fontSize: `var(${v})` } : {});
+  const face = (key: string) => (str(p[key]) ? { fontFamily: familyToken(str(p[key])) } : {});
+  const bold = (key: string) => (str(p[key]) ? { fontWeight: Number(str(p[key])) } : {});
+  const inkOf = (key: string) => (str(p[key]) ? { color: str(p[key]) } : {});
+  const part = (name: string, v: string): React.CSSProperties => ({
+    ...face(`${name}Font`),
+    ...sized(`${name}Size`, v),
+    ...bold(`${name}Weight`),
+    ...inkOf(`${name}Color`),
+  });
+  // Blank means the offer's own, like the price. The plan is the offer's
+  // real instalments — "3 monthly payments of $199" — so the line cannot
+  // promise a plan the checkout does not offer.
+  const compare = str(p.comparePrice) || str(money?.compareAtLabel) || "";
+  const alt = altPrice || str(money?.planLabel) || "";
+  const pad = padSides(p.cardPadding, { t: 30, r: 26, b: 26, l: 26 });
+  const radius = anyDeviceSets(block, "cardRadius") ? "var(--pc-radius)" : 20;
+  const badgeFill = str(p.badgeBg) || colors.accent;
+  const badge = str(p.badge) ? (
+    <span
+      className={
+        str(p.badgePlace) === "top"
+          ? "absolute left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-semibold"
+          : "mt-2 inline-block font-semibold"
+      }
+      style={{
+        background: badgeFill,
+        color: str(p.badgeColor) || readableOn(badgeFill),
+        borderRadius: 999,
+        padding: str(p.badgePlace) === "top" ? "8px 18px" : "0.16rem 0.6rem",
+        fontSize: anyDeviceSets(block, "badgeSize") ? "var(--pc-badge)" : "0.7rem",
+        lineHeight: 1.4,
+        ...(bool(p.badgeUpper) ? { textTransform: "uppercase" } : {}),
+        ...face("badgeFont"),
+        ...bold("badgeWeight"),
+      }}
+    >
+      {str(p.badge)}
+    </span>
+  ) : null;
+  const footerFill = str(p.footerColor);
+  const fpad = padSides(p.footerPadding, { t: 16, r: 20, b: 16, l: 20 });
+  const vars = at ? (deviceVars(block, at, PRICECARD_VARS) as React.CSSProperties) : undefined;
+  const button = str(p.ctaLabel) && (
+    <div data-pc-cta className="flex justify-center">
+      {cta ? (
+        cta(str(p.ctaLabel), theme)
+      ) : (
+        <span
+          className="inline-block px-7 py-3 font-display text-[0.95rem] font-semibold"
+          style={{ background: colors.accent, color: readableOn(colors.accent), borderRadius: 999 }}
+        >
+          {str(p.ctaLabel)}
+        </span>
+      )}
+    </div>
+  );
+  const notes = (
+    <>
+      {fillTokens(str(p.note), money) && (
+        <p className="mt-3 leading-snug" style={{ fontSize: "0.76rem", opacity: str(p.noteColor) ? 1 : 0.75, ...part("note", "--pc-note") }}>
+          {fillTokens(str(p.note), money)}
+        </p>
+      )}
+      {str(p.secureNote) && <p className="mt-2 text-[0.68rem]" style={{ opacity: 0.6 }}>{str(p.secureNote)}</p>}
+    </>
+  );
+  return (
+    <div
+      className="relative text-center"
+      style={{
+        background: fill,
+        color: ink,
+        borderRadius: radius,
+        padding: `${pad.t}px ${pad.r}px ${footerFill ? 0 : pad.b}px ${pad.l}px`,
+        ...vars,
+      }}
+    >
+      {str(p.badgePlace) === "top" && badge}
+      {str(p.title) && (
+        <div className="font-display font-semibold" style={{ marginBottom: 24, lineHeight: 1.25, whiteSpace: "pre-line", ...part("title", "--pc-title") }}>
+          {withLineBreaks(str(p.title))}
+        </div>
+      )}
+      {str(p.eyebrow) && (
+        <div className="text-[0.68rem] uppercase tracking-[0.13em]" style={{ opacity: str(p.labelColor) ? 1 : 0.72, ...part("label", "--pc-label") }}>
+          {str(p.eyebrow)}
+        </div>
+      )}
+      {str(p.compareLabel) && compare && (
+        <div style={{ marginBottom: 16 }}>
+          <div className="font-display font-semibold" style={{ ...part("label", "--pc-label"), ...sized("compareLabelSize", "--pc-compare-label") }}>
+            {str(p.compareLabel)}
+          </div>
+          <s className="font-display font-bold" style={{ fontSize: "1.6rem", lineHeight: 1.2, ...part("compare", "--pc-compare") }}>{compare}</s>
+        </div>
+      )}
+      {str(p.priceLabel) && (
+        <div className="font-display font-semibold" style={part("label", "--pc-label")}>{str(p.priceLabel)}</div>
+      )}
+      <div className="font-display font-bold" style={{ fontSize: "2.4rem", lineHeight: 1.2, ...part("price", "--pc-price") }}>{price}</div>
+      {period && <div style={{ marginTop: 4, ...part("terms", "--pc-terms") }}>{period}</div>}
+      {alt && (
+        <div style={{ ...part("terms", "--pc-terms"), ...(p.altItalic === false ? {} : { fontStyle: "italic" }) }}>
+          {[str(p.altPrefix), `${alt}${altPeriod}`].filter(Boolean).join(" ")}
+        </div>
+      )}
+      {money?.dueNowLabel && money.dueNowLabel !== price && (
+        <div className="mt-1 text-[0.8rem]" style={{ opacity: 0.8 }}>
+          {money.dueNowLabel} today
+        </div>
+      )}
+      {str(p.badgePlace) !== "top" && badge}
+      {footerFill ? (
+        <div
+          style={{
+            background: footerFill,
+            margin: `20px -${pad.r}px 0 -${pad.l}px`,
+            padding: `${fpad.t}px ${fpad.r}px ${fpad.b}px ${fpad.l}px`,
+            borderRadius: `0 0 ${typeof radius === "number" ? `${radius}px` : radius} ${typeof radius === "number" ? `${radius}px` : radius}`,
+          }}
+        >
+          {button}
+          {notes}
+        </div>
+      ) : (
+        <>
+          {button && <div className="mt-4">{button}</div>}
+          {notes}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Four sides from a padding control's value — a number, a Dim, or nothing. */
+function padSides(v: unknown, fallback: { t: number; r: number; b: number; l: number }) {
+  if (typeof v === "number" && Number.isFinite(v)) return { t: v, r: v, b: v, l: v };
+  if (v && typeof v === "object") {
+    const d = v as Record<string, unknown>;
+    return { t: num(d.t, fallback.t), r: num(d.r, fallback.r), b: num(d.b, fallback.b), l: num(d.l, fallback.l) };
+  }
+  return fallback;
 }
 
 /**

@@ -211,7 +211,6 @@ export function SalesPage({
   const snippets = settings?.snippets ?? [];
   return (
     <div>
-      {css && <style dangerouslySetInnerHTML={{ __html: inlineCss(css) }} />}
       {/* `head` first: React lifts these out of here into the document head,
           so a verification meta or a vendor loader lands where it belongs even
           though it was written against one page. */}
@@ -220,6 +219,11 @@ export function SalesPage({
       {ordered.map((row) => (
         <SectionBand key={row.sectionKey} row={row} money={money} cta={cta} globals={globals} />
       ))}
+      {/* After every section's own rules. A band's per-device background is
+          written `!important` on `#section-…`, and so is the page CSS people
+          write to override it; at equal weight and specificity the later one
+          wins, and the page's own CSS is the one that must. */}
+      {css && <style dangerouslySetInnerHTML={{ __html: inlineCss(css) }} />}
       <CodeSnippets snippets={snippets} place="bodyEnd" onCheckout={false} />
       {/* Last, so it runs against a page that exists. `</` is treated by the
           same pair that treats the site-wide custom code — see `inlineCss`. */}

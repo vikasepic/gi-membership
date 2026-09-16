@@ -374,3 +374,21 @@ old name), and the first phase must carry the `start_date` the schedule
 built `from_subscription` reports. And `refundOrder` returns early for an
 order with no payment intent, which is every subscription order, so
 anything a refund must always do has to run on that branch too.
+
+## Page code publishes with "Publish page", and the canvas answers media queries itself (16 Sep 2026)
+
+"The custom CSS is not working" was three things. The CSS was a draft:
+page settings save as a draft like every section, and a section's own
+Publish leaves them where they are — only "Publish page" sends page code
+live, so the settings row now wears a Draft tag. In the canvas, a
+`@media (max-width: 640px)` block can never fire: the canvas is a 390px
+column in a wide window and the query asks the window, so `cssAtDevice`
+resolves page CSS for the device being drawn, the way every per-device value
+the builder owns is inlined. And a band's per-device background is written
+`!important` on `#section-…`, the same weight people reach for to override
+it, so the page's CSS is now emitted after every section's rules — later
+wins at equal weight. Block-level Custom CSS goes through the same resolver.
+
+Also: keying inspector controls by kind alone reused one mounted rich text
+editor across two text blocks, which showed the previous block's words and
+wrote them into the new one on the next keystroke. Key by the block's id.

@@ -4,6 +4,7 @@ import { familyToken } from "@/lib/fonts-catalogue";
 import { imageSrc, type BandTheme } from "@/lib/page-sections";
 import {
   DEVICE_MAX,
+  DEVICES,
   baseStyle,
   columnAsBlock,
   columnWidths,
@@ -1011,7 +1012,9 @@ export function blockRules(block: Block, theme: BandTheme): string {
 
   if (block.type === "row") out.push(...rowRules(block, sel, theme));
   if (block.type === "cards" || block.type === "stats") out.push(...cardsRules(block, sel));
-  if (block.type === "timeline") out.push(...timelineRules(block, sel));
+  if (block.type === "timeline") out.push(...deviceVarRules(block, sel, TIMELINE_VARS));
+  if (block.type === "pricing") out.push(...deviceVarRules(block, sel, PRICING_VARS));
+  if (block.type === "pricecard") out.push(...deviceVarRules(block, sel, PRICECARD_VARS), ...pricecardButtonRules(block, sel));
 
   // After the frame and the per-device boxes, so `display:none` wins on source
   // order against whatever `display` those set — and before the custom CSS,
@@ -1231,15 +1234,57 @@ export function softAccent(theme: BandTheme, alpha = 0.1): string {
 }
 
 /**
- * The schedule's measurements, as custom properties.
+ * A block's per-device numbers, as custom properties.
  *
- * Every length the block draws with — where the line runs, how big the dot
- * is, each line's type size — is per device, and the renderer's markup reads
- * them all through `var(--tl-…)`. The values live in the stylesheet so a
- * phone's own numbers win by media query; the builder canvas sets the same
- * names inline for the width it is drawing, the way the cards track does.
+ * Every length a block draws with — where a line runs, a dot's size, each
+ * line's type — can be per device, and the renderer's markup reads each
+ * through `var(--…)`. The values live in the stylesheet so a phone's own
+ * numbers win by media query; the builder canvas sets the same names inline
+ * for the width it is drawing, the way the cards track does.
+ *
+ * A null value emits no property at all, so a part nobody has sized keeps
+ * whatever the markup gives it — and the renderer only reaches for the
+ * variable when some device has set it; see `anyDeviceSets`.
  */
-const TIMELINE_VARS: [string, string][] = [
+export type VarMap = readonly (readonly [string, string])[];
+
+export function deviceVars(block: Block, device: Device, map: VarMap): Record<string, string> {
+  const p = propsFor(block, device);
+  const out: Record<string, string> = {};
+  for (const [v, k] of map) {
+    const n = p[k];
+    if (typeof n === "number" && Number.isFinite(n)) out[v] = `${n}px`;
+  }
+  return out;
+}
+
+/** Whether any width sets this prop — the sign the markup should read it as a variable. */
+export function anyDeviceSets(block: Block, key: string): boolean {
+  return DEVICES.some((d) => {
+    const n = propsFor(block, d)[key];
+    return typeof n === "number" && Number.isFinite(n);
+  });
+}
+
+const declare = (vars: Record<string, string>) =>
+  Object.entries(vars)
+    .map(([k, v]) => `${k}:${v}`)
+    .join(";");
+
+export function deviceVarRules(block: Block, sel: string, map: VarMap): string[] {
+  let wider = deviceVars(block, "desktop", map);
+  const out = Object.keys(wider).length > 0 ? [`${sel}{${declare(wider)}}`] : [];
+  for (const device of ["tablet", "mobile"] as const) {
+    const here = deviceVars(block, device, map);
+    const changed = Object.fromEntries(Object.entries(here).filter(([k, v]) => wider[k] !== v));
+    if (Object.keys(changed).length > 0) out.push(`@media (max-width:${DEVICE_MAX[device]}px){${sel}{${declare(changed)}}}`);
+    wider = here;
+  }
+  return out;
+}
+
+/** The schedule: all of these are numbers by default, so every one is always emitted. */
+export const TIMELINE_VARS: VarMap = [
   ["--tl-rail", "rail"],
   ["--tl-gap", "gap"],
   ["--tl-col", "numberWidth"],
@@ -1257,25 +1302,58 @@ const TIMELINE_VARS: [string, string][] = [
 ];
 
 export function timelineVars(block: Block, device: Device): Record<string, string> {
-  const p = propsFor(block, device);
-  return Object.fromEntries(
-    TIMELINE_VARS.map(([v, k]) => [v, `${typeof p[k] === "number" && Number.isFinite(p[k]) ? p[k] : 0}px`]),
-  );
+  return deviceVars(block, device, TIMELINE_VARS);
 }
 
-const declare = (vars: Record<string, string>) =>
-  Object.entries(vars)
-    .map(([k, v]) => `${k}:${v}`)
-    .join(";");
+/** The price table. Null by default, so nothing is emitted until somebody sets one. */
+export const PRICING_VARS: VarMap = [
+  ["--pt-head", "headSize"],
+  ["--pt-label", "labelSize"],
+  ["--pt-amount", "amountSize"],
+  ["--pt-total-label", "totalLabelSize"],
+  ["--pt-total-amount", "totalAmountSize"],
+  ["--pt-pad-y", "rowPadY"],
+  ["--pt-pad-x", "rowPadX"],
+];
 
-function timelineRules(block: Block, sel: string): string[] {
-  let wider = timelineVars(block, "desktop");
-  const out = [`${sel}{${declare(wider)}}`];
-  for (const device of ["tablet", "mobile"] as const) {
-    const here = timelineVars(block, device);
-    const changed = Object.fromEntries(Object.entries(here).filter(([k, v]) => wider[k] !== v));
-    if (Object.keys(changed).length > 0) out.push(`@media (max-width:${DEVICE_MAX[device]}px){${sel}{${declare(changed)}}}`);
-    wider = here;
-  }
-  return out;
+/** The price card's panel skin. */
+export const PRICECARD_VARS: VarMap = [
+  ["--pc-badge", "badgeSize"],
+  ["--pc-title", "titleSize"],
+  ["--pc-label", "labelSize"],
+  ["--pc-compare-label", "compareLabelSize"],
+  ["--pc-compare", "compareSize"],
+  ["--pc-price", "priceSize"],
+  ["--pc-terms", "termsSize"],
+  ["--pc-note", "noteSize"],
+  ["--pc-radius", "cardRadius"],
+  ["--pc-btn", "buttonSize"],
+  ["--pc-btn-radius", "buttonRadius"],
+  ["--pc-btn-x", "buttonPadX"],
+  ["--pc-btn-y", "buttonPadY"],
+];
+
+/**
+ * The panel's button, styled from outside.
+ *
+ * The button itself is the page's real buy control, rendered by the page and
+ * handed in — the card cannot restyle it inline without owning the checkout
+ * link. So the card marks where it put it and this rule reaches in. It beats
+ * the control's own utility classes on specificity alone.
+ */
+function pricecardButtonRules(block: Block, sel: string): string[] {
+  if (block.props.skin !== "panel") return [];
+  const p = block.props;
+  const str = (v: unknown) => (typeof v === "string" ? v : "");
+  const decl: string[] = [];
+  if (str(p.buttonColor)) decl.push(`background:${str(p.buttonColor)}`);
+  if (str(p.buttonInk)) decl.push(`color:${str(p.buttonInk)}`);
+  if (str(p.buttonFont)) decl.push(`font-family:${familyToken(str(p.buttonFont))}`);
+  if (str(p.buttonWeight)) decl.push(`font-weight:${str(p.buttonWeight)}`);
+  if (anyDeviceSets(block, "buttonSize")) decl.push("font-size:var(--pc-btn)");
+  if (anyDeviceSets(block, "buttonRadius")) decl.push("border-radius:var(--pc-btn-radius)");
+  if (anyDeviceSets(block, "buttonPadX") || anyDeviceSets(block, "buttonPadY"))
+    decl.push("padding:var(--pc-btn-y, 0.75rem) var(--pc-btn-x, 1.75rem)");
+  if (decl.length === 0) return [];
+  return [`${sel} [data-pc-cta] a,${sel} [data-pc-cta] > span{${decl.join(";")}}`];
 }

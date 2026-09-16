@@ -75,6 +75,26 @@ describe("editing in the canvas", () => {
     expect(document.body.textContent ?? "").not.toContain("Select a block to edit it.");
   });
 
+  it("shows the words of the block you clicked, not the one before it", () => {
+    // Reported 16 Sep 2026 in a four-card section: click the description
+    // beside "Bonus 02" and the panel still read "Bonus 02". The rich text
+    // editor takes its content once, on mount, and two text blocks in a row
+    // reused the same mounted editor — so the next keystroke wrote the first
+    // block's paragraph into the second.
+    document.body.innerHTML = "";
+    const a = { ...newBlock("text"), props: { html: "<p>Bonus 02</p>" } };
+    const b = { ...newBlock("text"), props: { html: "<p>Twenty daily prompts.</p>" } };
+    mount([a, b]);
+    const p = (t: string) => [...document.querySelectorAll("p")].find((x) => x.textContent === t)!;
+    click(p("Bonus 02"));
+    // The inspector's editor, whichever surface it is on.
+    const field = () => [...document.querySelectorAll(".ProseMirror")].map((x) => (x as HTMLElement).textContent ?? "").join("|");
+    expect(field()).toContain("Bonus 02");
+    click(p("Twenty daily prompts."));
+    expect(field()).toContain("Twenty daily prompts.");
+    expect(field()).not.toContain("Bonus 02");
+  });
+
   it("becomes editable once selected, and saves what you type", () => {
     document.body.innerHTML = "";
     const h = { ...newBlock("heading"), props: { text: "Before", tag: "h2" } };

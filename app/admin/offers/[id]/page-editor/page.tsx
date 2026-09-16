@@ -107,6 +107,18 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
               .filter(Boolean)
               .join(" · ")}
           </span>
+          {/* Page code and SEO save as a draft like everything else, and only
+              "Publish page" moves them — a section's own Publish leaves them
+              where they are. Without this the only sign was a count in the
+              bar, and CSS that "did not work" was CSS nobody had published. */}
+          {settings.hasDraft && (
+            <span
+              className="shrink-0 rounded bg-primary/10 px-1 text-[0.62rem] font-medium text-primary"
+              title="Saved, not published. Publish page sends it live."
+            >
+              Draft
+            </span>
+          )}
         </summary>
         <div className="flex flex-col gap-3 border-t border-border p-3">
           {/* Editable, not just copyable. The address used to be read-only

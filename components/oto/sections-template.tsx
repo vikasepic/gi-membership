@@ -6,6 +6,7 @@ import { livePrices } from "@/lib/offer-prices";
 import { hasBuyAnchorBlock, hasStickyBarBlock, type SectionRow } from "@/lib/page-sections";
 import type { GlobalBlocks } from "@/lib/section-to-blocks";
 import { money } from "@/lib/money";
+import { planMoney } from "@/lib/plan-money";
 
 /**
  * The upsell page, rendered from the ten sections.
@@ -67,6 +68,7 @@ export async function SectionsOto({
           // cannot advertise one figure while the button charges another.
           altPriceLabel: alt ? money(alt.priceCents, alt.currency) : null,
           altTermsLabel: alt?.interval ? `/${alt.interval}` : null,
+          ...planMoney(offer),
           trialLabel: offer.trialDays ? `${offer.trialDays} days` : null,
           // The offer's real prices, and the offers any block on this page
           // names. Without them a Ways to pay block here says the offer has no

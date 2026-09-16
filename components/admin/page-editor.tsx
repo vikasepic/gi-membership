@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { cssAtDevice } from "@/lib/css-at-device";
 import { saveSectionAction, publishPageAction, discardDraftAction } from "@/app/admin/pages/actions";
 import { usePresence, PresenceNote } from "@/components/admin/presence";
 import type { StoreRender } from "@/components/page/storefront-blocks";
@@ -119,7 +120,7 @@ export function PageEditor({
         ? [
             preview.fontCss,
             siteTypographyCssAt(preview.typography, device, `.${PREVIEW_SCOPE}`),
-            preview.pageCss ? inlineCss(preview.pageCss) : "",
+            preview.pageCss ? inlineCss(cssAtDevice(preview.pageCss, device)) : "",
           ]
             .filter(Boolean)
             .join("\n")

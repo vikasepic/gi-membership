@@ -77,7 +77,7 @@ describe("the page-level warnings and helpers", () => {
     // Seen 16 Sep 2026: a rule written in Page settings showed on the live
     // page and nowhere in the editor, which read as "custom CSS not working".
     has("pageCss: settings.customCss");
-    has("inlineCss(preview.pageCss)");
+    has("inlineCss(cssAtDevice(preview.pageCss, device))");
   });
 
   it("still switches the preview between devices", () => {
