@@ -108,7 +108,9 @@ const CanvasStore = createContext<StoreRender | undefined>(undefined);
 export type GlobalIndex = Map<string, { name: string; blocks: Block[] }>;
 const Globals = createContext<GlobalIndex>(new Map());
 import { backgroundCss, blockClass, blockCssAt, blockCustomRules, blockTextRules, columnCss, columnOwnWidth, effectiveWidths, mobilePaddingNotice, rowIsGrid, rowLayout, stacksAt } from "@/lib/block-style";
-import { imageSrc, normalizeSectionLayout, sectionBox } from "@/lib/page-sections";
+import { imageSrc, normalizeSectionLayout, sectionBox,
+  sectionAt,
+} from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
 import { PREVIEW_SCOPE, inlineCss, siteTypographyCssAt, type SitePreview } from "@/lib/site-typography";
 
@@ -259,9 +261,12 @@ export function BlockEditor({
     [preview, device],
   );
   const sectionBackdrop = useMemo(() => {
-    const bg = section?.background;
-    return bg && bg.type !== "none" ? backgroundCss(normalizeBackground(bg), theme) : undefined;
-  }, [section?.background, theme]);
+    if (!section) return undefined;
+    // As the device being edited sees it, so a phone-only background shows
+    // the moment the canvas is on the phone.
+    const bg = sectionAt({ style: section.style, background: section.background, layout: section.layout }, device).background;
+    return bg && bg.type !== "none" ? backgroundCss(bg, theme) : undefined;
+  }, [section, theme, device]);
   // Disarmed whenever the selection moves, from any of the several places it
   // can move from — the canvas, the tree, a drop. One effect covers them all;
   // a reset in each handler covers whichever ones somebody remembered.
@@ -1230,7 +1235,7 @@ export function BlockEditor({
             // Nothing selected is not nothing to edit — it is the band. Which is
             // also what clicking away from a block already means.
             section ? (
-              <SectionSettings section={section} />
+              <SectionSettings section={section} device={device} />
             ) : (
               <p className="p-4 text-sm text-muted">Select a block to edit it.</p>
             )

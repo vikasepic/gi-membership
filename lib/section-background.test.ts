@@ -145,7 +145,9 @@ describe("the builder's canvas is the band", () => {
     // Two drawing paths is how a canvas comes to show one thing and the page
     // another.
     const src = readFileSync("components/admin/block-editor.tsx", "utf8");
-    expect(src).toContain("backgroundCss(normalizeBackground(bg), theme)");
+    // Resolved per device first, then drawn by the one function.
+    expect(src).toContain("sectionAt({ style: section.style, background: section.background, layout: section.layout }, device)");
+    expect(src).toContain("backgroundCss(bg, theme)");
   });
 
   it("reaches the canvas from the panel that sets it", () => {

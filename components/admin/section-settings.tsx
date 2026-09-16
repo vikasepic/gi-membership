@@ -7,13 +7,17 @@ import {
   BAND_WIDTH,
   SECTION_LIMITS,
   normalizeSectionLayout,
+  sectionAt,
+  setSectionOverride,
   type BandStyleKey,
   type SectionLayout,
   type SectionUnit,
   bandPatch,
 } from "@/lib/page-sections";
 import { ColorControl } from "@/components/admin/color-control";
-import { emptyBackground, type Background } from "@/lib/blocks";
+import { emptyBackground, type Background, type Device } from "@/lib/blocks";
+
+const DEVICE_LABEL = { tablet: "Tablet", mobile: "Phone" } as const;
 import { MediaButton } from "@/components/admin/media-modal";
 import { PositionPicker } from "@/components/admin/position-picker";
 import { publicCoverUrl } from "@/lib/media-url";
@@ -122,20 +126,49 @@ function NumberField({
  * now, in the panel, shown when nothing is selected — which is what clicking
  * away from a block already means.
  */
-export function SectionSettings({ section }: { section: SectionEdit }) {
+export function SectionSettings({ section, device = "desktop" }: { section: SectionEdit; device?: Device }) {
   const band = (section.style as BandStyleKey) ?? "paper";
-  const bg = section.background ?? emptyBackground();
+  // On tablet or phone the panel edits that device's override of the padding
+  // and the background, laid over the wider one, the way a block's inspector
+  // does. The preset stays one thing at every width; see SectionOverride.
+  const narrow = device === "desktop" ? null : device;
+  const look = sectionAt({ style: section.style, background: section.background, layout: section.layout }, device);
+  const bg = narrow ? (look.background ?? emptyBackground()) : (section.background ?? emptyBackground());
   // One patch shape, so a change to any part of the background writes the
   // whole object — a sparse patch would leave half a background behind.
   const setBg = (patch: Partial<Background>) =>
-    section.onChange({ background: { ...bg, ...patch } });
+    narrow
+      ? section.onChange({ layout: setSectionOverride(section.layout, narrow, { background: { ...bg, ...patch } }) })
+      : section.onChange({ background: { ...bg, ...patch } });
 
   // One patch shape for the layout too: the whole object goes back, so a
   // sparse patch cannot leave half a layout behind — the same rule the
-  // background above follows, and for the same reason.
-  const layout = normalizeSectionLayout(section.layout);
-  const setLayout = (patch: Partial<SectionLayout>) =>
-    section.onChange({ layout: { ...layout, ...patch } });
+  // background above follows, and for the same reason. Padding is the one
+  // part of it that is per device; the width and the unit are not.
+  const base = normalizeSectionLayout(section.layout);
+  const layout = narrow ? { ...base, pad: look.pad } : base;
+  const setLayout = (patch: Partial<SectionLayout>) => {
+    if (narrow && patch.pad) {
+      const { pad, ...rest } = patch;
+      const next = setSectionOverride(section.layout, narrow, { pad });
+      section.onChange({ layout: Object.keys(rest).length ? { ...next, ...rest } : next });
+      return;
+    }
+    section.onChange({ layout: { ...base, ...patch } });
+  };
+  const override = narrow ? base.responsive?.[narrow] : undefined;
+  /** "Phone" beside a control that is writing a phone-only value. */
+  const Badge = ({ set, onReset }: { set: boolean; onReset: () => void }) =>
+    narrow ? (
+      <span className="flex items-center gap-1.5 text-[0.6rem] text-muted">
+        <span className={`rounded px-1 ${set ? "bg-primary/12 text-primary" : "bg-surface-2"}`}>{DEVICE_LABEL[narrow]}</span>
+        {set && (
+          <button type="button" onClick={onReset} className="underline-offset-2 hover:text-fg hover:underline">
+            use the wider setting
+          </button>
+        )}
+      </span>
+    ) : null;
 
   return (
     <div className="flex flex-col">
@@ -212,6 +245,10 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
           <div className="grid grid-cols-[92px_minmax(0,1fr)] items-start gap-2.5">
             <span className="pt-1.5 text-xs text-fg">Padding</span>
             <div className="flex flex-col gap-1.5">
+              <Badge
+                set={!!override?.pad}
+                onReset={() => narrow && section.onChange({ layout: setSectionOverride(section.layout, narrow, { pad: null }) })}
+              />
               {layout.padLink ? (
                 <NumberField
                   value={layout.pad.t}
@@ -271,7 +308,12 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
           <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
             <span className="text-xs text-fg">Colour</span>
             <div className="flex flex-wrap items-center gap-1.5">
-              {BAND_STYLE_KEYS.map((k) => (
+              {narrow && (
+                <span className="text-[0.62rem] text-muted">
+                  The same at every width. Give this device its own ground with Custom below.
+                </span>
+              )}
+              {!narrow && BAND_STYLE_KEYS.map((k) => (
                 <button
                   key={k}
                   type="button"
@@ -295,15 +337,27 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
             <span className="pt-1.5 text-xs text-fg">Custom</span>
             {/* A brand colour as the band, which no swatch offers. Clearing it
                 goes back to the preset; picking a swatch above clears it too. */}
-            <ColorControl
-              label="Custom band colour"
-              value={section.background?.color ?? null}
-              empty="a swatch above"
-              fallback={BAND_STYLES[band].bg}
-              onChange={(v) =>
-                section.onChange(v ? customBandPatch(section.background, v) : bandPatch(section.background, section.style ?? "paper"))
-              }
-            />
+            <div className="flex flex-col gap-1">
+              <Badge
+                set={!!override?.background}
+                onReset={() => narrow && section.onChange({ layout: setSectionOverride(section.layout, narrow, { background: null }) })}
+              />
+              <ColorControl
+                label="Custom band colour"
+                value={bg.color ?? null}
+                empty={narrow ? "the wider width's" : "a swatch above"}
+                fallback={BAND_STYLES[band].bg}
+                onChange={(v) =>
+                  narrow
+                    ? // The ground only, on this device: the preset (and its ink) is
+                      // the same at every width.
+                      setBg(v ? { type: "classic", color: v } : { color: null, type: bg.image ? "classic" : "none" })
+                    : section.onChange(
+                        v ? customBandPatch(section.background, v) : bandPatch(section.background, section.style ?? "paper"),
+                      )
+                }
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-[92px_minmax(0,1fr)] items-start gap-2.5">
@@ -335,6 +389,10 @@ export function SectionSettings({ section }: { section: SectionEdit }) {
           <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
             <span className="text-xs text-fg">Image</span>
             <div className="flex flex-col gap-1.5">
+              <Badge
+                set={!!override?.background}
+                onReset={() => narrow && section.onChange({ layout: setSectionOverride(section.layout, narrow, { background: null }) })}
+              />
               {bg.image ? (
                 <span className="flex items-center gap-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}

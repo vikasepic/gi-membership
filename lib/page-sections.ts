@@ -1,5 +1,6 @@
 import { luminance, normalizeColor, readableInk, tint } from "@/lib/color";
-import { emptyBackground, normalizeBlocks, walkBlocks, type Background } from "@/lib/blocks";
+import { DEVICE_MAX, emptyBackground, normalizeBackground, normalizeBlocks, walkBlocks, type Background, type Device } from "@/lib/blocks";
+import { backgroundCss } from "@/lib/block-style";
 
 // The ten-section sales page.
 //
@@ -892,6 +893,23 @@ export type SectionPad = {
   l: number | null;
 };
 
+/**
+ * What a band changes about itself on a narrower screen.
+ *
+ * Only what somebody set on that device: an absent key inherits from the
+ * wider one, the same rule a block's overrides follow. Mobile layers on
+ * tablet, tablet on desktop.
+ */
+export type SectionOverride = {
+  pad?: SectionPad;
+  /**
+   * The ground only. The preset (and so the ink) is the same at every width:
+   * blocks carry the band's ink in their own rules, and a phone-only dark
+   * band would leave them printing laptop ink on it.
+   */
+  background?: Background;
+};
+
 export type SectionLayout = {
   width: SectionWidth;
   /** The measure a boxed band caps at. Null is the built-in 1040. */
@@ -901,6 +919,11 @@ export type SectionLayout = {
   padUnit: SectionUnit;
   /** Typing one side sets all four. Off is how the four come apart. */
   padLink: boolean;
+  /**
+   * Per device. Inside `layout` rather than a column of its own, so no row
+   * changed shape and a band nobody made responsive stores nothing here.
+   */
+  responsive?: { tablet?: SectionOverride; mobile?: SectionOverride };
 };
 
 export const defaultSectionLayout = (): SectionLayout => ({
@@ -945,6 +968,25 @@ export function normalizeSectionLayout(value: unknown): SectionLayout {
     b: num(padRaw.b ?? v.padY, cap),
     l: num(padRaw.l ?? v.padX, cap),
   };
+  // The overrides, each read the way the desktop values are. An override
+  // that says nothing is dropped, so "nothing set" and "set to nothing" stay
+  // one thing.
+  const override = (x: unknown): SectionOverride | undefined => {
+    if (typeof x !== "object" || x === null) return undefined;
+    const o = x as Record<string, unknown>;
+    const out: SectionOverride = {};
+    if (typeof o.pad === "object" && o.pad !== null) {
+      const p = o.pad as Record<string, unknown>;
+      out.pad = { t: num(p.t, cap), r: num(p.r, cap), b: num(p.b, cap), l: num(p.l, cap) };
+    }
+    if (typeof o.background === "object" && o.background !== null) out.background = normalizeBackground(o.background);
+    return Object.keys(out).length ? out : undefined;
+  };
+  const r = (v.responsive ?? {}) as Record<string, unknown>;
+  const tablet = override(r.tablet);
+  const mobile = override(r.mobile);
+  const responsive = tablet || mobile ? { ...(tablet ? { tablet } : {}), ...(mobile ? { mobile } : {}) } : undefined;
+
   return {
     width,
     maxWidth: num(v.maxWidth, SECTION_LIMITS.maxWidth[maxWidthUnit]),
@@ -957,7 +999,106 @@ export function normalizeSectionLayout(value: unknown): SectionLayout {
       v.padLink === false
         ? false
         : pad.t === pad.r && pad.r === pad.b && pad.b === pad.l,
+    ...(responsive ? { responsive } : {}),
   };
+}
+
+/** The pieces of a band that can differ per device, as one row carries them. */
+export type SectionLook = { style: string | null | undefined; background: unknown; layout: unknown };
+
+/**
+ * A band as one device sees it: colour, background and padding with that
+ * device's overrides laid over the wider ones. Desktop is the row itself.
+ */
+export function sectionAt(
+  row: SectionLook,
+  device: Device,
+): { style: string; background: Background | null; pad: SectionPad; padUnit: SectionUnit } {
+  const l = normalizeSectionLayout(row.layout);
+  const style = (row.style as string | null | undefined) ?? "paper";
+  let background = row.background ? normalizeBackground(row.background) : null;
+  let pad = l.pad;
+  const apply = (o?: SectionOverride) => {
+    if (!o) return;
+    if (o.pad) pad = o.pad;
+    if (o.background) background = o.background;
+  };
+  if (device !== "desktop") apply(l.responsive?.tablet);
+  if (device === "mobile") apply(l.responsive?.mobile);
+  return { style, background, pad, padUnit: l.padUnit };
+}
+
+/**
+ * One device's override written onto a layout, merged over what that device
+ * already had. An empty patch value removes that key, so "use the wider
+ * setting" is a write, not a special case.
+ */
+export function setSectionOverride(
+  layout: unknown,
+  device: Exclude<Device, "desktop">,
+  patch: { pad?: SectionPad | null; background?: Background | null },
+): SectionLayout {
+  const l = normalizeSectionLayout(layout);
+  const was = l.responsive?.[device] ?? {};
+  const next: SectionOverride = { ...was };
+  if ("pad" in patch) {
+    if (patch.pad) next.pad = patch.pad;
+    else delete next.pad;
+  }
+  if ("background" in patch) {
+    if (patch.background) next.background = patch.background;
+    else delete next.background;
+  }
+  const responsive = { ...(l.responsive ?? {}) };
+  if (Object.keys(next).length) responsive[device] = next;
+  else delete responsive[device];
+  const { responsive: _drop, ...rest } = l;
+  return Object.keys(responsive).length ? { ...rest, responsive } : rest;
+}
+
+/** camelCase CSS properties as declarations, each marked important. */
+function important(css: Record<string, unknown>): string {
+  return Object.entries(css)
+    .filter(([, v]) => v !== undefined && v !== null && v !== "")
+    .map(([k, v]) => `${k.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}:${String(v)} !important`)
+    .join(";");
+}
+
+/**
+ * The media rules a live band needs for its overrides, or "" when it has
+ * none. Important throughout: the band paints its desktop look in a style
+ * attribute, and only an important declaration in a stylesheet outranks one.
+ * Keyed on the band's id, which every band has since the preview anchors.
+ */
+export function sectionRules(id: string, row: SectionLook): string {
+  const l = normalizeSectionLayout(row.layout);
+  if (!l.responsive) return "";
+  const out: string[] = [];
+  let wider = sectionAt(row, "desktop");
+  for (const device of ["tablet", "mobile"] as const) {
+    const here = sectionAt(row, device);
+    const decl: Record<string, unknown> = {};
+    // By value: every resolve builds fresh objects, and identity would say
+    // "changed" on every device for a band that changed nothing.
+    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    if (!same(here.pad, wider.pad)) {
+      decl.paddingTop = sectionSize(here.pad.t, here.padUnit);
+      decl.paddingRight = sectionSize(here.pad.r, here.padUnit);
+      decl.paddingBottom = sectionSize(here.pad.b, here.padUnit);
+      decl.paddingLeft = sectionSize(here.pad.l, here.padUnit);
+    }
+    const theme = bandTheme(here.style);
+    if (!same(here.background, wider.background)) {
+      // A device that sets a background replaces the wider one whole, so an
+      // image on the laptop does not bleed under a phone's plain colour.
+      const painted = here.background && here.background.type !== "none" ? backgroundCss(here.background, theme) : {};
+      Object.assign(decl, { backgroundImage: "none" }, painted);
+    }
+    const text = important(decl);
+    if (text) out.push(`@media (max-width:${DEVICE_MAX[device]}px){#${id}{${text}}}`);
+    wider = here;
+  }
+  return out.join("\n");
 }
 
 /** True when a stored layout says nothing the built-in does not already say. */

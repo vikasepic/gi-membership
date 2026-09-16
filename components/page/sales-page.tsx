@@ -12,6 +12,8 @@ import {
   sectionBox,
   type SectionRow,
   type SectionView,
+  sectionAt,
+  sectionRules,
 } from "@/lib/page-sections";
 import { normalizeBackground, type Device } from "@/lib/blocks";
 import { backgroundCss } from "@/lib/block-style";
@@ -74,6 +76,7 @@ function Band({
   cssId,
   cssClass,
   layout,
+  at,
   children,
 }: {
   view: SectionView;
@@ -81,20 +84,31 @@ function Band({
   cssId?: string | null;
   cssClass?: string | null;
   layout?: unknown;
+  /** Editor only: draw the band as this width sees it. Live, the media rules do it. */
+  at?: Device;
   children: React.ReactNode;
 }) {
+  // Pinned to a device (the canvas), the band takes that device's padding
+  // and background inline: a 390px canvas in a wide window never fires a
+  // media query. Live, the desktop look goes inline as it always has and
+  // sectionRules writes the narrower devices as important media rules.
+  const resolved = at ? sectionAt({ style: null, background, layout }, at) : null;
+  const effectiveLayout = resolved ? { ...normalizeSectionLayout(layout), pad: resolved.pad } : layout;
+  const effectiveBackground = resolved ? resolved.background : background;
+
   // Over the band's own colour, not instead of it: an image that has not
   // arrived yet leaves the preset showing rather than a white void.
-  const bg = background ? normalizeBackground(background) : null;
+  const bg = effectiveBackground ? normalizeBackground(effectiveBackground) : null;
   const painted = bg && bg.type !== "none" ? backgroundCss(bg, view.theme) : null;
 
   // A band that says nothing about its layout keeps the classes it has always
   // had, character for character. The style attribute only appears once
   // somebody has actually set something — otherwise `py-12 md:py-16` would be
   // replaced by a single flat number and every live page would shift.
-  const l = normalizeSectionLayout(layout);
+  const l = normalizeSectionLayout(effectiveLayout);
   const custom = !layoutIsDefault(l);
-  const box = sectionBox(layout);
+  const box = sectionBox(effectiveLayout);
+  const rules = !at && cssId ? sectionRules(cssId, { style: null, background, layout }) : "";
 
   return (
     <section
@@ -115,6 +129,7 @@ function Band({
         ...painted,
       }}
     >
+      {rules && <style dangerouslySetInnerHTML={{ __html: rules }} />}
       <div className="w-full" style={box.inner}>
         {children}
       </div>
@@ -165,6 +180,7 @@ export function SectionBand({
       cssId={row.cssId || `section-${row.sectionKey}`}
       cssClass={row.cssClass}
       layout={row.layout}
+      at={at}
     >
       <Blocks blocks={blocks} theme={view.theme} money={money} cta={cta} store={store} at={at} />
     </Band>
