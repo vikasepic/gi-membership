@@ -26,7 +26,7 @@ import { blocksForSection, isUnconverted } from "@/lib/section-to-blocks";
 import { starterBlocks } from "@/lib/page-starter";
 import { warnNotBuyable } from "@/lib/page-buyable";
 import { DEVICE_CANVAS, type Block, type Device } from "@/lib/blocks";
-import { PREVIEW_SCOPE, siteTypographyCssAt, type SitePreview } from "@/lib/site-typography";
+import { PREVIEW_SCOPE, inlineCss, siteTypographyCssAt, type SitePreview } from "@/lib/site-typography";
 import { CheckoutSlots, previewCheckoutSlots } from "@/components/checkout/slots";
 import type { OwnerType } from "@/lib/pages";
 
@@ -116,7 +116,11 @@ export function PageEditor({
   const previewCss = useMemo(
     () =>
       preview
-        ? [preview.fontCss, siteTypographyCssAt(preview.typography, device, `.${PREVIEW_SCOPE}`)]
+        ? [
+            preview.fontCss,
+            siteTypographyCssAt(preview.typography, device, `.${PREVIEW_SCOPE}`),
+            preview.pageCss ? inlineCss(preview.pageCss) : "",
+          ]
             .filter(Boolean)
             .join("\n")
         : "",

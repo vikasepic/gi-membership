@@ -34,6 +34,7 @@ import {
   SEGMENT_ICONS,
   type Control,
   type BuilderOwner,
+  visibleItemFields,
 } from "@/lib/block-controls";
 import { canExplode, explodeWarnings, takeApart } from "@/lib/cards-to-blocks";
 import {
@@ -109,7 +110,7 @@ const Globals = createContext<GlobalIndex>(new Map());
 import { backgroundCss, blockClass, blockCssAt, blockCustomRules, blockTextRules, columnCss, columnOwnWidth, effectiveWidths, mobilePaddingNotice, rowIsGrid, rowLayout, stacksAt } from "@/lib/block-style";
 import { imageSrc, normalizeSectionLayout, sectionBox } from "@/lib/page-sections";
 import type { BandTheme } from "@/lib/page-sections";
-import { PREVIEW_SCOPE, siteTypographyCssAt, type SitePreview } from "@/lib/site-typography";
+import { PREVIEW_SCOPE, inlineCss, siteTypographyCssAt, type SitePreview } from "@/lib/site-typography";
 
 // The builder.
 //
@@ -247,7 +248,11 @@ export function BlockEditor({
   const previewCss = useMemo(
     () =>
       preview
-        ? [preview.fontCss, siteTypographyCssAt(preview.typography, device, `.${PREVIEW_SCOPE}`)]
+        ? [
+            preview.fontCss,
+            siteTypographyCssAt(preview.typography, device, `.${PREVIEW_SCOPE}`),
+            preview.pageCss ? inlineCss(preview.pageCss) : "",
+          ]
             .filter(Boolean)
             .join("\n")
         : "",
@@ -2946,7 +2951,7 @@ function ControlField({
           {label}
           {rows.map((row, i) => (
             <div key={i} className="flex flex-col gap-1 rounded-lg border border-border p-2">
-              {control.item.map((f) =>
+              {visibleItemFields(control, block.props).map((f) =>
                 // The same picker every other image on this screen uses, rather
                 // than a box to paste a path into. A card's picture is a file in
                 // the library like any other; typing its path is how you get a

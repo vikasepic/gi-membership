@@ -163,7 +163,8 @@ export default async function OfferPageEditor({ params }: { params: Promise<{ id
           declineHref: "#",
           declineLabel: offer.declineLabel,
         }}
-        preview={preview}
+        // The page's own CSS rides into the canvas; see SitePreview.pageCss.
+        preview={{ ...preview, pageCss: settings.customCss }}
         previewHref={`/o/${offer.key}?preview=1`}
         publishNote={!offer.active ? "The offer is switched off, so buyers can't see it yet." : undefined}
         settingsHasDraft={settings.hasDraft}

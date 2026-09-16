@@ -268,6 +268,13 @@ export type SitePreview = {
   typography: SiteTypography;
   /** The store's named colours, so the builder can offer and draw them. */
   palette?: PaletteColor[];
+  /**
+   * The page's own custom CSS, so the canvas shows a rule the page carries.
+   *
+   * Media queries in it still match the WINDOW, not the canvas, so a phone
+   * rule only shows in the eye-icon preview; everything else shows here.
+   */
+  pageCss?: string;
 };
 
 /**

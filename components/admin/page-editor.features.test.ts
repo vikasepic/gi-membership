@@ -73,6 +73,13 @@ describe("the page-level warnings and helpers", () => {
     has("Start from the template");
   });
 
+  it("runs the page's own custom CSS on the canvas", () => {
+    // Seen 16 Sep 2026: a rule written in Page settings showed on the live
+    // page and nowhere in the editor, which read as "custom CSS not working".
+    has("pageCss: settings.customCss");
+    has("inlineCss(preview.pageCss)");
+  });
+
   it("still switches the preview between devices", () => {
     has("DeviceSwitch");
   });

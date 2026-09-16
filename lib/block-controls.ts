@@ -85,7 +85,7 @@ export type Control =
    *  components/admin/icon-picker.tsx for why that matters. */
   | (Base & { kind: "icon" })
   | (Base & { kind: "dim" })
-  | (Base & { kind: "list"; item: { key: string; label: string; kind: "text" | "textarea" | "image" }[]; addLabel: string })
+  | (Base & { kind: "list"; item: ListField[]; addLabel: string })
   // Rows only. Both need the block itself — how many columns there are, and how
   // wide each one is — which a key and a value cannot express.
   | (Base & { kind: "columns"; max: number })
@@ -180,6 +180,22 @@ const RATIOS: [string, string][] = [["16/9", "16:9"], ["4/3", "4:3"], ["1/1", "1
 const IMAGE_RATIOS: [string, string][] = [["auto", "Original — no crop"], ...RATIOS];
 
 export type BlockControls = { content: Control[]; style: Control[] };
+
+/** One field of a list item. `showWhen` reads the BLOCK's props, so a field can follow a sibling setting. */
+export type ListField = {
+  key: string;
+  label: string;
+  kind: "text" | "textarea" | "image";
+  showWhen?: (props: Record<string, unknown>) => boolean;
+};
+
+/** The item fields a list should draw, given the block's own props. */
+export function visibleItemFields(
+  control: { item: ListField[] },
+  props: Record<string, unknown>,
+): ListField[] {
+  return control.item.filter((f) => !f.showWhen || f.showWhen(props));
+}
 
 export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
   // A pointer has nothing of its own to style — whatever it points at brings
@@ -939,8 +955,10 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
           { key: "title", label: "Title", kind: "text" },
           { key: "body", label: "Body", kind: "textarea" },
           { key: "amount", label: "Amount", kind: "text" },
-          { key: "icon", label: "Icon (SVG or image URL)", kind: "textarea" },
-          { key: "image", label: "Image", kind: "image" },
+          // Each follows the Media setting below: a field that draws nothing
+          // on the card is clutter on the panel.
+          { key: "icon", label: "Icon (SVG or image URL)", kind: "textarea", showWhen: (p) => (p.media ?? "icon") === "icon" },
+          { key: "image", label: "Image", kind: "image", showWhen: (p) => p.media === "image" },
         ],
         addLabel: "Add a card",
       },

@@ -143,7 +143,8 @@ export default async function ProductPageEditor({ params }: { params: Promise<{ 
         ownerId={id}
         initial={rows}
         money={{ priceLabel: money(product.priceCents, product.currency), termsLabel: null }}
-        preview={preview}
+        // The page's own CSS rides into the canvas; see SitePreview.pageCss.
+        preview={{ ...preview, pageCss: settings.customCss }}
         previewHref={`/p/${product.slug}?preview=1`}
         publishNote={
           product.status !== "published"
