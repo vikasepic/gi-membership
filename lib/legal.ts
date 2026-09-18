@@ -68,8 +68,16 @@ export function legalPlaceholders(l: Legal): string[] {
   ];
 }
 
-/** The same question, from settings, without resolving twice. */
+/**
+ * The same question, from settings, without resolving twice.
+ *
+ * Nothing to report when the terms live elsewhere: with `termsUrl` set the
+ * footer and both checkouts link to that page, so the built-in one and its
+ * draft warning reach nobody. The admin was being nagged about an address on
+ * a page no buyer was ever sent to.
+ */
 export function legalPlaceholdersFrom(s: Settings): string[] {
+  if (s.termsUrl) return [];
   return legalPlaceholders(legalFrom(s));
 }
 

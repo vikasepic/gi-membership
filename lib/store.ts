@@ -204,6 +204,19 @@ export async function getOfferByKey(key: string): Promise<Offer | null> {
  * Ordered by id as well as by the number, so two offers sharing a position
  * cannot swap places between two reads of the same page.
  */
+/** Every offer that can be bought, by name. For the sitemap and llms.txt. */
+export async function listActiveOffers(): Promise<Offer[]> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("offers")
+    .select(OFFER_COLUMNS)
+    .eq("active", true)
+    .order("name", { ascending: true })
+    .order("id", { ascending: true });
+  if (error) throw new Error(`listActiveOffers: ${error.message}`);
+  return (data ?? []).map(hydrateOffer);
+}
+
 export async function listHomeOffers(): Promise<Offer[]> {
   const db = createServiceClient();
   const { data, error } = await db

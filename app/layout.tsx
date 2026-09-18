@@ -1,3 +1,4 @@
+import { siteUrl } from "@/lib/env";
 import type { Metadata, Viewport } from "next";
 import { Inter, Poppins } from "next/font/google";
 import "./globals.css";
@@ -16,6 +17,9 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
+  // Every relative URL in any page's metadata — a share image path, a
+  // canonical — resolves against the store's own address, not localhost.
+  metadataBase: new URL(siteUrl()),
   title: "Greater Inside",
   description: "Store, library, and Content Engine — Greater Inside.",
   manifest: "/manifest.webmanifest",

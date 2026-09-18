@@ -17,6 +17,20 @@ import { blocksForSection } from "@/lib/section-to-blocks";
 import { buildSectionView } from "@/lib/page-sections";
 import { SectionBand } from "@/components/page/sales-page";
 import { MembershipCard, type MembershipView, type StoreRender } from "@/components/page/storefront-blocks";
+import type { Metadata } from "next";
+import { siteUrl } from "@/lib/env";
+import { getSettingsOrDefaults } from "@/lib/settings";
+import { homeJsonLd, jsonLdText } from "@/lib/structured-data";
+import { storeLines, faqsIn } from "@/lib/store-facts";
+
+/**
+ * The home page is the one address the store has, and the canonical says so:
+ * ?preview=1 and any campaign query resolve to it rather than competing with
+ * it. Title, description and share card come from the layout.
+ */
+export function generateMetadata(): Metadata {
+  return { alternates: { canonical: siteUrl() } };
+}
 
 // Storefront labels for each course type. Mirrors the catalog card.
 const BADGE_LABEL: Record<NonNullable<CatalogItem["type"]>, string> = {
@@ -136,6 +150,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   };
 
   const rows = await getPageSections("store", await getStoreId(), { draft: preview });
+  // What the page says to a machine: the business, the site, everything for
+  // sale at the price the cards show, and the questions the page answers.
+  // Never allowed to cost the page — a store with a broken row still opens.
+  const base = siteUrl();
+  const jsonLd = await Promise.all([getSettingsOrDefaults(), storeLines(base).catch(() => [])])
+    .then(([settings, lines]) => jsonLdText(homeJsonLd({ settings, base, lines, faqs: preview ? [] : faqsIn(rows) })))
+    .catch(() => null);
+  const machine = jsonLd ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} /> : null;
   // "Built" means a band with something in it. A row can exist with nothing on
   // it — opening the editor and closing it writes one — and a page of empty
   // bands must not replace the storefront with a blank screen.
@@ -147,6 +169,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   if (built) {
     return (
       <div className="flex flex-col">
+        {machine}
         {preview && <PreviewBar />}
         {rows.map((row) => (
           <SectionBand
@@ -160,7 +183,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     );
   }
 
-  return <DefaultHome d={d} memberships={memberships} />;
+  return (
+    <>
+      {machine}
+      <DefaultHome d={d} memberships={memberships} />
+    </>
+  );
 }
 
 function DefaultHome({

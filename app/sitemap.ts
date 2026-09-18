@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { siteUrl } from "@/lib/env";
-import { listPublishedProducts } from "@/lib/store";
+import { listActiveOffers, listPublishedProducts } from "@/lib/store";
+import { offerHref } from "@/lib/offer-link";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +21,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   try {
-    const products = await listPublishedProducts();
+    const [products, offers] = await Promise.all([listPublishedProducts(), listActiveOffers()]);
+    // An offer's own page, where it has one. One that goes straight to a
+    // checkout has no page to find, and the checkout is disallowed anyway.
+    const offerPages = (
+      await Promise.all(offers.map(async (o) => ({ o, href: await offerHref(o) })))
+    ).filter(({ href }) => href.startsWith("/o/"));
     return [
       ...fixed,
       ...products.map((p) => ({
         url: `${base}/p/${p.slug}`,
+        changeFrequency: "weekly" as const,
+        priority: 0.8,
+      })),
+      ...offerPages.map(({ href }) => ({
+        url: `${base}${href}`,
         changeFrequency: "weekly" as const,
         priority: 0.8,
       })),

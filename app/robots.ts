@@ -12,13 +12,28 @@ import { siteUrl } from "@/lib/env";
 // /library by ownership; this stops a page being INDEXED, not fetched. Anything
 // that would be a leak if crawled is a leak either way and is guarded in code.
 
+/**
+ * The answer engines, named.
+ *
+ * `*` already covers them, but a named rule is what their operators document
+ * looking for, and a site that lists them reads as one that meant to be read
+ * by them. Same allow, same disallows: nothing here is a different policy.
+ */
+const AI_CRAWLERS = [
+  "GPTBot",
+  "OAI-SearchBot",
+  "ChatGPT-User",
+  "ClaudeBot",
+  "Claude-User",
+  "anthropic-ai",
+  "PerplexityBot",
+  "Google-Extended",
+  "Applebot-Extended",
+  "CCBot",
+];
+
 export default function robots(): MetadataRoute.Robots {
-  return {
-    rules: [
-      {
-        userAgent: "*",
-        allow: "/",
-        disallow: [
+  const disallow = [
           // A checkout is a step, not a page. Indexed, it puts someone in the
           // middle of buying something they never chose.
           "/checkout",
@@ -39,8 +54,11 @@ export default function robots(): MetadataRoute.Robots {
           "/course-preview",
           // Nothing here is a page.
           "/api",
-        ],
-      },
+  ];
+  return {
+    rules: [
+      { userAgent: "*", allow: "/", disallow },
+      { userAgent: AI_CRAWLERS, allow: ["/", "/llms.txt"], disallow },
     ],
     sitemap: `${siteUrl()}/sitemap.xml`,
     host: siteUrl(),
