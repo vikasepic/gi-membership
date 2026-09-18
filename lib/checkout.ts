@@ -1036,6 +1036,19 @@ export async function fulfilBump(args: {
     stripe_subscription_id: result.subscriptionId ?? null,
     stripe_payment_intent_id: result.paymentIntentId ?? null,
   });
+
+  // The bump's own sale, under the bump's own name.
+  //
+  // The host's Purchase names the host; nothing named the add-on. Seen 17
+  // and 18 Sep 2026: two "150 Digital Product Ideas" bumps and a Funnel App
+  // trial bump, none of which reached Meta as anything but part of the
+  // host's line — so a custom conversion on the bump's content name could
+  // never fire. After the line is written and behind the "already" guard
+  // above, so a retry that finds the line does not report it twice.
+  await trackOfferSale(args.orderId, offer, {
+    ...result,
+    key: `bump:${offer.id}:${result.paymentIntentId ?? result.subscriptionId ?? args.orderId}`,
+  });
 }
 
 // Idempotently finalize a paid order: mark paid, grant base ownership, fulfil
@@ -1887,10 +1900,21 @@ export async function savedPaymentMethodFor(customerId: string): Promise<string 
  * Never throws. The thing being reported is bought, charged and granted by the
  * time this runs, and tracking may not undo that.
  */
-async function trackOfferSale(
+export async function trackOfferSale(
   orderId: string,
   offer: Offer,
-  result: { subscriptionId?: string; paymentIntentId?: string },
+  result: {
+    subscriptionId?: string;
+    paymentIntentId?: string;
+    /**
+     * The dedup key, where the charge's own id is not the right one.
+     *
+     * A prepaid bump has no charge of its own: its money rode the host's
+     * PaymentIntent, and keying on that id would collide with the host's
+     * Purchase and be thrown away as a duplicate.
+     */
+    key?: string;
+  },
 ): Promise<void> {
   try {
     const db = createServiceClient();
@@ -1909,7 +1933,7 @@ async function trackOfferSale(
     // A trial takes nothing today. Reporting $0 as a purchase says the sale was
     // worthless; reporting the price as revenue says money moved when none did.
     const nowCents = immediateChargeCents(offer);
-    const key = result.paymentIntentId ?? result.subscriptionId ?? orderId;
+    const key = result.key ?? result.paymentIntentId ?? result.subscriptionId ?? orderId;
     // The OFFER's identity, not the order's.
     //
     // `who` describes the whole order — its content ids are every product on

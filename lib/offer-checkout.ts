@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getOffer, getStoreName } from "@/lib/store";
 import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerWithCouponTrial } from "@/lib/offers";
 import { livePrices, priceForChoice, shownPrices } from "@/lib/offer-prices";
-import { ownershipFor, fulfilOffer, fulfilBump, grantOfferOwnership, customerForUser, visitorFor } from "@/lib/checkout";
+import { ownershipFor, fulfilOffer, fulfilBump, grantOfferOwnership, customerForUser, visitorFor, trackOfferSale } from "@/lib/checkout";
 import { orderForPaymentIntent } from "@/lib/orders";
 import { stripe, stripeMode } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
@@ -759,6 +759,19 @@ export async function completeOfferCheckout(
       stripe_subscription_id: result.subscriptionId ?? null,
       stripe_payment_intent_id: result.paymentIntentId ?? null,
     });
+    // A trial started here reports from here. A PAID offer is reported by
+    // finalizeOrder when Stripe confirms the PaymentIntent; a trial saves a
+    // card and charges nothing, so no PaymentIntent ever succeeds and no
+    // webhook ever reaches finalizeOrder. Three Content Engine trials on 18
+    // Sep 2026 started, granted and reached Meta as nothing at all. Keyed on
+    // the subscription, so the webhook and the return route — both of which
+    // run this — collapse into one event.
+    if (!paid) {
+      await trackOfferSale(orderId, sold, {
+        subscriptionId: result.subscriptionId,
+        key: `offer:${sold.id}:${result.subscriptionId ?? intentId}`,
+      });
+    }
   } catch (e) {
     // The card saved (and may already be charged or subscribed) but
     // fulfilment did not finish — granting access or recording the line can

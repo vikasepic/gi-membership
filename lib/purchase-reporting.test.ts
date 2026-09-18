@@ -56,9 +56,10 @@ describe("a sale charged to a card already on file", () => {
     checkout.indexOf("// Accept a standing offer from the library"),
   );
 
-  it("is reported by both the ones that make it", () => {
-    // The upsell and an offer accepted from the library afterwards.
-    expect(checkout.match(/await trackOfferSale\(/g)!.length).toBe(2);
+  it("is reported by every one of the ones that make it", () => {
+    // The upsell, an offer accepted from the library afterwards, and — since
+    // 18 Sep 2026 — the bump, under its own name rather than the host's.
+    expect(checkout.match(/await trackOfferSale\(/g)!.length).toBe(3);
   });
 
   it("does not collide with the purchase already reported for the order", () => {
