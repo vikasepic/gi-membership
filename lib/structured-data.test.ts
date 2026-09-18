@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { homeJsonLd, llmsText, jsonLdText, type SellableLine } from "@/lib/structured-data";
+import { homeJsonLd, llmsText, jsonLdText, offerLine, type SellableLine } from "@/lib/structured-data";
+import type { Offer } from "@/lib/types";
 import { SETTINGS_SCHEMA, type Settings } from "@/lib/settings-schema";
 
 const make = (over: Record<string, unknown>): Settings => ({ ...SETTINGS_SCHEMA.parse(over), name: String(over.name ?? "S") });
@@ -64,5 +65,18 @@ describe("llmsText", () => {
     expect(text).toContain(`- [Content Engine](${base}/o/content-engine) — USD 29.00 per month`);
     expect(text).toContain("- **Is there a refund?** Yes, 14 days.");
     expect(text).toContain("- [Terms](https://greaterinside.com/terms-and-conditions/)");
+  });
+});
+
+describe("offerLine", () => {
+  it("names the offer by its own name and keeps the headline as the description", () => {
+    // Three Content Engine channels share one headline; the name is what tells them apart.
+    const o = { name: "Content Engine — Instagram", headline: "Go From Hours of Research to a Week of Content.", description: "Long copy", imageUrl: null, priceCents: 2900, currency: "usd", interval: "month" } as unknown as Offer;
+    expect(offerLine(o, base, "/o/content-engine-instagram")).toMatchObject({
+      name: "Content Engine — Instagram",
+      description: "Go From Hours of Research to a Week of Content.",
+      url: `${base}/o/content-engine-instagram`,
+      interval: "month",
+    });
   });
 });

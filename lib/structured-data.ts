@@ -40,9 +40,13 @@ export function productLine(p: Product, base: string, image: string | null): Sel
 }
 
 export function offerLine(o: Offer, base: string, href: string): SellableLine {
+  // The offer's NAME, not its headline: three Content Engine channels share
+  // one headline, and a reader given three identical names cannot tell
+  // which is which. The headline becomes the description, which is what a
+  // headline is.
   return {
-    name: o.headline || o.name,
-    description: o.description,
+    name: o.name,
+    description: o.headline && o.headline !== o.name ? o.headline : o.description,
     url: `${base}${href}`,
     image: o.imageUrl,
     priceCents: o.priceCents,
