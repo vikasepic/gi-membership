@@ -1,4 +1,5 @@
 import { COVER_ASPECT } from "@/lib/cover";
+import { SaleTags } from "@/components/page/sale-tags";
 import { JsonLd } from "@/components/page/json-ld";
 import { pageJsonLd, productLine } from "@/lib/structured-data";
 import { faqsIn } from "@/lib/store-facts";
@@ -61,7 +62,7 @@ export async function generateMetadata({
         },
         store,
         url: absoluteUrl(`/p/${product.slug}`),
-        sale: { priceCents: product.priceCents, currency: product.currency },
+        sale: true,
       }),
       ...(preview ? { robots: { index: false, follow: false } } : {}),
     };
@@ -102,7 +103,12 @@ export default async function ProductPage({
   const machine = async (faqs: ReturnType<typeof faqsIn>) => {
     try {
       const store = await getSettingsOrDefaults();
-      return <JsonLd data={pageJsonLd({ settings: store, base: siteUrl(), line: productLine(product, siteUrl(), coverUrl), faqs })} />;
+      return (
+        <>
+          <SaleTags priceCents={product.priceCents} currency={product.currency} />
+          <JsonLd data={pageJsonLd({ settings: store, base: siteUrl(), line: productLine(product, siteUrl(), coverUrl), faqs })} />
+        </>
+      );
     } catch {
       return null;
     }

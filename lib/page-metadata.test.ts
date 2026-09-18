@@ -111,9 +111,10 @@ describe("a page that sells one thing", () => {
       fallback: { title: "Book Writer" },
       store: SETTINGS_SCHEMA.parse({}) as never,
       url: "https://x.test/o/book-writer",
-      sale: { priceCents: 4700, currency: "usd" },
+      sale: true,
     });
-    expect(m.other).toEqual({ "og:type": "product", "product:price:amount": "47.00", "product:price:currency": "USD" });
+    // The product tags come from SaleTags in the page, as property= attributes.
+    expect(m.other).toBeUndefined();
     expect((m.openGraph as Record<string, unknown>).type).toBeUndefined();
   });
 });

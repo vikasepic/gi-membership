@@ -35,12 +35,12 @@ export function pageMetadata(args: {
    */
   noindex?: boolean;
   /**
-   * What the page sells, for the Open Graph product tags.
-   *
-   * With it the card is a product with a price rather than a "website", so a
-   * link pasted into a chat or a feed can show what it costs.
+   * The page sells one thing, so it is an Open Graph `product`, not a
+   * "website". The type and price tags themselves come from SaleTags in the
+   * page: written here through `other` they went out as `name=` attributes,
+   * which the scrapers do not read. This only keeps `website` off the card.
    */
-  sale?: { priceCents: number; currency: string };
+  sale?: boolean;
 }): Metadata {
   const { page, fallback, store, sale } = args;
 
@@ -75,15 +75,7 @@ export function pageMetadata(args: {
       ...(args.url ? { url: args.url } : {}),
       ...(image ? { images: [{ url: image }] } : {}),
     },
-    ...(sale
-      ? {
-          other: {
-            "og:type": "product",
-            "product:price:amount": (Math.round(sale.priceCents) / 100).toFixed(2),
-            "product:price:currency": sale.currency.toUpperCase(),
-          },
-        }
-      : {}),
+
     twitter: {
       // A large card with no image renders as a bare link, which is worse than
       // the small card — so the shape follows whether there is actually art.

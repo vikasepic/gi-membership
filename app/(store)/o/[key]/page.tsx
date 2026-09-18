@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SaleTags } from "@/components/page/sale-tags";
 import { JsonLd } from "@/components/page/json-ld";
 import { pageJsonLd, offerLine } from "@/lib/structured-data";
 import { faqsIn } from "@/lib/store-facts";
@@ -70,7 +71,7 @@ export async function generateMetadata({
       fallback: { title: offer.headline || offer.name, description: offer.description },
       store,
       url: absoluteUrl(`/o/${key}`),
-      sale: { priceCents: offer.priceCents, currency: offer.currency },
+      sale: true,
     });
     const meta = preview ? { ...base, robots: { index: false, follow: false } } : base;
     // The offer's own artwork, where nothing better was chosen for the page.
@@ -132,7 +133,12 @@ export default async function OfferSalesPage({
   // to the store, and the questions its FAQ block answers. Read as the offer
   // is listed, not as sold to this reader — a graph is for everybody.
   const machine = await getSettingsOrDefaults()
-    .then((store) => <JsonLd data={pageJsonLd({ settings: store, base: siteUrl(), line: offerLine(listed, siteUrl(), `/o/${key}`), faqs: faqsIn(rows) })} />)
+    .then((store) => (
+      <>
+        <SaleTags priceCents={listed.priceCents} currency={listed.currency} />
+        <JsonLd data={pageJsonLd({ settings: store, base: siteUrl(), line: offerLine(listed, siteUrl(), `/o/${key}`), faqs: faqsIn(rows) })} />
+      </>
+    ))
     .catch(() => null);
 
   return (
