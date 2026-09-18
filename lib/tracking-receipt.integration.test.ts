@@ -28,7 +28,7 @@ vi.mock("@/lib/tracking", async (orig) => ({
 
 const { createServiceClient } = await import("@/lib/supabase/server");
 const { getStoreId } = await import("@/lib/store");
-const { reportTrialConverted } = await import("@/lib/tracking-receipt");
+const { reportTrialConverted, purchaseForOrder, adEventForOrder } = await import("@/lib/tracking-receipt");
 
 const APP = "00000000-0000-0000-0000-0000000000a1"; // seeded fixture app, reused by other suites
 
@@ -70,6 +70,8 @@ async function makeOffer() {
     currency: "usd",
     headline: "fixture",
     description: "fixture",
+    content_name: "Content Engine - IG",
+    ad_event_name: "Content Engine IG Sale",
   });
   if (error) throw new Error(`test fixture: offer: ${error.message}`);
   return id;
@@ -164,6 +166,38 @@ describe.skipIf(!canRun)("reportTrialConverted's campaign (integration)", () => 
     expect(event.attribution.last.utm_campaign).toBe("TRIAL-ORIGIN");
     expect(event.attribution.first.utm_source).toBe("ig");
     expect(event.attribution.last.utm_campaign).not.toBe("WRONG-CAMPAIGN");
+  });
+});
+
+describe.skipIf(!canRun)("an offer's order, for the browser's copy (integration)", () => {
+  it("carries the offer's content name and custom event, not its display name", async () => {
+    // Asked 18 Sep 2026: the ads team's rules read content_name, and the
+    // browser copy of an offer sale was built from the line's description —
+    // the offer's display name — while the server copy used the column.
+    // Two names for one sale, and the rule matched only one of them.
+    const db = createServiceClient();
+    const { userId } = await buyer();
+    const offerId = await makeOffer();
+    const { data: order, error } = await db
+      .from("orders")
+      .insert({ store_id: await getStoreId(), user_id: userId, email: "zz@example.com", status: "paid", total_cents: 1900, currency: "usd" })
+      .select("id")
+      .single();
+    if (error || !order) throw new Error(`test fixture: order: ${error?.message}`);
+    createdOrderIds.push(order.id as string);
+    const { error: itemErr } = await db.from("order_items").insert({
+      store_id: await getStoreId(),
+      order_id: order.id,
+      kind: "oto",
+      offer_id: offerId,
+      description: "zz trial-attribution fixture",
+      amount_cents: 1900,
+      stripe_subscription_id: SUB_ID,
+    });
+    if (itemErr) throw new Error(`test fixture: order_items: ${itemErr.message}`);
+
+    expect((await purchaseForOrder(order.id as string))?.contentName).toBe("Content Engine - IG");
+    expect(await adEventForOrder(order.id as string)).toEqual({ name: "Content Engine IG Sale", contentName: "Content Engine - IG" });
   });
 });
 

@@ -79,22 +79,34 @@ export async function adEventForOrder(
       .eq("kind", "product")
       .not("product_id", "is", null)
       .maybeSingle();
-    if (!item?.product_id) return null;
+    if (item?.product_id) {
+      const { data: product } = await db
+        .from("products")
+        .select("ad_event_name, title, content_name")
+        .eq("id", item.product_id as string)
+        .maybeSingle();
+      const name = (product?.ad_event_name as string | null)?.trim();
+      if (!name) return null;
+      return {
+        name,
+        contentName: contentNameOr(
+          product?.content_name as string | null | undefined,
+          (product?.title as string) ?? name,
+        ),
+      };
+    }
 
-    const { data: product } = await db
-      .from("products")
-      .select("ad_event_name, title, content_name")
-      .eq("id", item.product_id as string)
-      .maybeSingle();
-    const name = (product?.ad_event_name as string | null)?.trim();
+    // An order with no product line is an offer bought from its own sales
+    // page: its one line is the offer, stored under the same kind an accepted
+    // upsell uses. This used to return null here, so the browser's copy of
+    // the sale carried no custom event and the server's copy (finalizeOrder)
+    // never sent one either — while an offer's ad event name sat unread on
+    // the offer. Same fields, same names the server-side offer tracker sends.
+    const sold = await firstOfferOf(orderId);
+    if (!sold) return null;
+    const name = (sold.ad_event_name as string | null)?.trim();
     if (!name) return null;
-    return {
-      name,
-      contentName: contentNameOr(
-        product?.content_name as string | null | undefined,
-        (product?.title as string) ?? name,
-      ),
-    };
+    return { name, contentName: contentNameOr(sold.content_name as string | null | undefined, sold.name as string) };
   } catch {
     // Same rule as the receipt: tracking never breaks the page somebody lands
     // on after paying.
@@ -128,6 +140,12 @@ async function receiptFor(column: string, value: string): Promise<TrackingReceip
     const { data: named } = firstProductId
       ? await db.from("products").select("content_name").eq("id", firstProductId).maybeSingle()
       : { data: null };
+    // An offer's own name, where the order is an offer's. The line's
+    // description is the offer's display name — "Content Engine — Instagram"
+    // — which is not the content_name the ads team's rules read, and the
+    // browser copy of the sale was arriving under it while the server copy
+    // arrived under the right one. One name, from one column, on both.
+    const sold = firstProductId ? null : await firstOfferOf(order.id as string);
 
     return {
       orderId: order.id as string,
@@ -136,7 +154,7 @@ async function receiptFor(column: string, value: string): Promise<TrackingReceip
       trialCents,
       email: (order.email as string) ?? null,
       contentName: contentNameOr(
-        named?.content_name as string | null | undefined,
+        (named?.content_name as string | null | undefined) ?? (sold?.content_name as string | null | undefined),
         ((items ?? [])[0]?.description as string | undefined) ?? null,
       ),
       contentIds: (items ?? []).map((i) => (i.product_id as string) ?? "").filter(Boolean),
@@ -150,6 +168,28 @@ async function receiptFor(column: string, value: string): Promise<TrackingReceip
     // Tracking must never break the page a buyer lands on after paying.
     return null;
   }
+}
+
+/** The offer an order is FOR: its first line that names one, in the order they were written. */
+async function firstOfferOf(
+  orderId: string,
+): Promise<{ name: string; content_name: string | null; ad_event_name: string | null } | null> {
+  const db = createServiceClient();
+  const { data: line } = await db
+    .from("order_items")
+    .select("offer_id")
+    .eq("order_id", orderId)
+    .not("offer_id", "is", null)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!line?.offer_id) return null;
+  const { data: offer } = await db
+    .from("offers")
+    .select("name, content_name, ad_event_name")
+    .eq("id", line.offer_id as string)
+    .maybeSingle();
+  return (offer as { name: string; content_name: string | null; ad_event_name: string | null } | null) ?? null;
 }
 
 /**
