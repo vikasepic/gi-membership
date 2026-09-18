@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { SETTINGS_SCHEMA } from "@/lib/settings-schema";
 import { readFileSync } from "node:fs";
 import { pageMetadata } from "@/lib/page-metadata";
 import { SETTINGS_DEFAULTS } from "@/lib/settings-schema";
@@ -100,5 +101,19 @@ describe("a deploy that lands before the migration", () => {
   it("reads the old columns on their own when the new ones are missing", () => {
     const fn = src.slice(src.indexOf("export async function getPageSettings"));
     expect(fn).toContain('read("custom_css, custom_js, snippets")');
+  });
+});
+
+describe("a page that sells one thing", () => {
+  it("is an Open Graph product with a price, not a website", () => {
+    const m = pageMetadata({
+      page: { metaTitle: "", metaDescription: "", shareImagePath: "" },
+      fallback: { title: "Book Writer" },
+      store: SETTINGS_SCHEMA.parse({}) as never,
+      url: "https://x.test/o/book-writer",
+      sale: { priceCents: 4700, currency: "usd" },
+    });
+    expect(m.other).toEqual({ "og:type": "product", "product:price:amount": "47.00", "product:price:currency": "USD" });
+    expect((m.openGraph as Record<string, unknown>).type).toBeUndefined();
   });
 });

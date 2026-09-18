@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { JsonLd } from "@/components/page/json-ld";
+import { pageJsonLd, offerLine } from "@/lib/structured-data";
+import { faqsIn } from "@/lib/store-facts";
+import { siteUrl } from "@/lib/env";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getOffer, getOfferByKey } from "@/lib/store";
@@ -66,6 +70,7 @@ export async function generateMetadata({
       fallback: { title: offer.headline || offer.name, description: offer.description },
       store,
       url: absoluteUrl(`/o/${key}`),
+      sale: { priceCents: offer.priceCents, currency: offer.currency },
     });
     const meta = preview ? { ...base, robots: { index: false, follow: false } } : base;
     // The offer's own artwork, where nothing better was chosen for the page.
@@ -123,6 +128,12 @@ export default async function OfferSalesPage({
   // would be refused at.
   const owned = user ? await ownershipFor(user.id) : null;
   const alreadyHas = owned ? !isOfferEligible(offer, owned) : false;
+  // What the page says to a machine: this offer at its price, the trail back
+  // to the store, and the questions its FAQ block answers. Read as the offer
+  // is listed, not as sold to this reader — a graph is for everybody.
+  const machine = await getSettingsOrDefaults()
+    .then((store) => <JsonLd data={pageJsonLd({ settings: store, base: siteUrl(), line: offerLine(listed, siteUrl(), `/o/${key}`), faqs: faqsIn(rows) })} />)
+    .catch(() => null);
 
   return (
     // Full-bleed. The store shell caps main at max-w-5xl, and a negative
@@ -134,6 +145,7 @@ export default async function OfferSalesPage({
     // a gap under the header is right for a page in a column and wrong for one
     // whose first band is a full-width colour.
     <div className="-mt-6 mx-[calc(50%-50vw)] w-screen overflow-x-clip">
+      {machine}
       {preview && <PreviewBar />}
       {!preview && (
         <TrackView

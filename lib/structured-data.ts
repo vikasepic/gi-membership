@@ -108,36 +108,7 @@ export function homeJsonLd(input: {
       itemListElement: lines.map((l, i) => ({
         "@type": "ListItem",
         position: i + 1,
-        item: {
-          "@type": "Product",
-          name: l.name,
-          ...(l.description ? { description: l.description } : {}),
-          url: l.url,
-          ...(l.image ? { image: l.image } : {}),
-          brand: { "@id": org },
-          offers: {
-            "@type": "Offer",
-            url: l.url,
-            price: major(l.priceCents),
-            priceCurrency: l.currency.toUpperCase(),
-            availability: "https://schema.org/InStock",
-            seller: { "@id": org },
-            // A subscription says so. "per month" is the one fact a reader
-            // repeating the price must not drop.
-            ...(l.interval
-              ? {
-                  priceSpecification: {
-                    "@type": "UnitPriceSpecification",
-                    price: major(l.priceCents),
-                    priceCurrency: l.currency.toUpperCase(),
-                    billingDuration: 1,
-                    billingIncrement: 1,
-                    unitCode: l.interval === "year" ? "ANN" : l.interval === "week" ? "WEE" : l.interval === "day" ? "DAY" : "MON",
-                  },
-                }
-              : {}),
-          },
-        },
+        item: { "@type": "Product", ...productNode(l, org) },
       })),
     });
   }
@@ -155,6 +126,86 @@ export function homeJsonLd(input: {
   }
 
   return { "@context": "https://schema.org", "@graph": graph };
+}
+
+/**
+ * One thing for sale, as its own page says it.
+ *
+ * The product with its offer at the page's price, the trail back to the
+ * store, and the questions the page's FAQ block answers. The business is
+ * named the same way the home page names it, so the two graphs describe one
+ * seller rather than two that happen to share a name.
+ */
+export function pageJsonLd(input: {
+  settings: Settings;
+  base: string;
+  line: SellableLine;
+  faqs: Faq[];
+}): Record<string, unknown> {
+  const { settings: s, base, line: l, faqs } = input;
+  const org = `${base}/#organization`;
+  const logo = publicCoverUrl(s.logoPath || null);
+  const graph: Record<string, unknown>[] = [
+    {
+      "@type": "Organization",
+      "@id": org,
+      name: s.legalEntity || s.name,
+      url: base,
+      ...(logo ? { logo } : {}),
+    },
+    {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: s.name, item: `${base}/` },
+        { "@type": "ListItem", position: 2, name: l.name, item: l.url },
+      ],
+    },
+    { "@type": "Product", "@id": `${l.url}#product`, ...productNode(l, org) },
+  ];
+  if (faqs.length > 0) {
+    graph.push({
+      "@type": "FAQPage",
+      mainEntity: faqs.map((f) => ({
+        "@type": "Question",
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer", text: f.a },
+      })),
+    });
+  }
+  return { "@context": "https://schema.org", "@graph": graph };
+}
+
+/** A Product node's fields, shared by the home list and a page of its own. */
+function productNode(l: SellableLine, org: string): Record<string, unknown> {
+  return {
+    name: l.name,
+    ...(l.description ? { description: l.description } : {}),
+    url: l.url,
+    ...(l.image ? { image: l.image } : {}),
+    brand: { "@id": org },
+    offers: {
+      "@type": "Offer",
+      url: l.url,
+      price: major(l.priceCents),
+      priceCurrency: l.currency.toUpperCase(),
+      availability: "https://schema.org/InStock",
+      seller: { "@id": org },
+      // A subscription says so. "per month" is the one fact a reader
+      // repeating the price must not drop.
+      ...(l.interval
+        ? {
+            priceSpecification: {
+              "@type": "UnitPriceSpecification",
+              price: major(l.priceCents),
+              priceCurrency: l.currency.toUpperCase(),
+              billingDuration: 1,
+              billingIncrement: 1,
+              unitCode: l.interval === "year" ? "ANN" : l.interval === "week" ? "WEE" : l.interval === "day" ? "DAY" : "MON",
+            },
+          }
+        : {}),
+    },
+  };
 }
 
 /**

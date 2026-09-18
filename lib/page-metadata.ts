@@ -34,8 +34,15 @@ export function pageMetadata(args: {
    * the two are separate decisions: WhatsApp still needs a picture.
    */
   noindex?: boolean;
+  /**
+   * What the page sells, for the Open Graph product tags.
+   *
+   * With it the card is a product with a price rather than a "website", so a
+   * link pasted into a chat or a feed can show what it costs.
+   */
+  sale?: { priceCents: number; currency: string };
 }): Metadata {
-  const { page, fallback, store } = args;
+  const { page, fallback, store, sale } = args;
 
   const title = page.metaTitle.trim() || fallback.title;
   const description =
@@ -62,10 +69,21 @@ export function pageMetadata(args: {
       siteName: store.name,
       // `article` would be wrong — these are things for sale, and the type is
       // what decides whether a scraper looks for an author and a publish date.
-      type: "website",
+      // A page that sells one thing is a `product`, which Next's own union
+      // does not know, so it goes out through `other` below instead.
+      ...(sale ? {} : { type: "website" }),
       ...(args.url ? { url: args.url } : {}),
       ...(image ? { images: [{ url: image }] } : {}),
     },
+    ...(sale
+      ? {
+          other: {
+            "og:type": "product",
+            "product:price:amount": (Math.round(sale.priceCents) / 100).toFixed(2),
+            "product:price:currency": sale.currency.toUpperCase(),
+          },
+        }
+      : {}),
     twitter: {
       // A large card with no image renders as a bare link, which is worse than
       // the small card — so the shape follows whether there is actually art.

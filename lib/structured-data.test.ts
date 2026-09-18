@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { homeJsonLd, llmsText, jsonLdText, offerLine, type SellableLine } from "@/lib/structured-data";
+import { homeJsonLd, pageJsonLd, llmsText, jsonLdText, offerLine, type SellableLine } from "@/lib/structured-data";
 import type { Offer } from "@/lib/types";
 import { SETTINGS_SCHEMA, type Settings } from "@/lib/settings-schema";
 
@@ -78,5 +78,22 @@ describe("offerLine", () => {
       url: `${base}/o/content-engine-instagram`,
       interval: "month",
     });
+  });
+});
+
+describe("pageJsonLd", () => {
+  const graph = pageJsonLd({ settings, base, line: lines[1], faqs })["@graph"] as Record<string, unknown>[];
+  const of = (t: string) => graph.find((n) => n["@type"] === t)!;
+  it("describes the one thing the page sells, the trail home, and the page's questions", () => {
+    expect(of("Product")).toMatchObject({ name: "Content Engine", url: `${base}/o/content-engine`, offers: { price: "29.00", priceCurrency: "USD" } });
+    expect(((of("Product").offers as Record<string, unknown>).priceSpecification as Record<string, unknown>).unitCode).toBe("MON");
+    expect(of("BreadcrumbList")).toMatchObject({ itemListElement: [{ position: 1, item: `${base}/` }, { position: 2, name: "Content Engine" }] });
+    expect(of("FAQPage")).toMatchObject({ mainEntity: [{ name: "Is there a refund?" }] });
+    // The same seller the home page names, by the same id.
+    expect(of("Organization")["@id"]).toBe(`${base}/#organization`);
+  });
+  it("has no FAQ node when the page asks nothing", () => {
+    const g = pageJsonLd({ settings, base, line: lines[0], faqs: [] })["@graph"] as Record<string, unknown>[];
+    expect(g.map((n) => n["@type"])).toEqual(["Organization", "BreadcrumbList", "Product"]);
   });
 });

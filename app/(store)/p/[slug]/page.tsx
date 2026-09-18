@@ -1,4 +1,8 @@
 import { COVER_ASPECT } from "@/lib/cover";
+import { JsonLd } from "@/components/page/json-ld";
+import { pageJsonLd, productLine } from "@/lib/structured-data";
+import { faqsIn } from "@/lib/store-facts";
+import { siteUrl } from "@/lib/env";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getProductBySlug, getOffer } from "@/lib/store";
@@ -57,6 +61,7 @@ export async function generateMetadata({
         },
         store,
         url: absoluteUrl(`/p/${product.slug}`),
+        sale: { priceCents: product.priceCents, currency: product.currency },
       }),
       ...(preview ? { robots: { index: false, follow: false } } : {}),
     };
@@ -91,6 +96,17 @@ export default async function ProductPage({
   const display = (await productDisplay([product.id])).get(product.id) ?? null;
   // The product's own image wins; otherwise it inherits its course's.
   const coverUrl = publicCoverUrl(product.coverPath ?? display?.coverPath ?? null);
+  // What the page says to a machine: this product, at this price, with the
+  // questions its FAQ block answers. The store settings are read for the
+  // seller's name; a failure there costs the graph, never the page.
+  const machine = async (faqs: ReturnType<typeof faqsIn>) => {
+    try {
+      const store = await getSettingsOrDefaults();
+      return <JsonLd data={pageJsonLd({ settings: store, base: siteUrl(), line: productLine(product, siteUrl(), coverUrl), faqs })} />;
+    } catch {
+      return null;
+    }
+  };
 
   // A configured sales page replaces the short card layout. Falling back rather
   // than switching on a flag means turning it on is one action in admin, and a
@@ -130,6 +146,7 @@ export default async function ProductPage({
       // showed as a stripe of the shell's own background between the header and
       // the band, which reads as a rendering fault rather than as spacing.
       <div className="-mt-6 mx-[calc(50%-50vw)] w-screen overflow-x-clip">
+        {await machine(faqsIn(rows))}
         {preview && <PreviewBar />}
         {!preview && (
           <TrackView
@@ -176,6 +193,7 @@ export default async function ProductPage({
 
   return (
     <div className="flex flex-col gap-10 md:gap-14">
+      {await machine([])}
       <Link href="/" className="kicker w-fit text-muted hover:text-fg">
         &larr; Store
       </Link>
