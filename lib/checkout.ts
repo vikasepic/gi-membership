@@ -210,7 +210,7 @@ export async function ownershipFor(userId: string): Promise<Ownership> {
 }
 
 /** The attribution visitor captured on landing, if there is one. */
-async function visitorFor(
+export async function visitorFor(
   db: ReturnType<typeof createServiceClient>,
   storeId: string,
   anonId: string | null | undefined,

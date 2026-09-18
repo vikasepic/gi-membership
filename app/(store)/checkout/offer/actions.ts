@@ -1,12 +1,13 @@
 "use server";
 
 import { z } from "zod";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { previewOfferCoupon, startOfferCheckout } from "@/lib/offer-checkout";
 import { resolveBuyer } from "@/lib/checkout";
 import { UTM_COOKIE, attributionFromCookie } from "@/lib/attribution";
 import { currentVisitId } from "@/lib/visits";
+import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
 
 // An index into the list the page built, or "none" — never an id, and never
 // the legacy alt/main/boolean shapes the product checkout's own schema still
@@ -65,6 +66,25 @@ export async function startOffer(
   // Which visit this checkout belongs to, resolved here where the cookies
   // are, for the same reason anonId and attribution are.
   const visitId = await currentVisitId();
+  // The visitor, and the buyer's own request — the same three things the
+  // product checkout captures, and the ones Meta matches a sale to an ad
+  // click by. This action passed none of them: every offer sold from an ad
+  // reported with an email hash alone, while the click ids sat in the
+  // visitors table under a cookie nobody read. Seen 17 and 18 Sep 2026 —
+  // two Micro-Product Builder sales from a Meta campaign, both with fbc on
+  // file, neither attributable in Ads Manager.
+  const anonId = jar.get("gi_anon")?.value ?? null;
+  const trackingConsent = mayTrack(parseConsent(jar.get(CONSENT_COOKIE)?.value));
+  const h = await headers();
+  const client = trackingConsent
+    ? {
+        // x-forwarded-for is a list; the first entry is the client and the rest
+        // are the proxies it came through.
+        clientIp: h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || null,
+        userAgent: h.get("user-agent"),
+        sourceUrl: h.get("referer"),
+      }
+    : {};
 
   const res = await startOfferCheckout({
     userId: resolved.userId,
@@ -76,6 +96,9 @@ export async function startOffer(
     bumpChoice: parsedBump.data,
     attribution,
     visitId,
+    anonId,
+    trackingConsent,
+    ...client,
   });
   if (!res.ok) return res;
   return { ok: true, clientSecret: res.clientSecret, mode: res.mode };

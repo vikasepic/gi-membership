@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getOffer, getStoreName } from "@/lib/store";
 import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerWithCouponTrial } from "@/lib/offers";
 import { livePrices, priceForChoice, shownPrices } from "@/lib/offer-prices";
-import { ownershipFor, fulfilOffer, fulfilBump, grantOfferOwnership, customerForUser } from "@/lib/checkout";
+import { ownershipFor, fulfilOffer, fulfilBump, grantOfferOwnership, customerForUser, visitorFor } from "@/lib/checkout";
 import { orderForPaymentIntent } from "@/lib/orders";
 import { stripe, stripeMode } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
@@ -144,6 +144,19 @@ export async function startOfferCheckout(args: {
    * completeOfferCheckout also runs from the Stripe webhook, which has no
    * cookies to resolve a visit from. */
   visitId?: string | null;
+  /**
+   * The visitor cookie and the buyer's own request, read by the action.
+   *
+   * Stashed in the intent's metadata like the visit, because completion also
+   * runs from the Stripe webhook, whose request belongs to Stripe. These are
+   * what a sale is matched to an ad click by — fbc and fbp live on the
+   * visitor row — and until 18 Sep 2026 this checkout passed none of them.
+   */
+  anonId?: string | null;
+  trackingConsent?: boolean;
+  clientIp?: string | null;
+  userAgent?: string | null;
+  sourceUrl?: string | null;
 }): Promise<StartResult> {
   const offer = await getOffer(args.offerId);
   if (!offer || !offer.active) return { ok: false, error: "That offer isn’t available any more." };
@@ -274,6 +287,13 @@ export async function startOfferCheckout(args: {
     // The visit that started this checkout. Stripe metadata is strings, so a
     // null visit id becomes "" here and reads back as null in completion.
     visitId: args.visitId ?? "",
+    // The visitor and the request, for the order row at completion. Stripe
+    // caps a value at 500 characters; a user agent can run past that.
+    anonId: args.anonId ?? "",
+    trackingConsent: args.trackingConsent ? "1" : "0",
+    clientIp: (args.clientIp ?? "").slice(0, 500),
+    userAgent: (args.userAgent ?? "").slice(0, 500),
+    sourceUrl: (args.sourceUrl ?? "").slice(0, 500),
     // Last touch as utm_*, first touch as first_utm_*, plus referrer — for
     // the platform the ads team reads from Stripe, and read back at
     // completion to write the order. Spread last; the keys above are what
@@ -605,6 +625,13 @@ export async function completeOfferCheckout(
       // From the metadata we wrote at start: completion also runs from the
       // Stripe webhook, which has no cookies to resolve a visit from.
       visit_id: si.metadata?.visitId || null,
+      // Likewise the visitor — whose row holds the click ids Meta matches a
+      // sale to an ad by — and the buyer's own request.
+      visitor_id: await visitorFor(db, storeId, si.metadata?.anonId || null),
+      tracking_consent: si.metadata?.trackingConsent === "1",
+      client_ip: si.metadata?.clientIp || null,
+      client_user_agent: si.metadata?.userAgent || null,
+      source_url: si.metadata?.sourceUrl || null,
     })
     .select("id")
     .single();
