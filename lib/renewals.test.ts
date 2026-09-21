@@ -216,3 +216,9 @@ describe("an origin without a consent answer", () => {
     expect(renewals).toContain("tracking_consent: origin.trackingConsent ?? false");
   });
 });
+
+describe("a renewal order is dated by the invoice", () => {
+  it("uses the paid_at transition, not the time the record was written", () => {
+    expect(renewals).toContain("created_at: new Date(((invoice.status_transitions?.paid_at ?? invoice.created)");
+  });
+});

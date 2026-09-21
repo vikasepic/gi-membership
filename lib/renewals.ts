@@ -91,6 +91,9 @@ export async function recordRenewal(
       tax_cents: taxCents,
       stripe_customer_id: origin.stripeCustomerId,
       stripe_invoice_id: invoice.id,
+      // Dated when Stripe took the money, not when this ran. A backfill
+      // months later that stamps today puts every renewal on one day.
+      created_at: new Date(((invoice.status_transitions?.paid_at ?? invoice.created) || Math.floor(Date.now() / 1000)) * 1000).toISOString(),
       // Straight from the invoice — Stripe stamps every object with its own
       // mode, which is a better answer than the key we happen to be holding.
       livemode: invoice.livemode !== false,
