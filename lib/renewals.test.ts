@@ -210,3 +210,9 @@ describe("subscriptionIdOf", () => {
     expect(subscriptionIdOf(inv({ parent: { subscription_details: null }, lines: { data: [{ parent: { invoice_item_details: {} } }] } }))).toBeNull();
   });
 });
+
+describe("an origin without a consent answer", () => {
+  it("writes false, not null — orders.tracking_consent is NOT NULL and null overrides its default", () => {
+    expect(renewals).toContain("tracking_consent: origin.trackingConsent ?? false");
+  });
+});

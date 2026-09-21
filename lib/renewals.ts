@@ -98,7 +98,9 @@ export async function recordRenewal(
       // original sale — a conversion with no match data is a conversion Meta
       // can count but not learn from.
       visitor_id: origin.visitorId,
-      tracking_consent: origin.trackingConsent,
+      // NOT NULL with a default of false; an explicit null overrides the
+      // default and fails the insert. Nobody consented to what nobody asked.
+      tracking_consent: origin.trackingConsent ?? false,
       buyer_country: origin.buyerCountry,
       // The campaign that won the sale owns its renewals too.
       utm_first: origin.utmFirst,
