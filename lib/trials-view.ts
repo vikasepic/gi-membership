@@ -36,11 +36,15 @@ export function deriveTrials(d: MoneyData): TrialRow[] {
     if (!s.trialEnd || !s.livemode) continue;
     const u = s.userId ? users.get(s.userId) : undefined;
     const paid = s.paidInvoices > 0;
+    // A trial with a cancellation already scheduled is running, but it will
+    // never be charged. Counting it as live overstates the trials in flight
+    // and flatters the conversion rate, since it never settles either way.
+    const stopping = !!s.cancelAt || s.cancelAtPeriodEnd;
     const outcome: TrialOutcome = paid
       ? "converted"
-      : s.status === "trialing"
+      : s.status === "trialing" && !stopping
         ? "on trial"
-        : s.canceledAt
+        : s.canceledAt || stopping
           ? "cancelled"
           : "ended unpaid";
     out.push({

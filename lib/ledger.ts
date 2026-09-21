@@ -53,6 +53,13 @@ export function deriveLedger(d: MoneyData): LedgerRow[] {
   for (const it of d.items) itemsByOrder.set(it.orderId, [...(itemsByOrder.get(it.orderId) ?? []), it]);
   const nameOf = (offerId: string | null, productId: string | null, fallback: string) =>
     (offerId && d.names.offers.get(offerId)?.name) || (productId && d.names.products.get(productId)?.name) || fallback;
+  // A subscription a connected app started carries no offer or product, so
+  // the only name anyone ever gave it is the app that holds the access.
+  const appBySub = new Map(
+    d.ownership.filter((o) => o.stripeSubscriptionId && o.appId).map((o) => [o.stripeSubscriptionId as string, d.names.apps.get(o.appId as string) ?? null]),
+  );
+  const subName = (s: MoneyData["subscriptions"][number]) =>
+    nameOf(s.offerId, s.productId, appBySub.get(s.stripeSubscriptionId) || "Subscription");
 
   const rows: LedgerRow[] = [];
   for (const o of d.orders) {
@@ -144,6 +151,40 @@ export function deriveLedger(d: MoneyData): LedgerRow[] {
       });
     }
   }
+  // A trial only reaches the timeline through the order that opened it. A
+  // subscription a connected app started never had one, so its trial — the
+  // beginning of the whole relationship — was missing from the ledger.
+  const trialed = new Set(rows.filter((r) => r.kind === "trial" && r.stripeSubscriptionId).map((r) => r.stripeSubscriptionId as string));
+  for (const s of d.subscriptions) {
+    if (!s.trialEnd || trialed.has(s.stripeSubscriptionId)) continue;
+    const u = s.userId ? d.users.find((x) => x.id === s.userId) : null;
+    rows.push({
+      id: `${s.stripeSubscriptionId}:trial`,
+      at: s.trialStart ?? s.startedAt,
+      userId: s.userId,
+      email: u?.email ?? "",
+      name: u?.name ?? null,
+      kind: "trial",
+      what: subName(s),
+      offerId: s.offerId,
+      productId: s.productId,
+      amountCents: 0,
+      currency: s.currency,
+      livemode: s.livemode,
+      source: "",
+      orderId: null,
+      stripeSubscriptionId: s.stripeSubscriptionId,
+      stripePaymentIntentId: null,
+      trial: {
+        endsAt: s.trialEnd,
+        thenCents: s.amountCents,
+        interval: s.interval,
+        outcome:
+          s.paidInvoices > 0 ? "converted" : s.status === "trialing" && !s.cancelAt && !s.cancelAtPeriodEnd ? "on trial" : s.canceledAt || s.cancelAt ? "cancelled" : "ended unpaid",
+        outcomeAt: s.paidInvoices > 0 ? s.firstPaidAt : s.canceledAt ?? s.trialEnd,
+      },
+    });
+  }
   for (const s of d.subscriptions) {
     if (!s.canceledAt) continue;
     const u = s.userId ? d.users.find((x) => x.id === s.userId) : null;
@@ -154,7 +195,7 @@ export function deriveLedger(d: MoneyData): LedgerRow[] {
       email: u?.email ?? "",
       name: u?.name ?? null,
       kind: "cancellation",
-      what: nameOf(s.offerId, s.productId, "Subscription"),
+      what: subName(s),
       offerId: s.offerId,
       productId: s.productId,
       amountCents: 0,

@@ -253,3 +253,47 @@ describe("when a member joined", () => {
     expect(deriveMembers(data).find((m) => m.id === "late")?.joinedAt).toBe("2026-08-05T18:11:41Z");
   });
 });
+
+describe("a trial that is already scheduled to stop", () => {
+  it("is not counted among the trials still in flight", () => {
+    const data = { ...DATA, subscriptions: [sub({ stripeSubscriptionId: "sub_out", userId: "eric", status: "trialing", cancelAt: "2026-09-25T10:00:00Z", canceledAt: "2026-09-20T10:00:00Z" })] };
+    const rows = deriveTrials(data);
+    expect(rows[0].outcome).toBe("cancelled");
+    expect(trialsFor(rows, "on trial")).toHaveLength(0);
+    expect(trialsFor(rows, "lost")).toHaveLength(1);
+  });
+});
+
+/**
+ * A subscription a connected app started has no order behind it, so nothing
+ * in the order tables records that it began with a trial. Seen live 21 Sep
+ * 2026: a member's funnel builder trial of 5 Aug was missing from her
+ * timeline, which opened on a renewal with no beginning.
+ */
+describe("a subscription with no order of its own", () => {
+  const appStarted = {
+    ...DATA,
+    users: [{ id: "britt", email: "britt@e.com", name: "Britt", isAdmin: false, createdAt: "2026-09-21T04:33:24Z" }],
+    orders: [],
+    items: [],
+    ownership: [{ userId: "britt", productId: null, offerId: null, appId: "app", status: "active", stripeSubscriptionId: "sub_app" }],
+    subscriptions: [
+      sub({ stripeSubscriptionId: "sub_app", userId: "britt", offerId: null, amountCents: 2900, status: "active", trialStart: "2026-08-05T18:11:41Z", trialEnd: "2026-08-12T18:11:41Z", startedAt: "2026-08-05T18:11:41Z", paidInvoices: 2, paidTotalCents: 5800, firstPaidAt: "2026-08-12T18:11:41Z" }),
+    ],
+  };
+
+  it("still puts its trial on the timeline, dated when the trial began", () => {
+    const trial = deriveLedger(appStarted).find((r) => r.kind === "trial");
+    expect(trial?.at).toBe("2026-08-05T18:11:41Z");
+    expect(trial?.trial?.endsAt).toBe("2026-08-12T18:11:41Z");
+    expect(trial?.trial?.outcome).toBe("converted");
+  });
+
+  it("names it after the app that holds the access, not 'Subscription'", () => {
+    expect(deriveLedger(appStarted).find((r) => r.kind === "trial")?.what).toBe("Content Engine");
+  });
+
+  it("does not double up when an order already recorded the trial", () => {
+    expect(deriveLedger(DATA).filter((r) => r.kind === "trial" && r.stripeSubscriptionId === "sub_dael")).toHaveLength(1);
+  });
+});
