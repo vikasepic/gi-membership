@@ -1,6 +1,6 @@
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
-import { recordRenewal } from "@/lib/renewals";
+import { recordRenewal, subscriptionIdOf } from "@/lib/renewals";
 import { reportReversal, handleDispute, disputeWon } from "@/lib/reversals";
 import { orderForPaymentIntent } from "@/lib/orders";
 import { finalizeOrder } from "@/lib/checkout";
@@ -107,9 +107,7 @@ export async function POST(req: Request) {
     // carries the authoritative status.
     case "invoice.payment_failed":
     case "invoice.payment_action_required": {
-      const invoice = event.data.object as Stripe.Invoice & { subscription?: string | null };
-      const subId =
-        typeof invoice.subscription === "string" ? invoice.subscription : undefined;
+      const subId = subscriptionIdOf(event.data.object as Stripe.Invoice) ?? undefined;
       if (subId) {
         await syncSubscriptionQuietly(subId);
         await syncSubscriptionOwnership(subId, "past_due");
@@ -146,8 +144,7 @@ export async function POST(req: Request) {
     // never told it converted.
     case "invoice.payment_succeeded": {
       const invoice = event.data.object as Stripe.Invoice;
-      const paidSub = (invoice as Stripe.Invoice & { subscription?: string | { id: string } | null }).subscription;
-      await syncSubscriptionQuietly(typeof paidSub === "string" ? paidSub : paidSub?.id);
+      await syncSubscriptionQuietly(subscriptionIdOf(invoice) ?? undefined);
       const res = await recordRenewal(invoice);
       // Loud on purpose. This is the one webhook that arrives every month for
       // the life of every subscription, so a reason that turns out to be wrong

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
+import { subscriptionIdOf } from "@/lib/renewals";
 
 /**
  * The money that arrives after the checkout.
@@ -192,5 +193,20 @@ describe("the backfill route", () => {
   it("is given room to finish", () => {
     // Hundreds of invoices, each a Stripe round trip.
     expect(route).toContain("maxDuration");
+  });
+});
+
+describe("subscriptionIdOf", () => {
+  const inv = (x: object) => x as unknown as Parameters<typeof subscriptionIdOf>[0];
+  it("reads the current API shape, where the id sits under parent", () => {
+    expect(subscriptionIdOf(inv({ parent: { subscription_details: { subscription: "sub_new" } } }))).toBe("sub_new");
+  });
+  it("still reads the older shapes", () => {
+    expect(subscriptionIdOf(inv({ subscription: "sub_old" }))).toBe("sub_old");
+    expect(subscriptionIdOf(inv({ subscription: { id: "sub_obj" } }))).toBe("sub_obj");
+    expect(subscriptionIdOf(inv({ lines: { data: [{ parent: { subscription_item_details: { subscription: "sub_line" } } }] } }))).toBe("sub_line");
+  });
+  it("is null for a one-off invoice", () => {
+    expect(subscriptionIdOf(inv({ parent: { subscription_details: null }, lines: { data: [{ parent: { invoice_item_details: {} } }] } }))).toBeNull();
   });
 });

@@ -189,12 +189,20 @@ function taxOf(invoice: Stripe.Invoice): number {
 }
 
 /** Stripe moved this off the invoice root; read it from either shape. */
-function subscriptionIdOf(invoice: Stripe.Invoice): string | null {
+export function subscriptionIdOf(invoice: Stripe.Invoice): string | null {
+  // Current API: the id lives under `parent`. Older shapes carried it on the
+  // invoice and on each line. Seen 21 Sep 2026: every real renewal read as
+  // "no subscription" because only the older shapes were checked.
+  const parent = (invoice as unknown as { parent?: { subscription_details?: { subscription?: string | { id: string } | null } | null } | null }).parent;
+  const fromParent = parent?.subscription_details?.subscription;
+  if (typeof fromParent === "string") return fromParent;
+  if (fromParent && typeof fromParent === "object") return fromParent.id;
   const legacy = (invoice as unknown as { subscription?: string | { id: string } | null }).subscription;
   if (typeof legacy === "string") return legacy;
   if (legacy && typeof legacy === "object") return legacy.id;
   for (const line of invoice.lines?.data ?? []) {
-    const s = (line as unknown as { subscription?: string | null }).subscription;
+    const l = line as unknown as { subscription?: string | null; parent?: { subscription_item_details?: { subscription?: string | null } | null } | null };
+    const s = l.parent?.subscription_item_details?.subscription ?? l.subscription;
     if (typeof s === "string") return s;
   }
   return null;

@@ -405,3 +405,14 @@ written by the webhook and reconciled by `POST /api/cron/sync-subscriptions`;
 invoice id; a "trial" is a $0 line with a subscription id; "purchase" versus
 "upsell" on an offer line is decided by whether the line's offer is the order's
 `host_offer_id`. Test-mode rows count nowhere.
+
+## An invoice's subscription id moved under `parent` (21 Sep 2026)
+
+`invoice.subscription` is gone on the API version this repo pins; the id is
+`invoice.parent.subscription_details.subscription`, and on a line it is
+`line.parent.subscription_item_details.subscription`. Every renewal since the
+version bump read as "no subscription": no renewal orders, no dunning email on
+a failed charge, and a member with two paid months showed Total paid $0. The
+webhook was green the whole time because "skipped" is a success. Read the id
+through `subscriptionIdOf` in `lib/renewals.ts`, never off the invoice
+directly, and treat a skip counter that only ever grows as a failure signal.
