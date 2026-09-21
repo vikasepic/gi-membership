@@ -1,32 +1,37 @@
 import Link from "next/link";
-import { listMembers, accessForMember } from "@/lib/members";
+import { requireAdmin, adminEmails } from "@/lib/admin-guard";
 import { listProductOptions, listOfferOptions } from "@/lib/admin";
-import { adminEmails, isAdminEmail, requireAdmin } from "@/lib/admin-guard";
-import { AddMember } from "@/components/admin/add-member";
-import { MemberRowView } from "@/components/admin/member-row";
-import { money } from "@/lib/money";
+import { loadMoneyData } from "@/lib/money-data";
 import {
+  deriveMembers,
   applyMemberFilter,
-  memberChipCounts,
   memberFilterFrom,
   memberHref,
-  memberTotals,
+  memberTiles,
+  memberChipCounts,
+  JOURNEYS,
   type MemberFilter,
-} from "@/lib/member-view";
+} from "@/lib/member-money";
+import { money } from "@/lib/money";
+import { AddMember } from "@/components/admin/add-member";
+import { Tile, Chip, Pill, journeyTone, fmtDate, Soon, Th, Empty } from "@/components/admin/money-ui";
 
-const CHIPS: { key: MemberFilter["standing"]; label: string }[] = [
+/**
+ * Members: who they are, where they are in their journey, what comes next
+ * for them, and what they have paid us in total. Every tile follows the
+ * filter — filtering to the trials tells you about the trials.
+ */
+const CHIPS: { key: MemberFilter["journey"]; label: string }[] = [
   { key: "all", label: "All" },
-  { key: "paying", label: "Paying" },
-  { key: "trialing", label: "On trial" },
-  { key: "lapsed", label: "Lapsed" },
-  { key: "none", label: "No access" },
+  ...JOURNEYS.map((j) => ({ key: j, label: j[0].toUpperCase() + j.slice(1) })),
+  { key: "converted", label: "Converted" },
   { key: "admins", label: "Admins" },
 ];
-
 const SORTS: { key: MemberFilter["sort"]; label: string }[] = [
   { key: "newest", label: "Newest first" },
-  { key: "oldest", label: "Oldest first" },
-  { key: "spent", label: "Most spent" },
+  { key: "next", label: "Next event" },
+  { key: "total", label: "Total paid" },
+  { key: "last", label: "Last payment" },
 ];
 
 export default async function AdminMembersPage({
@@ -35,189 +40,126 @@ export default async function AdminMembersPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const filter = memberFilterFrom(await searchParams);
-  const [me, members] = await Promise.all([requireAdmin(), listMembers()]);
-
-  // Everything that can be granted by hand, in one list the form posts back as
-  // "kind:id" — products are owned outright, offers can carry app access.
-  const [products, offers] = await Promise.all([listProductOptions(), listOfferOptions()]);
+  const [, data, products, offers] = await Promise.all([requireAdmin(), loadMoneyData(), listProductOptions(), listOfferOptions()]);
+  const envAdmins = adminEmails();
+  const all = deriveMembers(data);
+  const shown = applyMemberFilter(all, filter, data.now, envAdmins);
+  const tiles = memberTiles(shown, data.now);
+  const counts = memberChipCounts(all, envAdmins);
   const grants = [
     ...products.map((p) => ({ value: `product:${p.id}`, label: `Product — ${p.title}` })),
     ...offers.map((o) => ({ value: `offer:${o.id}`, label: `Offer — ${o.name}` })),
   ];
-
-  const envAdmins = adminEmails();
-  const shown = applyMemberFilter(members, filter, envAdmins);
-  const counts = memberChipCounts(members, filter, envAdmins);
-  // Counted from what is on screen, so filtering to the trials tells you about
-  // the trials rather than about everyone.
-  const totals = memberTotals(shown, envAdmins);
-  const narrowed = shown.length !== members.length;
-
-  // Only the rows being shown need their access read.
-  const access = new Map(
-    await Promise.all(shown.map(async (m) => [m.id, await accessForMember(m.id)] as const)),
-  );
+  const things = [...products.map((p) => ({ id: p.id, name: p.title })), ...offers.map((o) => ({ id: o.id, name: o.name }))];
+  const cur = tiles.currency;
+  const active = (patch: Partial<MemberFilter>) => memberHref(filter, patch);
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl">Members</h1>
-          <p className="text-sm text-muted">
-            Everyone with an account, what they hold, and who can reach this admin.
-          </p>
-        </div>
-        {/* Behind a summary rather than open: adding someone is occasional, and
-            the form used to own the top third of the page permanently. */}
-        <details className="w-full max-w-2xl">
-          <summary className="w-fit cursor-pointer list-none rounded-full bg-primary px-5 py-2 text-sm font-medium text-primary-fg transition-colors hover:bg-primary-hover [&::-webkit-details-marker]:hidden">
-            + Add a member
-          </summary>
-          <div className="mt-3">
-            <AddMember grants={grants} />
-          </div>
-        </details>
-      </div>
-
-      <div className="flex flex-wrap items-end gap-x-8 gap-y-4 border-b border-border pb-4">
-        <Figure
-          label={narrowed ? "Showing" : "Members"}
-          value={String(totals.shown)}
-          hint={narrowed ? `of ${members.length}` : undefined}
-        />
-        <Figure
-          label="Paying"
-          value={String(totals.paying)}
-          hint={totals.spentCents ? money(totals.spentCents) : undefined}
-        />
-        <Figure label="On trial" value={String(totals.trialing)} />
-        <Figure label="Lapsed" value={String(totals.lapsed)} />
-        <Figure label="Admins" value={String(totals.admins)} />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        {CHIPS.map((c) => (
-          <Link
-            key={c.key}
-            href={memberHref(filter, { standing: c.key })}
-            aria-current={filter.standing === c.key ? "page" : undefined}
-            className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors ${
-              filter.standing === c.key
-                ? "border-primary bg-primary/10 font-medium text-primary"
-                : "border-border text-muted hover:border-fg hover:text-fg"
-            }`}
-          >
-            {c.label}
-            <span className="tabular-nums opacity-70">{counts[c.key]}</span>
-          </Link>
-        ))}
-
-        <form action="/admin/members" className="ml-auto flex flex-wrap items-center gap-2">
-          {filter.standing !== "all" && (
-            <input type="hidden" name="standing" value={filter.standing} />
-          )}
-          {filter.sort !== "newest" && <input type="hidden" name="sort" value={filter.sort} />}
-          <input
-            name="q"
-            defaultValue={filter.q}
-            placeholder="Search name or email"
-            aria-label="Search members"
-            className="w-52 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs outline-none focus:border-primary"
-          />
-          <select
-            name="sort"
-            defaultValue={filter.sort}
-            aria-label="Sort"
-            className="rounded-lg border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-primary"
-          >
-            {SORTS.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:border-primary hover:text-fg"
-          >
-            Apply
-          </button>
-          {(filter.q || filter.standing !== "all" || filter.sort !== "newest") && (
-            <Link href="/admin/members" className="text-xs text-muted underline-offset-4 hover:underline">
-              Clear
-            </Link>
-          )}
-        </form>
-      </div>
-
-      {shown.length === 0 ? (
-        <p className="rounded-2xl border border-border bg-surface px-5 py-10 text-center text-muted">
-          {members.length === 0
-            ? "No members yet."
-            : "Nobody matches that. Clear the filters to see everyone."}
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl">Members</h1>
+        <p className="max-w-2xl text-sm text-muted">
+          Everyone with an account, where they are in their journey, what happens to them next, and what they have paid in total. The numbers follow the filter.
         </p>
-      ) : (
-        <div className="overflow-x-auto rounded-2xl border border-border bg-surface">
-          <table className="w-full min-w-[44rem] border-collapse">
-            <thead>
-              <tr className="border-b border-border bg-surface-2">
-                <Th>Member</Th>
-                <Th>Joined</Th>
-                <Th>Holds</Th>
-                <Th>Orders</Th>
-                <Th right>Spent</Th>
-                <Th />
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((m) => (
-                <MemberRowView
-                  key={m.id}
-                  member={m}
-                  access={access.get(m.id) ?? []}
-                  grants={grants}
-                  isOwner={isAdminEmail(m.email)}
-                  isSelf={(me.email ?? "").toLowerCase() === m.email.toLowerCase()}
-                />
-              ))}
-            </tbody>
-          </table>
+      </div>
+
+      <details className="rounded-2xl border border-border bg-surface">
+        <summary className="cursor-pointer list-none px-5 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">+ Add a member</summary>
+        <div className="border-t border-border p-5"><AddMember grants={grants} /></div>
+      </details>
+
+      <div className="flex flex-wrap gap-2.5">
+        <Tile label={shown.length === all.length ? "Members" : "Showing"} value={String(tiles.members)} hint={shown.length === all.length ? undefined : `of ${all.length}`} />
+        <Tile label="Paying" value={String(tiles.paying)} hint={`${money(tiles.mrrCents, cur)} a month`} />
+        <Tile label="On trial" value={String(tiles.onTrial)} hint={tiles.endingThisWeek ? `${tiles.endingThisWeek} end this week` : "none ending this week"} tone={tiles.endingThisWeek ? "warn" : undefined} />
+        <Tile label="Converted this month" value={String(tiles.convertedThisMonth)} hint="trial → paid" />
+        <Tile label="Cancelled this month" value={String(tiles.cancelledThisMonth)} />
+        <Tile label="Collected" value={money(tiles.collectedCents, cur)} hint="all time, net of refunds" />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {CHIPS.map((c) => (
+          <Chip key={c.key} href={active({ journey: c.key })} active={filter.journey === c.key} count={counts[c.key] ?? 0}>
+            {c.label}
+          </Chip>
+        ))}
+      </div>
+
+      <form method="get" className="flex flex-wrap items-center gap-2">
+        {filter.journey !== "all" && <input type="hidden" name="journey" value={filter.journey} />}
+        <select name="offer" defaultValue={filter.offer} className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs">
+          <option value="">Any product or offer</option>
+          {things.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+        <label className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs ${filter.soon ? "border-primary bg-primary/10 text-primary" : "border-border bg-surface"}`}>
+          <input type="checkbox" name="soon" value="1" defaultChecked={filter.soon} className="sr-only" />
+          Next event within 7 days
+        </label>
+        <span className="flex-1" />
+        <input name="q" defaultValue={filter.q} placeholder="Search name or email" className="min-w-[14rem] rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs" />
+        <select name="sort" defaultValue={filter.sort} className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs">
+          {SORTS.map((s) => (
+            <option key={s.key} value={s.key}>{s.label}</option>
+          ))}
+        </select>
+        <button type="submit" className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs hover:border-primary">Apply</button>
+        {(filter.q || filter.offer || filter.soon || filter.sort !== "newest") && (
+          <Link href={active({ q: "", offer: "", soon: false, sort: "newest" })} className="text-xs text-muted hover:text-fg">Clear</Link>
+        )}
+      </form>
+
+      <div className="overflow-x-auto rounded-2xl border border-border bg-surface">
+        <table className="w-full min-w-[56rem] text-sm">
+          <thead className="bg-surface-2">
+            <tr>
+              <Th>Member</Th><Th>Joined</Th><Th>Journey</Th><Th>Next event</Th><Th right>Payments</Th><Th right>Total paid</Th><Th>Last payment</Th><Th />
+            </tr>
+          </thead>
+          <tbody>
+            {shown.length === 0 ? (
+              <tr><td colSpan={8}><Empty>Nobody matches. Clear a filter to see everyone.</Empty></td></tr>
+            ) : (
+              shown.map((m) => (
+                <tr key={m.id} className="border-t border-border align-top hover:bg-surface-2">
+                  <td className="px-3 py-3">
+                    <Link href={`/admin/members/${m.id}`} className="font-medium hover:text-primary">{m.name || m.email}</Link>
+                    {m.name && <div className="text-xs text-muted">{m.email}</div>}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3">{fmtDate(m.joinedAt)}<div className="text-xs text-muted">{m.source}</div></td>
+                  <td className="px-3 py-3">
+                    <Pill tone={journeyTone(m.journey)}>{m.journey}</Pill>
+                    {m.converted && m.journey === "paying" && <> <Pill tone="good">converted</Pill></>}
+                    {m.isAdmin && <> <Pill tone="quiet">admin</Pill></>}
+                    {(m.subs.length > 0 || m.holds.length > 0) && (
+                      <div className="mt-1 text-xs text-muted">{[...new Set([...m.subs.map((s) => s.name), ...m.holds])].join(", ")}</div>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3">
+                    {m.nextEvent ? (
+                      <>
+                        {m.nextEvent.what} <Soon iso={m.nextEvent.at} now={data.now} />
+                        <div className="text-xs text-muted">{fmtDate(m.nextEvent.at)} · {m.nextEvent.name}</div>
+                      </>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-right tabular-nums">{m.payments}{m.refunds ? <span className="text-xs text-muted"> · {m.refunds} refund{m.refunds === 1 ? "" : "s"}</span> : null}</td>
+                  <td className="px-3 py-3 text-right font-display tabular-nums">{money(m.totalPaidCents - m.refundedCents, m.currency)}</td>
+                  <td className="whitespace-nowrap px-3 py-3">{m.lastPaidAt ? fmtDate(m.lastPaidAt) : <span className="text-muted">never</span>}</td>
+                  <td className="px-3 py-3 text-muted"><Link href={`/admin/members/${m.id}`} aria-label="Open">›</Link></td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2 text-xs text-muted">
+          <span>{shown.length} people · {money(tiles.collectedCents, cur)} collected from them</span>
+          <a href={`/admin/members/export${memberHref(filter, {}).replace("/admin/members", "")}`} className="rounded-lg border border-border bg-surface px-3 py-1.5 hover:border-primary">Export CSV</a>
         </div>
-      )}
-
-      <p className="text-xs text-muted">
-        <strong className="text-fg">Owner</strong> accounts come from ADMIN_EMAILS
-        {envAdmins.length > 0 && <> ({envAdmins.join(", ")})</>} and can only be changed in the
-        environment. That list is deliberately outside this page, so nothing done here can lock
-        everyone out of the admin. <strong className="text-fg">Deleting</strong> removes the account,
-        its access and its progress for good, and is refused for anyone who has ordered — their
-        payments would be left with no customer attached, and that link is what a refund or a
-        chargeback needs. Revoke their access instead.
-      </p>
+      </div>
     </div>
-  );
-}
-
-function Figure({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="flex flex-col">
-      <span className="kicker text-muted">{label}</span>
-      <span className="font-display text-xl tabular-nums">
-        {value}
-        {hint && <span className="ml-1.5 text-xs font-normal text-muted">{hint}</span>}
-      </span>
-    </div>
-  );
-}
-
-function Th({ children, right }: { children?: React.ReactNode; right?: boolean }) {
-  return (
-    <th
-      className={`px-3 py-2 text-[0.62rem] font-medium uppercase tracking-[0.12em] text-muted ${
-        right ? "text-right" : "text-left"
-      }`}
-    >
-      {children}
-    </th>
   );
 }

@@ -12,6 +12,7 @@ import {
   revokeOwnershipForPaymentIntent,
 } from "@/lib/subscription-sync";
 import { planOutcome } from "@/lib/payment-plans";
+import { syncSubscriptionQuietly } from "@/lib/subscriptions";
 
 // Stripe webhook — the authoritative order finalizer and subscription-state
 // owner. Calls the SAME idempotent finalizeOrder as the thank-you page, so the
@@ -71,9 +72,18 @@ export async function POST(req: Request) {
     // Subscription lifecycle: trial -> active at day 7, dunning on a failed
     // renewal, cancellation. Store-created subs are tagged store_created in
     // metadata; we only own those (the connected app owns its own).
+    // The billing copy the admin reads (migration 0086). Its own case so a
+    // subscription's very first event — created, which nothing else here
+    // handled — writes the trial end the Members page shows. Never throws.
+    case "customer.subscription.created": {
+      await syncSubscriptionQuietly((event.data.object as Stripe.Subscription).id);
+      break;
+    }
+
     case "customer.subscription.updated":
     case "customer.subscription.deleted": {
       const sub = event.data.object as Stripe.Subscription;
+      await syncSubscriptionQuietly(sub.id);
       // A plan that ended is either paid off or given up on, and the event
       // looks the same either way. The invoices know which: only a paid one
       // with money on it is an instalment, so a trial's $0 opener is not.
@@ -101,6 +111,7 @@ export async function POST(req: Request) {
       const subId =
         typeof invoice.subscription === "string" ? invoice.subscription : undefined;
       if (subId) {
+        await syncSubscriptionQuietly(subId);
         await syncSubscriptionOwnership(subId, "past_due");
         // Access is deliberately kept while Stripe retries, so this email is
         // the only thing standing between an expired card and a customer who
@@ -135,6 +146,8 @@ export async function POST(req: Request) {
     // never told it converted.
     case "invoice.payment_succeeded": {
       const invoice = event.data.object as Stripe.Invoice;
+      const paidSub = (invoice as Stripe.Invoice & { subscription?: string | { id: string } | null }).subscription;
+      await syncSubscriptionQuietly(typeof paidSub === "string" ? paidSub : paidSub?.id);
       const res = await recordRenewal(invoice);
       // Loud on purpose. This is the one webhook that arrives every month for
       // the life of every subscription, so a reason that turns out to be wrong

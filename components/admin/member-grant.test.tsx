@@ -23,7 +23,7 @@ vi.mock("@/app/admin/members/actions", () => ({
 }));
 vi.mock("@/components/admin/delete-member", () => ({ DeleteMember: () => null }));
 
-const { MemberRowView } = await import("@/components/admin/member-row");
+const { GrantMore } = await import("@/components/admin/grant-more");
 
 const MEMBER = {
   id: "u1",
@@ -35,7 +35,7 @@ const MEMBER = {
   refundedOrders: 0,
   spentCents: 0,
   subscriptions: [],
-} as never;
+};
 
 const GRANTS = [
   { value: "product:p1", label: "Product — Digital Product Validator" },
@@ -57,24 +57,15 @@ function mount(access: unknown[] = []) {
   document.body.appendChild(host);
   const root = createRoot(host);
   mounted = root;
+  // What they already hold, in the picker's own "kind:id" vocabulary — the
+  // same rule the person page applies before handing the form its `held`.
+  const held = (access as { status: string; grantValue: string | null }[])
+    .filter((x) => x.status !== "canceled")
+    .map((x) => x.grantValue)
+    .filter((v): v is string => v !== null);
   act(() => {
-    root.render(
-      <table>
-        <tbody>
-          <MemberRowView
-            member={MEMBER}
-            access={access as never}
-            grants={GRANTS}
-            isOwner={false}
-            isSelf={false}
-          />
-        </tbody>
-      </table>,
-    );
+    root.render(<GrantMore userId={MEMBER.id} held={held} grants={GRANTS} />);
   });
-  // The row's detail panel is behind a click on the row itself.
-  const row = document.querySelector("tr")!;
-  act(() => row.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 }
 
 const boxes = () =>

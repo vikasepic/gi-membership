@@ -1095,6 +1095,34 @@ not in these tables; it is the `ownership` row for the app.
 
 ---
 
+### `subscriptions`
+
+One row per Stripe subscription, as billing facts: status, trial and period
+dates, cancel-at-period-end, and how many times it has paid and how much.
+Migration 0086, 21 Sep 2026. `ownership` stays the access record and holds
+only a subscription id and a status; this is what the Members, Transactions
+and Trials screens read for "trial ends", "renews", "converted" and a
+person's recurring amount, without a Stripe round trip per row.
+
+Written by `lib/subscriptions.ts` on `customer.subscription.created`,
+`.updated`, `.deleted`, `invoice.payment_succeeded` and
+`invoice.payment_failed`; filled once by `POST /api/cron/sync-subscriptions`
+(bearer `CRON_SECRET`), which is also the nightly reconcile. Stripe is the
+truth; a stale row is a missed webhook, and the cron repairs it.
+
+| Column | Type | Nullable | Notes |
+|---|---|---|---|
+| `stripe_subscription_id` | text | no | Unique. |
+| `user_id`, `offer_id`, `product_id` | uuid | yes | From the ownership row or the order line that started it. |
+| `status` | text | no | Stripe's word verbatim: trialing, active, past_due, canceled, unpaid, incomplete, paused. |
+| `amount_cents`, `currency`, `interval`, `interval_count`, `installments` | | | The price it bills at; `installments` for a payment plan. |
+| `trial_start`, `trial_end` | timestamptz | yes | |
+| `current_period_start`, `current_period_end` | timestamptz | yes | Read off the subscription item in this API version. |
+| `cancel_at_period_end`, `cancel_at`, `canceled_at`, `ended_at` | | | |
+| `paid_invoices`, `paid_total_cents`, `first_paid_at`, `last_paid_at` | | | Paid invoices with money on them; a trial's $0 invoice does not count. |
+| `livemode` | boolean | no | Test-mode rows count nowhere on the admin. |
+| `started_at`, `synced_at` | timestamptz | no | |
+
 ### `templates`
 
 *0 rows · 32 kB · RLS enabled*

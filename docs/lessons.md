@@ -392,3 +392,16 @@ wins at equal weight. Block-level Custom CSS goes through the same resolver.
 Also: keying inspector controls by kind alone reused one mounted rich text
 editor across two text blocks, which showed the previous block's words and
 wrote them into the new one on the next keystroke. Key by the block's id.
+
+## Money screens derive from one loader (21 Sep 2026)
+
+Members, Transactions, Trials and the person page all read `loadMoneyData()`
+once and derive from it in pure functions (`lib/member-money.ts`,
+`lib/ledger.ts`, `lib/trials-view.ts`), so a total on one page cannot
+disagree with another and the arithmetic is tested on one fixture without a
+database. Subscription dates and paid counts live in `subscriptions` (0086),
+written by the webhook and reconciled by `POST /api/cron/sync-subscriptions`;
+`ownership` stays the access record. A "renewal" is an order with a Stripe
+invoice id; a "trial" is a $0 line with a subscription id; "purchase" versus
+"upsell" on an offer line is decided by whether the line's offer is the order's
+`host_offer_id`. Test-mode rows count nowhere.

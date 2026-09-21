@@ -67,8 +67,11 @@ function groups(c: NavCounts): { title: string; items: Item[] }[] {
         { href: "/admin/attribution", label: "Attribution", icon: ICON.attribution },
         // Above Orders, because it is the page an order comes from.
         { href: "/admin/checkout", label: "Checkout", icon: ICON.checkout },
-        { href: "/admin/orders", label: "Orders", icon: ICON.orders, badge: n(c.orders) },
+        { href: "/admin/orders", label: "Transactions", icon: ICON.orders, badge: n(c.orders) },
         { href: "/admin/members", label: "Members", icon: ICON.members, badge: n(c.members) },
+        // Every free trial and what became of it. Its own page: the one
+        // question the members list cannot answer at a glance.
+        { href: "/admin/trials", label: "Trials", icon: ICON.members },
       ],
     },
     {

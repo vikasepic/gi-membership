@@ -22,7 +22,7 @@ const offer = readFileSync("lib/offer-checkout.ts", "utf8");
 const renewals = readFileSync("lib/renewals.ts", "utf8");
 const orders = readFileSync("lib/orders.ts", "utf8");
 const members = readFileSync("lib/members.ts", "utf8");
-const row = readFileSync("components/admin/order-row.tsx", "utf8");
+const page = readFileSync("app/admin/orders/page.tsx", "utf8");
 
 describe("the column", () => {
   it("defaults to live, because the rest of the table is", () => {
@@ -67,7 +67,7 @@ describe("what it changes", () => {
   });
 
   it("is visible in the orders list rather than only in the database", () => {
-    expect(row).toContain("!order.livemode &&");
-    expect(row).toContain("line-through");
+    expect(page).toContain("!r.livemode &&");
+    expect(page).toContain(">test<");
   });
 });

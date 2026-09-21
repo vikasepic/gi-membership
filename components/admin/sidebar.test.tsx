@@ -77,7 +77,7 @@ describe("the admin sidebar", () => {
       out.split("</a>").filter((c) => c.includes('aria-current="page"'));
     expect(current(render("/admin"))[0]).toContain("Products");
     const onOrders = current(render("/admin/orders"));
-    expect(onOrders[0]).toContain("Orders");
+    expect(onOrders[0]).toContain("Transactions");
     expect(onOrders.join()).not.toContain("Products");
   });
 

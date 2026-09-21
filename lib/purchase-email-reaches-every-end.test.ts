@@ -58,19 +58,20 @@ describe("every end of a checkout sends the welcome email", () => {
 });
 
 describe("what the admin calls a standalone offer line", () => {
-  const src = read("components/admin/order-row.tsx");
+  const src = read("lib/ledger.ts");
 
   it("says 'offer', not 'OTO', when the line sold the offer the order was for", () => {
     // An offer sold on its own page and an offer accepted as an upsell are
     // both written with kind "oto", so the kind alone called a standalone app
     // purchase an upsell.
-    expect(src).toContain("function lineKind(");
-    expect(src).toContain('item.kind === "oto" && hostOfferId && item.offerId === hostOfferId');
-    expect(src).toContain('return "offer"');
+    expect(src).toContain('it.kind === "oto"');
+    expect(src).toContain("o.hostOfferId && it.offerId === o.hostOfferId");
+    expect(src).toMatch(/o\.hostOfferId && it\.offerId === o\.hostOfferId\s*\?\s*"purchase"\s*:\s*"upsell"/);
   });
 
   it("leaves a real upsell, and anything predating the column, as it was", () => {
-    expect(src).toContain("return item.kind;");
+    expect(src).toMatch(/:\s*"upsell"/);
+    expect(src).toContain('it.kind === "bump"');
   });
 
   it("reads the two columns that make the distinction possible", () => {
