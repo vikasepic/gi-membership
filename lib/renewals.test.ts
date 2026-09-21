@@ -23,11 +23,16 @@ describe("which invoices count", () => {
     expect(renewals).toContain('"subscription_cycle"');
   });
 
-  it("the checkout's own invoice does NOT", () => {
+  it("the checkout's own invoice does NOT, unless nothing on our side ever recorded that sale", () => {
     // `subscription_create` is raised by the checkout. That sale is already an
     // order and already a Purchase; recording it here would count it twice.
-    expect(renewals).not.toContain('"subscription_create"');
+    // The one exception is a subscription a connected app started, which has
+    // no order at all — its first charge is real money with no row, and it
+    // is let through only when the origin came from the access row.
     expect(renewals).toContain("RENEWAL_REASONS.has(reason)");
+    expect(renewals).toContain("if (firstCharge && origin.fromOrder) return");
+    expect(renewals).toContain("fromOrder: true");
+    expect(renewals).toContain("fromOrder: false");
   });
 
   it("an invoice that charged nothing does not", () => {

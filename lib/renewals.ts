@@ -50,7 +50,8 @@ export async function recordRenewal(
   // sale is already an order and already a Purchase; recording it here would
   // bill the buyer nothing twice and count the conversion twice.
   const reason = invoice.billing_reason ?? "";
-  if (!RENEWAL_REASONS.has(reason)) return { recorded: false, reason: `billing_reason ${reason || "none"}` };
+  const firstCharge = reason === "subscription_create";
+  if (!RENEWAL_REASONS.has(reason) && !firstCharge) return { recorded: false, reason: `billing_reason ${reason || "none"}` };
 
   // A $0 invoice is a trial period rolling over, or a credit covering the
   // whole amount. Nothing moved, so there is nothing to receipt or report.
@@ -72,6 +73,10 @@ export async function recordRenewal(
   // exactly one of them.
   const origin = await originOrderFor(sub);
   if (!origin) return { recorded: false, reason: "no order for subscription" };
+  // The checkout's own invoice is already an order — unless nothing on our
+  // side ever wrote one, which is a subscription an app started. Seen 21 Sep
+  // 2026: a member with two paid months and a Total paid of $0.
+  if (firstCharge && origin.fromOrder) return { recorded: false, reason: `billing_reason ${reason}` };
 
   const { data: created, error } = await db
     .from("orders")
@@ -216,6 +221,12 @@ type Origin = {
   productId: string | null;
   offerId: string | null;
   description: string | null;
+  /**
+   * False when the subscription has no order line — one started from a
+   * connected app rather than the store's checkout. Its first invoice was
+   * never an order, so that one is recorded here too.
+   */
+  fromOrder: boolean;
 };
 
 /**
@@ -236,7 +247,7 @@ async function originOrderFor(subscriptionId: string): Promise<Origin | null> {
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
-  if (!item) return null;
+  if (!item) return originFromOwnership(db, subscriptionId);
 
   const { data: order } = await db
     .from("orders")
@@ -262,6 +273,51 @@ async function originOrderFor(subscriptionId: string): Promise<Origin | null> {
     productId: (item.product_id as string | null) ?? null,
     offerId: (item.offer_id as string | null) ?? null,
     description: (item.description as string | null) ?? null,
+    fromOrder: true,
+  };
+}
+
+/**
+ * A subscription with no order line: one a connected app started. The access
+ * row knows who and what; the money is still ours and still belongs on the
+ * ledger, so it is recorded against the person with what the row can say.
+ */
+async function originFromOwnership(
+  db: ReturnType<typeof createServiceClient>,
+  subscriptionId: string,
+): Promise<Origin | null> {
+  const { data: own } = await db
+    .from("ownership")
+    .select("store_id, user_id, product_id, offer_id, app_id, users(email), apps(name), offers(name), products(title)")
+    .eq("stripe_subscription_id", subscriptionId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!own?.user_id) return null;
+  const one = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
+  const user = one(own.users as { email?: string } | { email?: string }[] | null);
+  if (!user?.email) return null;
+  const description =
+    one(own.offers as { name?: string } | { name?: string }[] | null)?.name ??
+    one(own.products as { title?: string } | { title?: string }[] | null)?.title ??
+    one(own.apps as { name?: string } | { name?: string }[] | null)?.name ??
+    null;
+  return {
+    storeId: own.store_id as string,
+    userId: own.user_id as string,
+    email: user.email,
+    currency: "usd",
+    stripeCustomerId: null,
+    visitorId: null,
+    trackingConsent: null,
+    buyerCountry: null,
+    utmFirst: {},
+    utmLast: {},
+    referrer: null,
+    productId: (own.product_id as string | null) ?? null,
+    offerId: (own.offer_id as string | null) ?? null,
+    description,
+    fromOrder: false,
   };
 }
 
@@ -301,11 +357,13 @@ export async function backfillRenewals(): Promise<{
 
   // Ours, from our own records. Deduplicated: one subscription can appear on
   // several lines once its renewals are booked.
-  const { data: lines } = await db
-    .from("order_items")
-    .select("stripe_subscription_id")
-    .not("stripe_subscription_id", "is", null);
-  const subs = [...new Set((lines ?? []).map((l) => l.stripe_subscription_id as string))];
+  const [{ data: lines }, { data: owns }] = await Promise.all([
+    db.from("order_items").select("stripe_subscription_id").not("stripe_subscription_id", "is", null),
+    // And the access rows: a subscription an app started has no order line
+    // and would otherwise never be walked.
+    db.from("ownership").select("stripe_subscription_id").not("stripe_subscription_id", "is", null),
+  ]);
+  const subs = [...new Set([...(lines ?? []), ...(owns ?? [])].map((l) => l.stripe_subscription_id as string).filter(Boolean))];
 
   const out = {
     subscriptions: subs.length,
