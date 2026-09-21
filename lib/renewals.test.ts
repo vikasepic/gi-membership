@@ -53,7 +53,11 @@ describe("recording it once", () => {
   });
 
   it("treats the duplicate as success, not as a failure to retry", () => {
-    expect(renewals).toMatch(/23505"\) return \{ recorded: false, reason: "already recorded" \}/);
+    // It never throws on 23505, and every path out of that branch reports a
+    // reason beginning "already recorded" — the caller counts it as skipped,
+    // not as work to retry.
+    expect(renewals).toMatch(/23505"\) \{/);
+    expect(renewals).toMatch(/return \{ recorded: false, reason: fixed\?\.length \? "already recorded, date corrected" : "already recorded" \}/);
   });
 });
 
@@ -219,6 +223,16 @@ describe("an origin without a consent answer", () => {
 
 describe("a renewal order is dated by the invoice", () => {
   it("uses the paid_at transition, not the time the record was written", () => {
-    expect(renewals).toContain("created_at: new Date(((invoice.status_transitions?.paid_at ?? invoice.created)");
+    expect(renewals).toContain("const paidAt = new Date(((invoice.status_transitions?.paid_at ?? invoice.created)");
+    expect(renewals).toContain("created_at: paidAt,");
+  });
+
+  it("corrects a row an earlier run dated wrongly, instead of leaving it", () => {
+    // Rows written before the date was taken from the invoice carry the day
+    // the backfill ran. The duplicate-key branch is the only place that ever
+    // sees them again.
+    expect(renewals).toContain('.eq("stripe_invoice_id", invoice.id)');
+    expect(renewals).toContain('.neq("created_at", paidAt)');
+    expect(renewals).toContain('"already recorded, date corrected"');
   });
 });

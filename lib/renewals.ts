@@ -68,6 +68,10 @@ export async function recordRenewal(
 
   const db = createServiceClient();
 
+  // Dated when Stripe took the money, not when this ran. A backfill months
+  // later that stamps today puts every renewal on one day.
+  const paidAt = new Date(((invoice.status_transitions?.paid_at ?? invoice.created) || Math.floor(Date.now() / 1000)) * 1000).toISOString();
+
   // Who this is, found through the subscription rather than the customer: one
   // Stripe customer can hold several subscriptions, and the renewal belongs to
   // exactly one of them.
@@ -93,7 +97,7 @@ export async function recordRenewal(
       stripe_invoice_id: invoice.id,
       // Dated when Stripe took the money, not when this ran. A backfill
       // months later that stamps today puts every renewal on one day.
-      created_at: new Date(((invoice.status_transitions?.paid_at ?? invoice.created) || Math.floor(Date.now() / 1000)) * 1000).toISOString(),
+      created_at: paidAt,
       // Straight from the invoice — Stripe stamps every object with its own
       // mode, which is a better answer than the key we happen to be holding.
       livemode: invoice.livemode !== false,
@@ -117,7 +121,18 @@ export async function recordRenewal(
   // redelivers on any non-2xx and on its own schedule, and two deliveries
   // racing would otherwise both read "no order yet" and both write one.
   if (error) {
-    if (error.code === "23505") return { recorded: false, reason: "already recorded" };
+    if (error.code === "23505") {
+      // Already recorded — but a row written before this function dated its
+      // orders by the invoice carries the day the backfill ran. Correct it
+      // in place: the money is right, only its date was wrong.
+      const { data: fixed } = await db
+        .from("orders")
+        .update({ created_at: paidAt })
+        .eq("stripe_invoice_id", invoice.id)
+        .neq("created_at", paidAt)
+        .select("id");
+      return { recorded: false, reason: fixed?.length ? "already recorded, date corrected" : "already recorded" };
+    }
     throw new Error(`recordRenewal order: ${error.message}`);
   }
   const orderId = created.id as string;
