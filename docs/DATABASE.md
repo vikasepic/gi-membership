@@ -1314,10 +1314,8 @@ un-stripped because these rows are historical and the visit log labels them
 as such).
 
 `app/api/cron/prune-visits` deletes rows past 400 days (`visit_steps`
-follows by `ON DELETE CASCADE`); it exists but nothing calls it — it must be
-wired to the same schedule as `app/api/cron/retry` by whoever owns the cron
-config (Coolify, in this deploy), same shared-secret POST. Until that
-schedule exists, this table only grows.
+follows by `ON DELETE CASCADE`). Scheduled in Coolify since 21 Sep 2026,
+Sundays at 04:20 — see the scheduled-task table in `docs/errors-and-retries.md`.
 
 ---
 

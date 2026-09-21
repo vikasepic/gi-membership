@@ -85,3 +85,24 @@ retry would succeed.
 - **Nothing alerts.** You have to look at the page. An email or Slack ping on
   "gave up" would be the next thing worth adding.
 - **Stripe webhooks are not queued here** — Stripe does its own retries.
+
+## Every scheduled task on this deploy
+
+Coolify → gi-membership → Scheduled Tasks. All five run the same shape: a
+`node -e` fetch to `127.0.0.1:3000` with the bearer secret read from the
+container's own environment. Container field `r11f09w16h8afmpt0ilxey2q`.
+
+| Name | Route | Frequency | What breaks without it |
+|---|---|---|---|
+| `retry-failed-jobs` | `/api/cron/retry` | `*/5 * * * *` | the queue never drains |
+| `retry-sweep` | `/api/cron/retry` | `*/5 * * * *` | duplicate of the above |
+| `sync-subscriptions` | `/api/cron/sync-subscriptions` | `10 3 * * *` | a missed webhook leaves a subscription's status, trial end and next charge stale forever |
+| `backfill-renewals` | `/api/cron/backfill-renewals` | `40 3 * * *` | a renewal Stripe charged but never delivered is money with no order; it also repairs a renewal's date |
+| `prune-visits` | `/api/cron/prune-visits` | `20 4 * * 0` | `visits` only grows |
+
+`retry-failed-jobs` and `retry-sweep` are the same job twice, five minutes
+apart from each other by chance. Harmless (the queue claims its rows) but
+wasteful, and one of them should go.
+
+`sync-subscriptions` runs before `backfill-renewals` on purpose: the backfill
+walks the subscription ids the sync just refreshed.
