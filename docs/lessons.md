@@ -416,3 +416,16 @@ a failed charge, and a member with two paid months showed Total paid $0. The
 webhook was green the whole time because "skipped" is a success. Read the id
 through `subscriptionIdOf` in `lib/renewals.ts`, never off the invoice
 directly, and treat a skip counter that only ever grows as a failure signal.
+
+## A scheduled cancellation is not always `cancel_at_period_end` (21 Sep 2026)
+
+Stripe ends a subscription two ways. The dashboard button sets
+`cancel_at_period_end`; an API cancellation with a date sets `cancel_at` and
+leaves that flag false. Reading only the flag showed a member whose
+subscription stops on 12 Oct as "paying", with "renews in 22 days" pointing at
+the very date it ends. `subView` now treats either as cancelling. Read both
+whenever you ask whether a subscription has a future.
+
+Related: a user row is created the first time this store sees someone, which
+for a subscription a connected app started is the day the sync ran. "Joined"
+is now the oldest of the row, their first order and their first subscription.

@@ -91,14 +91,19 @@ export function subView(s: SubscriptionRow, name: string): SubView {
   const trialing = s.status === "trialing";
   const live = s.status === "active" || s.status === "past_due" || s.status === "trialing";
   let state: SubView["state"];
-  if (trialing) state = "on trial";
+  // Stripe ends a subscription two ways: `cancel_at_period_end`, or a dated
+  // `cancel_at` with that flag left false. Reading only the flag calls a
+  // subscription that stops next month "paying", and promises the owner a
+  // renewal that will never be charged.
+  const ending = live && (s.cancelAtPeriodEnd || !!s.cancelAt);
+  if (trialing && !ending) state = "on trial";
   else if (s.status === "past_due") state = "past due";
-  else if (live && s.cancelAtPeriodEnd) state = "cancelling";
+  else if (ending) state = trialing ? "trial cancelled" : "cancelling";
   else if (live) state = "paying";
   else if (!paid && (s.canceledAt || s.endedAt)) state = "trial cancelled";
   else if (!paid) state = "trial ended";
   else state = "cancelled";
-  const cancelsAt = live && s.cancelAtPeriodEnd ? (s.cancelAt ?? s.currentPeriodEnd) : null;
+  const cancelsAt = ending ? (s.cancelAt ?? s.currentPeriodEnd) : null;
   const nextChargeAt =
     state === "on trial" ? s.trialEnd : state === "paying" || state === "past due" ? s.currentPeriodEnd : null;
   return {
@@ -186,7 +191,12 @@ export function deriveMembers(d: MoneyData): MemberMoney[] {
       email: u.email,
       name: u.name,
       isAdmin: u.isAdmin,
-      joinedAt: u.createdAt,
+      // The user row is created the first time this store sees them, which
+      // for a subscription a connected app started is the day the sync ran,
+      // not the day they joined. Their oldest money is the better answer.
+      joinedAt: [u.createdAt, orders[0]?.createdAt, ...subs.map((s) => s.startedAt)]
+        .filter((x): x is string => !!x)
+        .reduce((a, b) => (ms(b) < ms(a) ? b : a)),
       source: first ? sourceOf(first.utmFirst, first.referrer) : "direct",
       journey,
       converted,

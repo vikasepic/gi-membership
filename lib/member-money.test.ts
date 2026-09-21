@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { MoneyData } from "@/lib/money-data";
 import type { SubscriptionRow } from "@/lib/subscriptions";
-import { deriveMembers, applyMemberFilter, memberTiles, DEFAULT_MEMBER_FILTER, monthlyCents, sourceOf } from "@/lib/member-money";
+import { deriveMembers, applyMemberFilter, memberTiles, DEFAULT_MEMBER_FILTER, monthlyCents, sourceOf, subView } from "@/lib/member-money";
 import { deriveLedger, applyLedgerFilter, ledgerTotals, breakdown, DEFAULT_LEDGER_FILTER } from "@/lib/ledger";
 import { deriveTrials, trialsFor, trialsByWeek } from "@/lib/trials-view";
 
@@ -200,5 +200,56 @@ describe("trials", () => {
     const weeks = trialsByWeek(rows);
     expect(weeks[0]).toMatchObject({ weekStart: "2026-09-14T00:00:00.000Z", started: 1, pending: 1 });
     expect(weeks[1]).toMatchObject({ weekStart: "2026-09-07T00:00:00.000Z", started: 2, converted: 1, lost: 1, paidCents: 5800 });
+  });
+});
+
+/**
+ * Stripe schedules an end two ways. `cancel_at_period_end` is the one the
+ * dashboard's button sets; a dated `cancel_at` leaves that flag false. Seen
+ * live 21 Sep 2026: a member whose subscription stops on 12 Oct was shown
+ * as paying, with "renews in 22 days" against the very date it ends.
+ */
+describe("a subscription that is scheduled to end", () => {
+  it("is cancelling, and its next event is the cancellation", () => {
+    const v = subView(
+      sub({ status: "active", cancelAtPeriodEnd: false, cancelAt: "2026-10-12T18:11:41Z", canceledAt: "2026-09-21T03:33:50Z", paidInvoices: 2, paidTotalCents: 5800, currentPeriodEnd: "2026-10-12T18:11:41Z" }),
+      "funnel builder",
+    );
+    expect(v.state).toBe("cancelling");
+    expect(v.cancelsAt).toBe("2026-10-12T18:11:41Z");
+    expect(v.nextChargeAt).toBeNull();
+  });
+
+  it("still counts toward what recurs, because the money has not stopped yet", () => {
+    const v = subView(sub({ status: "active", cancelAt: "2026-10-12T18:11:41Z", amountCents: 2900, paidInvoices: 2 }), "x");
+    expect(monthlyCents(v)).toBe(2900);
+  });
+
+  it("reads as a cancelled trial when the cancellation lands before the first charge", () => {
+    const v = subView(sub({ status: "trialing", cancelAt: "2026-09-25T10:00:00Z" }), "x");
+    expect(v.state).toBe("trial cancelled");
+  });
+
+  it("leaves an ordinary subscription alone", () => {
+    const v = subView(sub({ status: "active", currentPeriodEnd: "2026-10-17T10:00:00Z", paidInvoices: 1 }), "x");
+    expect(v.state).toBe("paying");
+    expect(v.cancelsAt).toBeNull();
+    expect(v.nextChargeAt).toBe("2026-10-17T10:00:00Z");
+  });
+});
+
+describe("when a member joined", () => {
+  it("is their oldest money, not the day this store first wrote a row for them", () => {
+    // A subscription a connected app started creates the user row on the day
+    // the sync runs. Eric's Funnel App trial began 18 Sep; his row says 18 Sep
+    // too, so the honest date is unchanged here — Dael is the one who proves
+    // the rule, joining on her trial rather than her row.
+    const dael = deriveMembers(DATA).find((m) => m.id === "dael");
+    expect(dael?.joinedAt).toBe("2026-09-10T09:00:00Z");
+  });
+
+  it("prefers a subscription older than the user row", () => {
+    const data = { ...DATA, users: [{ id: "late", email: "late@e.com", name: null, isAdmin: false, createdAt: "2026-09-21T04:33:24Z" }], orders: [], items: [], ownership: [], subscriptions: [sub({ stripeSubscriptionId: "sub_late", userId: "late", status: "active", startedAt: "2026-08-05T18:11:41Z", paidInvoices: 2, paidTotalCents: 5800 })] };
+    expect(deriveMembers(data).find((m) => m.id === "late")?.joinedAt).toBe("2026-08-05T18:11:41Z");
   });
 });
