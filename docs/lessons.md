@@ -429,3 +429,18 @@ whenever you ask whether a subscription has a future.
 Related: a user row is created the first time this store sees someone, which
 for a subscription a connected app started is the day the sync ran. "Joined"
 is now the oldest of the row, their first order and their first subscription.
+
+## A lesson's video URL was framed without being parsed (21 Sep 2026)
+
+`lesson-view.tsx` put `item.videoEmbedUrl` straight into an iframe `src`,
+while every other video in the codebase went through `videoEmbed()` with its
+host allowlist. So the paid area framed whatever an admin pasted, and the
+lesson form advertised Loom, which the embed builder had never supported.
+Lesson video now goes through `lessonVideo()` and an unrecognised link renders
+a message instead of a frame. If you add a provider, add it there: the player
+needs to know which provider it is talking to anyway, because the resume
+offset is a query parameter on YouTube and a fragment on Vimeo.
+
+Related, same day: `progress.position_seconds` had existed since 0001 with two
+helpers to read and write it and no callers at all. A column nobody writes and
+a helper nobody calls look identical to a working feature from the outside.

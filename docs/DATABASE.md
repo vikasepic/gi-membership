@@ -1052,11 +1052,13 @@ not in these tables; it is the `ownership` row for the app.
 | `product_id` | uuid | yes |  |  |
 | `lesson_id` | uuid | yes |  |  |
 | `completed` | boolean | no | `false` |  |
-| `position_seconds` | integer | yes |  |  |
+| `position_seconds` | integer | yes |  | Playhead, whole seconds. Written every 20s while a video plays. |
 | `updated_at` | timestamptz | no | `now()` |  |
 | `completed_source` | text | yes |  |  |
 | `manual_override` | boolean | no | `false` |  |
 | `course_id` | uuid | yes |  |  |
+| `duration_seconds` | integer | yes |  | Length of the video as the player reported it, so a percentage needs no third-party call. |
+| `last_viewed_at` | timestamptz | yes |  | When the member OPENED the lesson. Not `updated_at`, which also moves on a position save. |
 
 **Keys:** `PRIMARY KEY (id)`; `UNIQUE (store_id, user_id, lesson_id)`
 
@@ -1071,6 +1073,16 @@ not in these tables; it is the `ownership` row for the app.
 **Check constraints:**
 
 - `CHECK ((completed_source = ANY (ARRAY['manual'::text, 'video'::text, 'download'::text, 'dwell'::text])))`
+- `progress_position_sane`: `position_seconds is null or position_seconds >= 0`
+- `progress_duration_sane`: `duration_seconds is null or duration_seconds > 0`
+
+Both added by `0087_watch_progress.sql`. They are invisible to tsc, vitest and
+`next build`, so they are asserted against the real database in
+`lib/watch-progress.integration.test.ts`. A negative position or a zero
+duration is a bug in the player bridge and should fail at the write rather
+than render as a resume prompt pointing at -3 seconds or a bar dividing by
+zero. Reading side: `lib/watch.ts` holds every rule, `lib/progress.ts` the
+writes, `lib/learning.ts` the admin and library roll-ups.
 
 **Indexes:**
 

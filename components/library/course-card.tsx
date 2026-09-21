@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { metaFor } from "@/components/course-type";
+import { percent } from "@/lib/watch";
+import type { CourseProgress } from "@/lib/learning";
 
 /**
  * A course the reader already owns.
@@ -19,6 +21,7 @@ export function LibraryCourseCard({
   type,
   coverUrl,
   index = 0,
+  progress = null,
 }: {
   slug: string;
   title: string;
@@ -26,6 +29,8 @@ export function LibraryCourseCard({
   type?: string | null;
   coverUrl?: string | null;
   index?: number;
+  /** Omitted where there is no member to have progress, such as a preview. */
+  progress?: CourseProgress | null;
 }) {
   const meta = metaFor(type);
   return (
@@ -58,8 +63,23 @@ export function LibraryCourseCard({
       <div className="flex flex-1 flex-col gap-2 p-5">
         <h3 className="text-lg leading-snug">{title}</h3>
         {subtitle && <p className="flex-1 text-sm text-muted">{subtitle}</p>}
+        {/* Only once a course has something to count. A bar reading 0% on
+            every card of an untouched library is decoration that tells the
+            reader they have failed at something they have not started. */}
+        {progress && progress.total > 0 && progress.fraction > 0 && (
+          <div className="mt-2 flex flex-col gap-1.5">
+            <div className="h-1 w-full overflow-hidden rounded-full bg-surface-2">
+              <div className="h-full bg-primary" style={{ width: `${percent(progress.fraction)}%` }} />
+            </div>
+            <span className="text-xs text-muted">
+              {progress.done === progress.total
+                ? "Finished"
+                : `${progress.done} of ${progress.total} \u00b7 ${percent(progress.fraction)}%`}
+            </span>
+          </div>
+        )}
         <span className="mt-2 border-t border-border pt-3 text-sm font-medium text-primary group-hover:underline">
-          Open &rarr;
+          {progress && progress.fraction > 0 && progress.done !== progress.total ? "Continue \u2192" : "Open \u2192"}
         </span>
       </div>
     </Link>

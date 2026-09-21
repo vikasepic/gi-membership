@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { CompletionControls } from "@/components/library/completion-controls";
+import { VideoPlayer } from "@/components/library/video-player";
 import { AudioPlayer } from "@/components/library/audio-player";
 import { TrackView } from "@/components/track-view";
 import type { Course } from "@/lib/courses";
 import type { CourseItem } from "@/lib/curriculum";
+import type { WatchRow } from "@/lib/watch";
 
 // One lesson, as a learner sees it.
 //
@@ -28,6 +30,7 @@ export function LessonView({
   lessonHref,
   backHref,
   interactive = true,
+  watch = null,
 }: {
   course: Course;
   item: CourseItem;
@@ -39,6 +42,8 @@ export function LessonView({
   lessonHref: ((itemId: string) => string) | null;
   backHref: { href: string; label: string } | null;
   interactive?: boolean;
+  /** Where this member stopped, for the resume prompt. Null in a preview. */
+  watch?: WatchRow | null;
 }) {
   // Every source, not just the first. A lesson can be a part one and a part
   // two, or a worksheet and a summary — showing only one silently hides work
@@ -77,19 +82,13 @@ export function LessonView({
 
       {/* Rendering follows the lesson's own type. */}
       {item.itemType === "video" && item.videoEmbedUrl && (
-        <div className="aspect-video w-full overflow-hidden rounded-2xl border border-border">
-          <iframe
-            data-gi-video
-            src={
-              /youtube\.com|youtu\.be/i.test(item.videoEmbedUrl)
-                ? `${item.videoEmbedUrl}${item.videoEmbedUrl.includes("?") ? "&" : "?"}enablejsapi=1`
-                : item.videoEmbedUrl
-            }
-            className="h-full w-full"
-            allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
-            allowFullScreen
-          />
-        </div>
+        <VideoPlayer
+          itemId={item.id}
+          courseId={course.id}
+          url={item.videoEmbedUrl}
+          watch={watch}
+          interactive={interactive}
+        />
       )}
 
       {item.itemType === "audio" &&
@@ -155,7 +154,6 @@ export function LessonView({
           itemId={item.id}
           productId={course.id}
           completed={completed}
-          videoUrl={item.itemType === "video" ? item.videoEmbedUrl : null}
           nextHref={next && lessonHref ? lessonHref(next.id) : (backHref?.href ?? "/library")}
         />
       ) : (

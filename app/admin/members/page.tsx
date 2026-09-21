@@ -15,6 +15,8 @@ import {
 import { money } from "@/lib/money";
 import { AddMember } from "@/components/admin/add-member";
 import { Tile, Chip, Pill, journeyTone, fmtDate, Soon, Th, Empty } from "@/components/admin/money-ui";
+import { lastViewedForUsers, lastSignInForAll } from "@/lib/learning";
+import { agoLabel } from "@/lib/watch";
 
 /**
  * Members: who they are, where they are in their journey, what comes next
@@ -32,6 +34,7 @@ const SORTS: { key: MemberFilter["sort"]; label: string }[] = [
   { key: "next", label: "Next event" },
   { key: "total", label: "Total paid" },
   { key: "last", label: "Last payment" },
+  { key: "seen", label: "Last seen" },
 ];
 
 export default async function AdminMembersPage({
@@ -43,7 +46,21 @@ export default async function AdminMembersPage({
   const [, data, products, offers] = await Promise.all([requireAdmin(), loadMoneyData(), listProductOptions(), listOfferOptions()]);
   const envAdmins = adminEmails();
   const all = deriveMembers(data);
-  const shown = applyMemberFilter(all, filter, data.now, envAdmins);
+  // Last seen is the later of signing in and opening a lesson: someone who
+  // signs in and reads is not dormant, and neither is someone whose session
+  // is still alive from last week but who opened a lesson this morning.
+  const [signIns, viewed] = await Promise.all([
+    lastSignInForAll(),
+    lastViewedForUsers(all.map((m) => m.id)),
+  ]);
+  const seen = new Map<string, string>();
+  for (const m of all) {
+    const a = signIns.get(m.id);
+    const b = viewed.get(m.id);
+    const latest = a && b ? (new Date(a) > new Date(b) ? a : b) : (a ?? b);
+    if (latest) seen.set(m.id, latest);
+  }
+  const shown = applyMemberFilter(all, filter, data.now, envAdmins, seen);
   const tiles = memberTiles(shown, data.now);
   const counts = memberChipCounts(all, envAdmins);
   const grants = [
@@ -114,12 +131,12 @@ export default async function AdminMembersPage({
         <table className="w-full min-w-[56rem] text-sm">
           <thead className="bg-surface-2">
             <tr>
-              <Th>Member</Th><Th>Joined</Th><Th>Journey</Th><Th>Next event</Th><Th right>Payments</Th><Th right>Total paid</Th><Th>Last payment</Th><Th />
+              <Th>Member</Th><Th>Joined</Th><Th>Journey</Th><Th>Next event</Th><Th right>Payments</Th><Th right>Total paid</Th><Th>Last payment</Th><Th>Last seen</Th><Th />
             </tr>
           </thead>
           <tbody>
             {shown.length === 0 ? (
-              <tr><td colSpan={8}><Empty>Nobody matches. Clear a filter to see everyone.</Empty></td></tr>
+              <tr><td colSpan={9}><Empty>Nobody matches. Clear a filter to see everyone.</Empty></td></tr>
             ) : (
               shown.map((m) => (
                 <tr key={m.id} className="border-t border-border align-top hover:bg-surface-2">
@@ -149,6 +166,16 @@ export default async function AdminMembersPage({
                   <td className="px-3 py-3 text-right tabular-nums">{m.payments}{m.refunds ? <span className="text-xs text-muted"> · {m.refunds} refund{m.refunds === 1 ? "" : "s"}</span> : null}</td>
                   <td className="px-3 py-3 text-right font-display tabular-nums">{money(m.totalPaidCents - m.refundedCents, m.currency)}</td>
                   <td className="whitespace-nowrap px-3 py-3">{m.lastPaidAt ? fmtDate(m.lastPaidAt) : <span className="text-muted">never</span>}</td>
+                  <td className="whitespace-nowrap px-3 py-3">
+                    {seen.get(m.id) ? (
+                      <>
+                        {agoLabel(seen.get(m.id) as string, data.now)}
+                        <div className="text-xs text-muted">{fmtDate(seen.get(m.id) as string)}</div>
+                      </>
+                    ) : (
+                      <span className="text-muted">never</span>
+                    )}
+                  </td>
                   <td className="px-3 py-3 text-muted"><Link href={`/admin/members/${m.id}`} aria-label="Open">›</Link></td>
                 </tr>
               ))

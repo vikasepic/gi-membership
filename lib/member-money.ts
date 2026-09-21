@@ -223,7 +223,7 @@ export type MemberFilter = {
   offer: string; // offer or product id, "" for any
   soon: boolean; // next event within 7 days
   q: string;
-  sort: "newest" | "next" | "total" | "last";
+  sort: "newest" | "next" | "total" | "last" | "seen";
 };
 export const DEFAULT_MEMBER_FILTER: MemberFilter = { journey: "all", offer: "", soon: false, q: "", sort: "newest" };
 
@@ -236,7 +236,7 @@ export function memberFilterFrom(sp: Record<string, string | string[] | undefine
     offer: one("offer").slice(0, 80),
     soon: one("soon") === "1",
     q: one("q").slice(0, 120),
-    sort: (["newest", "next", "total", "last"] as string[]).includes(sort) ? (sort as MemberFilter["sort"]) : "newest",
+    sort: (["newest", "next", "total", "last", "seen"] as string[]).includes(sort) ? (sort as MemberFilter["sort"]) : "newest",
   };
 }
 
@@ -255,7 +255,19 @@ export function memberHref(f: MemberFilter, patch: Partial<MemberFilter>): strin
 const within = (at: string | null | undefined, now: Date, days: number) =>
   !!at && ms(at) >= now.getTime() - 864e5 && ms(at) <= now.getTime() + days * 864e5;
 
-export function applyMemberFilter(rows: MemberMoney[], f: MemberFilter, now: Date, envAdmins: string[] = []): MemberMoney[] {
+/**
+ * `seen` is when each member was last anywhere near the store, which is the
+ * one thing on these screens that is not money and so is not in MoneyData.
+ * It arrives as a parameter rather than being loaded here, so this stays a
+ * pure function over rows it was given.
+ */
+export function applyMemberFilter(
+  rows: MemberMoney[],
+  f: MemberFilter,
+  now: Date,
+  envAdmins: string[] = [],
+  seen: Map<string, string> = new Map(),
+): MemberMoney[] {
   const admin = (m: MemberMoney) => m.isAdmin || envAdmins.includes(m.email.toLowerCase());
   let out = rows.filter((m) => {
     if (f.journey === "all") return true;
@@ -274,6 +286,10 @@ export function applyMemberFilter(rows: MemberMoney[], f: MemberFilter, now: Dat
     next: (a, b) => (a.nextEvent ? ms(a.nextEvent.at) : Infinity) - (b.nextEvent ? ms(b.nextEvent.at) : Infinity),
     total: (a, b) => b.totalPaidCents - a.totalPaidCents,
     last: (a, b) => (b.lastPaidAt ? ms(b.lastPaidAt) : 0) - (a.lastPaidAt ? ms(a.lastPaidAt) : 0),
+    // Never-seen sorts last rather than first: the question this sort asks is
+    // "who was here recently", and an answer led by people who have never
+    // arrived answers a different one.
+    seen: (a, b) => (seen.get(b.id) ? ms(seen.get(b.id) as string) : 0) - (seen.get(a.id) ? ms(seen.get(a.id) as string) : 0),
   };
   return [...out].sort(by[f.sort]);
 }

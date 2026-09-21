@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { videoSourceOf } from "@/lib/video-embed";
 import { useRouter } from "next/navigation";
 import {
   uploadItemFileAction,
@@ -27,14 +28,23 @@ const TYPE_LABEL: Record<ItemType, string> = {
   text: "Text",
 };
 
-// YouTube and Vimeo expose playback position cross-origin; other providers do
-// not, so their lessons complete on the dwell timer instead. Say which applies
-// rather than letting it look broken.
-function trackingNote(url: string): string {
-  if (!url) return "";
-  return /youtube\.com|youtu\.be|vimeo\.com/i.test(url)
-    ? "Auto-completes at 50% watched."
-    : "This provider can't report progress — completes on time-on-page instead.";
+// Only YouTube and Vimeo report a playback position to the page that framed
+// them, which is what resuming a long video and moving a progress bar both
+// need. Say what this link will actually do before it is saved, rather than
+// letting it look broken to a member later.
+function trackingNote(url: string): { tone: "ok" | "bad"; text: string } | null {
+  if (!url.trim()) return null;
+  const source = videoSourceOf(url);
+  if (source === "youtube" || source === "vimeo") {
+    return { tone: "ok", text: "Resumes where the member left off, and completes at 90% watched." };
+  }
+  if (source === "file") {
+    return { tone: "ok", text: "Self-hosted file. Resumes and completes at 90% watched." };
+  }
+  return {
+    tone: "bad",
+    text: "This link can't be played. Use a Vimeo or YouTube link, or a direct video file. Loom can't report progress and is not supported.",
+  };
 }
 
 export function LessonTypeFields({ item, kindLabel }: { item: CourseItem; kindLabel: string }) {
@@ -44,6 +54,7 @@ export function LessonTypeFields({ item, kindLabel }: { item: CourseItem; kindLa
     item.audioUrls.length ? item.audioUrls : [""],
   );
 
+  const note = trackingNote(videoUrl);
   const audioFiles = item.attachments.filter((a) => a.mime.startsWith("audio/"));
   const pdfFiles = item.attachments.filter((a) => a.mime === "application/pdf");
 
@@ -79,7 +90,7 @@ export function LessonTypeFields({ item, kindLabel }: { item: CourseItem; kindLa
       {/* Only the fields this type actually needs. A PDF lesson has no video
           URL to fill in; a video lesson doesn't pretend to be a worksheet. */}
       {type === "video" && (
-        <Section title="Video" hint="Vimeo, YouTube or Loom — paste the embed URL.">
+        <Section title="Video" hint="Vimeo or YouTube — paste the link. Long videos resume where the member stopped.">
           <Field label="Video URL">
             <input
               name="videoEmbedUrl"
@@ -88,7 +99,9 @@ export function LessonTypeFields({ item, kindLabel }: { item: CourseItem; kindLa
               className={input}
             />
           </Field>
-          {videoUrl && <p className="-mt-2 text-xs text-muted">{trackingNote(videoUrl)}</p>}
+          {note && (
+            <p className={`-mt-2 text-xs ${note.tone === "bad" ? "text-primary" : "text-muted"}`}>{note.text}</p>
+          )}
         </Section>
       )}
 

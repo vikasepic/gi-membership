@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCourseBySlug, userOwnsCourse } from "@/lib/courses";
 import { listCurriculum, getCourseItem } from "@/lib/curriculum";
 import { flattenPlayable, neighbours } from "@/lib/curriculum-student";
-import { completedItemIds } from "@/lib/progress";
+import { completedItemIds, watchRowFor, recordView } from "@/lib/progress";
 import { LessonView } from "@/components/library/lesson-view";
 import { NOINDEX } from "@/lib/seo";
 
@@ -33,7 +33,14 @@ export default async function ItemPage({
 
   const nodes = await listCurriculum(course.id);
   const { prev, next } = neighbours(flattenPlayable(nodes), itemId);
-  const done = await completedItemIds(user.id, course.id);
+  const [done, watch] = await Promise.all([
+    completedItemIds(user.id, course.id),
+    watchRowFor(user.id, item.id),
+  ]);
+  // Opening a lesson is the "last access" the library's continue box and the
+  // admin activity column both mean. Fire and forget: this runs on a page
+  // behind the paywall and a lost timestamp is worth nothing to interrupt.
+  recordView(user.id, course.id, item.id);
 
   return (
     <LessonView
@@ -42,6 +49,7 @@ export default async function ItemPage({
       prev={prev}
       next={next}
       completed={done.has(item.id)}
+      watch={watch}
       assetUrl={(i) => `/api/media/item/${item.id}/${i}`}
       lessonHref={(id) => `/library/${slug}/${id}`}
       backHref={{ href: `/library/${slug}`, label: course.title }}

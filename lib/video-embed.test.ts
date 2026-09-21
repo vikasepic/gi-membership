@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { videoEmbed, youtubeId, vimeoId, type VideoEmbed } from "@/lib/video-embed";
+import { videoEmbed, youtubeId, vimeoId, type VideoEmbed, videoSourceOf, lessonVideo } from "@/lib/video-embed";
 
 /** The framed src, or "" for anything we refused to frame. */
 const src = (e: VideoEmbed): string => (e && e.kind === "iframe" ? e.src : "");
@@ -133,5 +133,48 @@ describe("hosts are checked as hosts, not as substrings", () => {
 
   it("refuses a non-http scheme that still parses", () => {
     expect(youtubeId("ftp://youtu.be/aqz-KE-bpKQ")).toBeNull();
+  });
+});
+
+describe("recognising a pasted lesson link", () => {
+  it("names the provider for the two that can report their position", () => {
+    expect(videoSourceOf("https://vimeo.com/123456789")).toBe("vimeo");
+    expect(videoSourceOf("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBe("youtube");
+  });
+
+  it("refuses Loom, which cannot report a position at all", () => {
+    // The lesson form used to advertise Loom while the embed builder had
+    // never supported it, and the lesson page framed whatever was pasted.
+    expect(videoSourceOf("https://www.loom.com/share/0123456789abcdef0123456789abcdef")).toBeNull();
+    expect(lessonVideo("https://www.loom.com/share/0123456789abcdef0123456789abcdef")).toBeNull();
+  });
+
+  it("takes a self-hosted file only when it looks like one", () => {
+    // Any https link would otherwise become a <video> pointed at an HTML
+    // page: a broken player with nothing to diagnose.
+    expect(videoSourceOf("https://cdn.example.com/lesson-01.mp4")).toBe("file");
+    expect(videoSourceOf("https://cdn.example.com/lesson-01.webm")).toBe("file");
+    expect(videoSourceOf("https://drive.google.com/file/d/abc/view")).toBeNull();
+  });
+
+  it("refuses anything that is not https", () => {
+    expect(videoSourceOf("javascript:alert(1)")).toBeNull();
+    expect(videoSourceOf("http://example.com/clip.mp4")).toBeNull();
+    expect(videoSourceOf("")).toBeNull();
+    expect(videoSourceOf("   ")).toBeNull();
+  });
+
+  it("starts a resume where the member stopped", () => {
+    const yt = lessonVideo("https://www.youtube.com/watch?v=dQw4w9WgXcQ", { startSeconds: 6130 });
+    expect(yt?.kind === "iframe" && yt.src).toContain("start=6130");
+    const vi = lessonVideo("https://vimeo.com/123456789", { startSeconds: 6130 });
+    expect(vi?.kind === "iframe" && vi.src).toContain("#t=6130s");
+  });
+
+  it("leaves the start out when there is nothing to resume to", () => {
+    const yt = lessonVideo("https://www.youtube.com/watch?v=dQw4w9WgXcQ", { startSeconds: 0 });
+    expect(yt?.kind === "iframe" && yt.src).not.toContain("start=");
+    const vi = lessonVideo("https://vimeo.com/123456789");
+    expect(vi?.kind === "iframe" && vi.src).not.toContain("#t=");
   });
 });

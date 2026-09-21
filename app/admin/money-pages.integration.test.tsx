@@ -25,6 +25,7 @@ describe.skipIf(!canRun)("the money screens (integration)", () => {
     const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({}) }));
     expect(html).toContain("Members");
     expect(html).toContain("Collected");
+    expect(html).toContain("Last seen");
     expect(html).toContain("On trial");
     expect(html).toContain("Export CSV");
   });
@@ -60,5 +61,9 @@ describe.skipIf(!canRun)("the money screens (integration)", () => {
     expect(html).toContain("Money timeline");
     expect(html).toContain("Subscriptions");
     expect(html).toContain(someone.email);
+    // Whether they turned up, beside whether they paid.
+    expect(html).toContain("Learning");
+    expect(html).toContain("Last signed in");
+    expect(html).toContain("Last opened");
   });
 });

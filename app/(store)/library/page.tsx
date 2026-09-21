@@ -8,6 +8,8 @@ import { coursesForUser } from "@/lib/courses";
 import { channelsLabel } from "@/lib/app-channels";
 import { publicCoverUrl } from "@/lib/media";
 import { LibraryCourseCard } from "@/components/library/course-card";
+import { ContinueBox } from "@/components/library/continue-box";
+import { progressForCourses, lastLessonFor } from "@/lib/learning";
 import { immediateChargeCents } from "@/lib/offers";
 import { acceptStandingOfferAction, openAppAction } from "./actions";
 
@@ -141,6 +143,13 @@ export default async function LibraryPage({
   const ownedProductCount = (await ownedProductIdsForViewer()).size;
   const ownsProducts = ownedProductCount > 0;
 
+  // Both read the same rows, so they are fetched together rather than once
+  // for the shelf and again for the box above it.
+  const [progress, last] = await Promise.all([
+    progressForCourses(user.id, courses),
+    lastLessonFor(user.id, courses),
+  ]);
+
   return (
     <div className="flex flex-col gap-10 py-4">
       <h1 className="text-3xl">Your library</h1>
@@ -159,6 +168,8 @@ export default async function LibraryPage({
           {OFFER_STATUS[offerStatus]}
         </p>
       )}
+
+      {last && <ContinueBox last={last} now={new Date()} />}
 
       {courses.length === 0 ? (
         ownsProducts ? (
@@ -204,6 +215,7 @@ export default async function LibraryPage({
                 type={c.type}
                 coverUrl={publicCoverUrl(c.coverPath)}
                 index={i}
+                progress={progress.get(c.id) ?? null}
               />
             ))}
           </div>

@@ -4,12 +4,15 @@ import { requireAdmin, adminEmails } from "@/lib/admin-guard";
 import { listProductOptions, listOfferOptions } from "@/lib/admin";
 import { accessForMember } from "@/lib/members";
 import { loadMoneyData } from "@/lib/money-data";
+import { coursesForUser } from "@/lib/courses";
+import { progressForCourses, lastLessonFor, lastSignInForAll } from "@/lib/learning";
 import { deriveMembers } from "@/lib/member-money";
 import { deriveLedger } from "@/lib/ledger";
 import { money } from "@/lib/money";
 import { cancelSubscriptionAction, revokeAccessAction, toggleAdminAction } from "@/app/admin/members/actions";
 import { DeleteMember } from "@/components/admin/delete-member";
 import { GrantMore } from "@/components/admin/grant-more";
+import { LearningPanel } from "@/components/admin/learning-panel";
 import { RefundButton } from "@/components/admin/refund-button";
 import { Tile, Pill, journeyTone, kindTone, KIND_LABEL, fmtDate, relative, Soon } from "@/components/admin/money-ui";
 
@@ -19,7 +22,19 @@ import { Tile, Pill, journeyTone, kindTone, KIND_LABEL, fmtDate, relative, Soon 
  */
 export default async function MemberPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [me, data, access, products, offers] = await Promise.all([requireAdmin(), loadMoneyData(), accessForMember(id), listProductOptions(), listOfferOptions()]);
+  const [me, data, access, products, offers, courses, signIns] = await Promise.all([
+    requireAdmin(),
+    loadMoneyData(),
+    accessForMember(id),
+    listProductOptions(),
+    listOfferOptions(),
+    coursesForUser(id),
+    lastSignInForAll(),
+  ]);
+  const [progress, lastLesson] = await Promise.all([
+    progressForCourses(id, courses),
+    lastLessonFor(id, courses),
+  ]);
   const m = deriveMembers(data).find((x) => x.id === id);
   if (!m) notFound();
   const rows = deriveLedger(data).filter((r) => r.userId === id);
@@ -114,6 +129,14 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
               ))
             )}
           </section>
+
+          <LearningPanel
+            lastSignIn={signIns.get(id) ?? null}
+            last={lastLesson}
+            courses={courses.map((c) => ({ id: c.id, title: c.title, slug: c.slug }))}
+            progress={progress}
+            now={data.now}
+          />
 
           <section className="rounded-2xl border border-border bg-surface p-4">
             <h2 className="text-sm font-medium">Access</h2>

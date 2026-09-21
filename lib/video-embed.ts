@@ -29,6 +29,7 @@ const YOUTUBE_HOSTS = new Set([
   "youtube-nocookie.com", "www.youtube-nocookie.com",
 ]);
 const VIMEO_HOSTS = new Set(["vimeo.com", "www.vimeo.com", "player.vimeo.com"]);
+const VIDEO_FILE = /\.(mp4|webm|ogv|m4v|mov)$/i;
 
 function parsed(url: string): URL | null {
   try {
@@ -73,7 +74,31 @@ export type EmbedOptions = {
   mute?: boolean;
   loop?: boolean;
   controls?: boolean;
+  /**
+   * Start this many seconds in.
+   *
+   * Carried in the URL rather than sent as a seek command after load, because
+   * a command depends on a handshake that can be missed and leaves the member
+   * watching the opening while we retry. A start in the src is applied by the
+   * player before the first frame, and "resume" versus "start over" becomes
+   * two sources for the same component rather than two timing races.
+   */
+  startSeconds?: number;
+  /**
+   * Let the parent page talk to the player.
+   *
+   * YouTube stays silent unless `enablejsapi` is set, so a lesson that has to
+   * report its playhead needs this and a marketing video on a sales page does
+   * not. Vimeo needs no equivalent flag.
+   */
+  jsApi?: boolean;
 };
+
+/** Whole, positive seconds, or nothing. A start of 0 is just the start. */
+function startAt(seconds: number | undefined): number | null {
+  if (!seconds || !Number.isFinite(seconds) || seconds < 1) return null;
+  return Math.floor(seconds);
+}
 
 /**
  * Options are appended by us from typed booleans rather than passed through
@@ -101,6 +126,9 @@ export function videoEmbed(source: VideoSource, url: string, o: EmbedOptions = {
       q.set("loop", "1");
       q.set("playlist", id);
     }
+    const from = startAt(o.startSeconds);
+    if (from) q.set("start", String(from));
+    if (o.jsApi) q.set("enablejsapi", "1");
     return { kind: "iframe", src: `https://www.youtube-nocookie.com/embed/${id}?${q}`, provider: "YouTube" };
   }
 
@@ -112,11 +140,51 @@ export function videoEmbed(source: VideoSource, url: string, o: EmbedOptions = {
     if (o.mute || o.autoplay) q.set("muted", "1");
     if (o.loop) q.set("loop", "1");
     if (o.controls === false) q.set("controls", "0");
-    return { kind: "iframe", src: `https://player.vimeo.com/video/${id}?${q}`, provider: "Vimeo" };
+    // Vimeo takes its start time as a fragment, not a query parameter.
+    const from = startAt(o.startSeconds);
+    return {
+      kind: "iframe",
+      src: `https://player.vimeo.com/video/${id}?${q}${from ? `#t=${from}s` : ""}`,
+      provider: "Vimeo",
+    };
   }
 
   // A self-hosted file. https only — a video element on an https page will not
   // load http anyway, and accepting the scheme would only hide the failure.
   if (/^https:\/\//i.test(raw)) return { kind: "file", src: raw };
   return null;
+}
+
+/**
+ * Which provider a pasted link belongs to, or null for one we will not frame.
+ *
+ * A course lesson stores only a URL, with no separate "source" field beside
+ * it, so the provider has to be recognised from the link itself. Recognised
+ * means parsed: an id we can read out of a host we allow. Anything else is
+ * refused, because an <iframe> on a lesson page hands a third party a window
+ * inside the paid area of the store.
+ *
+ * Loom is deliberately absent. It cannot report playback position to the
+ * parent page, so a Loom lesson could never resume or complete on its own,
+ * and the form used to promise it while the embed builder had never
+ * supported it.
+ */
+export function videoSourceOf(url: string): VideoSource | null {
+  const raw = (url ?? "").trim();
+  if (!raw) return null;
+  if (youtubeId(raw)) return "youtube";
+  if (vimeoId(raw)) return "vimeo";
+  // A self-hosted file has to look like a file. Accepting any https link here
+  // turns a pasted share page — Loom, Wistia, a Drive link — into a <video>
+  // element pointed at an HTML document, which renders as a broken player
+  // with no error anyone can act on.
+  const u = parsed(raw);
+  if (u && u.protocol === "https:" && VIDEO_FILE.test(u.pathname)) return "file";
+  return null;
+}
+
+/** The embed for a pasted lesson link, provider and all. Null if unsupported. */
+export function lessonVideo(url: string, o: EmbedOptions = {}): VideoEmbed {
+  const source = videoSourceOf(url);
+  return source ? videoEmbed(source, url, o) : null;
 }

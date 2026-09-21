@@ -3,6 +3,7 @@ import Link from "next/link";
 import { rollupProgress, flattenPlayable, firstIncomplete } from "@/lib/curriculum-student";
 import { publicCoverUrl } from "@/lib/media";
 import { SimpleCourseContent } from "@/components/library/simple-course-content";
+import { percent, resumeOffer as watchOffer, type WatchRow } from "@/lib/watch";
 import type { Course } from "@/lib/courses";
 import type { CurriculumNode } from "@/lib/curriculum";
 
@@ -25,6 +26,8 @@ export function CourseOverview({
   backHref,
   /** Preview only: label rows a learner would not be shown at all. */
   markDrafts = false,
+  /** Where this member stopped in each lesson. Empty in a preview. */
+  watch,
 }: {
   course: Course;
   nodes: CurriculumNode[];
@@ -32,10 +35,15 @@ export function CourseOverview({
   lessonHref: ((itemId: string) => string) | null;
   backHref: { href: string; label: string } | null;
   markDrafts?: boolean;
+  watch?: Map<string, WatchRow>;
 }) {
   const flat = flattenPlayable(nodes);
-  const roll = rollupProgress(nodes.flatMap((n) => [n, ...n.children]), doneIds);
+  const roll = rollupProgress(nodes.flatMap((n) => [n, ...n.children]), doneIds, watch);
   const resume = firstIncomplete(flat, doneIds);
+  // If the lesson we are about to send them to has a playhead, say so on the
+  // button. "Continue" that silently restarts a two-hour video is a worse
+  // promise than no promise.
+  const resumeOffer = resume ? watchOffer(watch?.get(resume.id) ?? null) : { kind: "start" as const };
   const coverUrl = publicCoverUrl(course.coverPath);
 
   return (
@@ -89,6 +97,9 @@ export function CourseOverview({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-sm text-muted">
                   {roll.done} of {roll.total} complete
+                  {roll.done !== roll.total && roll.fraction > roll.done / Math.max(1, roll.total) && (
+                    <> &middot; {percent(roll.fraction)}% watched</>
+                  )}
                 </span>
                 {resume &&
                   (lessonHref ? (
@@ -97,6 +108,7 @@ export function CourseOverview({
                       className="rounded-full bg-primary px-5 py-2.5 text-center text-sm font-medium text-balance text-primary-fg hover:bg-primary-hover sm:text-left"
                     >
                       Continue &rarr; {resume.title}
+                      {resumeOffer.kind === "resume" && <> ({resumeOffer.label})</>}
                     </Link>
                   ) : (
                     <span className="rounded-full bg-primary px-5 py-2.5 text-center text-sm font-medium text-balance text-primary-fg sm:text-left">
@@ -107,7 +119,7 @@ export function CourseOverview({
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
                 <div
                   className="h-full bg-primary transition-all"
-                  style={{ width: roll.total ? `${(roll.done / roll.total) * 100}%` : "0%" }}
+                  style={{ width: `${percent(roll.fraction)}%` }}
                 />
               </div>
               <ol className="flex flex-col gap-3">

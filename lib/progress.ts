@@ -1,6 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
+import type { WatchRow } from "@/lib/watch";
 
 export type CompletionSource = "manual" | "video" | "download" | "dwell";
 
@@ -121,4 +122,137 @@ export async function completedItemIds(userId: string, courseId: string): Promis
     .not("lesson_id", "is", null);
   if (error) throw new Error(`completedItemIds: ${error.message}`);
   return new Set((data ?? []).map((r) => r.lesson_id as string));
+}
+
+// ---------------------------------------------------------------------------
+// Where in a video someone is, and what they last opened.
+//
+// These writes run while a member is watching, on a page behind the paywall.
+// They never throw: a lost position costs a resume prompt, and there is no
+// version of that worth interrupting a lesson for. Same rule the traffic
+// counters follow.
+// ---------------------------------------------------------------------------
+
+export type WatchPatch = { positionSeconds: number; durationSeconds: number | null };
+
+/**
+ * Save the playhead.
+ *
+ * Never touches `completed`: completion has its own rules in
+ * `setItemCompletion`, including the manual override, and a position save
+ * arriving every twenty seconds must not be able to argue with them.
+ */
+export async function setItemPosition(
+  userId: string,
+  courseId: string,
+  itemId: string,
+  patch: WatchPatch,
+): Promise<void> {
+  const db = createServiceClient();
+  const position = Math.max(0, Math.floor(patch.positionSeconds));
+  const duration =
+    patch.durationSeconds && patch.durationSeconds > 0 ? Math.floor(patch.durationSeconds) : null;
+  const row = {
+    position_seconds: duration ? Math.min(position, duration) : position,
+    ...(duration ? { duration_seconds: duration } : {}),
+  };
+  const { data: existing } = await db
+    .from("progress")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("lesson_id", itemId)
+    .maybeSingle();
+  if (existing) {
+    await db.from("progress").update(row).eq("id", existing.id as string);
+    return;
+  }
+  const { error } = await db.from("progress").insert({
+    store_id: await getStoreId(),
+    user_id: userId,
+    course_id: courseId,
+    lesson_id: itemId,
+    completed: false,
+    last_viewed_at: new Date().toISOString(),
+    ...row,
+  });
+  // Another writer created the first row between the read and the insert.
+  // Theirs is as good as ours; the next save lands on it.
+  if (error && error.code !== "23505") throw new Error(`setItemPosition: ${error.message}`);
+}
+
+/**
+ * Record that the member opened this lesson.
+ *
+ * Distinct from a position save, which only happens once a video plays. The
+ * library's continue box and the admin's activity column both mean "opened",
+ * and a lesson with no video would otherwise never be seen to have happened.
+ */
+export async function touchItemViewed(userId: string, courseId: string, itemId: string): Promise<void> {
+  const db = createServiceClient();
+  const now = new Date().toISOString();
+  const { data: existing } = await db
+    .from("progress")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("lesson_id", itemId)
+    .maybeSingle();
+  if (existing) {
+    await db.from("progress").update({ last_viewed_at: now }).eq("id", existing.id as string);
+    return;
+  }
+  const { error } = await db.from("progress").insert({
+    store_id: await getStoreId(),
+    user_id: userId,
+    course_id: courseId,
+    lesson_id: itemId,
+    completed: false,
+    last_viewed_at: now,
+  });
+  if (error && error.code !== "23505") throw new Error(`touchItemViewed: ${error.message}`);
+}
+
+/** Fire and forget. Runs on a lesson page; a failure here changes nothing. */
+export function recordView(userId: string, courseId: string, itemId: string): void {
+  void touchItemViewed(userId, courseId, itemId).catch(() => {});
+}
+
+/** One member's watch rows for one course, keyed by lesson. */
+export async function watchRowsFor(userId: string, courseId: string): Promise<Map<string, WatchRow>> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("progress")
+    .select("lesson_id, completed, position_seconds, duration_seconds")
+    .eq("user_id", userId)
+    .eq("course_id", courseId)
+    .not("lesson_id", "is", null);
+  if (error) throw new Error(`watchRowsFor: ${error.message}`);
+  return new Map(
+    (data ?? []).map((r) => [
+      r.lesson_id as string,
+      {
+        completed: r.completed as boolean,
+        positionSeconds: (r.position_seconds as number | null) ?? null,
+        durationSeconds: (r.duration_seconds as number | null) ?? null,
+      },
+    ]),
+  );
+}
+
+/** One lesson's watch row, for the resume prompt. */
+export async function watchRowFor(userId: string, itemId: string): Promise<WatchRow | null> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("progress")
+    .select("completed, position_seconds, duration_seconds")
+    .eq("user_id", userId)
+    .eq("lesson_id", itemId)
+    .maybeSingle();
+  if (error) throw new Error(`watchRowFor: ${error.message}`);
+  return data
+    ? {
+        completed: data.completed as boolean,
+        positionSeconds: (data.position_seconds as number | null) ?? null,
+        durationSeconds: (data.duration_seconds as number | null) ?? null,
+      }
+    : null;
 }

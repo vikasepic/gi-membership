@@ -11,13 +11,11 @@ export function CompletionControls({
   itemId,
   productId,
   completed,
-  videoUrl,
   nextHref,
 }: {
   itemId: string;
   productId: string;
   completed: boolean;
-  videoUrl: string | null;
   nextHref: string;
 }) {
   const router = useRouter();
@@ -36,9 +34,9 @@ export function CompletionControls({
       // Trust the server's answer, not our optimistic guess: manual_override
       // may have silently refused this write, and the DB is the source of truth.
       const nowDone = Boolean(data.completed);
-      // Reported from here rather than from the button, because a lesson can be
-      // finished four ways — the button, watching half the video, opening the
-      // download, or five minutes of visible dwell — and all four arrive here.
+      // Reported from here rather than from the button, because a lesson can
+      // be finished three ways on this page: the button, opening a download,
+      // or five minutes of visible dwell. All three arrive here.
       // Only on the transition INTO complete, and only if the server agreed:
       // un-marking is not a completion, and neither is a write it refused.
       if (nowDone && !isDone) {
@@ -88,75 +86,10 @@ export function CompletionControls({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDone, itemId]);
 
-  // Video: YouTube and Vimeo expose progress cross-origin, but only after the
-  // parent sends a handshake ("listening" / addEventListener) to the iframe —
-  // neither player emits anything unprompted. Other providers are not
-  // supported here and simply fall through to the dwell timer.
-  useEffect(() => {
-    if (isDone || !videoUrl) return;
-    const isVimeo = /vimeo\.com/i.test(videoUrl);
-    const isYouTube = /youtube\.com|youtu\.be/i.test(videoUrl);
-    if (!isVimeo && !isYouTube) return;
-
-    const ALLOWED_ORIGINS = [
-      "https://www.youtube.com",
-      "https://www.youtube-nocookie.com",
-      "https://player.vimeo.com",
-    ];
-
-    // The handshake is lost if sent before the player's script has finished
-    // loading inside the iframe, so it's retried on an interval until the
-    // first reply from that provider arrives.
-    let handshakeAcked = false;
-    let handshakeTimer: ReturnType<typeof setInterval> | undefined;
-    const iframe = document.querySelector<HTMLIFrameElement>("[data-gi-video]");
-    if (iframe) {
-      const targetOrigin = isYouTube ? "https://www.youtube.com" : "https://player.vimeo.com";
-      const payload = isYouTube
-        ? JSON.stringify({ event: "listening", id: 1, channel: "widget" })
-        : JSON.stringify({ method: "addEventListener", value: "timeupdate" });
-      const sendHandshake = () => {
-        if (handshakeAcked) return;
-        iframe.contentWindow?.postMessage(payload, targetOrigin);
-      };
-      sendHandshake();
-      handshakeTimer = setInterval(sendHandshake, 1000);
-    }
-
-    const onMessage = (e: MessageEvent) => {
-      // Any frame could otherwise forge a completion by posting a message —
-      // only trust the known player origins.
-      if (!ALLOWED_ORIGINS.includes(e.origin)) return;
-      if (!handshakeAcked) {
-        handshakeAcked = true;
-        if (handshakeTimer) clearInterval(handshakeTimer);
-      }
-      if (sent.current) return;
-      try {
-        const d = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
-        // Vimeo player.js timeupdate payload
-        if (d?.event === "timeupdate" && typeof d?.data?.percent === "number" && d.data.percent >= 0.5) {
-          sent.current = true;
-          void send(true, "video");
-        }
-        // YouTube iframe API state payload
-        if (d?.event === "infoDelivery" && d?.info?.currentTime && d?.info?.duration) {
-          if (d.info.currentTime / d.info.duration >= 0.5) {
-            sent.current = true;
-            void send(true, "video");
-          }
-        }
-      } catch {
-        /* not our message */
-      }
-    };
-    window.addEventListener("message", onMessage);
-    return () => {
-      window.removeEventListener("message", onMessage);
-      if (handshakeTimer) clearInterval(handshakeTimer);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDone, videoUrl, itemId]);
+  // Video completion is not here: it belongs with the playhead, which only
+  // the player knows, and lives in components/library/video-player.tsx. This
+  // component owns the three signals that have nothing to do with a video —
+  // the button, an attachment click, and dwell time.
 
   return (
     <div className="flex flex-wrap items-center gap-4 border-t border-border pt-6">
