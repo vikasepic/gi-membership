@@ -99,6 +99,7 @@ container's own environment. Container field `r11f09w16h8afmpt0ilxey2q`.
 | `sync-subscriptions` | `/api/cron/sync-subscriptions` | `10 3 * * *` | a missed webhook leaves a subscription's status, trial end and next charge stale forever |
 | `backfill-renewals` | `/api/cron/backfill-renewals` | `40 3 * * *` | a renewal Stripe charged but never delivered is money with no order; it also repairs a renewal's date |
 | `prune-visits` | `/api/cron/prune-visits` | `20 4 * * 0` | `visits` only grows |
+| `trial-reminders` | `/api/cron/trial-reminders` | `5 * * * *` | nobody is warned before their trial converts |
 
 `POST /api/cron/backfill-ac-tags` exists but is deliberately NOT scheduled. It
 is a repair for the 22 Sep 2026 gap where offer-page purchases never reached
@@ -108,6 +109,13 @@ it by hand, with `?dry=1` first.
 `retry-failed-jobs` and `retry-sweep` are the same job twice, five minutes
 apart from each other by chance. Harmless (the queue claims its rows) but
 wasteful, and one of them should go.
+
+`trial-reminders` runs hourly, not daily, because the reminder is due one day
+before a trial ends and trials end at every hour of the clock. Stripe's own
+`customer.subscription.trial_will_end` fires a fixed three days out and cannot
+be moved — measured 22 Sep 2026 across twenty live events, every one at
+exactly 3.00 days — so that event is now an explicit no-op in the webhook and
+the send is ours.
 
 `sync-subscriptions` runs before `backfill-renewals` on purpose: the backfill
 walks the subscription ids the sync just refreshed.

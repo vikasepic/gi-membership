@@ -5,7 +5,7 @@ import { reportReversal, handleDispute, disputeWon } from "@/lib/reversals";
 import { orderForPaymentIntent } from "@/lib/orders";
 import { finalizeOrder } from "@/lib/checkout";
 import { completeOfferCheckout } from "@/lib/offer-checkout";
-import { sendPaymentFailedEmail, sendTrialEndingEmail } from "@/lib/subscription-emails";
+import { sendPaymentFailedEmail } from "@/lib/subscription-emails";
 import {
   syncSubscriptionOwnership,
   markPlanPaidOff,
@@ -124,17 +124,17 @@ export async function POST(req: Request) {
       break;
     }
 
-    // Three days before a trial converts. The most common reason a first
-    // subscription charge is disputed is that nobody remembers signing up a
-    // week ago.
-    case "customer.subscription.trial_will_end": {
-      try {
-        await sendTrialEndingEmail(event.data.object as Stripe.Subscription);
-      } catch (e) {
-        console.error("[stripe webhook] trial-ending email failed:", e);
-      }
+    // Stripe fires this a fixed three days before a trial converts and there
+    // is no setting for it — measured 22 Sep 2026 across twenty live events,
+    // every one at exactly 3.00 days. The owner wants the reminder one day
+    // out, so the send moved to our own hourly sweep
+    // (app/api/cron/trial-reminders) and this event no longer mails anyone.
+    //
+    // Kept as an explicit no-op rather than deleted: the live endpoint still
+    // subscribes to it, and an unhandled case falling through to the default
+    // would read as an event we forgot rather than one we decided about.
+    case "customer.subscription.trial_will_end":
       break;
-    }
 
     // Money that arrives after the checkout: a trial converting on day 7, and
     // every renewal after it. Until this existed a subscription produced

@@ -465,3 +465,17 @@ four grant paths pass through: a bump, the offer checkout, an accepted OTO and
 a manual grant. Anything that grants access and does not go through it will
 be invisible to the CRM again. Backfill: `POST /api/cron/backfill-ac-tags`,
 `?dry=1` to count first.
+
+## Stripe's trial warning is three days and cannot be moved (22 Sep 2026)
+
+`customer.subscription.trial_will_end` fires exactly three days before
+`trial_end`. Measured across twenty live events on this account: every one at
+3.00 days, to the minute. There is no setting. A reminder at any other
+interval has to be swept for and sent by us, which is what
+`app/api/cron/trial-reminders` does, hourly, at one day out.
+
+Two things that sweep gets right and a naive one would not. It claims the row
+(`trial_reminder_sent_at`) BEFORE sending, so a crash costs one missed email
+rather than mailing everyone again every hour until it stops crashing. And it
+skips anyone who has already cancelled: their card will not be charged, and an
+email saying it will is worse than no email.

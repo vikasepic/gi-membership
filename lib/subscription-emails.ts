@@ -72,10 +72,27 @@ async function subscriberFor(stripeSubscriptionId: string) {
   return { email: user.email as string, offer: asOffer };
 }
 
-const on = (unix: number | null | undefined) =>
-  unix ? longMonthDay(new Date(unix * 1000)) : "the end of your trial";
+/**
+ * When the card will be charged, in the words someone would use.
+ *
+ * The reminder now goes one day out (app/api/cron/trial-reminders), so a bare
+ * date reads as further away than it is. "Tomorrow" is the whole reason the
+ * timing was moved; a date alone throws that away.
+ */
+export function chargeDayLabel(unix: number | null | undefined, now: Date = new Date()): string {
+  if (!unix) return "the end of your trial";
+  const when = new Date(unix * 1000);
+  const hours = (when.getTime() - now.getTime()) / 3600_000;
+  const date = longMonthDay(when);
+  if (hours <= 0) return date;
+  if (hours <= 36) return `tomorrow, ${date}`;
+  return date;
+}
 
-/** Three days out, from customer.subscription.trial_will_end. */
+const on = (unix: number | null | undefined) => chargeDayLabel(unix);
+
+/** One day out, from our own hourly sweep. Stripe's own trial event fires at
+ *  a fixed three days and cannot be moved, so it no longer sends mail. */
 export async function sendTrialEndingEmail(sub: Stripe.Subscription): Promise<void> {
   const who = await subscriberFor(sub.id);
   if (!who) return;
