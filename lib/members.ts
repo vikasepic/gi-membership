@@ -4,6 +4,7 @@ import { stripe } from "@/lib/stripe";
 import { releaseSchedule } from "@/lib/payment-plans-stripe";
 import { getStoreId, getOffer } from "@/lib/store";
 import { applyPendingEntitlements, pushAppEntitlement } from "@/lib/app-sync";
+import { tagAccessGranted } from "@/lib/ac-tags";
 
 // Member (customer) views for admin, plus the Stripe Customer Portal that lets
 // a customer manage their own card, plan and cancellation. The portal is hosted
@@ -216,6 +217,7 @@ export async function grantProduct(args: {
   });
   // 23505 = they already own it, which is the desired end state anyway.
   if (error && error.code !== "23505") return { ok: false, error: error.message };
+  await tagAccessGranted({ userId: args.userId, productId: args.productId, status: "active" });
   return { ok: true };
 }
 
@@ -261,6 +263,14 @@ export async function grantOfferAccess(args: {
       stripeCustomerId: null,
     });
   }
+  // A comp is still access, and the sequences that go with it are still the
+  // right ones to send.
+  await tagAccessGranted({
+    userId: args.userId,
+    offerId: offer.id,
+    productId: offer.grantProductId,
+    status: "active",
+  });
   return { ok: true };
 }
 

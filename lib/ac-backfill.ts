@@ -1,7 +1,7 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { activeCampaignEnabled } from "@/lib/activecampaign";
-import { tagLifecycle } from "@/lib/ac-tags";
+import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
 import type { OwnershipStatus } from "@/lib/subscription-sync";
 
 /**
@@ -25,6 +25,7 @@ export type BackfillResult = {
   ok: boolean;
   people: number;
   tagged: number;
+  products: number;
   skipped: Record<string, number>;
 };
 
@@ -39,7 +40,7 @@ export async function backfillLifecycleTags(opts?: { dryRun?: boolean }): Promis
   const note = (why: string) => {
     skipped[why] = (skipped[why] ?? 0) + 1;
   };
-  if (!activeCampaignEnabled()) return { ok: false, people: 0, tagged: 0, skipped: { "activecampaign not configured": 1 } };
+  if (!activeCampaignEnabled()) return { ok: false, people: 0, tagged: 0, products: 0, skipped: { "activecampaign not configured": 1 } };
 
   const db = createServiceClient();
 
@@ -54,7 +55,7 @@ export async function backfillLifecycleTags(opts?: { dryRun?: boolean }): Promis
       .filter((o) => o.activecampaign_tag_id || o.activecampaign_trial_tag_id || o.activecampaign_cancelled_tag_id)
       .map((o) => o.id as string),
   );
-  if (tagged.size === 0) return { ok: true, people: 0, tagged: 0, skipped: { "no offer carries a tag": 1 } };
+  if (tagged.size === 0) note("no offer carries a tag");
 
   const { data: rows, error } = await db
     .from("ownership")
@@ -100,5 +101,39 @@ export async function backfillLifecycleTags(opts?: { dryRun?: boolean }): Promis
     await sleep(PACE_MS);
   }
 
-  return { ok: true, people: new Set(wanted.map((r) => r.userId)).size, tagged: done, skipped };
+  // Products are a separate tag with a separate rule: owning one earns its
+  // buyer tag whether it was bought, comped, or granted by an offer. Missed
+  // before because tagging keyed on a paid order line rather than on what
+  // someone actually holds.
+  const { data: pRows, error: pErr } = await db
+    .from("ownership")
+    .select("user_id, product_id, products!inner(activecampaign_tag_id)")
+    .not("product_id", "is", null)
+    .not("user_id", "is", null)
+    .eq("status", "active");
+  if (pErr) throw new Error(`backfillLifecycleTags products: ${pErr.message}`);
+  const byUser = new Map<string, Set<string>>();
+  for (const r of (pRows ?? []) as unknown as { user_id: string; product_id: string; products: { activecampaign_tag_id: string | null } | null }[]) {
+    if (!r.products?.activecampaign_tag_id) continue;
+    const set = byUser.get(r.user_id) ?? new Set<string>();
+    set.add(r.product_id);
+    byUser.set(r.user_id, set);
+  }
+  let productsDone = 0;
+  for (const [userId, productIds] of byUser) {
+    if (opts?.dryRun) {
+      productsDone += 1;
+      continue;
+    }
+    try {
+      await tagPurchase({ userId, productIds: [...productIds], offerIds: [] });
+      productsDone += 1;
+    } catch (e) {
+      note(`product error: ${e instanceof Error ? e.message : String(e)}`.slice(0, 120));
+    }
+    await sleep(PACE_MS);
+  }
+
+  const people = new Set([...wanted.map((r) => r.userId), ...byUser.keys()]).size;
+  return { ok: true, people, tagged: done, products: productsDone, skipped };
 }

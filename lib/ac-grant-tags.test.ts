@@ -20,10 +20,10 @@ const grant = checkout.slice(
 );
 
 describe("granting access tells the CRM", () => {
-  it("tags inside grantOfferOwnership, the one function every grant passes through", () => {
-    // Four call sites reach it: a bump, the offer checkout, an accepted OTO,
-    // and a manual grant. Tagging here covers all four at once.
-    expect(grant).toContain("tagLifecycle({ userId, offerIds: [offer.id]");
+  it("tags inside grantOfferOwnership, the one function every purchase grant passes through", () => {
+    // Three call sites reach it: a bump, the offer checkout and an accepted
+    // OTO. Tagging here covers all three at once.
+    expect(grant).toContain("tagAccessGranted({ userId, offerId: offer.id");
   });
 
   it("sends the status the offer actually starts in", () => {
@@ -31,11 +31,12 @@ describe("granting access tells the CRM", () => {
   });
 
   it("never lets the CRM fail the grant", () => {
-    // The card is already charged by this point.
-    const call = grant.slice(grant.indexOf("tagLifecycle"));
-    expect(grant.slice(0, grant.indexOf("tagLifecycle"))).toContain("try {");
-    expect(call).toContain("catch");
-    expect(call).toContain("lifecycle tag failed");
+    // The card is already charged by this point, so the guard lives inside
+    // the helper and every caller inherits it rather than repeating it.
+    const acTags = readFileSync("lib/ac-tags.ts", "utf8");
+    const helper = acTags.slice(acTags.indexOf("export async function tagAccessGranted"));
+    expect(helper).toContain("try {");
+    expect(helper).toContain("catch");
   });
 });
 
@@ -96,5 +97,54 @@ describe("the backfill", () => {
 
   it("offers a dry run, since a real one starts sequences for real people", () => {
     expect(backfill).toContain("opts?.dryRun");
+  });
+});
+
+/**
+ * Access arrives five ways and only one of them used to reach the CRM.
+ *
+ * Found 22 Sep 2026 while auditing the rest: a member holding the Digital
+ * Product Validator through a grant carried none of its product tags, because
+ * product tagging keyed on a paid order line rather than on what someone
+ * actually owns. Two live offers grant that product, so the next buyer on an
+ * offer page would have been missed the same way.
+ */
+describe("every way access is granted tells the CRM", () => {
+  const members = readFileSync("lib/members.ts", "utf8");
+
+  it("a comped product is tagged", () => {
+    const fn = members.slice(members.indexOf("export async function grantProduct"), members.indexOf("export async function grantOfferAccess"));
+    expect(fn).toContain("tagAccessGranted({ userId: args.userId, productId: args.productId");
+  });
+
+  it("comped offer access is tagged, offer and product both", () => {
+    const fn = members.slice(members.indexOf("export async function grantOfferAccess"));
+    expect(fn).toContain("offerId: offer.id");
+    expect(fn).toContain("productId: offer.grantProductId");
+  });
+
+  it("an offer that grants a product applies both tags", () => {
+    // The offer's own buyer tag, and the granted product's.
+    expect(grant).toContain("productId: offer.grantProductId, status: \"active\"");
+  });
+
+  it("the helper never lets the CRM undo a grant", () => {
+    const acTags = readFileSync("lib/ac-tags.ts", "utf8");
+    const fn = acTags.slice(acTags.indexOf("export async function tagAccessGranted"));
+    expect(fn).toContain("catch");
+    expect(fn).toContain("the grant stands");
+  });
+});
+
+describe("the backfill covers products as well as offers", () => {
+  const backfill = readFileSync("lib/ac-backfill.ts", "utf8");
+
+  it("keys product tags on what someone owns, not on an order line", () => {
+    expect(backfill).toContain("tagPurchase({ userId, productIds:");
+    expect(backfill).toContain('.eq("status", "active")');
+  });
+
+  it("counts a person once even when they hold both a product and an offer", () => {
+    expect(backfill).toContain("new Set([...wanted.map((r) => r.userId), ...byUser.keys()]).size");
   });
 });

@@ -31,7 +31,7 @@ import { sendCrmEvent, type CrmItem } from "@/lib/crm";
 import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
 import { ensureStripeProductForProduct, ensureStripeProduct } from "@/lib/stripe-catalog";
 import { livePrices, chargeNowCents as chargeNowFor } from "@/lib/offer-prices";
-import { tagLifecycle, tagPurchase } from "@/lib/ac-tags";
+import { tagLifecycle, tagPurchase, tagAccessGranted } from "@/lib/ac-tags";
 import { markLeadConverted } from "@/lib/leads";
 import { recordError, messageOf } from "@/lib/errors";
 import { orderAttributionColumns, type Attribution, type Labels } from "@/lib/attribution";
@@ -1692,13 +1692,7 @@ export async function grantOfferOwnership(
     //
     // Best-effort and last, like the app push above: the card is already
     // charged and a CRM outage must not fail a paid order.
-    if (ctx?.email) {
-      try {
-        await tagLifecycle({ userId, offerIds: [offer.id], status: trialing ? "trialing" : "active" });
-      } catch (e) {
-        console.error("[grantOfferOwnership] lifecycle tag failed (grant stands):", e);
-      }
-    }
+    await tagAccessGranted({ userId, offerId: offer.id, status: trialing ? "trialing" : "active" });
   } else if (offer.grantType === "product" && offer.grantProductId) {
     const { error } = await db.from("ownership").insert({
       store_id: storeId,
@@ -1721,6 +1715,10 @@ export async function grantOfferOwnership(
     } else if (error) {
       throw new Error(`grant offer (product): ${error.message}`);
     }
+    // Both tags. Two live offers grant the Digital Product Validator, which
+    // carries its own buyer tag, and buying them on an offer page used to
+    // apply neither.
+    await tagAccessGranted({ userId, offerId: offer.id, productId: offer.grantProductId, status: "active" });
   }
 }
 

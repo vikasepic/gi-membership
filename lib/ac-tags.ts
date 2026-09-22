@@ -285,3 +285,39 @@ export async function tagLifecycle(args: {
   if (add.size === 0 && remove.size === 0) return;
   await tagOrQueue({ ...contact, tagIds: [...add], removeTagIds: [...remove] });
 }
+
+/**
+ * The CRM, from wherever access is granted.
+ *
+ * Access arrives five ways: a bump, the offer checkout, an accepted upsell, a
+ * comp from the admin screen, and a product granted outright. Only the
+ * product checkout used to tell ActiveCampaign, which is why 57 trialists sat
+ * outside every sequence built for them (22 Sep 2026), and why a member
+ * granted the Digital Product Validator through an offer carried none of its
+ * product tags.
+ *
+ * Both halves are applied: the offer's lifecycle tag, which depends on
+ * whether money has actually been taken, and the granted product's buyer tag,
+ * which does not. An offer that grants a product owes both.
+ *
+ * Best-effort throughout. Every caller has either already charged a card or
+ * already written the grant, and neither may be undone by a marketing outage.
+ */
+export async function tagAccessGranted(args: {
+  userId: string;
+  offerId?: string | null;
+  productId?: string | null;
+  status: OwnershipStatus;
+}): Promise<void> {
+  if (!activeCampaignEnabled()) return;
+  try {
+    if (args.productId) {
+      await tagPurchase({ userId: args.userId, productIds: [args.productId], offerIds: [] });
+    }
+    if (args.offerId) {
+      await tagLifecycle({ userId: args.userId, offerIds: [args.offerId], status: args.status });
+    }
+  } catch (e) {
+    console.error("[tagAccessGranted] failed (the grant stands):", e);
+  }
+}
