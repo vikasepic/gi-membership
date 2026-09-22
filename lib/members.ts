@@ -90,6 +90,26 @@ export async function cancelSubscription(subscriptionId: string): Promise<void> 
 // Stripe-hosted portal: update card, change plan, cancel, download invoices.
 // Building these screens ourselves would mean handling card data; this way the
 // PCI surface stays with Stripe.
+/**
+ * Is there anything for this person to manage?
+ *
+ * A Stripe customer only exists once money has been involved. Someone comped
+ * by hand, or provisioned by a connected app, holds real access with no
+ * customer behind it, and sending them to the portal is a round trip to a
+ * dead end. Asked before the button is drawn rather than after it is pressed.
+ */
+export async function hasBillingAccount(userId: string): Promise<boolean> {
+  const db = createServiceClient();
+  const { data } = await db
+    .from("orders")
+    .select("id")
+    .eq("user_id", userId)
+    .not("stripe_customer_id", "is", null)
+    .limit(1)
+    .maybeSingle();
+  return !!data;
+}
+
 export async function billingPortalUrl(userId: string, returnUrl: string): Promise<string | null> {
   const db = createServiceClient();
   const { data: order } = await db

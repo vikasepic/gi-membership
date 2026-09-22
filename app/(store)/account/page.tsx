@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { logout, openBillingPortal } from "./actions";
 import { purchaseDocsForUser, subscriptionInvoicesForUser } from "@/lib/receipts";
+import { hasBillingAccount } from "@/lib/members";
 import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";
 import { YourDetails } from "@/components/account/your-details";
@@ -37,11 +38,12 @@ export default async function AccountPage({
   // Account, and the login already refuses anything that is not a path of ours.
   if (!user) redirect("/login?next=/account");
 
-  const [purchases, invoices, profile, legal] = await Promise.all([
+  const [purchases, invoices, profile, legal, canBill] = await Promise.all([
     purchaseDocsForUser(user.id),
     subscriptionInvoicesForUser(user.id),
     getProfile(user.id),
     getLegal(),
+    hasBillingAccount(user.id),
   ]);
 
   return (
@@ -54,9 +56,19 @@ export default async function AccountPage({
       />
       <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
         <span className="kicker text-muted">Billing</span>
-        {billing === "none" ? (
+        {/* Connected apps send their store-billed members straight here, so
+            this is the page that has to be honest about whether there is
+            anything to manage. A button that bounces back with an excuse is
+            worse than no button: it reads as a broken account. */}
+        {billing === "none" || !canBill ? (
           <p className="text-sm text-muted">
-            Nothing to manage yet — billing appears here after your first purchase.
+            There&rsquo;s no card or subscription on file for this account, so there&rsquo;s nothing
+            to manage here. If your access was given to you directly, that&rsquo;s expected.
+            Anything else, email{" "}
+            <a href={`mailto:${legal.contactEmail}`} className="text-primary hover:underline">
+              {legal.contactEmail}
+            </a>
+            .
           </p>
         ) : (
           <>

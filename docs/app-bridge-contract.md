@@ -54,6 +54,19 @@ content-type: application/json
 This fires on EVERY state change, not just the grant — trial conversion,
 dunning, cancellation, refund. `status: "canceled"` means revoke.
 
+**`hasAccess` is the field that takes access away, and it must not move
+early.** Content Engine acts on `hasAccess` alone and never reads `status`, so
+`false` freezes the workspace the moment it arrives. A member who cancels does
+so at period end: Stripe keeps the subscription `active` or `trialing` until
+that date, and `mapSubscriptionStatus` reads Stripe's status, so we keep
+sending `hasAccess: true` through the whole notice period and send `false`
+only when Stripe itself flips to `canceled`.
+
+Do not "simplify" this by sending `hasAccess: false` when a cancellation is
+*requested*. That cuts people off from something they have already paid for,
+in the app rather than in the store, where nobody would think to look for the
+cause. Agreed with Content Engine 22 Sep 2026.
+
 **App must:**
 - Reject if `x-store-secret` ≠ the shared secret (401).
 - Be **idempotent by email** — a repeat call for the same buyer must not double-provision.
@@ -66,6 +79,19 @@ The store call is **best-effort** and never blocks the purchase. If it fails,
 the handoff (below) re-drives provisioning on first arrival, so a missed GRANT
 is self-healing as long as it stays idempotent. A missed REVOKE is not — nothing
 brings the user back to correct it. See the guide's §5 for the mitigation.
+
+**The app must not offer a plan to someone the store already bills.** This is
+the same double-billing failure as the inbound direction below, facing the
+other way: a store-sold member who sees a buy button on the app's billing page
+can start a second subscription. Content Engine keys this on store ownership
+rather than on subscription status, so it holds through dunning, and links to
+`https://grow.greaterinside.com/account` rather than the storefront. Shipped
+22 Sep 2026.
+
+A member who holds access with no payment behind it — comped by hand, or
+provisioned by an app — has no Stripe customer and so no portal. Only the
+store knows that, so the store's account page says so rather than offering a
+button that bounces.
 
 **Inbound direction:** an app that sells access itself must report it to
 `POST /api/apps/entitlement` on the store (same shared secret), or the store
