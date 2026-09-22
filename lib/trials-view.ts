@@ -20,6 +20,9 @@ export type TrialRow = {
   currency: string;
   startedAt: string;
   endsAt: string;
+  /** What the trial is for, so it can be filtered without matching on name. */
+  offerId: string | null;
+  productId: string | null;
   outcome: TrialOutcome;
   outcomeAt: string | null;
   daysLeft: number;
@@ -53,6 +56,8 @@ export function deriveTrials(d: MoneyData): TrialRow[] {
       email: u?.email ?? "",
       name: u?.name ?? null,
       what: (s.offerId && d.names.offers.get(s.offerId)?.name) || (s.productId && d.names.products.get(s.productId)?.name) || "Subscription",
+      offerId: s.offerId,
+      productId: s.productId,
       thenCents: s.amountCents,
       interval: s.interval,
       currency: s.currency,
@@ -69,6 +74,33 @@ export function deriveTrials(d: MoneyData): TrialRow[] {
 }
 
 export type TrialView = "all" | "on trial" | "ending" | "converted" | "lost";
+
+/**
+ * Narrow to one product or offer.
+ *
+ * Applied BEFORE the view, so the tiles, the chip counts and the weekly
+ * table all describe the same population the table is showing. A filter that
+ * only moved the rows would leave the numbers above them describing
+ * something else.
+ *
+ * An id that matches nothing returns everything, because a stale link should
+ * show the whole picture rather than an empty page that reads as no trials.
+ */
+export function trialsOf(rows: TrialRow[], id: string): TrialRow[] {
+  if (!id) return rows;
+  const hit = rows.filter((t) => t.offerId === id || t.productId === id);
+  return hit.length > 0 ? hit : rows;
+}
+
+/** The products and offers that actually have a trial, for the picker. */
+export function trialThings(rows: TrialRow[]): { id: string; name: string }[] {
+  const out = new Map<string, string>();
+  for (const t of rows) {
+    const id = t.offerId ?? t.productId;
+    if (id) out.set(id, t.what);
+  }
+  return [...out.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+}
 
 export function trialsFor(rows: TrialRow[], view: TrialView): TrialRow[] {
   switch (view) {

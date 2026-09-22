@@ -51,6 +51,15 @@ describe.skipIf(!canRun)("the money screens (integration)", () => {
     expect(html).toContain("On trial now");
   });
 
+  it("Trials survives a product filter naming something that no longer exists", async () => {
+    // A stale link must show the whole picture rather than throw or render an
+    // empty page that reads as "no trials".
+    const { default: Page } = await import("@/app/admin/trials/page");
+    const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ offer: "no-such-offer", view: "converted" }) }));
+    expect(html).toContain("Trials");
+    expect(html).toContain("On trial now");
+  });
+
   it("a person page renders for a real member", async () => {
     const { loadMoneyData } = await import("@/lib/money-data");
     const data = await loadMoneyData();

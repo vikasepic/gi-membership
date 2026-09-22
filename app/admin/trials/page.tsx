@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/admin-guard";
 import { loadMoneyData } from "@/lib/money-data";
-import { deriveTrials, trialsFor, trialsByWeek, type TrialView } from "@/lib/trials-view";
+import { deriveTrials, trialsFor, trialsByWeek, trialsOf, trialThings, type TrialView } from "@/lib/trials-view";
 import { money } from "@/lib/money";
 import { Tile, Chip, Pill, fmtDate, Soon, Th, Empty } from "@/components/admin/money-ui";
 
@@ -22,7 +22,13 @@ export default async function TrialsPage({ searchParams }: { searchParams: Promi
   const raw = Array.isArray(sp.view) ? sp.view[0] : sp.view;
   const view: TrialView = VIEWS.some((v) => v.key === raw) ? (raw as TrialView) : "all";
   const [, data] = await Promise.all([requireAdmin(), loadMoneyData()]);
-  const all = deriveTrials(data);
+  const everything = deriveTrials(data);
+  const things = trialThings(everything);
+  const picked = Array.isArray(sp.offer) ? sp.offer[0] : sp.offer;
+  // Whitelisted against what actually has a trial, never parsed: a value off
+  // a URL selects a view, and one we do not recognise picks the default.
+  const offer = things.some((t) => t.id === picked) ? (picked as string) : "";
+  const all = trialsOf(everything, offer);
   const onTrial = trialsFor(all, "on trial");
   const ending = trialsFor(all, "ending");
   const converted = trialsFor(all, "converted");
@@ -32,6 +38,18 @@ export default async function TrialsPage({ searchParams }: { searchParams: Promi
   const rows = trialsFor(all, view);
   const cur = all[0]?.currency ?? "usd";
   const weeks = trialsByWeek(all);
+
+  // One place that builds a link, so a view chip keeps the chosen product and
+  // the product picker keeps the chosen view.
+  const href = (patch: { view?: string; offer?: string }) => {
+    const p = new URLSearchParams();
+    const v = patch.view !== undefined ? patch.view : view === "all" ? "" : view;
+    const o = patch.offer !== undefined ? patch.offer : offer;
+    if (v) p.set("view", v);
+    if (o) p.set("offer", o);
+    const q = p.toString();
+    return `/admin/trials${q ? `?${q}` : ""}`;
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -47,9 +65,37 @@ export default async function TrialsPage({ searchParams }: { searchParams: Promi
         <Tile label="Paid by converted trials" value={money(converted.reduce((n, t) => n + t.paidTotalCents, 0), cur)} hint="all time" />
       </div>
 
+      {things.length > 1 && (
+        <form method="get" className="flex flex-wrap items-center gap-2">
+          {view !== "all" && <input type="hidden" name="view" value={view} />}
+          <select name="offer" defaultValue={offer} className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs">
+            <option value="">Any product or offer</option>
+            {things.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          <button className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs hover:border-primary">Filter</button>
+          {offer && (
+            <Link href={href({ offer: "" })} className="text-xs text-muted hover:text-fg">Clear</Link>
+          )}
+          {offer && (
+            <span className="text-xs text-muted">
+              Showing {things.find((t) => t.id === offer)?.name}. Every number on this page follows it.
+            </span>
+          )}
+        </form>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {VIEWS.map((v) => (
-          <Chip key={v.key} href={v.key === "all" ? "/admin/trials" : `/admin/trials?view=${encodeURIComponent(v.key)}`} active={view === v.key} count={trialsFor(all, v.key).length}>{v.label}</Chip>
+          <Chip
+            key={v.key}
+            href={href({ view: v.key === "all" ? "" : v.key })}
+            active={view === v.key}
+            count={trialsFor(all, v.key).length}
+          >
+            {v.label}
+          </Chip>
         ))}
       </div>
 
