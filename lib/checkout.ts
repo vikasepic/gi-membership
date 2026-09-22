@@ -1681,6 +1681,24 @@ export async function grantOfferOwnership(
         stripeCustomerId: ctx.stripeCustomerId,
       });
     }
+    // The CRM, from the one place every grant passes through.
+    //
+    // This used to live only in finalizeOrder, which runs on the product
+    // checkout. An offer bought on its own page grants access through
+    // completeOfferCheckout and never reaches it, so 57 Content Engine
+    // trialists had no trial tag and no nurture sequence ever started for
+    // them. Tagging belongs where access is granted, not where one particular
+    // kind of order finalises.
+    //
+    // Best-effort and last, like the app push above: the card is already
+    // charged and a CRM outage must not fail a paid order.
+    if (ctx?.email) {
+      try {
+        await tagLifecycle({ userId, offerIds: [offer.id], status: trialing ? "trialing" : "active" });
+      } catch (e) {
+        console.error("[grantOfferOwnership] lifecycle tag failed (grant stands):", e);
+      }
+    }
   } else if (offer.grantType === "product" && offer.grantProductId) {
     const { error } = await db.from("ownership").insert({
       store_id: storeId,

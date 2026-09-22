@@ -444,3 +444,24 @@ offset is a query parameter on YouTube and a fragment on Vimeo.
 Related, same day: `progress.position_seconds` had existed since 0001 with two
 helpers to read and write it and no callers at all. A column nobody writes and
 a helper nobody calls look identical to a working feature from the outside.
+
+## The CRM only heard about one kind of checkout (22 Sep 2026)
+
+ActiveCampaign lifecycle tags were applied in `finalizeOrder`, which runs on
+the product checkout. An offer bought on its own page grants access through
+`completeOfferCheckout`, which never reaches it, so 57 Content Engine
+trialists carried no trial tag and no trial nurture sequence had ever started
+for any of them. It looked like a broken integration and was not: buyer tags
+were landing correctly, because those come from the Stripe webhook when
+ownership flips to active, which is independent of how the person bought.
+
+The tell was one member. `mamenprofesional@gmail.com` took Content Engine as a
+bump on a product order, went through `finalizeOrder`, and had the tag. Every
+other real trialist bought through the offer page and had nothing. When one
+row behaves and fifty do not, compare their paths, not their data.
+
+Lifecycle tagging now lives in `grantOfferOwnership`, the single function all
+four grant paths pass through: a bump, the offer checkout, an accepted OTO and
+a manual grant. Anything that grants access and does not go through it will
+be invisible to the CRM again. Backfill: `POST /api/cron/backfill-ac-tags`,
+`?dry=1` to count first.

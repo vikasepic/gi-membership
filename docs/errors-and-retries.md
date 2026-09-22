@@ -100,6 +100,11 @@ container's own environment. Container field `r11f09w16h8afmpt0ilxey2q`.
 | `backfill-renewals` | `/api/cron/backfill-renewals` | `40 3 * * *` | a renewal Stripe charged but never delivered is money with no order; it also repairs a renewal's date |
 | `prune-visits` | `/api/cron/prune-visits` | `20 4 * * 0` | `visits` only grows |
 
+`POST /api/cron/backfill-ac-tags` exists but is deliberately NOT scheduled. It
+is a repair for the 22 Sep 2026 gap where offer-page purchases never reached
+ActiveCampaign, and a real run starts nurture sequences for real people. Run
+it by hand, with `?dry=1` first.
+
 `retry-failed-jobs` and `retry-sweep` are the same job twice, five minutes
 apart from each other by chance. Harmless (the queue claims its rows) but
 wasteful, and one of them should go.
