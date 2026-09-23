@@ -1,5 +1,6 @@
 "use server";
 
+import { isViewingAs } from "@/lib/view-as";
 import { z } from "zod";
 import { cookies, headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
@@ -44,6 +45,12 @@ export async function startOffer(
   /** Which of the bump's prices was ticked — an index into the list the page drew. */
   bumpChoice?: number | "none",
 ): Promise<{ ok: true; clientSecret: string; mode: "payment" | "setup" } | { ok: false; error: string; code?: string }> {
+  // An admin standing in for a member must not put a charge on that member's
+  // card. Refused in the action rather than hidden in the UI: this is what
+  // moves the money, and a hidden button is not a guard.
+  if (await isViewingAs()) {
+    return { ok: false, error: "You are viewing someone else's account. Stop viewing before buying." };
+  }
   const parsedBump = bumpChoiceSchema.safeParse(bumpChoice);
   if (!parsedBump.success) {
     return { ok: false, error: "That add-on option is no longer available. Choose another and try again." };

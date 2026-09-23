@@ -10,6 +10,9 @@ import {
   revokeOwnership,
   setMemberAdmin,
 } from "@/lib/members";
+import { setViewAsCookie } from "@/lib/view-as";
+import { redirect } from "next/navigation";
+import { createServiceClient } from "@/lib/supabase/server";
 
 /**
  * One sentence for any mix of outcomes.
@@ -140,4 +143,22 @@ export async function deleteMemberAction(
 
   revalidatePath("/admin/members");
   return { message: `Deleted ${email}.` };
+}
+
+/**
+ * Open the store as this member.
+ *
+ * Not a login: the Supabase session stays the admin's own and the auth log
+ * stays honest. A signed, HttpOnly cookie tells the store's own pages who to
+ * render for, and `lib/view-as.ts` is the only place that reads it.
+ */
+export async function viewAsMemberAction(formData: FormData) {
+  const admin = await requireAdmin();
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) return;
+  const db = createServiceClient();
+  const { data: member } = await db.from("users").select("id").eq("id", userId).maybeSingle();
+  if (!member) return;
+  await setViewAsCookie(admin.id, userId);
+  redirect("/library");
 }

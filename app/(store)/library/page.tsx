@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BuyLink } from "@/components/buy-link";
 import { offerHref } from "@/lib/offer-link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { viewer } from "@/lib/view-as";
 import { getStandingOffer, listOwnedApps, hasSavedCard, ownedProductIdsForViewer } from "@/lib/library";
 import { coursesForUser } from "@/lib/courses";
 import { channelsLabel } from "@/lib/app-channels";
@@ -21,6 +21,8 @@ import { acceptStandingOfferAction, openAppAction } from "./actions";
 // "added" was handled, and worse than broken for a key from the PAID
 // checkout: a blank page after a real charge looks like the charge vanished.
 const OFFER_STATUS: Record<string, string> = {
+  // An admin standing in for this member. Buying would charge THEIR card.
+  viewing_as: "You’re viewing someone else’s account, so nothing can be bought here. Stop viewing to buy as yourself.",
   added: "Added — it’s ready in your library.",
   already_owned: "You already have this — nothing was charged.",
   unavailable: "That offer isn’t available any more.",
@@ -127,10 +129,7 @@ export default async function LibraryPage({
 }: {
   searchParams: Promise<{ offer?: string }>;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await viewer();
   if (!user) redirect("/login");
 
   const { offer: offerStatus } = await searchParams;

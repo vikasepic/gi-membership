@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { viewer } from "@/lib/view-as";
 import { getCourseItem } from "@/lib/curriculum";
 import { userOwnsCourse } from "@/lib/courses";
 import { signedItemAsset } from "@/lib/media";
@@ -20,10 +20,7 @@ export async function GET(
 ) {
   const { itemId, index } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await viewer();
   if (!user) return new NextResponse("Unauthorized", { status: 401 });
 
   const item = await getCourseItem(itemId);

@@ -1,5 +1,6 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
+import { allRows } from "@/lib/traffic";
 import { getStoreId } from "@/lib/store";
 import { listSubscriptions, type SubscriptionRow } from "@/lib/subscriptions";
 import type { Labels } from "@/lib/attribution";
@@ -68,25 +69,40 @@ export type MoneyData = {
 export async function loadMoneyData(): Promise<MoneyData> {
   const db = createServiceClient();
   const storeId = await getStoreId();
+  // Users, orders and ownership are paged. PostgREST caps a select at 1000
+  // rows and says nothing, and all three grow with the store: at the cap the
+  // money screens would quietly start losing members, and the ORDER BY would
+  // decide which. Found 23 Sep 2026 on a local store of 1062 users, where a
+  // real member 404ed on their own page. Offers, products and apps are
+  // hand-made lists and will not approach it.
   const [users, orders, subscriptions, ownership, offers, products, apps] = await Promise.all([
-    db.from("users").select("id, email, username, is_admin, created_at").eq("store_id", storeId),
-    db
-      .from("orders")
-      .select(
-        "id, user_id, email, status, total_cents, currency, livemode, created_at, updated_at, stripe_invoice_id, stripe_payment_intent_id, host_offer_id, utm_first, utm_last, referrer",
-      )
-      .eq("store_id", storeId)
-      .order("created_at", { ascending: false }),
+    allRows<Record<string, unknown>>((from, to) =>
+      db.from("users").select("id, email, username, is_admin, created_at").eq("store_id", storeId)
+        .order("created_at", { ascending: true }).range(from, to),
+    ),
+    allRows<Record<string, unknown>>((from, to) =>
+      db
+        .from("orders")
+        .select(
+          "id, user_id, email, status, total_cents, currency, livemode, created_at, updated_at, stripe_invoice_id, stripe_payment_intent_id, host_offer_id, utm_first, utm_last, referrer",
+        )
+        .eq("store_id", storeId)
+        .order("created_at", { ascending: false })
+        .range(from, to),
+    ),
     listSubscriptions(),
-    db.from("ownership").select("user_id, product_id, offer_id, app_id, status, stripe_subscription_id").eq("store_id", storeId),
+    allRows<Record<string, unknown>>((from, to) =>
+      db.from("ownership").select("user_id, product_id, offer_id, app_id, status, stripe_subscription_id")
+        .eq("store_id", storeId).order("user_id", { ascending: true }).range(from, to),
+    ),
     db.from("offers").select("id, name, content_name, billing_type, price_cents").eq("store_id", storeId),
     db.from("products").select("id, title, price_cents").eq("store_id", storeId),
     db.from("apps").select("id, name"),
   ]);
-  for (const r of [users, orders, ownership, offers, products, apps]) {
+  for (const r of [offers, products, apps]) {
     if (r.error) throw new Error(`loadMoneyData: ${r.error.message}`);
   }
-  const orderIds = (orders.data ?? []).map((o) => o.id as string);
+  const orderIds = (orders).map((o) => o.id as string);
   // Every line at once. PostgREST caps a select at 1000 rows and this list
   // grows one row per sale, so it is paged rather than trusted.
   const items: ItemRow[] = [];
@@ -109,14 +125,14 @@ export async function loadMoneyData(): Promise<MoneyData> {
     }
   }
   return {
-    users: (users.data ?? []).map((u) => ({
+    users: (users).map((u) => ({
       id: u.id as string,
       email: u.email as string,
       name: (u.username as string) ?? null,
       isAdmin: Boolean(u.is_admin),
       createdAt: u.created_at as string,
     })),
-    orders: (orders.data ?? []).map((o) => ({
+    orders: (orders).map((o) => ({
       id: o.id as string,
       userId: (o.user_id as string) ?? null,
       email: o.email as string,
@@ -135,7 +151,7 @@ export async function loadMoneyData(): Promise<MoneyData> {
     })),
     items,
     subscriptions,
-    ownership: (ownership.data ?? []).map((o) => ({
+    ownership: (ownership).map((o) => ({
       userId: o.user_id as string,
       productId: (o.product_id as string) ?? null,
       offerId: (o.offer_id as string) ?? null,

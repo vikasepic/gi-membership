@@ -11,6 +11,8 @@ import { storeMetadata } from "@/lib/site-metadata";
 import { CodeSnippets } from "@/components/code-snippets";
 import { headers } from "next/headers";
 import { recordVisit } from "@/lib/visits";
+import { viewer } from "@/lib/view-as";
+import { ViewAsBanner } from "@/components/view-as-banner";
 
 // Live store — never statically prerender (server data uses runtime-only env).
 export const dynamic = "force-dynamic";
@@ -49,8 +51,13 @@ export default async function StoreLayout({ children }: { children: React.ReactN
   // and never the home page at all. Not awaited — a record of a visit must
   // never delay one.
   void recordVisit();
+  // Who this page is actually for. Only interesting here when it is not the
+  // person signed in — the banner is the one thing that must appear on every
+  // store page without exception.
+  const who = await viewer();
   return (
     <>
+      {who?.viewingAs && <ViewAsBanner name={who.name} email={who.email} />}
       <CodeSnippets snippets={settings.codeSnippets} place="head" onCheckout={onCheckout} />
       <CodeSnippets snippets={settings.codeSnippets} place="bodyStart" onCheckout={onCheckout} />
       <StoreBrand

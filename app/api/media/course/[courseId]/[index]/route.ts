@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { viewer } from "@/lib/view-as";
 import { getCourse, userOwnsCourse } from "@/lib/courses";
 import { signedItemAsset } from "@/lib/media";
 import { userIsAdmin } from "@/lib/admin-guard";
@@ -13,10 +13,7 @@ export async function GET(
 ) {
   const { courseId, index } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await viewer();
   if (!user) return new NextResponse("Unauthorized", { status: 401 });
 
   // An admin passes ownership so a course can be previewed before it sells.

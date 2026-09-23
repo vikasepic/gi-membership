@@ -175,7 +175,7 @@ export function todayUtc(): string {
 const PAGE_SIZE = 1000;
 const MAX_PAGES = 20;
 
-async function allRows<T>(
+export async function allRows<T>(
   page: (from: number, to: number) => PromiseLike<{ data: T[] | null }>,
 ): Promise<T[]> {
   const out: T[] = [];

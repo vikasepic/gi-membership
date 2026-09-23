@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { viewer } from "@/lib/view-as";
 import { getCourseBySlug, userOwnsCourse } from "@/lib/courses";
 import { listCurriculum } from "@/lib/curriculum";
 import { completedItemIds, watchRowsFor } from "@/lib/progress";
@@ -10,8 +10,7 @@ export const metadata = NOINDEX;
 
 export default async function CoursePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await viewer();
   if (!user) redirect("/login");
 
   const course = await getCourseBySlug(slug);

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { viewer } from "@/lib/view-as";
 import { userOwnsCourse } from "@/lib/courses";
 import { setItemCompletion, isItemCompleted, setItemPosition, type CompletionSource } from "@/lib/progress";
 
@@ -8,10 +8,7 @@ const SOURCES: CompletionSource[] = ["manual", "video", "download", "dwell"];
 // Idempotent: clients may fire freely. setItemCompletion decides whether the
 // signal is allowed to move the row (manual_override wins permanently).
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await viewer();
   if (!user) return new NextResponse("Unauthorized", { status: 401 });
 
   const body = (await req.json().catch(() => ({}))) as {

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { viewer } from "@/lib/view-as";
 import { logout, openBillingPortal } from "./actions";
 import { purchaseDocsForUser, subscriptionInvoicesForUser } from "@/lib/receipts";
 import { hasBillingAccount } from "@/lib/members";
@@ -22,10 +22,7 @@ export default async function AccountPage({
   searchParams: Promise<{ billing?: string }>;
 }) {
   const { billing } = await searchParams;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await viewer();
 
   // Straight to the login, the way the library already does it.
   //

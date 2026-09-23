@@ -9,7 +9,7 @@ import { progressForCourses, lastLessonFor, lastSignInForAll } from "@/lib/learn
 import { deriveMembers } from "@/lib/member-money";
 import { deriveLedger } from "@/lib/ledger";
 import { money } from "@/lib/money";
-import { cancelSubscriptionAction, revokeAccessAction, toggleAdminAction } from "@/app/admin/members/actions";
+import { cancelSubscriptionAction, revokeAccessAction, toggleAdminAction, viewAsMemberAction } from "@/app/admin/members/actions";
 import { DeleteMember } from "@/components/admin/delete-member";
 import { GrantMore } from "@/components/admin/grant-more";
 import { LearningPanel } from "@/components/admin/learning-panel";
@@ -182,7 +182,12 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                   <button type="submit" className="text-xs text-muted hover:text-fg">{m.isAdmin ? "Remove admin" : "Make admin"}</button>
                 </form>
               )}
-              <DeleteMember userId={m.id} email={m.email} orders={m.payments} isOwner={isOwner} isSelf={me.email?.toLowerCase() === m.email.toLowerCase()} />
+              {/* Opens the store as them. Not a login — see lib/view-as.ts. */}
+            <form action={viewAsMemberAction}>
+              <input type="hidden" name="userId" value={m.id} />
+              <button type="submit" className="text-xs text-muted hover:text-primary">Open the store as them &rarr;</button>
+            </form>
+            <DeleteMember userId={m.id} email={m.email} orders={m.payments} isOwner={isOwner} isSelf={me.email?.toLowerCase() === m.email.toLowerCase()} />
             </div>
           </section>
         </div>

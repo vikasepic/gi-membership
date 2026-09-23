@@ -1,5 +1,6 @@
 "use server";
 
+import { isViewingAs } from "@/lib/view-as";
 import { z } from "zod";
 import { cookies, headers } from "next/headers";
 import { createCheckoutIntent, finalizeOrder, orderIdForIntent, type CheckoutResult } from "@/lib/checkout";
@@ -60,6 +61,12 @@ const schema = z.object({
 });
 
 export async function startCheckout(input: unknown): Promise<CheckoutResult> {
+  // An admin standing in for a member must not put a charge on that member's
+  // card. Refused here rather than hidden in the UI: the action is what moves
+  // the money, and a hidden button is not a guard.
+  if (await isViewingAs()) {
+    return { ok: false, error: "You are viewing someone else's account. Stop viewing before buying." };
+  }
   const parsed = schema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues.map((i) => i.message).join(", ") };

@@ -479,3 +479,20 @@ Two things that sweep gets right and a naive one would not. It claims the row
 rather than mailing everyone again every hour until it stops crashing. And it
 skips anyone who has already cancelled: their card will not be charged, and an
 email saying it will is worse than no email.
+
+## PostgREST's 1000-row cap bit again, in the money loader (23 Sep 2026)
+
+`loadMoneyData` read users, orders and ownership with no paging. On a local
+store of 1062 users a real member 404ed on their own admin page, because the
+users select returned the first thousand and theirs was not among them. No
+error anywhere; the row simply was not in the answer.
+
+Production was at 99 users and 100 orders when this was found, so it had not
+bitten yet — which is exactly why it is worth fixing before it does. All three
+now page through `allRows`, which is exported from `lib/traffic.ts` for this
+purpose, and each one carries an explicit `ORDER BY` so the paging is stable.
+
+The rule is in AGENTS.md and was still missed when the loader was written.
+Before any new `.select()` without a `.limit()`, ask whether that table grows
+with the store. Users, orders, order_items, ownership, subscriptions,
+progress and visits all do.
