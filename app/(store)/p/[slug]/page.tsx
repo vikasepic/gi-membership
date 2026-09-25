@@ -12,6 +12,7 @@ import { productDisplay } from "@/lib/courses";
 import { publicCoverUrl } from "@/lib/media";
 import { money } from "@/lib/money";
 import { TrackView } from "@/components/track-view";
+import { ScrollTracker } from "@/components/scroll-tracker";
 import { BuyLink } from "@/components/buy-link";
 import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
 import { offersForRows } from "@/lib/block-offers";
@@ -161,6 +162,7 @@ export default async function ProductPage({
             params={{ content_ids: [product.slug], content_type: "product", content_name: product.title }}
           />
         )}
+        {!preview && <ScrollTracker path={`/p/${slug}`} />}
         <SalesPage
           rows={rows}
           settings={settings}

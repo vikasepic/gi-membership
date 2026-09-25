@@ -126,3 +126,29 @@ export async function recentVisits(range: DayRange, limit = 100): Promise<VisitR
     return [];
   }
 }
+
+export type ScrollRow = { section: number; label: string; reached: number; visits: number };
+export type ScrollPath = { path: string; visits: number };
+
+/** Pages with scroll data in the window, most visited first. Migration 0089. */
+export async function scrollPaths(range: DayRange): Promise<ScrollPath[]> {
+  const raw = await rollup<Record<string, unknown>>("visit_scroll_paths", range);
+  return raw.map((r) => ({ path: String(r.path), visits: Number(r.visits) }));
+}
+
+/** How many visits reached each section of one page. Migration 0089. */
+export async function scrollRows(path: string, range: DayRange): Promise<ScrollRow[]> {
+  try {
+    const { from, to } = bounds(range);
+    const db = createServiceClient();
+    const { data } = await db.rpc("visit_scroll_rollup", { p_store: await getStoreId(), p_path: path, p_from: from, p_to: to });
+    return ((data as Record<string, unknown>[]) ?? []).map((r) => ({
+      section: Number(r.section),
+      label: r.label ? String(r.label) : `Section ${Number(r.section) + 1}`,
+      reached: Number(r.reached),
+      visits: Number(r.visits),
+    }));
+  } catch {
+    return [];
+  }
+}

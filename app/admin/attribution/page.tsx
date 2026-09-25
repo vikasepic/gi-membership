@@ -66,6 +66,9 @@ export default async function AttributionPage({
         <Link href="/admin/attribution/sources" className="text-xs text-muted underline-offset-4 hover:underline">
           Referrers and landing pages →
         </Link>
+        <Link href="/admin/attribution/scroll" className="text-xs text-muted underline-offset-4 hover:underline">
+          Scroll depth →
+        </Link>
       </div>
 
       <CampaignTable

@@ -1329,6 +1329,34 @@ as such).
 follows by `ON DELETE CASCADE`). Scheduled in Coolify since 21 Sep 2026,
 Sundays at 04:20 — see the scheduled-task table in `docs/errors-and-retries.md`.
 
+### `visit_scroll`
+
+One row per visit and sales page, kept at the furthest point reached. Added
+by `0089_visit_scroll.sql` on 25 Sep 2026, when 94% of ad visits to the
+Micro-Product Builder page were leaving without a click and nothing said
+where they stopped reading.
+
+| Column | Type | Notes |
+|---|---|---|
+| `visit_id` | uuid | PK with `path`; `visits(id) ON DELETE CASCADE`, so the 400-day prune covers it |
+| `path` | text | `/p/<slug>` or `/o/<key>` |
+| `section` | integer | 0-based index of the deepest `<section>` whose top came into view; `-1` if none |
+| `label` | text | That section's heading at the time |
+| `labels` | jsonb | Every section's heading in page order, so the report can name bands nobody reached |
+| `sections` | integer | How many sections the page had |
+| `depth_pct` | integer | Max scroll depth, 0 to 100 |
+
+Written by `record_scroll(...)`, an upsert that keeps the greatest of every
+field, because a 10-second tick and the `pagehide` beacon from the same tab
+can land out of order. `visit_scroll_rollup(store, path, from, to)` returns
+one row per section index with how many visits got at least that far and
+the most common heading seen at that index; `visit_scroll_paths` lists the
+pages with data. Read by `/admin/attribution/scroll`. No consent gate, same
+reasoning as `visits`: a scroll position describes the page, not the person.
+The beacon comes from `components/scroll-tracker.tsx`, mounted on the two
+sales pages outside preview, and lands on `app/api/track/scroll`, which keys
+on the visit from the cookie and never on anything in the body.
+
 ---
 
 ## Appendix: the raw DDL

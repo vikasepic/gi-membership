@@ -17,6 +17,7 @@ import { planMoney } from "@/lib/plan-money";
 import { livePrices } from "@/lib/offer-prices";
 import { offersForRows } from "@/lib/block-offers";
 import { TrackView } from "@/components/track-view";
+import { ScrollTracker } from "@/components/scroll-tracker";
 import { BuyLink } from "@/components/buy-link";
 import { buildBumpView } from "@/lib/bump";
 import { offerAsSoldTo } from "@/lib/trial-history";
@@ -160,6 +161,7 @@ export default async function OfferSalesPage({
           params={{ content_ids: [offer.key], content_type: "product", content_name: offer.name }}
         />
       )}
+      {!preview && <ScrollTracker path={`/o/${key}`} />}
       <SalesPage
         rows={rows}
         settings={settings}
