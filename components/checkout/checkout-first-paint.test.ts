@@ -70,16 +70,17 @@ describe("the payment element is born in the right mode", () => {
   });
 });
 
-describe("no Stripe warm-up on the checkouts, for now", () => {
+describe("no Stripe warm-up on the checkouts", () => {
   it("renders neither a preconnect nor a preload for js.stripe.com", () => {
-    // Tried 25 Sep 2026: a preconnect plus a preload of https://js.stripe.com/v3/
-    // rendered on both checkout pages. Locally it brought the card fields
-    // from 3.3 s to under 1 s. On production it was intermittent: one
-    // navigation mounted at 0.93 s, the next three had not mounted after 30 s,
-    // where four consecutive measurements before the change all mounted
-    // within six. Both checkouts, and the warm-up was the only change the
-    // product page had. Pulled the same evening. A safer variant needs to be
-    // measured on production, repeatedly, before it is trusted with money.
+    // Tried and pulled 25 Sep 2026. It was added because the card fields
+    // looked slow (3.3 s desktop, 6.2 s mobile) and pulled because they then
+    // looked broken (three of four navigations never mounted). Both readings
+    // came from a hidden Browser pane, where the page never hydrates and
+    // Stripe.js is never requested. Measured headless over CDP on production,
+    // sixteen fresh navigations across both checkouts and both viewports
+    // mounted the payment element in 0.33–1.88 s with no warm-up at all.
+    // Nothing needs it. If it ever comes back, it comes back on a headless
+    // measurement, never one taken through the pane. See docs/lessons.md.
     expect(offerPage).not.toContain("js.stripe.com");
     expect(productPage).not.toContain("js.stripe.com");
     expect(offerPage).not.toContain("StripeWarmup");

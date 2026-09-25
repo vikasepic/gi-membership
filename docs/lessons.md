@@ -520,21 +520,24 @@ walking both pages live rather than reading code:
   so a one-off opened as a save-a-card element. Created in payment mode with
   the amount when that is knowable at first render, as the product form does.
 
-And one thing shared by both checkouts, NOT fixed: `loadStripe` runs inside
-the form, so Stripe.js is not requested until our bundle has hydrated — card
-fields at 3.3 s desktop, 6.2 s mobile, on a fast connection. A preconnect plus
-a `<link rel="preload" as="script">` of `https://js.stripe.com/v3/` on both
-checkout pages went out the same evening and came back out within the hour.
-Locally it brought the fields to under a second. On production it was
-intermittent: one navigation mounted at 0.93 s, the next three had not
-mounted after 30 s, where four measurements before the change all mounted
-within six. Both checkouts, and the warm-up was the only change the product
-page had. The mechanism was not established and a Friday evening with ads
-running is not the time to establish it. Whoever tries again: measure on
-production, repeatedly, with a fresh navigation each time, before trusting it
-with money — and note that a `location.reload()` issued from inside a probe
-script, plus a timer stored across the reload, produced readings that were
-themselves wrong.
+And one thing that was NOT wrong, though it cost a deploy and a revert to
+learn it: the checkouts are not slow. Measured through the desktop app's
+Browser pane, the card fields appeared to take 3.3 s on desktop and 6.2 s on
+a phone, so a preconnect plus a `<link rel="preload" as="script">` of
+`https://js.stripe.com/v3/` went out on both checkout pages. Measured the
+same way after the deploy: one navigation mounted at 0.93 s, the next three
+had not mounted after 30 s. The warm-up was pulled on that. Both readings
+were the pane, not the site. When the Browser pane is hidden the page never
+hydrates (`document.visibilityState` is `hidden`), so `loadStripe` never
+runs and there is no `js.stripe.com` script tag at all; the one run that
+"mounted" was the navigation that opened the pane. Headless Chrome over CDP
+from Bash, sixteen fresh navigations across both checkouts and both
+viewports with the cache cleared each time, mounted the payment element in
+0.33–1.88 s, without any warm-up. The warm-up stays out because nothing
+needs it, not because it broke anything. Any timing taken through the pane
+is worthless unless `tabs_context` says the pane is displayed; the CDP
+script pattern is in the machine-private memory under
+`visual-verification-loop`.
 
 When one page converts and its twin does not, diff the two pages in a
 browser before diffing the code. Every finding here was visible on screen.
