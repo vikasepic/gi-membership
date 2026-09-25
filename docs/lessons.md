@@ -496,3 +496,34 @@ The rule is in AGENTS.md and was still missed when the loader was written.
 Before any new `.select()` without a `.limit()`, ask whether that table grows
 with the store. Users, orders, order_items, ownership, subscriptions,
 progress and visits all do.
+
+## The offer checkout was losing buyers who had already decided (25 Sep 2026)
+
+Micro-Product Builder, 1 to 25 Sep, from our own visit data: 1,053 landed
+from ads, 67 clicked buy, 4 paid. The product checkout beside it converts the
+same step at 29%. Nothing failed: Stripe saw only five payment attempts all
+month, so 62 people left the form before pressing Pay, and nothing on the
+server records a form that is simply abandoned.
+
+Three things distinguished the offer checkout from the product one, found by
+walking both pages live rather than reading code:
+
+- **Its title was the offer's `headline` field**, which also serves as the
+  sales page's fallback `<title>`, so SEO copy ("… | Greater Inside") sat at
+  the top of the payment form. It now uses `offer.name`, as the product
+  checkout has always used the product's title.
+- **A one-time offer never said so.** The product checkout says "One-time
+  purchase" and "one-time · instant access"; the offer checkout said nothing,
+  while the bump beneath read "$0 then $29/month" and Stripe's mandate line
+  promised future charges. Same words now, on `oneTime`.
+- **Stripe's element was born in setup mode and switched to payment later**,
+  so a one-off opened as a save-a-card element. Created in payment mode with
+  the amount when that is knowable at first render, as the product form does.
+
+And one thing shared by both checkouts: `loadStripe` ran inside the form, so
+Stripe.js was not requested until our bundle had hydrated — card fields at
+3.3 s desktop, 6.2 s mobile, on a fast connection. `StripeWarmup` preconnects
+and preloads the exact URL the loader matches on, checkout pages only.
+
+When one page converts and its twin does not, diff the two pages in a
+browser before diffing the code. Every finding here was visible on screen.

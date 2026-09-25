@@ -10,6 +10,7 @@ import { CheckoutStage } from "@/components/checkout/v2/stage";
 import { CheckoutTrial, TrialEyebrow, TrialPriceTerms } from "@/components/checkout/trial";
 import { stripePublishableKey } from "@/lib/env";
 import { OfferCheckoutForm } from "@/components/checkout/offer-checkout-form";
+import { StripeWarmup } from "@/components/checkout/stripe-warmup";
 
 export const dynamic = "force-dynamic";
 
@@ -121,11 +122,18 @@ export default async function OfferCheckoutPage({
   // column narrower than the copy beside them. Two-fifths and three-fifths: the
   // panel still holds its picture, and the form gets the space.
   const ways = livePrices(offer.prices);
+  // Exactly one way to pay and it does not renew.
+  const oneTime = ways.length === 1 && ways[0].billingType === "one_time";
   const form = (
     <OfferCheckoutForm
       offer={{
         id: offer.id,
-        headline: offer.headline ?? offer.name,
+        // The NAME, not the headline. `headline` doubles as the sales page's
+        // fallback <title>, so an owner writing SEO copy into it — as the
+        // Micro-Product Builder's "… | Greater Inside" was, 11 Sep 2026 —
+        // put a search snippet at the top of the payment form. The product
+        // checkout has always used the product's title here.
+        headline: offer.name,
         description: offer.description,
         chargeNowCents: immediateChargeCents(offer),
         // The offer's own trial and renewal, so the form can say what happens
@@ -164,6 +172,7 @@ export default async function OfferCheckoutPage({
   if (skin === "v2") {
     return (
       <CheckoutTrial days={offer.trialDays}>
+      <StripeWarmup />
       <div className="checkout-v2 min-h-dvh bg-bg" style={checkoutDesignVars(design)}>
         {/* Half and half, both hugging the seam — the arrangement Stripe's own
             checkout uses, and for the reason it uses it: two columns of equal
@@ -179,8 +188,13 @@ export default async function OfferCheckoutPage({
           backLabel="Back"
           // The terms as a label, never a claim — and the trial a code
           // actually grants rather than the price's. See checkout/trial.
-          eyebrow={<TrialEyebrow name={offer.name} />}
-          title={offer.headline ?? offer.name}
+          // A one-time price says so, in the words the product checkout uses.
+          // Found 25 Sep 2026: the Micro-Product Builder checkout named no
+          // terms at all while its bump beneath read "$0 then $29/month" and
+          // Stripe's mandate line promised future charges, and 63 of 67
+          // people who had already clicked buy left the form.
+          eyebrow={oneTime ? "One-time purchase" : <TrialEyebrow name={offer.name} />}
+          title={offer.name}
           sub={offer.description}
           imageUrl={coverUrl}
           bullets={offer.bullets ?? []}
@@ -191,7 +205,9 @@ export default async function OfferCheckoutPage({
           // A one-time price has no terms to state, with or without a code —
           // which is the whole of what `priceTerms` returns null for.
           priceCaption={
-            ways.length === 1 && ways[0].billingType === "recurring" ? (
+            oneTime ? (
+              "one-time · instant access"
+            ) : ways.length === 1 && ways[0].billingType === "recurring" ? (
               <TrialPriceTerms price={ways[0]} currency={offer.currency} />
             ) : null
           }
@@ -207,9 +223,10 @@ export default async function OfferCheckoutPage({
 
   return (
     <CheckoutTrial days={offer.trialDays}>
+    <StripeWarmup />
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <CheckoutPanel
-        title={offer.headline ?? offer.name}
+        title={offer.name}
         tagline={offer.description}
         coverUrl={coverUrl}
         backHref="/library"

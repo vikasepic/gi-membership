@@ -71,16 +71,31 @@ export function OfferCheckoutForm({
   design?: CheckoutDesign;
 }) {
   const stripePromise = useMemo(() => loadStripe(publishableKey), [publishableKey]);
+
+  // What Inner will settle on at its first render, worked out here so the
+  // element can be born in the right mode instead of switching into it.
+  //
+  // Starting every offer in "setup" and letting Inner's effect flip it to
+  // "payment" meant a one-time purchase opened as a save-a-card element:
+  // its mandate line, its wallet choices and its first paint were all for
+  // saving a card, then it re-rendered as a payment. The product checkout
+  // has always been created in payment mode with its amount. Same rule here
+  // when the amount is knowable up front — one price, or a preselected one,
+  // that does not renew; nothing else can be ticked or applied before the
+  // first render. Everything Inner does afterwards is unchanged.
+  const firstPick = chosen >= 0 ? chosen : prices.length === 1 ? 0 : -1;
+  const firstPrice = firstPick >= 0 ? (prices[firstPick] ?? null) : null;
+  const startsRecurring = firstPrice ? firstPrice.billingType === "recurring" : Boolean(offer.recurring);
+  const firstAmount = firstPrice ? chargeNowCents(firstPrice) : offer.chargeNowCents;
+  const bornAsPayment = !startsRecurring && firstAmount > 0;
+
   return (
     <Elements
       stripe={stripePromise}
       options={{
-        // The safe starting guess, before a price is even known: nothing to
-        // authorise yet, so there is no amount to give it. Inner's own effect
-        // corrects this the moment a price is picked (or on mount, for a
-        // preselected or single one) — this is only ever what's on screen
-        // for the instant before that runs.
-        mode: "setup",
+        ...(bornAsPayment
+          ? { mode: "payment" as const, amount: firstAmount, setupFutureUsage: "off_session" as const }
+          : { mode: "setup" as const }),
         currency: offer.currency,
         appearance: stripeAppearance(skin, design?.buttonColor),
       }}
