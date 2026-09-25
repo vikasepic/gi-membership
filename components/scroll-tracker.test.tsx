@@ -4,16 +4,18 @@ import { readFileSync } from "node:fs";
 import { sectionLabels } from "@/components/scroll-tracker";
 
 describe("naming the sections a visit scrolled through", () => {
-  it("uses the first heading, collapsed, and a number when there is none", () => {
+  it("uses the first heading, then the first text, then a number", () => {
     document.body.innerHTML = `
       <section><h2>  Who this is
         for </h2></section>
-      <section><p>no heading</p></section>
+      <section><p>no heading, so this line names it</p></section>
+      <section><img alt=""></section>
       <section><h3>${"x".repeat(80)}</h3></section>`;
     const labels = sectionLabels(Array.from(document.querySelectorAll("section")));
     expect(labels[0]).toBe("Who this is for");
-    expect(labels[1]).toBe("Section 2");
-    expect(labels[2]).toHaveLength(60);
+    expect(labels[1]).toBe("no heading, so this line names it");
+    expect(labels[2]).toBe("Section 3");
+    expect(labels[3]).toHaveLength(60);
   });
 });
 

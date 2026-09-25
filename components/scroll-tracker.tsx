@@ -20,8 +20,10 @@ const REACH = 0.6;
 
 export function sectionLabels(sections: Element[]): string[] {
   return sections.map((s, i) => {
-    const h = s.querySelector("h1, h2, h3");
-    const text = h?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+    // A heading if there is one; otherwise the first words of the band, so a
+    // video or image band still has a name in the report.
+    const el = s.querySelector("h1, h2, h3, p, li, blockquote, figcaption, button, a");
+    const text = el?.textContent?.replace(/\s+/g, " ").trim() ?? "";
     return (text || `Section ${i + 1}`).slice(0, 60);
   });
 }
