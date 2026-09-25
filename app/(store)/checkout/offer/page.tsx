@@ -10,7 +10,6 @@ import { CheckoutStage } from "@/components/checkout/v2/stage";
 import { CheckoutTrial, TrialEyebrow, TrialPriceTerms } from "@/components/checkout/trial";
 import { stripePublishableKey } from "@/lib/env";
 import { OfferCheckoutForm } from "@/components/checkout/offer-checkout-form";
-import { StripeWarmup } from "@/components/checkout/stripe-warmup";
 
 export const dynamic = "force-dynamic";
 
@@ -172,7 +171,6 @@ export default async function OfferCheckoutPage({
   if (skin === "v2") {
     return (
       <CheckoutTrial days={offer.trialDays}>
-      <StripeWarmup />
       <div className="checkout-v2 min-h-dvh bg-bg" style={checkoutDesignVars(design)}>
         {/* Half and half, both hugging the seam — the arrangement Stripe's own
             checkout uses, and for the reason it uses it: two columns of equal
@@ -223,7 +221,6 @@ export default async function OfferCheckoutPage({
 
   return (
     <CheckoutTrial days={offer.trialDays}>
-    <StripeWarmup />
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <CheckoutPanel
         title={offer.name}

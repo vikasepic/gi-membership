@@ -12,7 +12,6 @@ import { readFileSync } from "node:fs";
 const offerPage = readFileSync("app/(store)/checkout/offer/page.tsx", "utf8");
 const productPage = readFileSync("app/(store)/checkout/page.tsx", "utf8");
 const offerForm = readFileSync("components/checkout/offer-checkout-form.tsx", "utf8");
-const warmup = readFileSync("components/checkout/stripe-warmup.tsx", "utf8");
 const rootLayout = readFileSync("app/layout.tsx", "utf8");
 
 describe("the offer checkout's title", () => {
@@ -71,26 +70,20 @@ describe("the payment element is born in the right mode", () => {
   });
 });
 
-describe("Stripe starts downloading before our bundle finishes", () => {
-  it("preconnects and preloads the exact URL the loader looks for", () => {
-    // @stripe/stripe-js reuses an existing script only if its src matches
-    // /^https:\/\/js\.stripe\.com\/v3\/?(\?.*)?$/ — any other spelling here
-    // means two copies of Stripe.js.
-    expect(warmup).toContain('<link rel="preconnect" href="https://js.stripe.com" />');
-    expect(warmup).toContain('<link rel="preload" href="https://js.stripe.com/v3/" as="script" />');
-    expect("https://js.stripe.com/v3/").toMatch(/^https:\/\/js\.stripe\.com\/v3\/?(\?.*)?$/);
-  });
-
-  it("is on both checkouts, both skins", () => {
-    expect((offerPage.match(/<StripeWarmup \/>/g) ?? []).length).toBe(2);
-    expect((productPage.match(/<StripeWarmup \/>/g) ?? []).length).toBe(2);
-  });
-
-  it("is on the checkouts only, not every page of the store", () => {
-    // beforeInteractive would achieve the same but has to live in the root
-    // layout, which puts a third-party script on the admin and every sales
-    // page. Money pages only.
+describe("no Stripe warm-up on the checkouts, for now", () => {
+  it("renders neither a preconnect nor a preload for js.stripe.com", () => {
+    // Tried 25 Sep 2026: a preconnect plus a preload of https://js.stripe.com/v3/
+    // rendered on both checkout pages. Locally it brought the card fields
+    // from 3.3 s to under 1 s. On production it was intermittent: one
+    // navigation mounted at 0.93 s, the next three had not mounted after 30 s,
+    // where four consecutive measurements before the change all mounted
+    // within six. Both checkouts, and the warm-up was the only change the
+    // product page had. Pulled the same evening. A safer variant needs to be
+    // measured on production, repeatedly, before it is trusted with money.
+    expect(offerPage).not.toContain("js.stripe.com");
+    expect(productPage).not.toContain("js.stripe.com");
+    expect(offerPage).not.toContain("StripeWarmup");
+    expect(productPage).not.toContain("StripeWarmup");
     expect(rootLayout).not.toContain("js.stripe.com");
-    expect(rootLayout).not.toContain("StripeWarmup");
   });
 });

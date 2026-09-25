@@ -520,10 +520,21 @@ walking both pages live rather than reading code:
   so a one-off opened as a save-a-card element. Created in payment mode with
   the amount when that is knowable at first render, as the product form does.
 
-And one thing shared by both checkouts: `loadStripe` ran inside the form, so
-Stripe.js was not requested until our bundle had hydrated — card fields at
-3.3 s desktop, 6.2 s mobile, on a fast connection. `StripeWarmup` preconnects
-and preloads the exact URL the loader matches on, checkout pages only.
+And one thing shared by both checkouts, NOT fixed: `loadStripe` runs inside
+the form, so Stripe.js is not requested until our bundle has hydrated — card
+fields at 3.3 s desktop, 6.2 s mobile, on a fast connection. A preconnect plus
+a `<link rel="preload" as="script">` of `https://js.stripe.com/v3/` on both
+checkout pages went out the same evening and came back out within the hour.
+Locally it brought the fields to under a second. On production it was
+intermittent: one navigation mounted at 0.93 s, the next three had not
+mounted after 30 s, where four measurements before the change all mounted
+within six. Both checkouts, and the warm-up was the only change the product
+page had. The mechanism was not established and a Friday evening with ads
+running is not the time to establish it. Whoever tries again: measure on
+production, repeatedly, with a fresh navigation each time, before trusting it
+with money — and note that a `location.reload()` issued from inside a probe
+script, plus a timer stored across the reload, produced readings that were
+themselves wrong.
 
 When one page converts and its twin does not, diff the two pages in a
 browser before diffing the code. Every finding here was visible on screen.

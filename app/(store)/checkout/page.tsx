@@ -21,7 +21,6 @@ import { getStoreId } from "@/lib/store";
 import { usableCheckoutLayout } from "@/lib/checkout-layout";
 import { checkoutSkin } from "@/lib/checkout-skin";
 import { CheckoutStage } from "@/components/checkout/v2/stage";
-import { StripeWarmup } from "@/components/checkout/stripe-warmup";
 import { money } from "@/lib/money";
 import { recordPageHit } from "@/lib/traffic";
 import { recordVisitStep } from "@/lib/visits";
@@ -234,8 +233,6 @@ export default async function CheckoutPage({
     const single = ways.length === 1 ? ways[0] : null;
     const one = ways.length <= 1;
     return (
-      <>
-      <StripeWarmup />
       <div className="checkout-v2 min-h-dvh bg-bg" style={checkoutDesignVars(design)}>
         {/* Half and half, both hugging the seam — the arrangement Stripe's own
             checkout uses, and for the reason it uses it: two columns of equal
@@ -262,13 +259,10 @@ export default async function CheckoutPage({
           </div>
         </div>
       </div>
-      </>
     );
   }
 
   return (
-    <>
-    <StripeWarmup />
     <div className="grid min-h-dvh grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
       <CheckoutPanel
         title={product.title}
@@ -297,6 +291,5 @@ export default async function CheckoutPage({
         {form}
       </div>
     </div>
-    </>
   );
 }
