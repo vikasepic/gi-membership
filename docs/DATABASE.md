@@ -1357,6 +1357,27 @@ The beacon comes from `components/scroll-tracker.tsx`, mounted on the two
 sales pages outside preview, and lands on `app/api/track/scroll`, which keys
 on the visit from the cookie and never on anything in the body.
 
+### `visit_clicks`
+
+Which buy button a visit pressed. Added by `0090_visit_clicks.sql` on 26 Sep
+2026; nothing had recorded it before, since AddToCart carries only price
+and product. Every buy button on a sales page is a link to `/checkout`,
+whichever block draws it, so `components/scroll-tracker.tsx` listens for
+clicks on those links (capture phase, before navigation) and beacons to
+`app/api/track/click`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `visit_id` | uuid | `visits(id) ON DELETE CASCADE` |
+| `path` | text | The sales page |
+| `section` | integer | 0-based index of the `<section>` holding the button; `-1` outside every section (a sticky bar) |
+| `section_label` | text | That section's heading or first words |
+| `button` | text | The button's text, 60 chars max |
+
+Unique on `(visit_id, path, section, button)`, so pressing the same button
+twice is one click. `visit_click_rollup(store, path, from, to)` counts
+distinct visits per button; read by `/admin/attribution/scroll`.
+
 ---
 
 ## Appendix: the raw DDL

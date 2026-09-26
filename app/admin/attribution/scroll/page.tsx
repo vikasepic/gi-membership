@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { scrollPaths, scrollRows } from "@/lib/visit-reports";
+import { clickRows, scrollPaths, scrollRows } from "@/lib/visit-reports";
 import { PRESETS, presetFrom, rangeOf } from "@/lib/traffic-funnel";
 import { todayUtc } from "@/lib/traffic";
 
@@ -25,7 +25,9 @@ export default async function ScrollPage({
   // Whitelisted against the pages that have data; anything else picks the busiest.
   const wanted = one(params.path);
   const path = paths.find((p) => p.path === wanted)?.path ?? paths[0]?.path ?? null;
-  const rows = path ? await scrollRows(path, range) : [];
+  const [rows, clicks] = path ? await Promise.all([scrollRows(path, range), clickRows(path, range)]) : [[], []];
+  const clickTotal = clicks.reduce((n, c) => n + c.clicks, 0);
+  const clicksIn = (section: number) => clicks.filter((c) => c.section === section).reduce((n, c) => n + c.clicks, 0);
   const total = rows[0]?.visits ?? 0;
 
   const href = (over: Record<string, string>) => {
@@ -43,7 +45,7 @@ export default async function ScrollPage({
   return (
     <div className="flex flex-col gap-6 py-4">
       <div className="flex flex-col gap-1">
-        <h1 className="text-3xl">Scroll depth</h1>
+        <h1 className="text-3xl">Scroll depth and buy clicks</h1>
         <p className="max-w-3xl text-muted">
           How far down a sales page each visit got, by section. A section counts as reached once its top has
           come into view. The first big drop is where the page loses people.
@@ -90,21 +92,54 @@ export default async function ScrollPage({
           <p className="text-sm text-muted">
             <span className="font-medium text-fg">{path}</span> · {total} visits with scroll data
           </p>
+          <p className="text-xs text-muted">Bar: share of visits that reached the section. Right: buy-button clicks from it.</p>
           <ol className="flex flex-col gap-1">
             {rows.map((r) => {
               const pct = total ? Math.round((r.reached / total) * 100) : 0;
               return (
-                <li key={r.section} className="grid grid-cols-[2rem_1fr_4rem] items-center gap-3 text-sm">
+                <li key={r.section} className="grid grid-cols-[2rem_1fr_3.5rem_3.5rem] items-center gap-3 text-sm">
                   <span className="text-muted tabular-nums">{r.section + 1}</span>
                   <span className="relative h-7 overflow-hidden rounded bg-muted/20">
                     <span className="absolute inset-y-0 left-0 bg-primary/30" style={{ width: `${pct}%` }} />
                     <span className="relative px-2 leading-7 truncate block">{r.label}</span>
                   </span>
                   <span className="text-right tabular-nums">{pct}%</span>
+                  <span className="text-right tabular-nums text-muted">{clicksIn(r.section) ? `${clicksIn(r.section)} ✓` : "–"}</span>
                 </li>
               );
             })}
           </ol>
+
+          <h2 className="mt-6 text-xl">Buy buttons clicked</h2>
+          {clicks.length === 0 ? (
+            <p className="text-sm text-muted">No buy-button clicks recorded on this page in this window. Counting started 26 Sep 2026.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-muted">
+                    <th className="py-1 pr-3 font-normal">Section</th>
+                    <th className="py-1 pr-3 font-normal">Button</th>
+                    <th className="py-1 pr-3 text-right font-normal">Visits</th>
+                    <th className="py-1 text-right font-normal">Share</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clicks.map((c) => (
+                    <tr key={`${c.section}-${c.button}`} className="border-t border-border">
+                      <td className="py-2 pr-3">
+                        <span className="tabular-nums text-muted">{c.section >= 0 ? `${c.section + 1} · ` : ""}</span>
+                        {c.sectionLabel || "Outside the sections"}
+                      </td>
+                      <td className="py-2 pr-3">{c.button}</td>
+                      <td className="py-2 pr-3 text-right tabular-nums">{c.clicks}</td>
+                      <td className="py-2 text-right tabular-nums">{clickTotal ? Math.round((c.clicks / clickTotal) * 100) : 0}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

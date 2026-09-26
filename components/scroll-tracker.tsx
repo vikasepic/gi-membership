@@ -28,6 +28,20 @@ export function sectionLabels(sections: Element[]): string[] {
   });
 }
 
+/**
+ * The buy button a click landed on, if it was one: any link to a checkout,
+ * whichever block drew it. Null for every other click.
+ */
+export function buyClickOf(target: EventTarget | null, sections: Element[], labels: string[]) {
+  const link = target instanceof Element ? target.closest("a[href]") : null;
+  if (!link || !/\/checkout(\/|\?|$)/.test(link.getAttribute("href") ?? "")) return null;
+  const button = link.textContent?.replace(/\s+/g, " ").trim().slice(0, 60) ?? "";
+  if (!button) return null;
+  const holder = link.closest("section");
+  const section = holder ? sections.indexOf(holder) : -1;
+  return { section, sectionLabel: section >= 0 ? labels[section] : "Outside the sections", button };
+}
+
 export function ScrollTracker({ path }: { path: string }) {
   useEffect(() => {
     const sections = Array.from(document.querySelectorAll("section"));
@@ -79,13 +93,30 @@ export function ScrollTracker({ path }: { path: string }) {
       if (document.visibilityState === "hidden") send();
     };
 
+    // Capture phase, so it runs before the link navigates away. Sent on its
+    // own beacon; the Meta/GA4 AddToCart on the same click is untouched.
+    const onClick = (e: MouseEvent) => {
+      const hit = buyClickOf(e.target, sections, labels);
+      if (!hit) return;
+      const body = JSON.stringify({ path, ...hit });
+      try {
+        if (!navigator.sendBeacon?.("/api/track/click", new Blob([body], { type: "application/json" }))) {
+          void fetch("/api/track/click", { method: "POST", headers: { "content-type": "application/json" }, body, keepalive: true }).catch(() => {});
+        }
+      } catch {
+        // A lost click is a lost data point, never a broken button.
+      }
+    };
+
     measure();
+    document.addEventListener("click", onClick, true);
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll, { passive: true });
     document.addEventListener("visibilitychange", onHide);
     window.addEventListener("pagehide", send);
     const tick = setInterval(send, 10_000);
     return () => {
+      document.removeEventListener("click", onClick, true);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
       document.removeEventListener("visibilitychange", onHide);

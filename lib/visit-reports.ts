@@ -152,3 +152,22 @@ export async function scrollRows(path: string, range: DayRange): Promise<ScrollR
     return [];
   }
 }
+
+export type ClickRow = { section: number; sectionLabel: string; button: string; clicks: number };
+
+/** Which buy buttons on one page were pressed, most first. Migration 0090. */
+export async function clickRows(path: string, range: DayRange): Promise<ClickRow[]> {
+  try {
+    const { from, to } = bounds(range);
+    const db = createServiceClient();
+    const { data } = await db.rpc("visit_click_rollup", { p_store: await getStoreId(), p_path: path, p_from: from, p_to: to });
+    return ((data as Record<string, unknown>[]) ?? []).map((r) => ({
+      section: Number(r.section),
+      sectionLabel: r.section_label ? String(r.section_label) : "",
+      button: String(r.button),
+      clicks: Number(r.clicks),
+    }));
+  } catch {
+    return [];
+  }
+}
