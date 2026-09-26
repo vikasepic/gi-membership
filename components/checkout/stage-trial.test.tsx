@@ -98,6 +98,7 @@ function mount({ prices = [MONTHLY], chosen = 0 }: { prices?: OfferPrice[]; chos
         <OfferCheckoutForm
           offer={{
             id: "offer-1",
+            key: "test-offer",
             headline: "Content Engine",
             description: null,
             chargeNowCents: 0,

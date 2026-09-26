@@ -541,3 +541,21 @@ script pattern is in the machine-private memory under
 
 When one page converts and its twin does not, diff the two pages in a
 browser before diffing the code. Every finding here was visible on screen.
+
+## An event that is wired in one checkout is not wired in its twin (26 Sep 2026)
+
+The product checkout sent InitiateCheckout, CheckoutEmailEntered,
+AddPaymentInfo and the bump events. The offer checkout, which every offer
+funnel runs through, sent none of them: its slot context passed
+`notePaymentInfo: () => {}` and a `captureEmail` that only set the typo hint.
+So for the Micro-Product Builder and every Content Engine page, Meta and GA4
+saw AddToCart, then nothing, then a handful of purchases. The ads team's
+"55 add to carts, 4 sales" had no middle because we never sent one. The
+same audit found that a buy button inside a Ways to pay block was a plain
+`<a>` with no AddToCart at all.
+
+Both checkouts publish one slot context now, and the offer one fills it.
+`components/checkout/checkout-tracking.test.tsx` watches `track()` for each
+event and fails if one goes quiet. When two components do the same job,
+grep both for every `track(` call before trusting either; a no-op in a
+context object reads as wiring until somebody counts the calls.

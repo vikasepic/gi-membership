@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { money } from "@/lib/money";
+import { track } from "@/components/analytics";
+import { eventIdFor } from "@/lib/analytics/events";
+import { buyContext } from "@/components/scroll-tracker";
 import { readableInk, tint } from "@/lib/color";
 import { acceptOtoAction } from "@/app/(store)/checkout/oto/actions";
 import {
@@ -261,6 +264,20 @@ export function PriceChoice({
       ) : href && !waiting ? (
         <a
           href={price ? `${href}${href.includes("?") ? "&" : "?"}price=${price.id}` : href}
+          // A buy button like any other, so it reports like one. It sent
+          // nothing until 26 Sep 2026, which hid every click on a Ways to pay
+          // block from Meta and GA4.
+          onClick={(e) =>
+            track(
+              "AddToCart",
+              {
+                value: price ? chargeNowCents(price) / 100 : 0,
+                currency: currency.toUpperCase(),
+                ...buyContext(e.currentTarget),
+              },
+              eventIdFor("AddToCart"),
+            )
+          }
           className="w-full px-5 py-3 text-center text-sm font-medium transition-opacity hover:opacity-90"
           style={{
             background: buttonBg,

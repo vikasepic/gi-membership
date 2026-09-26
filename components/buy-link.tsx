@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { track } from "@/components/analytics";
 import { eventIdFor } from "@/lib/analytics/events";
+import { buyContext } from "@/components/scroll-tracker";
 
 /**
  * A buy button on a sales page.
@@ -42,13 +43,15 @@ export function BuyLink({
       href={href}
       className={className}
       style={style}
-      onClick={() =>
+      onClick={(e) =>
         track(
           "AddToCart",
           {
             value: (valueCents ?? 0) / 100,
             currency: (currency ?? "usd").toUpperCase(),
             ...(contentId ? { content_ids: [contentId], content_type: "product" } : {}),
+            // Which button: its words and the section it sits in.
+            ...buyContext(e.currentTarget),
           },
           eventIdFor("AddToCart"),
         )

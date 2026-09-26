@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { track } from "@/components/analytics";
+import { eventIdFor } from "@/lib/analytics/events";
 
 /**
  * Where on a sales page a visit stopped.
@@ -42,6 +44,26 @@ export function buyClickOf(target: EventTarget | null, sections: Element[], labe
   return { section, sectionLabel: section >= 0 ? labels[section] : "Outside the sections", button };
 }
 
+/**
+ * Where a buy button sits, as event params: the words on it and the section
+ * holding it. Rides on AddToCart to Meta and GA4. Empty off a sales page or
+ * outside a checkout link, so a caller can always spread it.
+ */
+export function buyContext(el: Element | null): Record<string, string | number> {
+  if (typeof document === "undefined" || !el) return {};
+  const sections = Array.from(document.querySelectorAll("section"));
+  const hit = buyClickOf(el, sections, sectionLabels(sections));
+  if (!hit) return {};
+  return {
+    button_text: hit.button,
+    page_section: hit.section + 1,
+    section_name: hit.sectionLabel,
+  };
+}
+
+/** Scroll depths reported to Meta and GA4, once each per page view. */
+export const SCROLL_MILESTONES = [25, 50, 75, 100] as const;
+
 export function ScrollTracker({ path }: { path: string }) {
   useEffect(() => {
     const sections = Array.from(document.querySelectorAll("section"));
@@ -50,6 +72,7 @@ export function ScrollTracker({ path }: { path: string }) {
     let depth = 0;
     let sent = { furthest: -1, depth: -1 };
     let ticking = false;
+    const reported = new Set<number>();
 
     const measure = () => {
       ticking = false;
@@ -61,6 +84,21 @@ export function ScrollTracker({ path }: { path: string }) {
         if (sections[i].getBoundingClientRect().top < vh * REACH) {
           furthest = i;
           break;
+        }
+      }
+      // Meta and GA4 get the milestones; our own table keeps every section.
+      for (const m of SCROLL_MILESTONES) {
+        if (depth >= m && !reported.has(m)) {
+          reported.add(m);
+          track(
+            "ScrollDepth",
+            {
+              percent_scrolled: m,
+              page_path: path,
+              ...(furthest >= 0 ? { page_section: furthest + 1, section_name: labels[furthest] } : {}),
+            },
+            eventIdFor("ScrollDepth"),
+          );
         }
       }
     };

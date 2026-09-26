@@ -57,6 +57,7 @@ function mount() {
       <OfferCheckoutForm
         offer={{
           id: "offer-1",
+          key: "test-offer",
           headline: "Content Engine",
           description: null,
           chargeNowCents: 0,

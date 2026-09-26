@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { track } from "@/components/analytics";
+import { eventIdFor } from "@/lib/analytics/events";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { startOffer } from "@/app/(store)/checkout/offer/actions";
@@ -9,6 +11,12 @@ import type { BumpChoice } from "@/lib/bump";
 
 export type OfferSummary = {
   id: string;
+  /**
+   * The offer's key, which is what `content_ids` carries on the sales page's
+   * ViewContent and AddToCart. The checkout events use the same id so Meta
+   * and GA4 see one funnel, not two.
+   */
+  key: string;
   headline: string;
   description: string | null;
   chargeNowCents: number;
@@ -237,7 +245,23 @@ function Inner({
   // mean anything, so both answers collapse to the position they actually
   // name.
   function chooseBump(next: BumpChoice) {
-    setBumpPick(typeof next === "number" ? next : next === "main" ? 0 : "none");
+    const picked = typeof next === "number" ? next : next === "main" ? 0 : "none";
+    setBumpPick(picked);
+    // Same events the product checkout sends. A decline only where there was
+    // a bump to decline.
+    const taken = typeof picked === "number" ? (bumpOptions[picked] ?? null) : null;
+    const currency = offer.currency.toUpperCase();
+    if (taken) {
+      track("BumpSelected", {
+        content_name: taken.headline,
+        content_ids: [offer.key],
+        value: taken.chargeNowCents / 100,
+        currency,
+        variant: picked,
+      });
+    } else if (bumpOptions[0]) {
+      track("BumpDeclined", { content_name: bumpOptions[0].headline, content_ids: [offer.key], currency });
+    }
   }
 
   // "none" whenever the bump cannot actually be bought — the pay-time
@@ -325,6 +349,52 @@ function Inner({
     });
   }, [elements, isRecurring, dueNow, offer.currency]);
 
+  // The checkout funnel, reported the way the product checkout reports it.
+  // This form sent nothing between the buy click and the purchase until
+  // 26 Sep 2026, so for every offer the ad platforms saw AddToCart and then,
+  // for a few, Purchase, with no way to tell where the rest stopped.
+  const startedCheckout = useRef(false);
+  const capturedEmail = useRef<string | null>(null);
+  const enteredPayment = useRef(false);
+  const dueNowRef = useRef(dueNow);
+  useEffect(() => {
+    dueNowRef.current = dueNow;
+  }, [dueNow]);
+
+  // Once per mount, with what is due today (0 on a trial).
+  useEffect(() => {
+    if (startedCheckout.current) return;
+    startedCheckout.current = true;
+    track(
+      "InitiateCheckout",
+      { value: dueNowRef.current / 100, currency: offer.currency.toUpperCase(), content_ids: [offer.key], content_type: "product" },
+      eventIdFor("InitiateCheckout"),
+      { email: signedInEmail ?? null },
+    );
+  }, [offer.key, offer.currency, signedInEmail]);
+
+  function captureEmail() {
+    const value = email.trim().toLowerCase();
+    setEmailHint(suggestEmail(value));
+    if (!value || !value.includes("@")) return;
+    // Once per address, not once per blur.
+    if (capturedEmail.current === value) return;
+    capturedEmail.current = value;
+    track("CheckoutEmailEntered", { content_ids: [offer.key] }, eventIdFor("CheckoutEmailEntered", value));
+  }
+
+  /** First interaction with the card fields, once per checkout. */
+  function notePaymentInfo() {
+    if (enteredPayment.current) return;
+    enteredPayment.current = true;
+    track(
+      "AddPaymentInfo",
+      { value: dueNowRef.current / 100, currency: offer.currency.toUpperCase(), content_ids: [offer.key] },
+      eventIdFor("AddPaymentInfo"),
+      { email: signedInEmail ?? (email.trim().toLowerCase() || null) },
+    );
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -410,7 +480,7 @@ function Inner({
     // redesign showing the country inside Stripe's box changes nothing here.
     country: "",
     setCountry: () => {},
-    captureEmail: () => setEmailHint(suggestEmail(email.trim().toLowerCase())),
+    captureEmail,
     prices,
     pricePick: pick >= 0 ? pick : null,
     setPricePick: choosePrice,
@@ -436,7 +506,7 @@ function Inner({
     busy,
     error,
     canPay: Boolean(stripe),
-    notePaymentInfo: () => {},
+    notePaymentInfo,
     termsUrl,
     earningsUrl,
     design,
@@ -667,7 +737,11 @@ function Inner({
           the total is asking somebody to commit before it has said to what. */}
       <fieldset className="flex flex-col gap-3">
         <legend className="kicker mb-2 text-muted">Payment method</legend>
-        <PaymentElement />
+        <PaymentElement
+          onChange={(e) => {
+            if (!e.empty) notePaymentInfo();
+          }}
+        />
       </fieldset>
 
       {error && (

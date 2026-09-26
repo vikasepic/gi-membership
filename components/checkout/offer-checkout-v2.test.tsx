@@ -52,6 +52,7 @@ const prices = [price({ id: "mo" }), price({ id: "yr", interval: "year", priceCe
 
 const offer = {
   id: "o1",
+  key: "test-offer",
   headline: "Build funnels that actually convert",
   description: "Pages, checkouts and follow-up in one place.",
   chargeNowCents: 0,

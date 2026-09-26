@@ -13,6 +13,7 @@ import type { OtoView } from "@/components/oto/shell";
 import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";
 import { TrackPurchase } from "@/components/track-purchase";
+import { TrackView } from "@/components/track-view";
 import { purchaseForOrder, adEventForOrder } from "@/lib/tracking-receipt";
 import { googleAdsPurchaseLabel } from "@/lib/env";
 import { recordOtoPageHit } from "@/lib/traffic";
@@ -113,6 +114,15 @@ export default async function OtoPage({
     />
   ) : null;
 
+  // The upsell was shown. Its accept and decline are reported by the shell.
+  const viewed = (
+    <TrackView
+      event="UpsellViewed"
+      stableKey={offer.key}
+      params={{ content_ids: [offer.key], content_name: offer.name, promotion_name: offer.name }}
+    />
+  );
+
   // The sections layout reads its content from the database, which a
   // component map cannot supply — so it is resolved here rather than
   // pretending every template has the same shape.
@@ -122,6 +132,7 @@ export default async function OtoPage({
     return (
       <>
         {purchase}
+        {viewed}
         <SectionsOto view={view} rows={rows} globals={await resolveGlobals(rows)} />
       </>
     );
@@ -131,6 +142,7 @@ export default async function OtoPage({
   return (
     <>
       {purchase}
+      {viewed}
       <Template view={view} />
     </>
   );

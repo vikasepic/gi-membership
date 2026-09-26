@@ -67,6 +67,15 @@ export const EVENTS = [
    */
   "Refund",
   "Chargeback",
+  /**
+   * How far down a sales page a visit got, at 25, 50, 75 and 100%. Custom on
+   * Meta so it never counts toward a standard event; useful there as an
+   * audience ("read three quarters of the page"). Per-section detail stays
+   * in our own visit_scroll table.
+   */
+  "ScrollDepth",
+  /** The upsell page was shown. The choice on it is UpsellSelected/Declined. */
+  "UpsellViewed",
 ] as const;
 
 export type EventName = (typeof EVENTS)[number];
@@ -108,6 +117,11 @@ export const GA4_NAME: Record<EventName, string> = {
   // their own, given the same transaction_id the purchase carried.
   Refund: "refund",
   Chargeback: "refund",
+  // Not GA4's own `scroll`: enhanced measurement already sends that at 90%,
+  // and a second meaning under the same name would muddle both.
+  ScrollDepth: "scroll_depth",
+  // GA4's promotion events fit an upsell exactly: shown, then chosen or not.
+  UpsellViewed: "view_promotion",
 };
 
 /**
@@ -175,6 +189,8 @@ export const META_CUSTOM: EventName[] = [
   // exact opposite of what it means.
   "Refund",
   "Chargeback",
+  "ScrollDepth",
+  "UpsellViewed",
 ];
 
 /** Events with no money on them; sending a value would invent revenue. */
@@ -202,6 +218,8 @@ export const NO_VALUE: EventName[] = [
   // an amount that might actually be charged.
   "BumpDeclined",
   "UpsellDeclined",
+  "ScrollDepth",
+  "UpsellViewed",
 ];
 
 /**

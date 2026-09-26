@@ -132,6 +132,7 @@ export default async function OfferCheckoutPage({
         // Micro-Product Builder's "… | Greater Inside" was, 11 Sep 2026 —
         // put a search snippet at the top of the payment form. The product
         // checkout has always used the product's title here.
+        key: offer.key,
         headline: offer.name,
         description: offer.description,
         chargeNowCents: immediateChargeCents(offer),
