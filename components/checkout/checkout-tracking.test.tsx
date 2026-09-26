@@ -199,3 +199,38 @@ describe("scroll milestones reach Meta and GA4", () => {
     expect(GA4_NAME.UpsellViewed).toBe("view_promotion");
   });
 });
+
+describe("leaving for the checkout is not reading the page", () => {
+  it("records nothing more once a buy button is pressed or the page is swapped out", () => {
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    host.innerHTML = `<section><h2>Hero</h2><a href="/checkout/offer?offer=o1">Buy</a></section><section><h2>FAQ</h2></section><div id="t"></div>`;
+    Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 4000 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: 1000 });
+    Object.defineProperty(window, "scrollY", { configurable: true, value: 0 });
+    const sections = host.querySelectorAll("section");
+    sections[0].getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    sections[1].getBoundingClientRect = () => ({ top: 3500 }) as DOMRect;
+    const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+      cb(0);
+      return 0;
+    });
+    act(() => {
+      createRoot(host!.querySelector("#t")!).render(<ScrollTracker path="/o/x" />);
+    });
+    const link = host.querySelector("a")!;
+    link.addEventListener("click", (e) => e.preventDefault());
+    act(() => link.click());
+
+    // The checkout replaces the page: the document shrinks, the old sections go.
+    Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 900 });
+    sections[1].getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    act(() => window.dispatchEvent(new Event("scroll")));
+    sections[1].remove();
+    act(() => window.dispatchEvent(new Event("resize")));
+
+    const fired = named("ScrollDepth").map((c) => (c[1] as { percent_scrolled: number }).percent_scrolled);
+    expect(fired).toEqual([25]);
+    raf.mockRestore();
+  });
+});

@@ -559,3 +559,24 @@ Both checkouts publish one slot context now, and the offer one fills it.
 event and fails if one goes quiet. When two components do the same job,
 grep both for every `track(` call before trusting either; a no-op in a
 context object reads as wiring until somebody counts the calls.
+
+## Leaving a page looks like reading all of it (26 Sep 2026)
+
+The scroll tracker measured on every scroll and resize until it unmounted.
+Pressing a buy button swaps the sales page for the checkout while those
+listeners are still attached: the old sections are detached, so each
+`getBoundingClientRect()` reads 0 and every section counts as "reached",
+and the document is suddenly short, so depth reads 100%. Every buyer was
+recorded as having read the whole page, and it was reported to the owner
+as "most buyers read to the bottom before clicking" before a probe that
+scrolled to a button with and without clicking it showed the difference
+(75% vs 100%). The tracker now freezes on a buy click and whenever a
+section it holds is no longer in the document. The 12 visit_scroll rows
+from checkout-bound visits between 25 Sep 22:07 and this fix may overstate
+depth; they were left in place.
+
+Probing it: a headless run with `Fetch.enable` blocking facebook.com/tr,
+/g/collect and /api/track* records every event a live page sends and lets
+none of them land, so production can be tested without polluting Meta,
+GA4 or the store's tables. GA4 batches: wait ten seconds after an action
+or the event looks missing.

@@ -74,8 +74,18 @@ export function ScrollTracker({ path }: { path: string }) {
     let ticking = false;
     const reported = new Set<number>();
 
+    // Frozen once the visit is leaving. Pressing a buy button swaps this page
+    // for the checkout while the listeners are still attached: the old
+    // sections are detached (every rect reads 0, so each looks "reached") and
+    // the document is suddenly short (so depth reads 100%). Found 26 Sep 2026,
+    // when every buyer was being recorded as having read the whole page.
+    let leaving = false;
     const measure = () => {
       ticking = false;
+      if (leaving || !sections.every((sec) => sec.isConnected)) {
+        leaving = true;
+        return;
+      }
       const vh = window.innerHeight;
       const doc = document.documentElement;
       const total = Math.max(doc.scrollHeight, 1);
@@ -136,6 +146,10 @@ export function ScrollTracker({ path }: { path: string }) {
     const onClick = (e: MouseEvent) => {
       const hit = buyClickOf(e.target, sections, labels);
       if (!hit) return;
+      // Measure once more where they actually are, then stop: what follows is
+      // the checkout loading, not this page being read.
+      measure();
+      leaving = true;
       const body = JSON.stringify({ path, ...hit });
       try {
         if (!navigator.sendBeacon?.("/api/track/click", new Blob([body], { type: "application/json" }))) {
