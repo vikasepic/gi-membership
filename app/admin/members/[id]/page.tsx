@@ -9,7 +9,7 @@ import { progressForCourses, lastLessonFor, lastSignInForAll } from "@/lib/learn
 import { deriveMembers } from "@/lib/member-money";
 import { deriveLedger } from "@/lib/ledger";
 import { money } from "@/lib/money";
-import { cancelSubscriptionAction, revokeAccessAction, toggleAdminAction, viewAsMemberAction } from "@/app/admin/members/actions";
+import { cancelSubscriptionAction, extendTrialAction, revokeAccessAction, toggleAdminAction, viewAsMemberAction } from "@/app/admin/members/actions";
 import { DeleteMember } from "@/components/admin/delete-member";
 import { GrantMore } from "@/components/admin/grant-more";
 import { LearningPanel } from "@/components/admin/learning-panel";
@@ -119,6 +119,17 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                     {s.canceledAt && <><dt className="text-muted">Cancelled</dt><dd>{fmtDate(s.canceledAt)}</dd></>}
                     <dt className="text-muted">Paid so far</dt><dd>{s.paidInvoices} payment{s.paidInvoices === 1 ? "" : "s"}, {money(s.paidTotalCents, s.currency)}</dd>
                   </dl>
+                  {s.state === "on trial" && (
+                    <form action={extendTrialAction} className="mt-2 flex flex-wrap items-center gap-2">
+                      <input type="hidden" name="subscriptionId" value={s.stripeSubscriptionId} />
+                      <label className="text-xs text-muted" htmlFor={`days-${s.stripeSubscriptionId}`}>Extend trial by</label>
+                      <select id={`days-${s.stripeSubscriptionId}`} name="days" defaultValue="7" className="rounded-full border border-border bg-surface px-2 py-1 text-xs">
+                        {[3, 7, 14, 30].map((d) => <option key={d} value={d}>{d} days</option>)}
+                      </select>
+                      <button type="submit" className="rounded-full border border-border px-3 py-1 text-xs hover:border-primary hover:text-primary">Extend trial</button>
+                      <span className="w-full text-[0.7rem] text-muted">Moves the charge date in Stripe. No charge for the extra days; the 1-day reminder goes out before the new date.</span>
+                    </form>
+                  )}
                   {(s.state === "paying" || s.state === "on trial" || s.state === "past due") && (
                     <form action={cancelSubscriptionAction} className="mt-2">
                       <input type="hidden" name="subscriptionId" value={s.stripeSubscriptionId} />

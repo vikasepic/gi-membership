@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { dueForReminder, HOURS_AHEAD, type Candidate } from "@/lib/trial-reminders";
+import { dueForReminder, HOURS_AHEAD, REMINDER_VALID_HOURS, type Candidate } from "@/lib/trial-reminders";
 import { chargeDayLabel } from "@/lib/subscription-emails";
 
 /**
@@ -22,6 +22,7 @@ const sub = (o: Partial<Candidate>): Candidate => ({
   cancelAt: null,
   cancelAtPeriodEnd: false,
   paidInvoices: 0,
+  reminderSentAt: null,
   ...o,
 });
 
@@ -107,5 +108,35 @@ describe("the sweep itself", () => {
   it("Stripe's own three-day event no longer sends mail", () => {
     expect(webhook).toContain('case "customer.subscription.trial_will_end":');
     expect(webhook).not.toContain("sendTrialEndingEmail");
+  });
+});
+
+describe("an extended trial is reminded again", () => {
+  // 28 Sep 2026: a Content Engine trial reminded on the 27th was extended a
+  // week in Stripe. Any stamp used to count as "reminded", so the new charge
+  // on 5 Oct would have arrived with no warning.
+  it("is not reminded twice for the same trial end", () => {
+    expect(dueForReminder([sub({ reminderSentAt: at(0) })], NOW)).toHaveLength(0);
+    expect(dueForReminder([sub({ reminderSentAt: at(-1) })], NOW)).toHaveLength(0);
+  });
+
+  it("is reminded when the stamp belongs to an earlier trial end", () => {
+    // Trial ends in 24h; the stamp is from a week ago, about the old date.
+    expect(dueForReminder([sub({ reminderSentAt: at(-24 * 7) })], NOW)).toHaveLength(1);
+  });
+
+  it("draws the line REMINDER_VALID_HOURS before the trial end", () => {
+    const end = 24;
+    const edge = end - REMINDER_VALID_HOURS;
+    expect(dueForReminder([sub({ reminderSentAt: at(edge) })], NOW)).toHaveLength(0);
+    expect(dueForReminder([sub({ reminderSentAt: at(edge - 1) })], NOW)).toHaveLength(1);
+  });
+
+  it("claims with compare-and-set on the stamp it read", () => {
+    const sweep = readFileSync("lib/trial-reminders.ts", "utf8");
+    expect(sweep).toContain('claim.eq("trial_reminder_sent_at", row.reminderSentAt)');
+    expect(sweep).toContain('claim.is("trial_reminder_sent_at", null)');
+    // And the query no longer drops stamped rows before the rule can see them.
+    expect(sweep).not.toMatch(/\.select\([^)]*\)\s*\.is\("trial_reminder_sent_at", null\)/);
   });
 });

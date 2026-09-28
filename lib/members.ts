@@ -5,6 +5,7 @@ import { releaseSchedule } from "@/lib/payment-plans-stripe";
 import { getStoreId, getOffer } from "@/lib/store";
 import { applyPendingEntitlements, pushAppEntitlement } from "@/lib/app-sync";
 import { tagAccessGranted } from "@/lib/ac-tags";
+import { syncSubscription } from "@/lib/subscriptions";
 
 // Member (customer) views for admin, plus the Stripe Customer Portal that lets
 // a customer manage their own card, plan and cancellation. The portal is hosted
@@ -86,6 +87,39 @@ export async function cancelSubscription(subscriptionId: string): Promise<void> 
   // refuses cancel_at_period_end on one it still manages.
   await releaseSchedule(subscriptionId);
   await stripe().subscriptions.update(subscriptionId, { cancel_at_period_end: true });
+}
+
+/** Longest single extension, in days. Longer than this is a comp, not a trial. */
+export const MAX_TRIAL_EXTENSION_DAYS = 30;
+
+/**
+ * Push a trial's end later by whole days, in Stripe and in our record together.
+ *
+ * Asked for 28 Sep 2026 after Content Engine had to request one by message.
+ * Stripe decides the charge date, so the change is made there; our row is
+ * then re-synced straight away rather than waiting on the webhook. The
+ * reminder re-arms itself: a stamp from before the new date no longer counts
+ * (REMINDER_VALID_HOURS in lib/trial-reminders.ts).
+ *
+ * Only a subscription still on trial. Extending one that has converted would
+ * be a free period on a paying customer, which is a different decision.
+ */
+export async function extendTrial(
+  subscriptionId: string,
+  days: number,
+): Promise<{ ok: true; trialEnd: string } | { ok: false; error: string }> {
+  if (!Number.isInteger(days) || days < 1 || days > MAX_TRIAL_EXTENSION_DAYS) {
+    return { ok: false, error: `Pick between 1 and ${MAX_TRIAL_EXTENSION_DAYS} days.` };
+  }
+  const sub = await stripe().subscriptions.retrieve(subscriptionId);
+  if (sub.status !== "trialing" || !sub.trial_end) {
+    return { ok: false, error: `This subscription is ${sub.status}, not on trial.` };
+  }
+  const trialEnd = sub.trial_end + days * 86_400;
+  // proration_behavior none: nothing is owed for the extra days.
+  await stripe().subscriptions.update(subscriptionId, { trial_end: trialEnd, proration_behavior: "none" });
+  await syncSubscription(subscriptionId);
+  return { ok: true, trialEnd: new Date(trialEnd * 1000).toISOString() };
 }
 
 // Stripe-hosted portal: update card, change plan, cancel, download invoices.

@@ -580,3 +580,17 @@ Probing it: a headless run with `Fetch.enable` blocking facebook.com/tr,
 none of them land, so production can be tested without polluting Meta,
 GA4 or the store's tables. GA4 batches: wait ten seconds after an action
 or the event looks missing.
+
+## A "sent" stamp must say what it was sent about (28 Sep 2026)
+
+`trial_reminder_sent_at` was treated as "this subscription has been
+reminded", full stop. A Content Engine trial reminded on 27 Sep was then
+extended a week in Stripe; the webhook synced the new trial_end, but the
+stamp stayed, so the sweep would never have warned her before the 5 Oct
+charge. A stamp now only counts if it is within REMINDER_VALID_HOURS (48)
+of the current trial end, the sweep selects by window rather than by
+`sent_at is null`, and the claim is compare-and-set on the stamp it read.
+Any extension, from the admin's Extend trial or straight in Stripe,
+re-arms the reminder with no second write to remember. Admins extend
+trials from the member page (`extendTrial` in lib/members.ts), which
+changes Stripe and re-syncs our row in one step.

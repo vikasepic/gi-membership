@@ -7,6 +7,7 @@ import {
   cancelSubscription,
   createMember,
   deleteMember,
+  extendTrial,
   revokeOwnership,
   setMemberAdmin,
 } from "@/lib/members";
@@ -39,6 +40,18 @@ export async function cancelSubscriptionAction(formData: FormData) {
   await requireAdmin();
   const id = formData.get("subscriptionId");
   if (typeof id === "string" && id) await cancelSubscription(id);
+  revalidatePath("/admin/members");
+}
+
+export async function extendTrialAction(formData: FormData) {
+  await requireAdmin();
+  const id = formData.get("subscriptionId");
+  const days = Number(formData.get("days"));
+  if (typeof id !== "string" || !id) return;
+  const res = await extendTrial(id, days);
+  // Rare, and an admin standing in front of it: say what went wrong plainly
+  // rather than pretending it worked.
+  if (!res.ok) throw new Error(res.error);
   revalidatePath("/admin/members");
 }
 

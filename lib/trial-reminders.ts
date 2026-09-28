@@ -19,6 +19,17 @@ import { stripe } from "@/lib/stripe";
 /** How far ahead to look. One day, plus the sweep's own interval. */
 export const HOURS_AHEAD = 25;
 
+/**
+ * A reminder only counts for the trial end it was sent about.
+ *
+ * Extending a trial (the admin's Extend trial, or trial_end changed straight
+ * in Stripe, which the webhook syncs) moves the charge date but leaves the
+ * old stamp behind. Treating any stamp as "reminded" meant an extended trial
+ * got no reminder before its new charge. A stamp older than this, measured
+ * back from the current trial end, belongs to an earlier date and is ignored.
+ */
+export const REMINDER_VALID_HOURS = 48;
+
 export type ReminderResult = {
   ok: boolean;
   due: number;
@@ -33,6 +44,8 @@ export type Candidate = {
   cancelAt: string | null;
   cancelAtPeriodEnd: boolean;
   paidInvoices: number;
+  /** When the reminder went out, if it has. See REMINDER_VALID_HOURS. */
+  reminderSentAt: string | null;
 };
 
 /**
@@ -54,6 +67,7 @@ export function dueForReminder(rows: Candidate[], now: Date, hoursAhead = HOURS_
     if (r.cancelAt || r.cancelAtPeriodEnd) return false;
     const end = new Date(r.trialEnd).getTime();
     if (!Number.isFinite(end)) return false;
+    if (r.reminderSentAt && new Date(r.reminderSentAt).getTime() >= end - REMINDER_VALID_HOURS * 3600_000) return false;
     return end > now.getTime() && end <= limit;
   });
 }
@@ -68,9 +82,11 @@ export async function sendDueTrialReminders(opts?: { dryRun?: boolean }): Promis
 
   const { data, error } = await db
     .from("subscriptions")
-    .select("stripe_subscription_id, trial_end, status, cancel_at, cancel_at_period_end, paid_invoices")
-    .is("trial_reminder_sent_at", null)
-    .not("trial_end", "is", null)
+    .select("stripe_subscription_id, trial_end, status, cancel_at, cancel_at_period_end, paid_invoices, trial_reminder_sent_at")
+    // Only the window, stamped or not: a stamp may belong to an earlier trial
+    // end (see REMINDER_VALID_HOURS), so it cannot be filtered out here.
+    .gt("trial_end", now.toISOString())
+    .lte("trial_end", new Date(now.getTime() + HOURS_AHEAD * 3600_000).toISOString())
     .eq("livemode", true)
     .order("trial_end", { ascending: true });
   if (error) throw new Error(`sendDueTrialReminders: ${error.message}`);
@@ -82,6 +98,7 @@ export async function sendDueTrialReminders(opts?: { dryRun?: boolean }): Promis
     cancelAt: (r.cancel_at as string | null) ?? null,
     cancelAtPeriodEnd: Boolean(r.cancel_at_period_end),
     paidInvoices: (r.paid_invoices as number) ?? 0,
+    reminderSentAt: (r.trial_reminder_sent_at as string | null) ?? null,
   }));
   const due = dueForReminder(rows, now);
 
@@ -94,12 +111,16 @@ export async function sendDueTrialReminders(opts?: { dryRun?: boolean }): Promis
     // Stamped BEFORE the send, not after. A crash between the two costs one
     // missed reminder; the other order costs a second email to everyone the
     // sweep had already mailed, every hour, until it stopped crashing.
-    const { data: claimed } = await db
+    // Compare-and-set on the stamp we read, so two sweeps still cannot both
+    // send, whether the old stamp was empty or belonged to an earlier date.
+    const claim = db
       .from("subscriptions")
       .update({ trial_reminder_sent_at: now.toISOString() })
-      .eq("stripe_subscription_id", row.stripeSubscriptionId)
-      .is("trial_reminder_sent_at", null)
-      .select("stripe_subscription_id");
+      .eq("stripe_subscription_id", row.stripeSubscriptionId);
+    const { data: claimed } = await (row.reminderSentAt
+      ? claim.eq("trial_reminder_sent_at", row.reminderSentAt)
+      : claim.is("trial_reminder_sent_at", null)
+    ).select("stripe_subscription_id");
     if (!claimed || claimed.length === 0) {
       // Another run of the sweep took it first.
       note("already claimed");
