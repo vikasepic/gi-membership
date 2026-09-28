@@ -1885,6 +1885,9 @@ async function mintOtoToken(
 // API trouble): "we could not find a card to charge" is the same outcome for
 // every caller, and this runs before their charge guard — throwing here would
 // escape it and 500 the page.
+/** Saved methods that can be charged with nobody present, in the order preferred. */
+export const SAVED_METHOD_TYPES = ["card", "link"] as const;
+
 export async function savedPaymentMethodFor(customerId: string): Promise<string | null> {
   try {
     const customer = await stripe().customers.retrieve(customerId);
@@ -1892,8 +1895,16 @@ export async function savedPaymentMethodFor(customerId: string): Promise<string 
       const dflt = customer.invoice_settings?.default_payment_method;
       if (dflt) return typeof dflt === "string" ? dflt : dflt.id;
     }
-    const cards = await stripe().paymentMethods.list({ customer: customerId, type: "card", limit: 1 });
-    return cards.data[0]?.id ?? null;
+    // A card first, then Link. Somebody who paid with Link (Stripe's saved
+    // wallet, email + one-time code) has a `link` method on file and no
+    // `card` one, and Link charges off-session just as a card does. Looking
+    // for cards alone refused them the one-click upsell: found 28 Sep 2026
+    // on a Funnel App upsell accepted three minutes after a Link purchase.
+    for (const type of SAVED_METHOD_TYPES) {
+      const found = await stripe().paymentMethods.list({ customer: customerId, type, limit: 1 });
+      if (found.data[0]) return found.data[0].id;
+    }
+    return null;
   } catch {
     return null;
   }

@@ -44,6 +44,9 @@ export type SubscriptionDrift = {
  * about each one is the only way to be sure — a list built from our own tables
  * would be built from the very records that are wrong.
  */
+/** Stripe lookups in flight at once. Well inside its 100/s live limit, shared with other apps. */
+const STRIPE_BATCH = 20;
+
 export async function findSubscriptionDrift(): Promise<SubscriptionDrift[]> {
   const db = createServiceClient();
   const { data: rows } = await db
@@ -72,21 +75,32 @@ export async function findSubscriptionDrift(): Promise<SubscriptionDrift[]> {
     ...(products ?? []).map((p) => [p.id as string, p.title as string] as [string, string]),
   ]);
 
+  // Asked of Stripe STRIPE_BATCH at a time, not one by one. One by one was
+  // 123 calls at ~0.4 s each on 28 Sep 2026: the Errors page, which runs this
+  // before it can render, took close to a minute and looked broken.
+  const statusOf = new Map<string, OwnershipStatus | "missing">();
+  const ids = [...new Set(rows.map((r) => r.stripe_subscription_id as string))];
+  for (let i = 0; i < ids.length; i += STRIPE_BATCH) {
+    await Promise.all(
+      ids.slice(i, i + STRIPE_BATCH).map(async (id) => {
+        try {
+          statusOf.set(id, mapSubscriptionStatus((await stripe().subscriptions.retrieve(id)).status));
+        } catch {
+          // Stripe has never heard of it. Usually a subscription created in
+          // test mode against a store now running live keys. Reported, never
+          // repaired: a wrong key would make every row look missing, and
+          // acting on that would revoke the whole store.
+          statusOf.set(id, "missing");
+        }
+      }),
+    );
+  }
+
   const out: SubscriptionDrift[] = [];
   for (const row of rows) {
     const subscriptionId = row.stripe_subscription_id as string;
     const ours = row.status as OwnershipStatus;
-    let theirs: OwnershipStatus | "missing";
-    try {
-      const sub = await stripe().subscriptions.retrieve(subscriptionId);
-      theirs = mapSubscriptionStatus(sub.status);
-    } catch {
-      // Stripe has never heard of it. Usually a subscription created in test
-      // mode against a store now running live keys. Reported, never repaired:
-      // a wrong key would make every row look missing, and acting on that
-      // would revoke the whole store.
-      theirs = "missing";
-    }
+    const theirs = statusOf.get(subscriptionId) ?? "missing";
     if (theirs === ours) continue;
     out.push({
       ownershipId: row.id as string,

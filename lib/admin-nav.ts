@@ -49,7 +49,10 @@ export async function navCounts(): Promise<NavCounts> {
         n("apps"),
         db.from("apps").select("id", { count: "exact", head: true })
           .eq("store_id", storeId).eq("active", true).then((r) => r.count ?? 0),
-        n("error_events"),
+        // Only what still needs someone. A resolved error is history; counting
+        // it kept the badge at 4 with one thing left to look at.
+        db.from("error_events").select("id", { count: "exact", head: true })
+          .eq("store_id", storeId).is("resolved_at", null).then((r) => r.count ?? 0),
       ]);
     return {
       products, courses, offers, orders, members, media,
