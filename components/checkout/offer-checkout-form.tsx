@@ -418,6 +418,9 @@ function Inner({
       // somebody else's name.
       signedInEmail ? undefined : { email: email.trim(), fullName: fullName.trim() },
       bumpChoice,
+      // What this form promised, so the server can refuse rather than charge
+      // an email that has already had the trial.
+      (trialDays ?? 0) > 0,
     );
     if (!res.ok) {
       setError(res.error);

@@ -170,7 +170,7 @@ describe("the bump's effect on an offer checkout's total", () => {
     expect(elementsUpdate).toHaveBeenCalledWith(expect.objectContaining({ mode: "payment", amount: 7600 }));
   });
 
-  it("posts the ticked index to the server as bumpChoice, the final argument", async () => {
+  it("posts the ticked index to the server as bumpChoice, then whether a trial was shown", async () => {
     startOffer.mockResolvedValue({ ok: true, clientSecret: "seti_x", mode: "payment" });
     const host = mount();
     await act(async () => bumpBox(host)!.click());
@@ -178,7 +178,8 @@ describe("the bump's effect on an offer checkout's total", () => {
     await act(async () => {
       form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
-    expect(startOffer).toHaveBeenCalledWith("offer-1", 0, null, undefined, 0);
+    // Neither price here carries a trial, so the form promised none.
+    expect(startOffer).toHaveBeenCalledWith("offer-1", 0, null, undefined, 0, false);
   });
 
   it("hides the bump, and clears the tick, once the chosen price is recurring", async () => {
@@ -211,7 +212,7 @@ describe("the bump's effect on an offer checkout's total", () => {
     await act(async () => {
       form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
-    expect(startOffer).toHaveBeenCalledWith("offer-1", 1, null, undefined, "none");
+    expect(startOffer).toHaveBeenCalledWith("offer-1", 1, null, undefined, "none", false);
   });
 
   it("discounts only the host when a coupon and the bump are both applied", async () => {

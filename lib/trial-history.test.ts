@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import { grantKeysOf, withoutTrial } from "@/lib/trial-history";
+import { offerAtPrice } from "@/lib/offers";
+import type { OfferPrice } from "@/lib/offer-prices";
 import type { Offer } from "@/lib/types";
 
 // A free trial is a thing you get once. The rules that decide it, without the
@@ -62,6 +65,33 @@ describe("selling to someone who has already had one", () => {
     expect(after.priceCents).toBe(2900);
     expect(after.interval).toBe("month");
     expect(after.id).toBe(before.id);
+  });
+
+  it("takes it off every price too, so pricing the offer cannot put it back", () => {
+    // 29 Sep 2026: only the offer's own trial was removed. Each price carries
+    // its own, and offerAtPrice copies the price's onto the offer, so the
+    // checkout still said "7 days free" and Stripe still granted it.
+    const monthly = { id: "m", billingType: "recurring", interval: "month", trialDays: 7, priceCents: 2900 } as OfferPrice;
+    const yearly = { id: "y", billingType: "recurring", interval: "year", trialDays: null, priceCents: 19900 } as OfferPrice;
+    const stripped = withoutTrial(offer({ trialDays: 7, prices: [monthly, yearly] }));
+    expect(stripped.prices.map((p) => p.trialDays)).toEqual([null, null]);
+    expect(offerAtPrice(stripped, stripped.prices[0]).trialDays).toBeNull();
+    // A price that had none is the very same object.
+    expect(stripped.prices[1]).toBe(yearly);
+  });
+
+  it("strips an offer whose trial lives only on a price", () => {
+    const monthly = { id: "m", billingType: "recurring", interval: "month", trialDays: 7, priceCents: 2900 } as OfferPrice;
+    const out = withoutTrial(offer({ trialDays: null, prices: [monthly] }));
+    expect(out.prices[0].trialDays).toBeNull();
+  });
+
+  it("asks the history whatever the offer itself says about trials", () => {
+    // A coupon can add a trial to a price that has none. Returning early when
+    // the offer carried no trial of its own let that through.
+    const src = readFileSync("lib/trial-history.ts", "utf8");
+    const body = src.slice(src.indexOf("export async function hasHadTrial"), src.indexOf("export function withoutTrial"));
+    expect(body).not.toMatch(/offer\.trialDays/);
   });
 
   it("returns the very same object when there is no trial to remove", () => {

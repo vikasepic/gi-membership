@@ -52,9 +52,17 @@ export function grantKeysOf(
 
 const norm = (email: string) => email.trim().toLowerCase();
 
-/** Whether this address has already had a free trial of this thing. */
+/**
+ * Whether this address has already had a free trial of this thing.
+ *
+ * Asked whether or not the offer itself carries a trial. Its prices carry
+ * their own, and a coupon can add one to a price that has none, so an offer
+ * with no trial of its own is not evidence that no trial is on the table.
+ * Gating on `offer.trialDays` let both through for a returning trialist
+ * (29 Sep 2026).
+ */
 export async function hasHadTrial(email: string | null | undefined, offer: Offer): Promise<boolean> {
-  if (!email || !offer.trialDays || offer.trialDays <= 0) return false;
+  if (!email) return false;
   const keys = grantKeysOf(offer);
   if (keys.length === 0) return false;
   try {
@@ -88,8 +96,17 @@ export async function hasHadTrial(email: string | null | undefined, offer: Offer
  * active rather than trialing, and the buyer tag applies instead of the trial
  * tag. Nothing has to remember to check a flag.
  */
-export function withoutTrial(offer: Offer): Offer {
-  return offer.trialDays ? { ...offer, trialDays: null } : offer;
+export function withoutTrial<T extends { trialDays: number | null; prices?: Offer["prices"] }>(offer: T): T {
+  // The prices too. Each carries its own trial, and pricing an offer copies
+  // the PRICE's trial onto it (offerAtPrice), so stripping only the offer's
+  // left every price still saying "7 days free" and still granting it.
+  const pricesTrial = (offer.prices ?? []).some((p) => p.trialDays);
+  if (!offer.trialDays && !pricesTrial) return offer;
+  return {
+    ...offer,
+    trialDays: null,
+    ...(offer.prices ? { prices: offer.prices.map((p) => (p.trialDays ? { ...p, trialDays: null } : p)) } : {}),
+  };
 }
 
 export async function offerAsSoldTo(email: string | null | undefined, offer: Offer): Promise<Offer> {

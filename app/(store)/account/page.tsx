@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { viewer } from "@/lib/view-as";
 import { logout, openBillingPortal } from "./actions";
-import { purchaseDocsForUser, subscriptionInvoicesForUser } from "@/lib/receipts";
+import { purchaseDocsForUser, subscriptionInvoicesForUser, subscriptionsForUser } from "@/lib/receipts";
+import { memberSubscriptionLine } from "@/lib/account-subscription";
 import { hasBillingAccount } from "@/lib/members";
 import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";
@@ -42,6 +43,10 @@ export default async function AccountPage({
     getLegal(),
     hasBillingAccount(user.id),
   ]);
+  const subs = await subscriptionsForUser(
+    user.id,
+    purchases.map((p) => p.subscriptionId).filter((id): id is string => !!id),
+  );
 
   return (
     <div className="mx-auto flex max-w-xl flex-col gap-6 py-10">
@@ -91,13 +96,32 @@ export default async function AccountPage({
           <span className="kicker text-muted">Your purchases</span>
           <ul className="flex flex-col divide-y divide-border">
             {purchases.map((p) => (
-              <li key={p.orderId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 first:pt-0 last:pb-0">
-                <div className="flex min-w-0 flex-col">
+              <li key={p.orderId} className="flex items-start justify-between gap-x-4 py-3 first:pt-0 last:pb-0">
+                <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-sm">{p.description}</span>
                   <span className="text-xs text-muted">
                     {when(p.createdAt)} · {money(p.totalCents, p.currency)}
                     {p.status === "refunded" && " · refunded"}
                   </span>
+                  {(() => {
+                    const sub = p.subscriptionId ? subs.get(p.subscriptionId) : undefined;
+                    if (!sub) return null;
+                    const line = memberSubscriptionLine(sub);
+                    return (
+                      // One run of text, so a narrow screen wraps it between
+                      // words like a sentence rather than orphaning the date.
+                      <span className="mt-1 text-xs">
+                        <span
+                          aria-hidden
+                          className={`mr-1.5 inline-block size-1.5 rounded-full align-middle ${
+                            line.tone === "ok" ? "bg-emerald-600" : line.tone === "warn" ? "bg-primary" : "bg-muted"
+                          }`}
+                        />
+                        <span className={line.tone === "ended" ? "text-muted" : "font-medium"}>{line.state}</span>
+                        {line.detail && <span className="text-muted"> · {line.detail}</span>}
+                      </span>
+                    );
+                  })()}
                 </div>
                 {p.documentUrl ? (
                   <a

@@ -594,3 +594,25 @@ Any extension, from the admin's Extend trial or straight in Stripe,
 re-arms the reminder with no second write to remember. Admins extend
 trials from the member page (`extendTrial` in lib/members.ts), which
 changes Stripe and re-syncs our row in one step.
+
+## "Once per person" has to be asked on every path that grants it (29 Sep 2026)
+
+trial_history existed, and the product checkout, the bump and the upsell
+all asked it. The offer checkout, which sells every Content Engine and
+Funnel App trial, did not: its page stripped the OFFER's trial but each
+PRICE carries its own and offerAtPrice copies it back, and neither the
+start nor the completion step checked at all. A returning trialist got a
+second 7 days, and a coupon with trial_days would have given one to anyone.
+Proved in Stripe test mode before fixing (lib/repeat-trial.integration.test.ts).
+
+Now: withoutTrial strips the prices too; hasHadTrial asks whenever the offer
+grants something, not only when the offer itself has trial days; the start
+refuses (code trial_used) a buyer shown a trial they have had, and refuses
+a trial code for them, before any card is saved; completion never grants
+one, coupon or not. A rule like this lives in one function, but it is only
+enforced where a caller asks it. When adding "once per person", grep every
+path that can create the thing, not the one you were looking at.
+
+The Funnel App's own signup (Stripe metadata app: gi-funnel) is a separate
+door this store cannot close: a customer who cancelled our Funnel App trial
+started two more there twelve minutes later.

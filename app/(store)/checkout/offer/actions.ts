@@ -44,6 +44,8 @@ export async function startOffer(
   buyer?: { email?: string; fullName?: string },
   /** Which of the bump's prices was ticked — an index into the list the page drew. */
   bumpChoice?: number | "none",
+  /** Whether the form promised a free trial. See startOfferCheckout. */
+  trialShown?: boolean,
 ): Promise<{ ok: true; clientSecret: string; mode: "payment" | "setup" } | { ok: false; error: string; code?: string }> {
   // An admin standing in for a member must not put a charge on that member's
   // card. Refused in the action rather than hidden in the UI: this is what
@@ -101,6 +103,7 @@ export async function startOffer(
     couponCode,
     isNewAccount: resolved.isNew,
     bumpChoice: parsedBump.data,
+    trialShown: trialShown === true,
     attribution,
     visitId,
     anonId,
@@ -135,5 +138,9 @@ export async function previewOfferCouponAction(
     }
   | { ok: false; error: string }
 > {
-  return previewOfferCoupon({ offerId, code, priceChoice });
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return previewOfferCoupon({ offerId, code, priceChoice, email: user?.email ?? null });
 }

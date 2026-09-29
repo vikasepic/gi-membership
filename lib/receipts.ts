@@ -2,6 +2,7 @@ import "server-only";
 import { stripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
+import { rowOf, type SubscriptionRow } from "@/lib/subscriptions";
 
 // A buyer's own purchase history, with whatever Stripe can actually hand them.
 //
@@ -29,6 +30,12 @@ export type PurchaseDoc = {
   /** A direct PDF, which only invoices have. */
   pdfUrl: string | null;
   kind: "receipt" | "invoice" | "none";
+  /**
+   * The subscription this order started, if it started one. Renewals are
+   * left out: their order is a payment on a subscription some other order
+   * began, and the status belongs on that one line, not on every month.
+   */
+  subscriptionId: string | null;
 };
 
 export async function purchaseDocsForUser(userId: string): Promise<PurchaseDoc[]> {
@@ -46,14 +53,19 @@ export async function purchaseDocsForUser(userId: string): Promise<PurchaseDoc[]
   const ids = orders.map((o) => o.id as string);
   const { data: items } = await db
     .from("order_items")
-    .select("order_id, description")
+    .select("order_id, description, kind, stripe_subscription_id")
     .in("order_id", ids);
 
   const descriptionByOrder = new Map<string, string[]>();
+  const subscriptionByOrder = new Map<string, string>();
   for (const i of items ?? []) {
     const list = descriptionByOrder.get(i.order_id as string) ?? [];
     list.push(i.description as string);
     descriptionByOrder.set(i.order_id as string, list);
+    const sub = i.stripe_subscription_id as string | null;
+    if (sub && i.kind !== "renewal" && !subscriptionByOrder.has(i.order_id as string)) {
+      subscriptionByOrder.set(i.order_id as string, sub);
+    }
   }
 
   const docs: PurchaseDoc[] = [];
@@ -68,6 +80,7 @@ export async function purchaseDocsForUser(userId: string): Promise<PurchaseDoc[]
       documentUrl: null,
       pdfUrl: null,
       kind: "none",
+      subscriptionId: subscriptionByOrder.get(order.id as string) ?? null,
     };
 
     const piId = order.stripe_payment_intent_id as string | null;
@@ -129,4 +142,32 @@ export async function subscriptionInvoicesForUser(
   } catch {
     return [];
   }
+}
+
+/**
+ * This member's own subscriptions, by Stripe id, for the account page.
+ *
+ * Scoped to the user as well as the ids, so a purchase row can only ever show
+ * a subscription that belongs to the person reading it. Never throws: a page
+ * that cannot say the status still shows the purchase.
+ */
+export async function subscriptionsForUser(userId: string, ids: string[]): Promise<Map<string, SubscriptionRow>> {
+  const out = new Map<string, SubscriptionRow>();
+  if (ids.length === 0) return out;
+  try {
+    const db = createServiceClient();
+    const { data } = await db
+      .from("subscriptions")
+      .select("*")
+      .eq("store_id", await getStoreId())
+      .eq("user_id", userId)
+      .in("stripe_subscription_id", ids);
+    for (const r of data ?? []) {
+      const row = rowOf(r);
+      out.set(row.stripeSubscriptionId, row);
+    }
+  } catch {
+    // Shown without a status rather than not shown.
+  }
+  return out;
 }

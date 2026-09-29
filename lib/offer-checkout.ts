@@ -10,7 +10,7 @@ import { stripe, stripeMode } from "@/lib/stripe";
 import { normalizeCountry } from "@/lib/tax";
 import { ensureUserProfile } from "@/lib/users";
 import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
-import { offerAsSoldTo } from "@/lib/trial-history";
+import { offerAsSoldTo, hasHadTrial, withoutTrial } from "@/lib/trial-history";
 import { recordError, messageOf } from "@/lib/errors";
 import { recordVisitStep } from "@/lib/visits";
 import { attributionFromMetadata, orderAttributionColumns, type Attribution } from "@/lib/attribution";
@@ -48,7 +48,7 @@ export type StartResult =
        */
       mode: "payment" | "setup";
     }
-  | { ok: false; error: string };
+  | { ok: false; error: string; code?: "trial_used" };
 
 /**
  * What a code is worth against this offer.
@@ -74,6 +74,8 @@ export async function previewOfferCoupon(args: {
   offerId: string;
   code: string;
   priceChoice?: number;
+  /** The signed-in member, when there is one: a trial code they cannot use is said so here. */
+  email?: string | null;
 }): Promise<
   | {
       ok: true;
@@ -110,6 +112,12 @@ export async function previewOfferCoupon(args: {
     { item: offer.key, interval: offer.billingType === "recurring" ? offer.interval : null },
   );
   if (!res.ok) return res;
+  if (res.coupon.trialDays && res.coupon.trialDays > 0 && (await hasHadTrial(args.email, raw))) {
+    return {
+      ok: false,
+      error: `That code includes a free trial, and this email has already had the free trial of ${raw.name}. You can still buy without the code.`,
+    };
+  }
   return {
     ok: true,
     label: res.coupon.label,
@@ -131,6 +139,14 @@ export async function startOfferCheckout(args: {
   bumpChoice?: number | "none";
   /** The code they typed. Re-checked here; never trusted for an amount. */
   couponCode?: string | null;
+  /**
+   * Whether the page they paid on promised a free trial. A stranger is shown
+   * the trial because we cannot know who they are until they type an email;
+   * if that email has had it, this is what turns a surprise charge into a
+   * refusal. A client that lies can only cause a refusal, or be charged the
+   * full price it claims it was shown.
+   */
+  trialShown?: boolean;
   /** Whether this checkout created the account. Decides the sign-in on return. */
   isNewAccount?: boolean;
   /**
@@ -158,8 +174,14 @@ export async function startOfferCheckout(args: {
   userAgent?: string | null;
   sourceUrl?: string | null;
 }): Promise<StartResult> {
-  const offer = await getOffer(args.offerId);
-  if (!offer || !offer.active) return { ok: false, error: "That offer isn’t available any more." };
+  const listed = await getOffer(args.offerId);
+  if (!listed || !listed.active) return { ok: false, error: "That offer isn’t available any more." };
+
+  // A free trial is a thing you get once. Decided here, before any price is
+  // read, because every price carries its own trial and offerAtPrice copies it
+  // onto the offer: stripping afterwards would have to remember every place.
+  const hadTrial = await hasHadTrial(args.email, listed);
+  const offer = hadTrial ? withoutTrial(listed) : listed;
 
   // The list is rebuilt here from the offer's own page selection, never from
   // the request — the browser sends an index into it and nothing else, so the
@@ -177,6 +199,17 @@ export async function startOfferCheckout(args: {
   }
   // The offer as this checkout is actually selling it, before any coupon.
   const priced = chosenPrice ? offerAtPrice(offer, chosenPrice) : offer;
+
+  // Shown a trial they have already had. Refused before a card is saved, in
+  // the product checkout's words for the same case: being shown "free" and
+  // charged the full price today is worse than the second trial it prevents.
+  if (hadTrial && args.trialShown) {
+    return {
+      ok: false,
+      code: "trial_used",
+      error: `This email has already had the free trial of ${listed.name}, so it would start today at the full price. Sign in with it to see that price and continue, or use a different email.`,
+    };
+  }
 
   // Never sell someone what they already have.
   const owned = await ownershipFor(args.userId);
@@ -247,6 +280,15 @@ export async function startOfferCheckout(args: {
       { item: priced.key, interval: priced.billingType === "recurring" ? priced.interval : null },
     );
     if (!res.ok) return { ok: false, error: res.error };
+    // A code that gives a trial gives it once, like the offer's own. The same
+    // code still works for anybody who has not had this trial.
+    if (hadTrial && res.coupon.trialDays && res.coupon.trialDays > 0) {
+      return {
+        ok: false,
+        code: "trial_used",
+        error: `That code includes a free trial, and this email has already had the free trial of ${listed.name}. You can still buy without the code.`,
+      };
+    }
     coupon = res.coupon;
   }
 
@@ -471,6 +513,10 @@ export async function completeOfferCheckout(
   // Same backfill as the product checkout: a member may authenticate without
   // ever having had a profile row created for them.
   const email = (await ensureUserProfile(userId))?.email ?? "";
+  // Asked again here, not carried from the start: this also runs from the
+  // webhook, and a second checkout in another tab may have spent the trial in
+  // between. Nobody leaves here with a second trial, coupon or not.
+  const hadTrial = await hasHadTrial(email, offer);
 
   // The code WE wrote at start, priced again now. Never the amount previewed:
   // between the preview and here a coupon can expire, hit its redemption limit
@@ -509,7 +555,7 @@ export async function completeOfferCheckout(
   // on a no-trial $199 yearly wrote $199 onto an order Stripe charged $0 for,
   // and a trial-removing code wrote $0 onto one it billed immediately. The
   // ledger has to agree with the card.
-  const sold = offerWithCouponTrial(offer, coupon);
+  const sold = hadTrial ? withoutTrial(offerWithCouponTrial(offer, coupon)) : offerWithCouponTrial(offer, coupon);
 
   const gross = immediateChargeCents(sold);
   const discount =
@@ -712,7 +758,13 @@ export async function completeOfferCheckout(
       offer: sold,
       paymentMethodId: pm,
       coupon: coupon
-        ? { promotionCodeId: coupon.promotionCodeId, discountCents: coupon.discountCents, trialDays: coupon.trialDays }
+        ? {
+            promotionCodeId: coupon.promotionCodeId,
+            discountCents: coupon.discountCents,
+            // fulfilOffer lets a coupon's trial beat the offer's. For someone
+            // who has had the trial there is none to beat it with.
+            trialDays: hadTrial ? null : coupon.trialDays,
+          }
         : null,
       idempotencyKey: `offerco_${intentId}_${offer.id}`,
       // The money is in the intent the buyer just confirmed.
