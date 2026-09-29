@@ -128,24 +128,30 @@ export default async function AdminMembersPage({
       </form>
 
       <div className="overflow-x-auto rounded-2xl border border-border bg-surface">
-        <table className="w-full min-w-[56rem] text-sm">
+        <table className="w-full min-w-[52rem] text-sm">
           <thead className="bg-surface-2">
             <tr>
-              <Th>Member</Th><Th>Joined</Th><Th>Journey</Th><Th>Next event</Th><Th right>Payments</Th><Th right>Total paid</Th><Th>Last payment</Th><Th>Last seen</Th><Th />
+              <Th>Member</Th><Th>Joined</Th><Th>Journey</Th><Th>Next event</Th><Th right>Paid</Th><Th>Last paid</Th><Th>Last seen</Th><Th />
             </tr>
           </thead>
           <tbody>
             {shown.length === 0 ? (
-              <tr><td colSpan={9}><Empty>Nobody matches. Clear a filter to see everyone.</Empty></td></tr>
+              <tr><td colSpan={8}><Empty>Nobody matches. Clear a filter to see everyone.</Empty></td></tr>
             ) : (
               shown.map((m) => (
                 <tr key={m.id} className="border-t border-border align-top hover:bg-surface-2">
-                  <td className="px-3 py-3">
-                    <Link href={`/admin/members/${m.id}`} className="font-medium hover:text-primary">{m.name || m.email}</Link>
-                    {m.name && <div className="text-xs text-muted">{m.email}</div>}
+                  {/* Long text is capped and shortened, never allowed to set a
+                      column's width: a campaign name under Joined once pushed
+                      Journey off the right edge (29 Sep 2026). Full text on hover. */}
+                  <td className="max-w-[12rem] px-3 py-3">
+                    <Link href={`/admin/members/${m.id}`} className="block truncate font-medium hover:text-primary" title={m.name || m.email}>{m.name || m.email}</Link>
+                    {m.name && <div className="truncate text-xs text-muted" title={m.email}>{m.email}</div>}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-3">{fmtDate(m.joinedAt)}<div className="text-xs text-muted">{m.source}</div></td>
                   <td className="px-3 py-3">
+                    <div className="whitespace-nowrap">{fmtDate(m.joinedAt)}</div>
+                    <div className="max-w-[9rem] truncate text-xs text-muted" title={m.source}>{m.source}</div>
+                  </td>
+                  <td className="min-w-[9rem] px-3 py-3">
                     <Pill tone={journeyTone(m.journey)}>{m.journey}</Pill>
                     {m.converted && m.journey === "paying" && <> <Pill tone="good">converted</Pill></>}
                     {m.isAdmin && <> <Pill tone="quiet">admin</Pill></>}
@@ -153,18 +159,28 @@ export default async function AdminMembersPage({
                       <div className="mt-1 text-xs text-muted">{[...new Set([...m.subs.map((s) => s.name), ...m.holds])].join(", ")}</div>
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-3">
+                  <td className="px-3 py-3">
                     {m.nextEvent ? (
                       <>
-                        {m.nextEvent.what} <Soon iso={m.nextEvent.at} now={data.now} />
-                        <div className="text-xs text-muted">{fmtDate(m.nextEvent.at)} · {m.nextEvent.name}</div>
+                        <div className="whitespace-nowrap">{m.nextEvent.what} <Soon iso={m.nextEvent.at} now={data.now} /></div>
+                        <div className="max-w-[9rem] truncate text-xs text-muted" title={`${fmtDate(m.nextEvent.at)} · ${m.nextEvent.name}`}>{fmtDate(m.nextEvent.at)} · {m.nextEvent.name}</div>
                       </>
                     ) : (
                       <span className="text-muted">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-3 text-right tabular-nums">{m.payments}{m.refunds ? <span className="text-xs text-muted"> · {m.refunds} refund{m.refunds === 1 ? "" : "s"}</span> : null}</td>
-                  <td className="px-3 py-3 text-right font-display tabular-nums">{money(m.totalPaidCents - m.refundedCents, m.currency)}</td>
+                  {/* One column for the money: what they paid, then how many
+                      payments made it. Two columns of the same fact were the
+                      width that pushed Journey off the page. */}
+                  <td className="whitespace-nowrap px-3 py-3 text-right">
+                    <div className="font-display tabular-nums">{money(m.totalPaidCents - m.refundedCents, m.currency)}</div>
+                    {(m.payments > 0 || m.refunds > 0) && (
+                      <div className="text-xs text-muted tabular-nums">
+                        {m.payments} payment{m.payments === 1 ? "" : "s"}
+                        {m.refunds ? ` · ${m.refunds} refund${m.refunds === 1 ? "" : "s"}` : ""}
+                      </div>
+                    )}
+                  </td>
                   <td className="whitespace-nowrap px-3 py-3">{m.lastPaidAt ? fmtDate(m.lastPaidAt) : <span className="text-muted">never</span>}</td>
                   <td className="whitespace-nowrap px-3 py-3">
                     {seen.get(m.id) ? (
@@ -176,7 +192,7 @@ export default async function AdminMembersPage({
                       <span className="text-muted">never</span>
                     )}
                   </td>
-                  <td className="px-3 py-3 text-muted"><Link href={`/admin/members/${m.id}`} aria-label="Open">›</Link></td>
+                  <td className="px-2 py-3 text-muted"><Link href={`/admin/members/${m.id}`} aria-label="Open">›</Link></td>
                 </tr>
               ))
             )}
