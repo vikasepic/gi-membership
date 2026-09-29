@@ -88,6 +88,10 @@ export async function sendDueTrialReminders(opts?: { dryRun?: boolean }): Promis
     .gt("trial_end", now.toISOString())
     .lte("trial_end", new Date(now.getTime() + HOURS_AHEAD * 3600_000).toISOString())
     .eq("livemode", true)
+    // Only what this store sold. The table also held the Funnel App's own
+    // signups and Circle's memberships, and one Funnel App signup was sent
+    // the store's reminder on 27 Sep 2026.
+    .or("offer_id.not.is.null,product_id.not.is.null")
     .order("trial_end", { ascending: true });
   if (error) throw new Error(`sendDueTrialReminders: ${error.message}`);
 
@@ -132,6 +136,11 @@ export async function sendDueTrialReminders(opts?: { dryRun?: boolean }): Promis
       const sub = await stripe().subscriptions.retrieve(row.stripeSubscriptionId);
       if (sub.status !== "trialing") {
         note(`no longer trialing (${sub.status})`);
+        continue;
+      }
+      // Stripe's word on whose it is, since the email speaks for the store.
+      if (sub.metadata?.store_created !== "true") {
+        note("not a store subscription");
         continue;
       }
       await sendTrialEndingEmail(sub);

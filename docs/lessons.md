@@ -616,3 +616,22 @@ path that can create the thing, not the one you were looking at.
 The Funnel App's own signup (Stripe metadata app: gi-funnel) is a separate
 door this store cannot close: a customer who cancelled our Funnel App trial
 started two more there twelve minutes later.
+
+## A shared Stripe account sends you everyone's events (29 Sep 2026)
+
+customer.subscription.* arrives for every subscription on the account, and
+syncSubscription upserted each one. The account also bills Circle's
+community memberships, the Funnel App's own signup and another app, so the
+store's subscriptions table held 40 rows that were nobody's here: Circle's
+$300 membership showed on Transactions as a nameless "Cancelled
+Subscription", and a Funnel App signup was sent the store's trial reminder.
+
+belongsToStore decides now: store_created in Stripe's metadata, or linked
+to an access row or order line here. Anything else is not written, and the
+existing rows are filtered out of listSubscriptions rather than deleted.
+The trial reminder additionally needs a store offer or product and
+store_created on the live subscription, because the email speaks for the
+store. Connected-app subscriptions on a member's access row stay on the
+ledger by design (see originFromOwnership in lib/renewals.ts).
+
+Any handler for an account-wide event starts by asking whose it is.

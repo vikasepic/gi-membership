@@ -172,17 +172,38 @@ async function linkFor(stripeSubscriptionId: string): Promise<SubscriptionLink> 
 }
 
 /**
- * Read one subscription from Stripe and write the row. Never throws into a
- * webhook: the caller decides whether a failed sync is worth a retry, and
- * an admin table that is a minute stale is not worth failing a payment for.
+ * Whether a subscription on the Stripe account is this store's.
+ *
+ * The account is shared: the Greater Inside community on Circle, the Funnel
+ * App's own signup and another app all bill through it, and the webhook hears
+ * every one of their subscription events. Copying those in put Circle's $300
+ * membership on the Transactions page as a nameless "Cancelled Subscription"
+ * (29 Sep 2026) and sent a Funnel App signup the store's trial reminder.
+ *
+ * Ours: created by this store (it stamps store_created on both subscription
+ * sites in lib/checkout.ts), or linked to something here — an access row or
+ * an order line. A subscription a connected app reports on an access row is
+ * linked, and stays.
  */
-export async function syncSubscription(stripeSubscriptionId: string): Promise<SubscriptionInsert> {
+export function belongsToStore(sub: Pick<Stripe.Subscription, "metadata">, link: SubscriptionLink): boolean {
+  return sub.metadata?.store_created === "true" || Boolean(link.userId || link.offerId || link.productId);
+}
+
+/**
+ * Read one subscription from Stripe and write the row, if it is ours. Never
+ * throws into a webhook: the caller decides whether a failed sync is worth a
+ * retry, and an admin table that is a minute stale is not worth failing a
+ * payment for. Null for a subscription that belongs to someone else.
+ */
+export async function syncSubscription(stripeSubscriptionId: string): Promise<SubscriptionInsert | null> {
   const s = stripe();
   const [sub, invoices] = await Promise.all([
     s.subscriptions.retrieve(stripeSubscriptionId),
     s.invoices.list({ subscription: stripeSubscriptionId, status: "paid", limit: 100 }),
   ]);
-  const row = subscriptionRowFrom(sub, invoices.data, await linkFor(stripeSubscriptionId));
+  const link = await linkFor(stripeSubscriptionId);
+  if (!belongsToStore(sub, link)) return null;
+  const row = subscriptionRowFrom(sub, invoices.data, link);
   const db = createServiceClient();
   const { error } = await db.from("subscriptions").upsert(row, { onConflict: "stripe_subscription_id" });
   if (error) throw new Error(`syncSubscription: ${error.message}`);
@@ -218,8 +239,7 @@ export async function backfillSubscriptions(): Promise<{ scanned: number; synced
   const out = { scanned: ids.length, synced: 0, failed: [] as string[] };
   for (const id of ids) {
     try {
-      await syncSubscription(id);
-      out.synced += 1;
+      if (await syncSubscription(id)) out.synced += 1;
     } catch (e) {
       out.failed.push(`${id}: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -234,6 +254,9 @@ export async function listSubscriptions(): Promise<SubscriptionRow[]> {
     .from("subscriptions")
     .select("*")
     .eq("store_id", await getStoreId())
+    // Rows written before belongsToStore existed include other systems'
+    // subscriptions with nothing of ours attached. Hidden, not deleted.
+    .or("user_id.not.is.null,offer_id.not.is.null,product_id.not.is.null")
     .order("started_at", { ascending: false });
   if (error) throw new Error(`listSubscriptions: ${error.message}`);
   return (data ?? []).map(rowOf);
