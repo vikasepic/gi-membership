@@ -1,7 +1,9 @@
 # Post-purchase email sequences, per offer and product
 
 Date: 30 Sep 2026
-Status: design approved in chat, spec awaiting review
+Status: Part 1 built on branch post-purchase-sequences. Part 2 (store series,
+one flow per buyer, at the end of this file) approved in chat, spec awaiting
+review. Where Part 2 contradicts Part 1, Part 2 wins.
 Prototype: https://claude.ai/artifact/Q8SD7xTjKrdU3U3Q1ut96s (version 2)
 
 ## What the owner asked for
@@ -292,3 +294,154 @@ A "Post-purchase emails" section on the offer edit page
 - **A sequence started before an edit.** Content is read at send time, so a
   buyer mid-sequence gets the edited version. That is intended (a typo fix
   reaches everyone) and is stated in the admin section's help text.
+
+---
+
+# Part 2: the store series, and one flow per buyer
+
+Asked for and approved in chat on 30 Sep 2026, after Part 1 was built.
+
+## What the owner asked for
+
+The store-wide welcome email gets follow-ups too, as a sequence. A buyer's
+first purchase gets the welcome and then the follow-ups. Later purchases get
+only the welcome; the store series does not start again. A buyer who clicked
+"Stop these emails" and then buys again has the stop removed and gets emails
+again.
+
+Decisions (chat, 30 Sep 2026):
+
+- **First purchase after launch.** The store series starts on a buyer's first
+  purchase processed while it is switched on. Customers who bought before
+  still get it once, on their next purchase.
+- **Stop means everything.** "Stop these emails" in any follow-up (store,
+  offer or product) pauses every flow for that buyer.
+- **Buying again after a stop** removes the stop. Every paused flow resumes
+  where it stopped. The flow for what they just bought starts again from the
+  start if it had finished. A finished store series stays finished.
+- **Resume timing.** A resumed flow's next email goes after its own delay,
+  counted from the new purchase.
+- **One flow per buyer per sequence** (approach chosen over copying progress
+  between purchases). Buying the same offer again while its flow is running
+  does not start a second copy.
+
+## The rules
+
+A flow is one buyer (order email, lower-cased) on one sequence: the store
+series, or one offer's or product's sequence. Its status is `running`,
+`paused` (the buyer clicked stop) or `done` (every email sent, or ended by a
+stop rule).
+
+| Event | Store series | Flow for an item in this purchase | The buyer's other flows |
+|---|---|---|---|
+| Purchase, no flow yet | Starts (series on, at least one email) | Starts | none |
+| Purchase, flow running | Carries on | Carries on, no second copy | Unchanged |
+| Purchase, flow paused | Resumes | Resumes | Resume |
+| Purchase, flow done | Stays done | Starts again from the start | Unchanged |
+| "Stop these emails" | Paused | Paused | Paused |
+
+A purchase is what Part 1 already counts (a store checkout with its bump and
+upsell, a $0 trial, a coupon order), processed once, when the checkout is
+over. Renewals, access granted by hand and access granted by a connected app
+are never a purchase. The welcome email itself goes on every purchase, as
+now, and is never affected by a stop.
+
+## Timing
+
+- Item flows: email 1 about a minute after the checkout is over (Part 1),
+  each later email after its delay from the one before.
+- Store series: every email is a follow-up to the welcome. Email 1 waits its
+  own delay after the purchase (at least one hour, so the welcome always
+  arrives first); later emails wait their delay after the one before.
+- A resumed flow's next email waits its own delay from the resuming purchase.
+- A restarted item flow begins again at email 1, a minute after checkout.
+
+## Stop rules at send time (replaces Part 1's list)
+
+Checked before every send. When one applies, the row is skipped with the
+reason and the flow is marked `done` (so a later purchase of that item starts
+it again):
+
+- Item flows: the order that last started or resumed the flow is refunded;
+  the buyer no longer holds the item (ownership not active, trialing or
+  past_due; this also covers chargebacks).
+- Store series: the buyer has no paid order left (all refunded).
+- Both: the sequence is switched off.
+
+A paused flow's pending row is skipped with reason "buyer stopped these
+emails" and the flow stays `paused`.
+
+## Data (reshapes 0091, which has not reached production)
+
+- `post_purchase_sequences.owner_type` also allows `'store'`; a store series
+  has `owner_id = store_id`.
+- New `post_purchase_flows`: `id`, `store_id`, `sequence_id` (cascade),
+  `email` (lower-cased), `status` (`running`, `paused`, `done`), `run`
+  (starts at 1, goes up by one when a finished item flow starts again),
+  `order_id` (the purchase that last started, resumed or restarted it;
+  `on delete set null`), `created_at`, `updated_at`. Unique
+  (`sequence_id`, `email`).
+- `post_purchase_sends` hangs off the flow: `flow_id` (cascade) and `run`
+  replace `order_item_id`; `position` is the step within the run (1, 2, 3
+  in the order they are sent or skipped). Unique (`flow_id`, `run`,
+  `position`), which keeps queueing idempotent.
+- `orders.post_purchase_flows_at`: stamped when a purchase has been
+  processed for flows, so the re-queue sweep never processes an order twice.
+- `order_items.post_purchase_stopped_at` is removed (the stop now lives on
+  the flows).
+- Same RLS and revoke as Part 1; the file still ends with the schema reload.
+
+Which email to send is Part 1's rule, per run: the row's email if it still
+exists and has not been sent in this run, otherwise the first email in the
+current order not yet sent in this run. None left: the flow is `done`.
+
+## Processing a purchase
+
+`startFlowsForOrder(orderId)` runs when the checkout is over (where Part 1
+queues today) and from the re-queue sweep (Part 1's F1 rules: paid in the
+last two hours, no pending upsell token, welcome already stamped or switched
+off, and now also `post_purchase_flows_at` still empty). Every step is safe
+to run twice: a flow whose `order_id` is already this order is skipped, state
+changes are compare-and-set, and queueing relies on the unique step. It
+stamps `post_purchase_flows_at` when done; an error is recorded on the Errors
+page and the sweep retries within the window.
+
+## Stop link (replaces Part 1's)
+
+The token names a flow. GET asks "Stop these emails? You won't get any more
+follow-up emails from us until you buy again." with one button. POST (the
+button, or the inbox's one-click unsubscribe) pauses every running flow for
+that buyer's email and skips their pending rows, then shows "Done. You won't
+get any more of these emails." Clicking again shows the same.
+
+Every store-series email carries the stop footer and `List-Unsubscribe`. For
+item flows, the first email of a run does not (Part 1); later ones do.
+
+## Admin
+
+The store series is edited in Settings, in the welcome email group, below
+the welcome email: "Follow-up emails", off by default, with the same section
+as offers and products. Differences: every email shows "N hours/days after
+the welcome" (email 1) or "after email K", every email has a delay (at
+least one hour) and can be deleted, and no starter content is required
+beyond one starter follow-up. Help text says that only a buyer's first
+purchase starts the series, that later purchases get only the welcome, and
+that a stop pauses every follow-up until they buy again.
+
+For store-series merge tags, "What they bought" is the first item of the
+purchase that started or resumed the series.
+
+## Testing (in addition to Part 1's)
+
+- First purchase starts the store series; a second purchase queues nothing
+  for it; a finished store series stays finished after stop and repurchase.
+- Repurchase of an item: running flow gets no second copy; done flow starts
+  run 2 at email 1; paused flow resumes at its next unsent email, due after
+  its delay from the new purchase.
+- Stop from any email pauses every flow for that buyer and skips pending
+  rows; a later purchase resumes all of them; the stop page is the same on a
+  second click.
+- Processing the same order twice (thank-you page and sweep) changes nothing
+  the second time, including a flow that finished in between.
+- Stop rules mark the flow done with the reason; the store series ends when
+  every order of the buyer is refunded.
