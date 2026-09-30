@@ -232,10 +232,12 @@ arrived is worse than none.
 
 `/email/stop?t=<token>`. The token is signed the way preview and view-as
 tokens are (`OTO_SIGNING_SECRET`), carrying the `order_item_id` and no
-expiry. The route sets `post_purchase_stopped_at` and shows a one-line page:
-"Done. You won't get any more of these emails about {offer_name}." No
-login, no confirmation step; `List-Unsubscribe-Post` one-click is supported
-by accepting POST on the same route.
+expiry. Opening the link (GET) only asks: "Stop the emails about
+{offer_name}?" with one button, because mail security gateways fetch links in
+incoming mail on their own. The button POSTs to the same URL, which sets
+`post_purchase_stopped_at` and shows "Done. You won't get any more of these
+emails about {offer_name}." No login; `List-Unsubscribe-Post` one-click
+from the inbox is the same POST.
 
 ## Admin
 
