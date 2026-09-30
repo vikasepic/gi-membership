@@ -38,6 +38,8 @@ export const layoutSchema = z.object({
   linkColor: hex.default("#c8653d"),
   bodyColor: hex.default("#ffffff"),
   backgroundColor: hex.default("#f1efe9"),
+  /** Shown edge to edge at the top of every email in the sequence, like the welcome email's band. */
+  headerImageUrl: z.string().trim().max(600).regex(/^(https:\/\/\S+)?$/).default(""),
 });
 export type EmailLayout = z.infer<typeof layoutSchema>;
 export const LAYOUT_DEFAULTS: EmailLayout = layoutSchema.parse({});

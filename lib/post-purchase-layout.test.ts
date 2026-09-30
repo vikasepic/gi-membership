@@ -9,6 +9,7 @@ describe("layout", () => {
       desktopWidth: 600, mobileWidthPct: 100, desktopPadding: 32, mobilePadding: 20,
       fontFamily: "Arial, Helvetica, sans-serif", fontSize: 16, lineHeight: 1.6,
       textColor: "#1a1a1a", linkColor: "#c8653d", bodyColor: "#ffffff", backgroundColor: "#f1efe9",
+      headerImageUrl: "",
     });
   });
 
@@ -81,5 +82,15 @@ describe("addresses in a document", () => {
     const d = starterDoc("Funnel App");
     expect(JSON.stringify(d)).toContain('"mergeTag"');
     expect(docUrls(d)).toEqual(["{{access_link}}"]);
+  });
+});
+
+describe("the header image", () => {
+  it("is optional, and only an https address", () => {
+    expect(parseLayout({ headerImageUrl: "https://x.co/h.png" }).headerImageUrl).toBe("https://x.co/h.png");
+    expect(parseLayout({}).headerImageUrl).toBe("");
+    // Anything else fails the whole layout, which falls back to the defaults.
+    expect(parseLayout({ headerImageUrl: "http://x.co/h.png" }).headerImageUrl).toBe("");
+    expect(parseLayout({ headerImageUrl: "data:image/png;base64,AAAA" }).headerImageUrl).toBe("");
   });
 });

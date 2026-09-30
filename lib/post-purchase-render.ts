@@ -200,6 +200,11 @@ export function renderPostPurchaseEmail(args: {
   // set wider than 600 still switches to the mobile rule once it cannot fit.
   const breakpoint = layout.desktopWidth + 32;
   const offer = esc(args.vars.offer_name ?? "this");
+  const headerSrc = layout.headerImageUrl ? safeUrl(layout.headerImageUrl, args.vars) : null;
+  // Outside the padded cell, so it runs edge to edge like the welcome email's header.
+  const header = headerSrc
+    ? `<tr><td style="padding:0;line-height:0;font-size:0;"><img src="${esc(headerSrc)}" alt="" width="${layout.desktopWidth}" style="display:block;width:100%;height:auto;border:0;"></td></tr>`
+    : "";
   const footer = args.stopUrl
     ? `<p style="margin:0;padding:14px 16px 0;font-family:${layout.fontFamily};font-size:12px;line-height:1.5;color:#6b6b72;text-align:center;">You are getting this because you bought ${offer}. <a href="${esc(args.stopUrl)}" style="color:#6b6b72;text-decoration:underline;">Stop these emails</a></p>`
     : "";
@@ -224,7 +229,7 @@ export function renderPostPurchaseEmail(args: {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${layout.backgroundColor};">
 <tr><td class="pp-outer" align="center" style="padding:24px 0;">
 <table role="presentation" class="pp-body" width="${layout.desktopWidth}" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:${layout.desktopWidth}px;background:${layout.bodyColor};">
-<tr><td class="pp-pad" style="padding:${layout.desktopPadding}px;font-family:${layout.fontFamily};font-size:${layout.fontSize}px;line-height:${layout.lineHeight};color:${layout.textColor};">
+${header}<tr><td class="pp-pad" style="padding:${layout.desktopPadding}px;font-family:${layout.fontFamily};font-size:${layout.fontSize}px;line-height:${layout.lineHeight};color:${layout.textColor};">
 ${inner}
 </td></tr>
 </table>

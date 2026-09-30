@@ -244,6 +244,11 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, se
                   </div>
                 </div>
                 <div className="grid gap-1">
+                  <label htmlFor="pp-header" className="text-xs font-semibold">Header image</label>
+                  <input id="pp-header" type="url" className={inputCls} value={layout.headerImageUrl} placeholder="https://" onChange={(e) => setLayout((l) => ({ ...l, headerImageUrl: e.target.value.trim() }))} />
+                  <span className="text-xs text-muted">Optional. Shown edge to edge at the top of every email here.</span>
+                </div>
+                <div className="grid gap-1">
                   <label htmlFor="pp-reply-to" className="text-xs font-semibold">Replies go to</label>
                   <input id="pp-reply-to" type="email" className={inputCls} value={replyTo} placeholder="The store's reply-to address" onChange={(e) => setReplyTo(e.target.value.trim())} />
                   <span className="text-xs text-muted">Leave empty to use the store&rsquo;s reply-to address.</span>

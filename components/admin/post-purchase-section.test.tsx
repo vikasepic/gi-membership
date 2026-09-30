@@ -160,4 +160,18 @@ describe("the store series section", () => {
     await act(async () => click([...host.querySelectorAll("button")].find((b) => b.textContent === "Save")!));
     expect((save.mock.calls.at(-1)?.[0] as { replyTo?: string }).replyTo).toBe("a@greaterinside.com");
   });
+
+  it("saves a header image for the whole series", async () => {
+    const host = mountStore();
+    click(host.querySelector('input[type="checkbox"]'));
+    const field = host.querySelector("#pp-header") as HTMLInputElement;
+    expect(field).not.toBeNull();
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(field, "https://x.co/header.png");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => click([...host.querySelectorAll("button")].find((b) => b.textContent === "Save")!));
+    expect((save.mock.calls.at(-1)?.[0] as { layout: { headerImageUrl?: string } }).layout.headerImageUrl).toBe("https://x.co/header.png");
+  });
 });

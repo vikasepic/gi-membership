@@ -140,4 +140,13 @@ describe("the email a buyer receives", () => {
     expect(m.text).toContain("kept");
     expect(() => render({ doc })).not.toThrow();
   });
+
+  it("puts the header image edge to edge above the padded body, and only when there is one", () => {
+    const withHeader = render({ layout: { headerImageUrl: "https://x.co/header.png" } }).html;
+    const img = withHeader.indexOf('<img src="https://x.co/header.png"');
+    expect(img).toBeGreaterThan(-1);
+    expect(img).toBeLessThan(withHeader.indexOf('class="pp-pad"'));
+    expect(withHeader).toMatch(/<td style="padding:0;[^"]*">\s*<img src="https:\/\/x\.co\/header\.png"[^>]*width="600"/);
+    expect(render().html).not.toContain("header.png");
+  });
 });
