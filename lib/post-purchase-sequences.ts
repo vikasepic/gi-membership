@@ -116,22 +116,28 @@ export async function queueSequencesForOrder(orderId: string, now = new Date()):
  * the welcome sweep then never revisits the order. A transient queueing
  * failure ends the same way. queueSequencesForOrder is idempotent, so going
  * over recent paid orders again queues only what is missing.
+ *
+ * Only orders the welcome can no longer come before: post_purchase_sent_at
+ * set (the welcome went, or was claimed, which is the race above), or the
+ * welcome switched off. With the welcome on and still to come, the order is
+ * left to the welcome path (the thank-you page or the welcome sweep), which
+ * queues sequences first. Taking it here would send email 1 ahead of the
+ * welcome to a buyer who left the upsell: their token expires after 15
+ * minutes, the welcome sweep waits 30. The owner chose "right after the welcome".
  * ponytail: the 2-hour window also means a sequence switched on now starts for
  * buyers from the last 2 hours. The 50-order limit is fine at this store's volume.
  */
 export async function requeueMissedSequences(now = new Date()): Promise<number> {
   const db = createServiceClient();
-  const orders = await unwrap(
-    db
-      .from("orders")
-      .select("id")
-      .eq("status", "paid")
-      .gte("created_at", new Date(now.getTime() - 2 * 3_600_000).toISOString())
-      .lte("created_at", new Date(now.getTime() - 5 * 60_000).toISOString())
-      .order("created_at")
-      .limit(50),
-    "requeueMissedSequences: orders",
-  );
+  const welcomeOn = (await getSettingsOrDefaults()).postPurchaseEmail.enabled;
+  let query = db
+    .from("orders")
+    .select("id")
+    .eq("status", "paid")
+    .gte("created_at", new Date(now.getTime() - 2 * 3_600_000).toISOString())
+    .lte("created_at", new Date(now.getTime() - 5 * 60_000).toISOString());
+  if (welcomeOn) query = query.not("post_purchase_sent_at", "is", null);
+  const orders = await unwrap(query.order("created_at").limit(50), "requeueMissedSequences: orders");
   let queued = 0;
   for (const o of orders ?? []) {
     const orderId = o.id as string;

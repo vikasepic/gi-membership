@@ -10,10 +10,12 @@ vi.mock("@/lib/email", async (orig) => ({
   },
 }));
 // Pinned rather than read from the local store, where an admin may have
-// switched the welcome on: the wiring test below needs it off.
+// switched the welcome on. Off unless a test turns it on: the wiring test
+// below needs it off.
+const welcome = vi.hoisted(() => ({ on: false }));
 vi.mock("@/lib/settings", () => ({
   getSettingsOrDefaults: async () => ({
-    postPurchaseEmail: { enabled: false, accessUrl: "https://grow.greaterinside.com/login", senderName: "Ajit", senderEmail: "ajit@example.com", replyTo: "" },
+    postPurchaseEmail: { enabled: welcome.on, accessUrl: "https://grow.greaterinside.com/login", senderName: "Ajit", senderEmail: "ajit@example.com", replyTo: "" },
   }),
 }));
 
@@ -32,6 +34,7 @@ const DAY = 86_400_000;
 beforeEach(() => {
   sent.length = 0;
   nextResult = "sent";
+  welcome.on = false;
 });
 
 describe.skipIf(!canRun)("post-purchase sequences (integration)", () => {
@@ -185,17 +188,22 @@ describe.skipIf(!canRun)("post-purchase sequences (integration)", () => {
     expect((await sends(p.itemId)).map((r) => r.position)).toEqual([1]);
   });
 
-  /** The checkout-over step ran and found no line to queue (the webhook race), then stamped the welcome as sent. */
-  async function missedAtCheckout(p: Awaited<ReturnType<typeof purchase>>, now: Date) {
+  /**
+   * The checkout-over step ran and found no line to queue (the webhook race),
+   * then stamped the welcome as sent. `stamped: false` is an order the welcome
+   * has not reached yet.
+   */
+  async function missedAtCheckout(p: Awaited<ReturnType<typeof purchase>>, now: Date, stamped = true) {
     const upd = await createServiceClient()
       .from("orders")
-      .update({ post_purchase_sent_at: now.toISOString(), created_at: new Date(now.getTime() - 20 * 60_000).toISOString() })
+      .update({ post_purchase_sent_at: stamped ? now.toISOString() : null, created_at: new Date(now.getTime() - 20 * 60_000).toISOString() })
       .eq("id", p.orderId);
     if (upd.error) throw new Error(`fixture order: ${upd.error.message}`);
     expect(await sends(p.itemId)).toEqual([]);
   }
 
   it("the retry sweep queues a sequence the checkout-over step missed, once", async () => {
+    welcome.on = true;
     const p = await purchase();
     const now = new Date();
     await missedAtCheckout(p, now);
@@ -217,6 +225,24 @@ describe.skipIf(!canRun)("post-purchase sequences (integration)", () => {
     if (tok.error) throw new Error(`fixture oto token: ${tok.error.message}`);
     await requeueMissedSequences(now);
     expect(await sends(p.itemId)).toEqual([]);
+  });
+
+  it("the retry sweep leaves an order the welcome has not reached yet to the welcome, so email 1 follows it", async () => {
+    welcome.on = true;
+    const p = await purchase();
+    const now = new Date();
+    // Upsell left unanswered, token expired: the welcome sweep has not got to it yet.
+    await missedAtCheckout(p, now, false);
+    await requeueMissedSequences(now);
+    expect(await sends(p.itemId)).toEqual([]);
+  });
+
+  it("with the welcome off, the retry sweep queues an order nothing has stamped", async () => {
+    const p = await purchase();
+    const now = new Date();
+    await missedAtCheckout(p, now, false);
+    await requeueMissedSequences(now);
+    expect((await sends(p.itemId)).map((r) => r.position)).toEqual([1]);
   });
 });
 
