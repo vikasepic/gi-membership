@@ -31,9 +31,15 @@ describe("whose subscription it is", () => {
     expect(belongsToStore({ metadata: {} }, link())).toBe(false);
   });
 
-  it("a connected app's subscription reported on a member's access row stays", () => {
-    // The renewal ledger books these as the store's money by design.
-    expect(belongsToStore({ metadata: { app: "gi-funnel" } }, link({ userId: "u1" }))).toBe(true);
+  it("a connected app's own billing is not ours, even on a member's access row", () => {
+    // Decided 30 Sep 2026: the member keeps the Funnel App access; the Funnel
+    // App keeps the payments and the status.
+    expect(belongsToStore({ metadata: { app: "gi-funnel" } }, link({ userId: "u1" }))).toBe(false);
+  });
+
+  it("anything tied to a Grow offer or product is ours", () => {
+    expect(belongsToStore({ metadata: {} }, link({ userId: "u1", offerId: "o1" }))).toBe(true);
+    expect(belongsToStore({ metadata: {} }, link({ productId: "p1" }))).toBe(true);
   });
 });
 
@@ -45,8 +51,8 @@ describe("where it is enforced", () => {
     expect(subs).toContain("if (!belongsToStore(sub, link)) return null;");
   });
 
-  it("the money screens hide rows written before that, rather than deleting them", () => {
-    expect(subs).toContain('.or("user_id.not.is.null,offer_id.not.is.null,product_id.not.is.null")');
+  it("the money screens read only Grow-sold rows, hiding older ones rather than deleting them", () => {
+    expect(subs).toContain('.or("offer_id.not.is.null,product_id.not.is.null")');
   });
 
   it("the trial reminder only goes to subscriptions the store sold and Stripe says it created", () => {

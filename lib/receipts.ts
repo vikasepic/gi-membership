@@ -3,6 +3,7 @@ import { stripe } from "@/lib/stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { rowOf, type SubscriptionRow } from "@/lib/subscriptions";
+import { isAppBilledOrder } from "@/lib/app-billed";
 
 // A buyer's own purchase history, with whatever Stripe can actually hand them.
 //
@@ -53,12 +54,17 @@ export async function purchaseDocsForUser(userId: string): Promise<PurchaseDoc[]
   const ids = orders.map((o) => o.id as string);
   const { data: items } = await db
     .from("order_items")
-    .select("order_id, description, kind, stripe_subscription_id")
+    .select("order_id, description, kind, stripe_subscription_id, offer_id, product_id")
     .in("order_id", ids);
 
   const descriptionByOrder = new Map<string, string[]>();
   const subscriptionByOrder = new Map<string, string>();
+  const linesByOrder = new Map<string, { kind: string; offerId: string | null; productId: string | null }[]>();
   for (const i of items ?? []) {
+    linesByOrder.set(i.order_id as string, [
+      ...(linesByOrder.get(i.order_id as string) ?? []),
+      { kind: i.kind as string, offerId: (i.offer_id as string | null) ?? null, productId: (i.product_id as string | null) ?? null },
+    ]);
     const list = descriptionByOrder.get(i.order_id as string) ?? [];
     list.push(i.description as string);
     descriptionByOrder.set(i.order_id as string, list);
@@ -70,6 +76,8 @@ export async function purchaseDocsForUser(userId: string): Promise<PurchaseDoc[]
 
   const docs: PurchaseDoc[] = [];
   for (const order of orders) {
+    // Paid to a connected app, not to Grow: that app shows it. See lib/app-billed.
+    if (isAppBilledOrder(linesByOrder.get(order.id as string) ?? [])) continue;
     const base: PurchaseDoc = {
       orderId: order.id as string,
       createdAt: order.created_at as string,

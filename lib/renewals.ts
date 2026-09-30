@@ -306,9 +306,12 @@ async function originOrderFor(subscriptionId: string): Promise<Origin | null> {
 }
 
 /**
- * A subscription with no order line: one a connected app started. The access
- * row knows who and what; the money is still ours and still belongs on the
- * ledger, so it is recorded against the person with what the row can say.
+ * A subscription with no order line, found through the member's access row.
+ *
+ * Recorded only when that row names a Grow offer or product. A connected app
+ * that bills its own signups (the Funnel App's gi-funnel subscriptions) also
+ * reports them on access rows; those charges are the app's, not Grow's, and
+ * are not booked here (decided 30 Sep 2026, see lib/app-billed).
  */
 async function originFromOwnership(
   db: ReturnType<typeof createServiceClient>,
@@ -322,6 +325,9 @@ async function originFromOwnership(
     .limit(1)
     .maybeSingle();
   if (!own?.user_id) return null;
+  // No Grow offer or product: the app billed this itself. Its charges are the
+  // app's to report, not Grow's (decided 30 Sep 2026; see lib/app-billed).
+  if (!own.offer_id && !own.product_id) return null;
   const one = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ? (v[0] ?? null) : (v ?? null));
   const user = one(own.users as { email?: string } | { email?: string }[] | null);
   if (!user?.email) return null;

@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { allRows } from "@/lib/traffic";
 import { getStoreId } from "@/lib/store";
 import { listSubscriptions, type SubscriptionRow } from "@/lib/subscriptions";
+import { isAppBilledOrder } from "@/lib/app-billed";
 import type { Labels } from "@/lib/attribution";
 
 /**
@@ -124,6 +125,12 @@ export async function loadMoneyData(): Promise<MoneyData> {
       });
     }
   }
+  // What a connected app billed itself is not Grow's money. See lib/app-billed.
+  const itemsOf = new Map<string, ItemRow[]>();
+  for (const it of items) itemsOf.set(it.orderId, [...(itemsOf.get(it.orderId) ?? []), it]);
+  const appBilled = new Set([...itemsOf.entries()].filter(([, its]) => isAppBilledOrder(its)).map(([id]) => id));
+  const growOrders = appBilled.size ? orders.filter((o) => !appBilled.has(o.id as string)) : orders;
+  const growItems = appBilled.size ? items.filter((it) => !appBilled.has(it.orderId)) : items;
   return {
     users: (users).map((u) => ({
       id: u.id as string,
@@ -132,7 +139,7 @@ export async function loadMoneyData(): Promise<MoneyData> {
       isAdmin: Boolean(u.is_admin),
       createdAt: u.created_at as string,
     })),
-    orders: (orders).map((o) => ({
+    orders: (growOrders).map((o) => ({
       id: o.id as string,
       userId: (o.user_id as string) ?? null,
       email: o.email as string,
@@ -149,7 +156,7 @@ export async function loadMoneyData(): Promise<MoneyData> {
       utmLast: (o.utm_last as Labels | null) ?? {},
       referrer: (o.referrer as string) ?? null,
     })),
-    items,
+    items: growItems,
     subscriptions,
     ownership: (ownership).map((o) => ({
       userId: o.user_id as string,

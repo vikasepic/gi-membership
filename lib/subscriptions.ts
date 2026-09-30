@@ -181,12 +181,13 @@ async function linkFor(stripeSubscriptionId: string): Promise<SubscriptionLink> 
  * (29 Sep 2026) and sent a Funnel App signup the store's trial reminder.
  *
  * Ours: created by this store (it stamps store_created on both subscription
- * sites in lib/checkout.ts), or linked to something here — an access row or
- * an order line. A subscription a connected app reports on an access row is
- * linked, and stays.
+ * sites in lib/checkout.ts), or tied to a Grow offer or product here. A
+ * subscription a connected app bills itself is NOT ours even when the app
+ * reports it on a member's access row: decided 30 Sep 2026, the member keeps
+ * the access, the app keeps the payments and the status. See lib/app-billed.
  */
 export function belongsToStore(sub: Pick<Stripe.Subscription, "metadata">, link: SubscriptionLink): boolean {
-  return sub.metadata?.store_created === "true" || Boolean(link.userId || link.offerId || link.productId);
+  return sub.metadata?.store_created === "true" || Boolean(link.offerId || link.productId);
 }
 
 /**
@@ -254,9 +255,10 @@ export async function listSubscriptions(): Promise<SubscriptionRow[]> {
     .from("subscriptions")
     .select("*")
     .eq("store_id", await getStoreId())
-    // Rows written before belongsToStore existed include other systems'
-    // subscriptions with nothing of ours attached. Hidden, not deleted.
-    .or("user_id.not.is.null,offer_id.not.is.null,product_id.not.is.null")
+    // Grow-sold only. Rows written before belongsToStore existed include
+    // other systems' subscriptions and connected apps' own billing. Hidden,
+    // not deleted.
+    .or("offer_id.not.is.null,product_id.not.is.null")
     .order("started_at", { ascending: false });
   if (error) throw new Error(`listSubscriptions: ${error.message}`);
   return (data ?? []).map(rowOf);

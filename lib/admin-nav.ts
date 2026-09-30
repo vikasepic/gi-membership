@@ -1,4 +1,5 @@
 import "server-only";
+import { isAppBilledOrder } from "@/lib/app-billed";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 
@@ -87,11 +88,14 @@ export async function storeTake(): Promise<StoreTake> {
     const db = createServiceClient();
     const { data, error } = await db
       .from("orders")
-      .select("status, total_cents")
+      .select("status, total_cents, order_items(kind, offer_id, product_id)")
       .eq("store_id", await getStoreId());
     if (error || !data) return empty;
     let takenCents = 0, refundedCents = 0, paid = 0, refunded = 0;
-    for (const o of data as { status: string; total_cents: number }[]) {
+    type Row = { status: string; total_cents: number; order_items: { kind: string; offer_id: string | null; product_id: string | null }[] | null };
+    for (const o of data as Row[]) {
+      // A connected app's own charge is not Grow's take. See lib/app-billed.
+      if (isAppBilledOrder((o.order_items ?? []).map((i) => ({ kind: i.kind, offerId: i.offer_id, productId: i.product_id })))) continue;
       if (o.status === "paid") { takenCents += o.total_cents; paid++; }
       if (o.status === "refunded") { refundedCents += o.total_cents; refunded++; }
     }

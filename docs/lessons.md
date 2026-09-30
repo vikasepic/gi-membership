@@ -631,8 +631,8 @@ to an access row or order line here. Anything else is not written, and the
 existing rows are filtered out of listSubscriptions rather than deleted.
 The trial reminder additionally needs a store offer or product and
 store_created on the live subscription, because the email speaks for the
-store. Connected-app subscriptions on a member's access row stay on the
-ledger by design (see originFromOwnership in lib/renewals.ts).
+store. (Superseded the next day: a connected app's own billing stays out
+even when it is on a member's access row. See below.)
 
 Any handler for an account-wide event starts by asking whose it is.
 
@@ -653,3 +653,20 @@ next charge, neither converted nor lost. subscriptionNamer names a
 subscription with no Grow offer or product "<App> (own signup)", and the
 Trials page counts only Grow-sold trials. Before calling a status a
 failure, read the subscription in Stripe: status, invoices and discounts.
+
+## Access is shared; money is not (30 Sep 2026, owner's decision)
+
+A member reaches the Funnel App from their Grow library, and the Funnel App
+reports its own signups on the member's access row. The store treated that
+row as proof the subscription was Grow's: it synced it, showed its status,
+counted it in the monthly figure and trials, and the renewal recorder booked
+its charges as Grow orders (two $29 renewals for one member). The owner's
+rule: what a member paid a connected app, and that subscription's status,
+live only in that app. Grow shows what Grow sold.
+
+In code: belongsToStore needs store_created or a Grow offer/product;
+listSubscriptions reads only rows with an offer or product; the renewal
+recorder skips an access row with neither; isAppBilledOrder (lib/app-billed)
+keeps the two orders already written out of the money screens, the
+dashboard total and the member's purchase list. The rows themselves were
+not deleted.
