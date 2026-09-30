@@ -62,8 +62,8 @@ export async function sendPostPurchaseIfDue(orderId: string): Promise<Sent> {
   // The checkout is over. Post-purchase flows (the store series and each
   // item's sequence) start or resume now, whether or not the store's welcome
   // email is switched on: they are sent in addition to it, not through it.
-  // Processed once per order (post_purchase_flows_at), so the sweep calling
-  // this again changes nothing. A failure here must not cost the buyer their
+  // Each purchase line is processed once (order_items.post_purchase_flows_at),
+  // so the sweep calling this again changes nothing. A failure here must not cost the buyer their
   // welcome.
   // ponytail: with the welcome off, post_purchase_sent_at is never stamped, so
   // the sweep re-reads its 50 oldest orders of the last day every run. Fine at
