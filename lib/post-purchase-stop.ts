@@ -44,6 +44,11 @@ export async function stopSequence(orderItemId: string): Promise<{ ok: boolean; 
     console.error("Failed to stop sequence:", updateResult.error);
     return { ok: false, name: null };
   }
-  const { data } = await db.from("order_items").select("description").eq("id", orderItemId).maybeSingle();
-  return { ok: true, name: (data?.description as string | null) ?? null };
+  return { ok: true, name: await stopName(orderItemId) };
+}
+
+/** What the line was for, to name it on the stop page. Reads only. */
+export async function stopName(orderItemId: string): Promise<string | null> {
+  const { data } = await createServiceClient().from("order_items").select("description").eq("id", orderItemId).maybeSingle();
+  return (data?.description as string | null) ?? null;
 }
