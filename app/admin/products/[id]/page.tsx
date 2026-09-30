@@ -5,6 +5,7 @@ import { AssetUpload } from "@/components/admin/asset-upload";
 import { DuplicateButton } from "@/components/admin/duplicate-button";
 import { PostPurchaseSection } from "@/components/admin/post-purchase-section";
 import { getSequence } from "@/lib/post-purchase-store";
+import { getSettingsOrDefaults } from "@/lib/settings";
 import { getProductById, listOfferOptions, priceUsage } from "@/lib/admin";
 import { listCourses, coursesForProduct } from "@/lib/courses";
 import { hasPageSections } from "@/lib/pages";
@@ -32,6 +33,8 @@ export default async function EditProductPage({
     priceUsage(id, "product"),
   ]);
   if (!product) notFound();
+  // The real sender and access link, so the post-purchase preview shows what buyers get.
+  const postPurchaseMail = (await getSettingsOrDefaults()).postPurchaseEmail;
 
   return (
     <div className="flex flex-col gap-5">
@@ -77,7 +80,14 @@ export default async function EditProductPage({
           </ul>
         </div>
       )}
-      <PostPurchaseSection ownerType="product" ownerId={product.id} ownerName={product.title} initial={await getSequence("product", product.id)} />
+      <PostPurchaseSection
+        ownerType="product"
+        ownerId={product.id}
+        ownerName={product.title}
+        initial={await getSequence("product", product.id)}
+        senderName={postPurchaseMail.senderName || postPurchaseMail.senderEmail}
+        accessUrl={postPurchaseMail.accessUrl}
+      />
 
       <div className="flex justify-end">
         <DuplicateButton kind="product" id={product.id} currentKey={product.slug} />

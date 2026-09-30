@@ -9,6 +9,7 @@ import { ViewLive } from "@/components/admin/view-live";
 import { DuplicateButton } from "@/components/admin/duplicate-button";
 import { PostPurchaseSection } from "@/components/admin/post-purchase-section";
 import { getSequence } from "@/lib/post-purchase-store";
+import { getSettingsOrDefaults } from "@/lib/settings";
 
 export default async function EditOfferPage({
   params,
@@ -32,6 +33,8 @@ export default async function EditOfferPage({
     priceUsage(id),
   ]);
   if (!offer) notFound();
+  // The real sender and access link, so the post-purchase preview shows what buyers get.
+  const postPurchaseMail = (await getSettingsOrDefaults()).postPurchaseEmail;
 
   // The offer's own sales page needs both: the offer live, and a page actually
   // built. Either missing and /o/<key> is a 404.
@@ -156,7 +159,14 @@ export default async function EditOfferPage({
           </ul>
         </div>
       )}
-      <PostPurchaseSection ownerType="offer" ownerId={offer.id} ownerName={offer.name} initial={await getSequence("offer", offer.id)} />
+      <PostPurchaseSection
+        ownerType="offer"
+        ownerId={offer.id}
+        ownerName={offer.name}
+        initial={await getSequence("offer", offer.id)}
+        senderName={postPurchaseMail.senderName || postPurchaseMail.senderEmail}
+        accessUrl={postPurchaseMail.accessUrl}
+      />
 
       <div className="flex justify-end">
         <DuplicateButton kind="offer" id={offer.id} currentKey={offer.key} />

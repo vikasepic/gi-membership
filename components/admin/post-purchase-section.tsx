@@ -8,7 +8,7 @@ import { EMAIL_FONTS, LAYOUT_DEFAULTS, fillLine, starterDoc, type DelayUnit, typ
 import type { OwnerType, Sequence } from "@/lib/post-purchase-store";
 
 type Draft = { key: string; id: string | null; delayAmount: number; delayUnit: DelayUnit; subject: string; preheader: string; doc: DocNode };
-const SAMPLE = (name: string) => ({ first_name: "Priya", offer_name: name, access_link: "https://grow.greaterinside.com/login" });
+const SAMPLE = (name: string, accessUrl: string) => ({ first_name: "Priya", offer_name: name, access_link: accessUrl });
 let seq = 0;
 const newKey = () => `e${Date.now()}${seq++}`;
 
@@ -23,7 +23,15 @@ function when(d: Draft, i: number) {
  * first email goes right after the store's welcome, each follow-up after its
  * delay. Spec: docs/superpowers/specs/2026-09-30-post-purchase-sequences-design.md
  */
-export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial }: { ownerType: OwnerType; ownerId: string; ownerName: string; initial: Sequence }) {
+export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, senderName, accessUrl }: {
+  ownerType: OwnerType;
+  ownerId: string;
+  ownerName: string;
+  initial: Sequence;
+  /** From the store's email settings, so the preview shows what buyers get. */
+  senderName: string;
+  accessUrl: string;
+}) {
   const [enabled, setEnabled] = useState(initial.enabled);
   const [layout, setLayout] = useState<EmailLayout>(initial.layout);
   const [emails, setEmails] = useState<Draft[]>(initial.emails.map((e) => ({ ...e, key: newKey() })));
@@ -98,8 +106,8 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial }: 
   };
 
   const rendered = useMemo(
-    () => (current && preview ? renderPostPurchaseEmail({ doc: current.doc, subject: current.subject, preheader: current.preheader, layout, vars: SAMPLE(ownerName), stopUrl: idx > 0 ? "https://grow.greaterinside.com/email/stop" : null }) : null),
-    [current, preview, layout, ownerName, idx],
+    () => (current && preview ? renderPostPurchaseEmail({ doc: current.doc, subject: current.subject, preheader: current.preheader, layout, vars: SAMPLE(ownerName, accessUrl), stopUrl: idx > 0 ? "https://grow.greaterinside.com/email/stop" : null }) : null),
+    [current, preview, layout, ownerName, accessUrl, idx],
   );
 
   const num = (k: keyof EmailLayout, v: string) => setLayout((l) => ({ ...l, [k]: Number(v) }));
@@ -132,7 +140,9 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial }: 
             <div className="grid gap-3 border-t border-border px-5 py-4">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h3 className="text-sm font-semibold">Emails in this sequence</h3>
-                <span className="text-xs text-muted">The rest stop if the order is refunded, access ends, or the buyer clicks Stop these emails.</span>
+                <span className="text-xs text-muted">
+                  The rest stop if the order is refunded, access ends, or the buyer clicks Stop these emails. Edits reach buyers who are part-way through. Turning this off stops the rest for everyone.
+                </span>
               </div>
               <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Emails in this sequence">
                 {emails.map((e, i) => (
@@ -206,9 +216,9 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial }: 
                 <div className="grid gap-2">
                   <h3 className="text-sm font-semibold">Inbox preview</h3>
                   <div className="grid gap-0.5 rounded-xl border border-border p-3 text-sm">
-                    <span className="font-semibold">Ajit from Greater Inside</span>
-                    <span>{fillLine(current.subject, SAMPLE(ownerName)) || "(no subject yet)"}</span>
-                    <span className="truncate text-xs text-muted">{fillLine(current.preheader, SAMPLE(ownerName)) || "Preview text shows here"}</span>
+                    <span className="font-semibold">{senderName}</span>
+                    <span>{fillLine(current.subject, SAMPLE(ownerName, accessUrl)) || "(no subject yet)"}</span>
+                    <span className="truncate text-xs text-muted">{fillLine(current.preheader, SAMPLE(ownerName, accessUrl)) || "Preview text shows here"}</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2.5">

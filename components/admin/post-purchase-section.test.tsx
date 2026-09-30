@@ -28,7 +28,14 @@ function mount() {
   root = createRoot(host);
   act(() => {
     root!.render(
-      <PostPurchaseSection ownerType="offer" ownerId="11111111-1111-4111-8111-111111111111" ownerName="Funnel App" initial={{ id: null, enabled: false, layout: LAYOUT_DEFAULTS, emails: [] }} />,
+      <PostPurchaseSection
+        ownerType="offer"
+        ownerId="11111111-1111-4111-8111-111111111111"
+        ownerName="Funnel App"
+        initial={{ id: null, enabled: false, layout: LAYOUT_DEFAULTS, emails: [] }}
+        senderName="Store Sender"
+        accessUrl="https://store.example.com/start"
+      />,
     );
   });
   return host;
@@ -74,6 +81,14 @@ describe("the post-purchase section", () => {
     click(host.querySelector('input[type="checkbox"]'));
     click([...host.querySelectorAll("button")].find((b) => b.textContent === "Preview as Priya")!);
     expect(host.querySelector("iframe")?.getAttribute("sandbox")).toBe("allow-popups allow-popups-to-escape-sandbox");
+  });
+
+  it("previews with the store's real sender and access link", () => {
+    const host = mount();
+    click(host.querySelector('input[type="checkbox"]'));
+    expect(host.querySelector('[aria-label="Email layout"]')?.textContent).toContain("Store Sender");
+    click([...host.querySelectorAll("button")].find((b) => b.textContent === "Preview as Priya")!);
+    expect(host.querySelector("iframe")?.getAttribute("srcdoc")).toContain('href="https://store.example.com/start"');
   });
 
   it("keeps the draft and lets the owner try again when the server cannot be reached", async () => {
