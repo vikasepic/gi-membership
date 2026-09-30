@@ -19,6 +19,15 @@ import { stopUrl } from "@/lib/post-purchase-stop";
 
 /** Email 1 waits this long, so the welcome email arrives first. */
 const FIRST_EMAIL_AFTER_MS = 60_000;
+/**
+ * How far a row reverted to pending (an error before delivery) is pushed out.
+ * The sweep takes the oldest-due 50 rows; a row stuck on a permanent failure
+ * (a missing secret, say) that kept its original due_at would retry on every
+ * single sweep and, being always the oldest, crowd out the other 49 rows
+ * behind it. Moving it to the back of the queue instead lets the sweep make
+ * progress elsewhere while it keeps retrying at a sane rate.
+ */
+const RETRY_AFTER_MS = 30 * 60_000;
 const HOLDS = ["active", "trialing", "past_due"];
 
 type Line = { id: string; kind: string; offer_id: string | null; product_id: string | null };
@@ -217,10 +226,16 @@ async function sendOne(sendId: string, now: Date): Promise<keyof SequenceSendSum
       return "failed";
     }
     if (!delivered) {
-      // Nothing went out. Put the claim back so the next sweep retries it,
+      // Nothing went out. Put the claim back so a later sweep retries it,
       // rather than marking it failed and losing the email over what is
-      // usually a transient read or write error.
-      await db.from("post_purchase_sends").update({ status: "pending" }).eq("id", sendId).eq("status", "sending");
+      // usually a transient read or write error. Pushed out rather than due
+      // right now, so a permanent failure does not retry every sweep and
+      // block the rows behind it.
+      await db
+        .from("post_purchase_sends")
+        .update({ status: "pending", due_at: new Date(now.getTime() + RETRY_AFTER_MS).toISOString() })
+        .eq("id", sendId)
+        .eq("status", "sending");
       await recordError({ source: "post_purchase_sequence", message: messageOf(e), context: { sendId, orderItemId: row.order_item_id } });
       return null;
     }

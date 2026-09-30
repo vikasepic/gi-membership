@@ -128,6 +128,24 @@ const EMAIL_ROW = {
   delay_unit: "days",
 };
 
+/**
+ * A second email in the sequence. Without it, `queueNext` finds nothing
+ * unsent to queue and returns before ever calling `upsert` — so an assertion
+ * that "no upsert happened" would hold even if `queueNext` ran when it must
+ * not have. With two emails, an erroneous `queueNext` call finds email-2
+ * unsent (email-1 is in its local `sent` set) and does upsert, so the
+ * assertion actually exercises the guard.
+ */
+const EMAIL_ROW_2 = {
+  id: "email-2",
+  position: 2,
+  subject: "Follow-up",
+  preheader: "",
+  doc: { type: "doc", content: [] },
+  delay_amount: 2,
+  delay_unit: "days",
+};
+
 /** Scripts the calls that happen before the mark-sent write, so a test only has to set the outcome of the step it cares about. */
 function scriptUpToDelivery() {
   push("post_purchase_sends:select", { data: [{ id: "send-1" }], error: null }); // the due sweep
@@ -136,8 +154,12 @@ function scriptUpToDelivery() {
   push("post_purchase_sequences:select", { data: { enabled: true, layout: {} }, error: null });
   push("ownership:select", { data: [{ id: "own-1" }], error: null }); // stillHolds
   push("post_purchase_sends:select", { data: [], error: null }); // sentEmailIds
-  push("post_purchase_emails:select", { data: [EMAIL_ROW], error: null }); // emailsInOrder
+  push("post_purchase_emails:select", { data: [EMAIL_ROW, EMAIL_ROW_2], error: null }); // emailsInOrder, called by emailToSend
   push("users:select", { data: { username: "Buyer Name" }, error: null }); // profile
+  // A second entry for the same key: only consumed if queueNext runs, which
+  // it must not when the mark-sent write fails. Left unconsumed on the
+  // correct path.
+  push("post_purchase_emails:select", { data: [EMAIL_ROW, EMAIL_ROW_2], error: null }); // emailsInOrder, called by queueNext
 }
 
 describe("sendDueSequenceEmails error handling", () => {
@@ -151,6 +173,10 @@ describe("sendDueSequenceEmails error handling", () => {
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
     // queueNext must never run: no upsert to post_purchase_sends after the failed mark-sent write.
     expect(calls.some((c) => c.table === "post_purchase_sends" && c.op === "upsert")).toBe(false);
+    // The email already went out: a revert to pending here is the actual
+    // re-send vector (the next sweep would deliver it a second time).
+    const updates = calls.filter((c) => c.table === "post_purchase_sends" && c.op === "update");
+    expect(updates.some((c) => (c.payload as { status?: string })?.status === "pending")).toBe(false);
     expect(recordErrorMock).toHaveBeenCalled();
     // The email went out, so this must not be reported as a lost/failed send.
     expect(out.failed).toBe(0);
@@ -161,12 +187,20 @@ describe("sendDueSequenceEmails error handling", () => {
     push("post_purchase_sends:update", { data: CLAIMED_ROW, error: null }); // the claim
     push("order_items:select", { data: null, error: { message: "connection reset" } });
 
-    const out = await sendDueSequenceEmails({ now: new Date() });
+    const now = new Date();
+    const out = await sendDueSequenceEmails({ now });
 
     expect(sendEmailMock).not.toHaveBeenCalled();
     // Put back to pending for the next sweep to retry.
     const updates = calls.filter((c) => c.table === "post_purchase_sends" && c.op === "update");
-    expect(updates.some((c) => (c.payload as { status?: string })?.status === "pending")).toBe(true);
+    const pendingUpdate = updates.find((c) => (c.payload as { status?: string })?.status === "pending");
+    expect(pendingUpdate).toBeTruthy();
+    // Pushed to the back of the queue, not left due right now: a permanent
+    // failure (a missing secret, say) must not retry every sweep forever and
+    // starve out the other 49 rows the sweep would otherwise pick up.
+    const dueAt = (pendingUpdate?.payload as { due_at?: string })?.due_at;
+    expect(dueAt).toBeTruthy();
+    expect(new Date(dueAt as string).getTime()).toBeGreaterThan(now.getTime());
     expect(updates.some((c) => (c.payload as { status?: string })?.status === "skipped")).toBe(false);
     expect(updates.some((c) => (c.payload as { status?: string })?.status === "failed")).toBe(false);
     expect(recordErrorMock).toHaveBeenCalled();
