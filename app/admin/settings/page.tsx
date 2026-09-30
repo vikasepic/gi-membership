@@ -39,7 +39,10 @@ export default async function AdminSettingsPage() {
         count: f.files.length,
       }))}
       emailFollowUps={
+        // Keyed: without one, React warns in development when this element,
+        // made here, is rendered among SettingsScreen's children.
         <PostPurchaseSection
+          key="store-series"
           ownerType="store"
           ownerId={storeId}
           ownerName={sample}
