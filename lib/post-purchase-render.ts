@@ -49,6 +49,9 @@ const align = (n: DocNode) => {
   return a === "center" || a === "right" || a === "left" ? `text-align:${a};` : "";
 };
 
+/** Safely get content array, or empty array if content is missing or not an array. */
+const kids = (n: DocNode | undefined): DocNode[] => (Array.isArray(n?.content) ? n.content : []);
+
 function renderText(n: DocNode, vars: MergeVars, layout: EmailLayout): string {
   let out = esc(n.text ?? "");
   // The link goes on last, outermost, so a bold word inside a link stays linked.
@@ -112,13 +115,13 @@ function renderBlock(n: DocNode, vars: MergeVars, layout: EmailLayout): string {
     case "bulletList":
     case "orderedList": {
       const tag = n.type === "bulletList" ? "ul" : "ol";
-      const items = (n.content ?? [])
-        .map((li) => `<li style="margin:0 0 6px;">${(li.content ?? []).map((c) => (c.type === "paragraph" ? renderInline(c.content, vars, layout) : renderBlock(c, vars, layout))).join("<br>")}</li>`)
+      const items = kids(n)
+        .map((li) => `<li style="margin:0 0 6px;">${kids(li).map((c) => (c.type === "paragraph" ? renderInline(c.content, vars, layout) : renderBlock(c, vars, layout))).join("<br>")}</li>`)
         .join("");
       return `<${tag} style="margin:0 0 14px;padding-left:22px;">${items}</${tag}>`;
     }
     case "blockquote":
-      return `<blockquote style="margin:0 0 14px;padding-left:14px;border-left:3px solid #e4e1d9;">${(n.content ?? []).map((c) => renderBlock(c, vars, layout)).join("")}</blockquote>`;
+      return `<blockquote style="margin:0 0 14px;padding-left:14px;border-left:3px solid #e4e1d9;">${kids(n).map((c) => renderBlock(c, vars, layout)).join("")}</blockquote>`;
     case "horizontalRule":
       return `<hr style="border:0;border-top:1px solid #e4e1d9;margin:22px 0;">`;
     case "image": {
@@ -143,7 +146,7 @@ function renderBlock(n: DocNode, vars: MergeVars, layout: EmailLayout): string {
 </table>`;
     }
     default:
-      return (n.content ?? []).map((c) => renderBlock(c, vars, layout)).join("");
+      return kids(n).map((c) => renderBlock(c, vars, layout)).join("");
   }
 }
 
@@ -162,8 +165,8 @@ function plainBlock(n: DocNode, vars: MergeVars): string {
       return plainInline(n.content, vars);
     case "bulletList":
     case "orderedList":
-      return (n.content ?? [])
-        .map((li, i) => `${n.type === "bulletList" ? "-" : `${i + 1}.`} ${(li.content ?? []).map((c) => plainInline(c.content, vars)).join(" ")}`)
+      return kids(n)
+        .map((li, i) => `${n.type === "bulletList" ? "-" : `${i + 1}.`} ${kids(li).map((c) => plainInline(c.content, vars)).join(" ")}`)
         .join("\n");
     case "emailButton": {
       const href = safeUrl(n.attrs?.href, vars);
@@ -174,7 +177,7 @@ function plainBlock(n: DocNode, vars: MergeVars): string {
     case "horizontalRule":
       return "";
     default:
-      return (n.content ?? []).map((c) => plainBlock(c, vars)).join("\n\n");
+      return kids(n).map((c) => plainBlock(c, vars)).join("\n\n");
   }
 }
 
@@ -188,7 +191,7 @@ export function renderPostPurchaseEmail(args: {
 }): RenderedEmail {
   const layout = parseLayout(args.layout);
   const doc = (args.doc && typeof args.doc === "object" ? args.doc : { type: "doc", content: [] }) as DocNode;
-  const blocks = doc.content ?? [];
+  const blocks = kids(doc);
   const subject = fillLine(args.subject, args.vars);
   const preheader = fillLine(args.preheader, args.vars);
   const inner = blocks.map((b) => renderBlock(b, args.vars, layout)).join("\n");
