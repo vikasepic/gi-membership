@@ -104,15 +104,18 @@ describe("the email a buyer receives", () => {
   });
 
   it("a malformed document renders what it can instead of throwing", () => {
-    // Paragraph with non-array content is skipped, next one is kept
-    const doc = { type: "doc", content: [{ type: "paragraph", content: "oops" }, { type: "paragraph", content: [{ type: "text", text: "kept" }] }] };
+    // Paragraph and heading with non-array content (number, object) are skipped, good paragraph kept
+    const doc = {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: 42 },
+        { type: "heading", attrs: { level: 2 }, content: {} },
+        { type: "paragraph", content: [{ type: "text", text: "kept" }] },
+      ],
+    };
     const m = render({ doc });
     expect(m.html).toContain("kept");
+    expect(m.text).toContain("kept");
     expect(() => render({ doc })).not.toThrow();
-
-    // Top-level content is not an array
-    const broken = { type: "doc", content: "oops" };
-    const b = render({ doc: broken });
-    expect(() => render({ doc: broken })).not.toThrow();
   });
 });

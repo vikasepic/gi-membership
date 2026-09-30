@@ -76,7 +76,7 @@ function renderText(n: DocNode, vars: MergeVars, layout: EmailLayout): string {
 function renderInline(nodes: DocNode[] | undefined, vars: MergeVars, layout: EmailLayout): string {
   let out = "";
   let droppedTag = false;
-  for (const n of nodes ?? []) {
+  for (const n of Array.isArray(nodes) ? nodes : []) {
     if (n.type === "mergeTag") {
       const key = String(n.attrs?.key ?? "") as keyof MergeVars;
       const v = vars[key] ?? "";
