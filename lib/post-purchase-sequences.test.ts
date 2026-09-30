@@ -208,6 +208,21 @@ describe("sendDueSequenceEmails error handling", () => {
     expect(out).toEqual({ sent: 0, skipped: 0, failed: 0 });
   });
 
+  it("email sending not being set up is retried later, not skipped for good", async () => {
+    scriptUpToDelivery();
+    sendEmailMock.mockResolvedValueOnce("disabled");
+
+    const now = new Date();
+    const out = await sendDueSequenceEmails({ now });
+
+    const updates = calls.filter((c) => c.table === "post_purchase_sends" && c.op === "update");
+    const pendingUpdate = updates.find((c) => (c.payload as { status?: string })?.status === "pending");
+    expect(new Date((pendingUpdate?.payload as { due_at: string }).due_at).getTime()).toBe(now.getTime() + 30 * 60_000);
+    expect(updates.some((c) => (c.payload as { status?: string })?.status === "skipped")).toBe(false);
+    expect(recordErrorMock).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringMatching(/email sending is not configured/) }));
+    expect(out).toEqual({ sent: 0, skipped: 0, failed: 0 });
+  });
+
   it("the provider refusing a send still marks it failed and ends the chain (unchanged behaviour)", async () => {
     scriptUpToDelivery();
     sendEmailMock.mockResolvedValueOnce("failed");

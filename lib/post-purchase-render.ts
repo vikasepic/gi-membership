@@ -1,5 +1,5 @@
 import {
-  EMAIL_FONTS, fillLine, parseLayout, type DocMark, type DocNode, type EmailLayout, type MergeVars,
+  EMAIL_FONTS, fillLine, fillTags, parseLayout, type DocMark, type DocNode, type EmailLayout, type MergeVars,
 } from "@/lib/post-purchase-layout";
 
 /**
@@ -53,7 +53,8 @@ const align = (n: DocNode) => {
 const kids = (n: DocNode | undefined): DocNode[] => (Array.isArray(n?.content) ? n.content : []);
 
 function renderText(n: DocNode, vars: MergeVars, layout: EmailLayout): string {
-  let out = esc(n.text ?? "");
+  // A tag typed as text ("Hello {{first_name}}") is filled like a chip is.
+  let out = esc(fillTags(n.text ?? "", vars));
   // The link goes on last, outermost, so a bold word inside a link stays linked.
   const marks = [...(n.marks ?? [])].sort((a, b) => Number(a.type === "link") - Number(b.type === "link"));
   for (const m of marks as DocMark[]) {
@@ -128,7 +129,7 @@ function renderBlock(n: DocNode, vars: MergeVars, layout: EmailLayout): string {
       const src = safeUrl(n.attrs?.src, vars);
       if (!src) return "";
       const pct = Math.min(100, Math.max(10, Number(n.attrs?.widthPct) || 100));
-      const img = `<img src="${esc(src)}" alt="${esc(String(n.attrs?.alt ?? ""))}" width="${Math.round((layout.desktopWidth * pct) / 100)}" style="display:block;width:${pct}%;max-width:100%;height:auto;border:0;border-radius:6px;">`;
+      const img = `<img src="${esc(src)}" alt="${esc(String(n.attrs?.alt ?? ""))}" width="${Math.round(((layout.desktopWidth - 2 * layout.desktopPadding) * pct) / 100)}" style="display:block;width:${pct}%;max-width:100%;height:auto;border:0;border-radius:6px;">`;
       const href = safeUrl(n.attrs?.href, vars);
       return `<div style="margin:0 0 14px;">${href ? `<a href="${esc(href)}" target="_blank">${img}</a>` : img}</div>`;
     }
@@ -140,7 +141,7 @@ function renderBlock(n: DocNode, vars: MergeVars, layout: EmailLayout): string {
       return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"${center ? ' align="center"' : ""} style="margin:22px ${center ? "auto" : "0"};">
 <tr>
 <td style="border-radius:6px;background:${colour};">
-<a href="${esc(href)}" target="_blank" style="display:inline-block;padding:13px 24px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">${esc(String(n.attrs?.label ?? "Open"))}</a>
+<a href="${esc(href)}" target="_blank" style="display:inline-block;padding:13px 24px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:6px;">${esc(fillTags(String(n.attrs?.label ?? "Open"), vars))}</a>
 </td>
 </tr>
 </table>`;
@@ -170,7 +171,7 @@ function plainBlock(n: DocNode, vars: MergeVars): string {
         .join("\n");
     case "emailButton": {
       const href = safeUrl(n.attrs?.href, vars);
-      return href ? `${String(n.attrs?.label ?? "Open")}: ${href}` : "";
+      return href ? `${fillTags(String(n.attrs?.label ?? "Open"), vars)}: ${href}` : "";
     }
     case "image":
       return String(n.attrs?.alt ?? "");

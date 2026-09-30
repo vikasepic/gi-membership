@@ -253,7 +253,8 @@ async function sendOne(sendId: string, now: Date): Promise<keyof SequenceSendSum
       replyTo: settings.replyTo,
       ...(stop ? { headers: { "List-Unsubscribe": `<${stop}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {}),
     });
-    if (res === "disabled") return await skip("email sending is not configured");
+    // Not set up yet is not a no: retried later like any other failure before delivery.
+    if (res === "disabled") throw new Error("email sending is not configured");
     if (res === "failed") throw new SendRefused("the email provider refused the send");
     delivered = true;
 

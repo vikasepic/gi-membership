@@ -61,3 +61,5 @@ alter table post_purchase_sequences enable row level security;
 alter table post_purchase_emails    enable row level security;
 alter table post_purchase_sends     enable row level security;
 revoke all on post_purchase_sequences, post_purchase_emails, post_purchase_sends from anon, authenticated;
+
+notify pgrst, 'reload schema';

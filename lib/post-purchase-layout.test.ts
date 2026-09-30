@@ -41,6 +41,11 @@ describe("personal details", () => {
     expect(fillLine("Hi {{first_name}}, welcome", {})).toBe("Hi, welcome");
     expect(fillLine("{{first_name}}, your Funnel App is ready", vars)).toBe("Priya, your Funnel App is ready");
   });
+
+  it("a line the owner typed keeps its own first letter", () => {
+    expect(fillLine("iPhone setup", vars)).toBe("iPhone setup");
+    expect(fillLine("and one more thing", {})).toBe("and one more thing");
+  });
 });
 
 describe("delays", () => {

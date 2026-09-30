@@ -69,6 +69,13 @@ describe("the post-purchase section", () => {
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("Email 2 needs a subject line.");
   });
 
+  it("the preview frame runs no script from the email", () => {
+    const host = mount();
+    click(host.querySelector('input[type="checkbox"]'));
+    click([...host.querySelectorAll("button")].find((b) => b.textContent === "Preview as Priya")!);
+    expect(host.querySelector("iframe")?.getAttribute("sandbox")).toBe("allow-popups allow-popups-to-escape-sandbox");
+  });
+
   it("keeps the draft and lets the owner try again when the server cannot be reached", async () => {
     save.mockRejectedValueOnce(new Error("Failed to fetch"));
     const host = mount();

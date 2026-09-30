@@ -103,6 +103,28 @@ describe("the email a buyer receives", () => {
     expect(h).toContain("<hr ");
   });
 
+  it("sizes an image to the content width, not the whole body, so Outlook does not stretch it", () => {
+    const doc = { type: "doc", content: [{ type: "image", attrs: { src: "https://grow.greaterinside.com/a.png", alt: "" } }] };
+    // 600 wide, 32 padding each side: 536.
+    expect(render({ doc }).html).toContain('width="536"');
+  });
+
+  it("fills a personal detail typed into the text or a button label", () => {
+    const doc = {
+      type: "doc",
+      content: [
+        { type: "paragraph", content: [{ type: "text", text: "Hello {{first_name}}" }] },
+        { type: "emailButton", attrs: { label: "Open {{offer_name}}", href: "{{access_link}}" } },
+      ],
+    };
+    const m = render({ doc });
+    expect(m.html).toContain("Hello Priya");
+    expect(m.html).toContain(">Open Funnel App</a>");
+    expect(m.text).toContain("Hello Priya");
+    expect(m.text).toContain("Open Funnel App: https://grow.greaterinside.com/login");
+    expect(m.html).not.toContain("{{");
+  });
+
   it("a malformed document renders what it can instead of throwing", () => {
     // Paragraph and heading with non-array content (number, object) are skipped, good paragraph kept
     const doc = {

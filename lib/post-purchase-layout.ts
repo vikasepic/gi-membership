@@ -65,7 +65,8 @@ export function fillTags(s: string, vars: MergeVars): string {
 
 /**
  * A subject or preview line, filled and tidied. A buyer with no name on file
- * must not get ", your Funnel App is ready".
+ * must not get ", your Funnel App is ready". Only a line that opened with a
+ * tag is capitalised: what the owner typed ("iPhone setup") stays as typed.
  */
 export function fillLine(s: string, vars: MergeVars): string {
   const out = fillTags(s, vars)
@@ -73,7 +74,7 @@ export function fillLine(s: string, vars: MergeVars): string {
     .replace(/^[\s,.!?;:]+/, "")
     .replace(/\s{2,}/g, " ")
     .trim();
-  return out.charAt(0).toUpperCase() + out.slice(1);
+  return /^\s*\{\{/.test(s) ? out.charAt(0).toUpperCase() + out.slice(1) : out;
 }
 
 export const DELAY_UNITS = ["hours", "days"] as const;

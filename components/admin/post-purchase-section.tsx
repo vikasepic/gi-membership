@@ -196,7 +196,7 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial }: 
                 </div>
 
                 {preview && rendered ? (
-                  <iframe title="Email preview" srcDoc={rendered.html} className="mx-auto h-[640px] w-full rounded-xl border border-border bg-white" style={{ maxWidth: view === "mobile" ? 375 : "100%" }} />
+                  <iframe title="Email preview" srcDoc={rendered.html} sandbox="allow-popups allow-popups-to-escape-sandbox" className="mx-auto h-[640px] w-full rounded-xl border border-border bg-white" style={{ maxWidth: view === "mobile" ? 375 : "100%" }} />
                 ) : (
                   <EmailEditor doc={current.doc} docKey={current.key} onChange={(doc) => patch({ doc })} layout={layout} view={view} />
                 )}
