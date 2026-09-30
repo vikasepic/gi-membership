@@ -44,21 +44,27 @@ export function saveProblem(input: SaveInput): string | null {
   return null;
 }
 
+/**
+ * Throws on a failed read: shown as off and empty, the sequence could be
+ * turned on and saved straight over the real one.
+ */
 export async function getSequence(ownerType: OwnerType, ownerId: string): Promise<Sequence> {
   const db = createServiceClient();
-  const { data: seq } = await db
+  const { data: seq, error: seqErr } = await db
     .from("post_purchase_sequences")
     .select("id, enabled, layout")
     .eq("store_id", await getStoreId())
     .eq("owner_type", ownerType)
     .eq("owner_id", ownerId)
     .maybeSingle();
+  if (seqErr) throw new Error(`getSequence: post_purchase_sequences: ${seqErr.message}`);
   if (!seq) return { id: null, enabled: false, layout: parseLayout({}), emails: [] };
-  const { data: rows } = await db
+  const { data: rows, error: rowsErr } = await db
     .from("post_purchase_emails")
     .select("id, position, delay_amount, delay_unit, subject, preheader, doc")
     .eq("sequence_id", seq.id)
     .order("position");
+  if (rowsErr) throw new Error(`getSequence: post_purchase_emails: ${rowsErr.message}`);
   return {
     id: seq.id as string,
     enabled: Boolean(seq.enabled),
@@ -100,7 +106,10 @@ export async function saveSequence(
     .single();
   if (seqErr || !seq) return { ok: false, error: `Could not save: ${seqErr?.message ?? "no sequence row"}` };
 
-  const { data: existing } = await db.from("post_purchase_emails").select("id").eq("sequence_id", seq.id);
+  // Unread, every email would get a new id, the delete below would remove the
+  // real rows, and buyers part-way through would be sent email 1 again.
+  const { data: existing, error: readErr } = await db.from("post_purchase_emails").select("id").eq("sequence_id", seq.id);
+  if (readErr) return { ok: false, error: `Could not save: ${readErr.message}` };
   const mine = new Set((existing ?? []).map((r) => r.id as string));
   // An id this sequence does not own is a new email, never a stolen one.
   const rows = input.emails.map((e, i) => ({
