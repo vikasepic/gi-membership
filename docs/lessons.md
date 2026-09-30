@@ -681,3 +681,13 @@ the editor and the buyer never gets it. Sequences are queued by
 `sendPostPurchaseIfDue` at checkout-over whatever the welcome's own switch
 says, and sent by the retry cron; a follow-up is queued only when the one
 before it is sent, so edits reach buyers mid-sequence.
+
+## Post-purchase flows are per buyer, not per purchase (30 Sep 2026)
+
+A flow is one buyer (order email, trimmed and lower-cased) on one sequence.
+"Stop these emails" pauses all of that buyer's flows; their next purchase
+resumes them. `orders.post_purchase_flows_at` is what makes processing an
+order once-only: the thank-you page and the re-queue sweep both process it,
+and without the stamp a flow that finished in between would start again. The
+store-series integration tests skip themselves when a local store series
+exists, rather than overwrite a developer's work.
