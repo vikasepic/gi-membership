@@ -18,10 +18,10 @@ describe.skipIf(!canRun)("post-purchase tables (integration)", () => {
     const { data, error } = await db
       .from("post_purchase_sequences")
       .insert({ store_id: await getStoreId(), owner_type: "offer", owner_id: owner })
-      .select("id, enabled")
+      .select("id, enabled, store_id")
       .single();
     if (error) throw new Error(error.message);
-    return data as { id: string; enabled: boolean };
+    return data as { id: string; enabled: boolean; store_id: string };
   }
 
   it("a new sequence is off", async () => {
@@ -70,11 +70,53 @@ describe.skipIf(!canRun)("post-purchase tables (integration)", () => {
     ]);
     expect(swap.error).toBeNull();
   });
+
+  it("accepts a store series", async () => {
+    const db = createServiceClient();
+    const owner = crypto.randomUUID();
+    owners.push(owner);
+    const r = await db.from("post_purchase_sequences").insert({ store_id: await getStoreId(), owner_type: "store", owner_id: owner });
+    expect(r.error).toBeNull();
+  });
+
+  async function flow(sequenceId: string, email: string) {
+    return createServiceClient()
+      .from("post_purchase_flows")
+      .insert({ store_id: await getStoreId(), sequence_id: sequenceId, email })
+      .select("id, status, run")
+      .single();
+  }
+
+  it("one flow per buyer per sequence, running and run 1 by default", async () => {
+    const s = await sequence();
+    const first = await flow(s.id, "zz-flow@example.com");
+    expect(first.error).toBeNull();
+    expect(first.data).toMatchObject({ status: "running", run: 1 });
+    expect((await flow(s.id, "zz-flow@example.com")).error?.code).toBe("23505");
+  });
+
+  it("refuses a buyer email that is not trimmed and lower-cased", async () => {
+    const s = await sequence();
+    expect((await flow(s.id, "Zz-Flow@example.com")).error?.code).toBe("23514");
+    expect((await flow(s.id, " zz-flow@example.com")).error?.code).toBe("23514");
+  });
+
+  it("one send per flow, run and step", async () => {
+    const db = createServiceClient();
+    const s = await sequence();
+    const f = (await flow(s.id, "zz-steps@example.com")).data!;
+    const row = (run: number, position: number) => ({
+      store_id: s.store_id, flow_id: f.id, run, sequence_id: s.id, position, to_email: "zz-steps@example.com", due_at: new Date().toISOString(),
+    });
+    expect((await db.from("post_purchase_sends").insert(row(1, 1))).error).toBeNull();
+    expect((await db.from("post_purchase_sends").insert(row(1, 1))).error?.code).toBe("23505");
+    expect((await db.from("post_purchase_sends").insert(row(2, 1))).error).toBeNull();
+  });
 });
 
 afterAll(async () => {
   if (!canRun) return;
   const db = createServiceClient();
-  // Emails and sends go with their sequence (on delete cascade).
+  // Emails, flows and sends go with their sequence (on delete cascade).
   for (const o of owners) await db.from("post_purchase_sequences").delete().eq("owner_id", o);
 });
