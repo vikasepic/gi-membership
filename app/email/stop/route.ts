@@ -1,8 +1,7 @@
-import { stopName, stopSequence, verifyStopToken } from "@/lib/post-purchase-stop";
+import { stopBuyer, verifyStopToken } from "@/lib/post-purchase-stop";
 
 export const dynamic = "force-dynamic";
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const INVALID = "This link is not valid. If you want to stop these emails, reply to any of them and we will do it for you.";
 
 function page(status: number, message: string, after = ""): Response {
@@ -16,17 +15,15 @@ function page(status: number, message: string, after = ""): Response {
 
 /**
  * Opening the link only asks. Mail security gateways fetch the links in
- * incoming mail on their own, so a GET that stopped the sequence would stop
- * it for buyers who never clicked.
+ * incoming mail on their own, so a GET that stopped the emails would stop
+ * them for buyers who never clicked.
  */
 export async function GET(req: Request) {
   const t = new URL(req.url).searchParams.get("t") ?? "";
-  const id = verifyStopToken(t);
-  if (!id) return page(400, INVALID);
-  const name = await stopName(id);
+  if (!verifyStopToken(t)) return page(400, INVALID);
   return page(
     200,
-    name ? `Stop the emails about ${esc(name)}?` : "Stop these emails?",
+    "Stop these emails? You won't get any more follow-up emails from us until you buy again.",
     `<form method="post" action="/email/stop?t=${encodeURIComponent(t)}"><button type="submit" style="font:inherit;padding:10px 18px;border:0;border-radius:6px;background:#0b0b0d;color:#ffffff;cursor:pointer;">Stop these emails</button></form>`,
   );
 }
@@ -35,7 +32,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const id = verifyStopToken(new URL(req.url).searchParams.get("t"));
   if (!id) return page(400, INVALID);
-  const { ok, name } = await stopSequence(id);
+  const { ok } = await stopBuyer(id);
   if (!ok) return page(500, "Something went wrong and your emails were not stopped. Reply to any of them and we will stop them for you.");
-  return page(200, `Done. You won't get any more of these emails${name ? ` about ${esc(name)}` : ""}.`);
+  return page(200, "Done. You won't get any more of these emails.");
 }

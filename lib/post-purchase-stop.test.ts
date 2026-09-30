@@ -5,34 +5,26 @@ vi.mock("@/lib/env", () => ({
   otoSigningSecret: () => "test-signing-secret-aaaaaaaaaaaa",
   siteUrl: () => "https://grow.greaterinside.com",
 }));
-const stopped: string[] = [];
-/** Every update issued, successful or not: a GET must issue none. */
-let writes = 0;
-let updateError: { error: { message: string } } | null = null;
+
+type Write = { table: string; patch: unknown; filters: Record<string, unknown> };
+const writes: Write[] = [];
+const fail = vi.hoisted(() => ({ read: false }));
 vi.mock("@/lib/supabase/server", () => ({
   createServiceClient: () => ({
-    from: () => {
+    from: (table: string) => {
+      const filters: Record<string, unknown> = {};
+      let patch: unknown = null;
       const q: Record<string, unknown> = {};
-      q.mode = null as string | null;
-      q.eqValue = null as string | null;
-      q.update = () => { q.mode = "update"; writes++; return q; };
-      q.eq = (_c: string, v: string) => { if (q.mode === "update") q.eqValue = v; return q; };
-      q.is = () => q;
       q.select = () => q;
-      q.maybeSingle = async () => ({ data: { description: "Funnel App" } });
-      q.then = (res: ((v: unknown) => unknown) | null | undefined) => {
-        if (q.mode === "update") {
-          if (updateError) {
-            if (res) return Promise.resolve(updateError).then(res);
-            return Promise.resolve(updateError);
-          }
-          // Only push to stopped if update succeeded (no error)
-          if (q.eqValue) stopped.push(q.eqValue as string);
-          if (res) return Promise.resolve({ data: null }).then(res);
-          return Promise.resolve({ data: null });
-        }
-        if (res) return Promise.resolve({ data: null }).then(res);
-        return Promise.resolve({ data: null });
+      q.update = (p: unknown) => { patch = p; return q; };
+      q.eq = (c: string, v: unknown) => { filters[c] = v; return q; };
+      q.in = (c: string, v: unknown) => { filters[c] = v; return q; };
+      q.maybeSingle = async () =>
+        fail.read ? { data: null, error: { message: "boom" } } : { data: { store_id: "store-1", email: "priya@example.com" }, error: null };
+      q.then = (res: (v: unknown) => unknown) => {
+        writes.push({ table, patch, filters: { ...filters } });
+        const data = table === "post_purchase_flows" ? [{ id: "flow-1" }, { id: "flow-2" }] : null;
+        return Promise.resolve({ data, error: null }).then(res);
       };
       return q;
     },
@@ -42,20 +34,19 @@ vi.mock("@/lib/supabase/server", () => ({
 const { stopToken, verifyStopToken, stopUrl } = await import("@/lib/post-purchase-stop");
 const { GET, POST } = await import("@/app/email/stop/route");
 
-const ITEM = "3f1e2d4c-5b6a-4789-8abc-def012345678";
+const FLOW = "3f1e2d4c-5b6a-4789-8abc-def012345678";
 beforeEach(() => {
-  stopped.length = 0;
-  writes = 0;
-  updateError = null;
+  writes.length = 0;
+  fail.read = false;
 });
 
 describe("the stop token", () => {
-  it("round-trips the order line it was made for", () => {
-    expect(verifyStopToken(stopToken(ITEM))).toBe(ITEM);
+  it("round-trips the flow it was made for", () => {
+    expect(verifyStopToken(stopToken(FLOW))).toBe(FLOW);
   });
 
   it("refuses an edited, truncated or missing token", () => {
-    const t = stopToken(ITEM);
+    const t = stopToken(FLOW);
     const other = Buffer.from("00000000-0000-0000-0000-000000000000").toString("base64url");
     expect(verifyStopToken(`${other}.${t.split(".")[1]}`)).toBeNull();
     expect(verifyStopToken(t.slice(0, -2))).toBeNull();
@@ -64,54 +55,60 @@ describe("the stop token", () => {
   });
 
   it("builds an absolute link on the store's own address", () => {
-    expect(stopUrl(ITEM)).toMatch(/^https:\/\/grow\.greaterinside\.com\/email\/stop\?t=/);
+    expect(stopUrl(FLOW)).toMatch(/^https:\/\/grow\.greaterinside\.com\/email\/stop\?t=/);
   });
 });
 
 describe("the stop page", () => {
   const req = (t: string, method = "GET") => new Request(`https://grow.greaterinside.com/email/stop?t=${t}`, { method });
 
-  it("opening the link only asks, so a mail scanner fetching it stops nothing", async () => {
-    const t = stopToken(ITEM);
+  it("opening the link only asks, and writes nothing", async () => {
+    const t = stopToken(FLOW);
     const res = await GET(req(t));
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain("Stop the emails about Funnel App?");
-    expect(html).toContain(`<form method="post" action="/email/stop?t=${encodeURIComponent(t)}"><button type="submit"`);
-    expect(html).toContain(">Stop these emails</button>");
-    expect(html).not.toContain("Done");
-    expect(writes).toBe(0);
-    expect(stopped).toHaveLength(0);
+    expect(html).toContain("Stop these emails? You won't get any more follow-up emails from us until you buy again.");
+    expect(html).toContain(`action="/email/stop?t=${encodeURIComponent(t)}"`);
+    expect(writes).toHaveLength(0);
   });
 
-  it("the button's POST says it is done, names what they bought, and stops that line", async () => {
-    const res = await POST(req(stopToken(ITEM), "POST"));
+  it("the button pauses every running flow for the buyer and skips what is queued", async () => {
+    const res = await POST(req(stopToken(FLOW), "POST"));
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain("Done. You won't get any more of these emails about Funnel App.");
-    expect(stopped).toContain(ITEM);
+    expect(await res.text()).toContain("Done. You won't get any more of these emails.");
+    expect(writes[0]).toMatchObject({
+      table: "post_purchase_flows",
+      patch: expect.objectContaining({ status: "paused" }),
+      filters: { store_id: "store-1", email: "priya@example.com", status: "running" },
+    });
+    expect(writes[1]).toMatchObject({
+      table: "post_purchase_sends",
+      patch: { status: "skipped", reason: "buyer stopped these emails" },
+      filters: { flow_id: ["flow-1", "flow-2"], status: "pending" },
+    });
   });
 
-  it("returns 500 when the update fails, tells the buyer to reply, and stops nothing", async () => {
-    updateError = { error: { message: "boom" } };
-    const res = await POST(req(stopToken(ITEM), "POST"));
-    expect(res.status).toBe(500);
-    const text = await res.text();
-    expect(text).not.toContain("Done");
-    expect(text).toContain("were not stopped");
-    expect(stopped).toHaveLength(0);
-  });
-
-  it("says the same the second time, rather than an error", async () => {
-    await POST(req(stopToken(ITEM), "POST"));
-    const again = await POST(req(stopToken(ITEM), "POST"));
+  it("says the same on a second click", async () => {
+    await POST(req(stopToken(FLOW), "POST"));
+    const again = await POST(req(stopToken(FLOW), "POST"));
     expect(again.status).toBe(200);
     expect(await again.text()).toContain("Done.");
   });
 
-  it("refuses a bad link politely and stops nothing", async () => {
-    const res = await GET(req("forged.token"));
-    expect(res.status).toBe(400);
-    expect(await res.text()).toContain("This link is not valid");
-    expect(writes).toBe(0);
+  it("says so when the stop could not be saved", async () => {
+    fail.read = true;
+    const res = await POST(req(stopToken(FLOW), "POST"));
+    expect(res.status).toBe(500);
+    expect(await res.text()).toContain("were not stopped");
+    expect(writes).toHaveLength(0);
+  });
+
+  it("refuses a bad link and stops nothing", async () => {
+    for (const method of ["GET", "POST"]) {
+      const res = await (method === "GET" ? GET : POST)(req("forged.token", method));
+      expect(res.status).toBe(400);
+      expect(await res.text()).toContain("This link is not valid");
+    }
+    expect(writes).toHaveLength(0);
   });
 });

@@ -353,6 +353,39 @@ describe.skipIf(!canRun)("post-purchase flows (integration)", () => {
       expect(await sendPostPurchaseIfDue(o.orderId)).toBe("disabled");
       expect((await flowOf(seq.id!, b.email))?.status).toBe("running");
     });
+    it("stop pauses every flow for the buyer and skips what is queued; buying again resumes each, once", async () => {
+      const { stopBuyer } = await import("@/lib/post-purchase-stop");
+      const t = tag();
+      const a = await makeOffer();
+      const seqA = await series("offer", a, [`${t} A1`, `${t} A2`]);
+      const c = await makeOffer();
+      const seqC = await series("offer", c, [`${t} C1`, `${t} C2`]);
+      const b = await buyer();
+      const t0 = new Date();
+      await startFlowsForOrder((await buy(b, a)).orderId, t0);
+      await startFlowsForOrder((await buy(b, c)).orderId, t0);
+      await sendDueSequenceEmails({ now: new Date(t0.getTime() + 61_000) });
+      const flowA = (await flowOf(seqA.id!, b.email))!;
+      const flowC = (await flowOf(seqC.id!, b.email))!;
+
+      expect(await stopBuyer(flowA.id)).toEqual({ ok: true });
+      expect((await flowOf(seqA.id!, b.email))!.status).toBe("paused");
+      expect((await flowOf(seqC.id!, b.email))!.status).toBe("paused");
+      expect((await sendsOf(flowC.id)).map((r) => [r.position, r.status, r.reason])).toEqual([[1, "sent", null], [2, "skipped", "buyer stopped these emails"]]);
+      // A second click changes nothing.
+      expect(await stopBuyer(flowA.id)).toEqual({ ok: true });
+
+      // Nothing goes out while stopped.
+      await sendDueSequenceEmails({ now: new Date(t0.getTime() + 5 * DAY) });
+      expect(mine(b.email, t).sort()).toEqual(["A1", "C1"]);
+
+      // Buying anything resumes both, each after its own delay from that purchase, once.
+      const t1 = new Date(t0.getTime() + 6 * DAY);
+      await startFlowsForOrder((await buy(b, await makeOffer())).orderId, t1);
+      await sendDueSequenceEmails({ now: new Date(t1.getTime() + 2 * DAY + 1000) });
+      await sendDueSequenceEmails({ now: new Date(t1.getTime() + 30 * DAY) });
+      expect(mine(b.email, t).sort()).toEqual(["A1", "A2", "C1", "C2"]);
+    });
   });
 
   describe("the re-queue sweep", () => {
