@@ -41,7 +41,9 @@ Decisions made in chat on 30 Sep 2026:
   From.
 - An email's content is read when it is sent, not when the sequence starts.
   Editing email 3 changes what everyone who has not reached email 3 yet will
-  get. Deleting an email skips it for everyone still before it.
+  get. Deleting an email skips it for everyone still before it. Reordering
+  or deleting emails mid-sequence never sends a buyer the same email twice
+  and never drops one they have not had yet.
 
 ## Out of scope
 
@@ -87,7 +89,7 @@ create table post_purchase_sends (
   order_item_id  uuid not null references order_items(id) on delete cascade,
   sequence_id    uuid not null references post_purchase_sequences(id) on delete cascade,
   email_id       uuid references post_purchase_emails(id) on delete set null,
-  position       integer not null,            -- the position it was queued for
+  position       integer not null,            -- the step: 1st, 2nd, 3rd email this line gets
   to_email       text not null,
   due_at         timestamptz not null,
   status         text not null default 'pending'
@@ -212,12 +214,13 @@ minutes), so no new scheduled task is needed. For each pending row with
      and leaves the order's status alone,
    - `order_items.post_purchase_stopped_at` is set,
    - the sequence is now off.
-3. Find the email to send: the sequence's email at this `position`. If it
-   has been deleted, skip to the next position that exists.
+3. Find the email to send: the row's `email_id` if that email still exists
+   and this line has not been sent it; otherwise the first email, in the
+   sequence's current order, that this line has not been sent.
 4. Render and send with `sendEmail`, from the store's sender.
-5. Mark `sent`, then queue the next email: the smallest `position` greater
-   than this one, `due_at = sent_at + delay`. None left means the sequence
-   is finished for this item.
+5. Mark `sent`, then queue the next step: the first email in the current
+   order this line has not been sent, `due_at = sent_at + its delay`. None
+   left means the sequence is finished for this item.
 
 A send that throws marks the row `failed` with the error and logs it to
 `error_events` (source `post_purchase_sequence`), where it shows on the
