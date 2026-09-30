@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import type { ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { MediaButton, type PickedMedia } from "@/components/admin/media-modal";
 import { ImageField } from "@/components/admin/image-field";
@@ -37,11 +38,14 @@ export function SettingsScreen({
   settings,
   legalPlaceholders,
   fonts = [],
+  emailFollowUps,
 }: {
   settings: Settings;
   legalPlaceholders: string[];
   /** What is installed, for the Typography group's two selects and its library. */
   fonts?: InstalledFont[];
+  /** The store series' follow-ups, shown under the Email group. Outside the settings form: it saves itself. */
+  emailFollowUps?: ReactNode;
 }) {
   const [open, setOpen] = useState<SettingsGroupKey>("legal");
 
@@ -103,6 +107,7 @@ export function SettingsScreen({
           />
           {/* Outside the form on purpose — see FontLibrary. */}
           {open === "typography" && <FontLibrary installed={fonts} />}
+          {open === "email" && emailFollowUps}
         </div>
       </div>
 

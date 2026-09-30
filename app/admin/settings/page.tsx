@@ -1,10 +1,22 @@
 import { SettingsScreen } from "@/components/admin/settings-screen";
+import { PostPurchaseSection } from "@/components/admin/post-purchase-section";
 import { getSettings } from "@/lib/settings";
 import { legalPlaceholdersFrom } from "@/lib/legal";
 import { listFonts, fontFaceCss } from "@/lib/fonts";
+import { getStoreId } from "@/lib/store";
+import { getSequence } from "@/lib/post-purchase-store";
+import { createServiceClient } from "@/lib/supabase/server";
+
+/** A real offer's name for the preview's "What they bought"; the store series has no single item. */
+async function sampleOfferName(storeId: string): Promise<string> {
+  const { data } = await createServiceClient().from("offers").select("name").eq("store_id", storeId).order("created_at").limit(1).maybeSingle();
+  return (data?.name as string | undefined) ?? "your purchase";
+}
 
 export default async function AdminSettingsPage() {
-  const [settings, fonts] = await Promise.all([getSettings(), listFonts()]);
+  const [settings, fonts, storeId] = await Promise.all([getSettings(), listFonts(), getStoreId()]);
+  const [storeSeries, sample] = await Promise.all([getSequence("store", storeId), sampleOfferName(storeId)]);
+  const mail = settings.postPurchaseEmail;
   return (
     <>
       {/* The faces, declared for this page only.
@@ -26,6 +38,16 @@ export default async function AdminSettingsPage() {
         source: f.source,
         count: f.files.length,
       }))}
+      emailFollowUps={
+        <PostPurchaseSection
+          ownerType="store"
+          ownerId={storeId}
+          ownerName={sample}
+          initial={storeSeries}
+          senderName={mail.senderName || mail.senderEmail}
+          accessUrl={mail.accessUrl}
+        />
+      }
       />
     </>
   );

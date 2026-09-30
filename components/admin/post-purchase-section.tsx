@@ -9,29 +9,33 @@ import type { OwnerType, Sequence } from "@/lib/post-purchase-store";
 
 type Draft = { key: string; id: string | null; delayAmount: number; delayUnit: DelayUnit; subject: string; preheader: string; doc: DocNode };
 const SAMPLE = (name: string, accessUrl: string) => ({ first_name: "Priya", offer_name: name, access_link: accessUrl });
+const FOLLOW_UP_DOC: DocNode = { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Write your follow-up here." }] }] };
 let seq = 0;
 const newKey = () => `e${Date.now()}${seq++}`;
 
-function when(d: Draft, i: number) {
-  if (i === 0) return "Right after the welcome email";
+function when(d: Draft, i: number, store: boolean) {
+  if (i === 0 && !store) return "Right after the welcome email";
   const unit = d.delayUnit === "hours" ? (d.delayAmount === 1 ? "hour" : "hours") : d.delayAmount === 1 ? "day" : "days";
-  return `${d.delayAmount} ${unit} after email ${i}`;
+  return `${d.delayAmount} ${unit} after ${i === 0 ? "the welcome email" : `email ${i}`}`;
 }
 
 /**
- * Post-purchase emails for one offer or product. Off until turned on; the
- * first email goes right after the store's welcome, each follow-up after its
- * delay. Spec: docs/superpowers/specs/2026-09-30-post-purchase-sequences-design.md
+ * Post-purchase emails for one offer or product, or the store series that
+ * follows the welcome email. Off until turned on. An item's first email goes
+ * right after the welcome; every store email waits its delay.
+ * Spec: docs/superpowers/specs/2026-09-30-post-purchase-sequences-design.md
  */
 export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, senderName, accessUrl }: {
   ownerType: OwnerType;
   ownerId: string;
+  /** What the buyer bought, for the preview's personal details. */
   ownerName: string;
   initial: Sequence;
   /** From the store's email settings, so the preview shows what buyers get. */
   senderName: string;
   accessUrl: string;
 }) {
+  const store = ownerType === "store";
   const [enabled, setEnabled] = useState(initial.enabled);
   const [layout, setLayout] = useState<EmailLayout>(initial.layout);
   const [emails, setEmails] = useState<Draft[]>(initial.emails.map((e) => ({ ...e, key: newKey() })));
@@ -47,12 +51,16 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, se
   const turn = (on: boolean) => {
     setEnabled(on);
     if (on && emails.length === 0) {
-      setEmails([{ key: newKey(), id: null, delayAmount: 0, delayUnit: "days", subject: `{{first_name}}, thank you for getting ${ownerName}`, preheader: "Everything is ready in your library.", doc: starterDoc(ownerName) }]);
+      setEmails([
+        store
+          ? { key: newKey(), id: null, delayAmount: 2, delayUnit: "days", subject: "", preheader: "", doc: FOLLOW_UP_DOC }
+          : { key: newKey(), id: null, delayAmount: 0, delayUnit: "days", subject: `{{first_name}}, thank you for getting ${ownerName}`, preheader: "Everything is ready in your library.", doc: starterDoc(ownerName) },
+      ]);
       setIdx(0);
     }
   };
   const add = () => {
-    setEmails((all) => [...all, { key: newKey(), id: null, delayAmount: 2, delayUnit: "days", subject: "", preheader: "", doc: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: "Write your follow-up here." }] }] } }]);
+    setEmails((all) => [...all, { key: newKey(), id: null, delayAmount: 2, delayUnit: "days", subject: "", preheader: "", doc: FOLLOW_UP_DOC }]);
     setIdx(emails.length);
   };
   const move = (to: number) => {
@@ -73,7 +81,7 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, se
     ownerId,
     enabled,
     layout,
-    emails: emails.map((e, i) => ({ id: e.id, delayAmount: i === 0 ? 0 : e.delayAmount, delayUnit: e.delayUnit, subject: e.subject, preheader: e.preheader, doc: e.doc })),
+    emails: emails.map((e, i) => ({ id: e.id, delayAmount: i === 0 && !store ? 0 : e.delayAmount, delayUnit: e.delayUnit, subject: e.subject, preheader: e.preheader, doc: e.doc })),
   });
 
   // A thrown action (offline, a deploy mid-save) leaves the draft as it is.
@@ -106,8 +114,11 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, se
   };
 
   const rendered = useMemo(
-    () => (current && preview ? renderPostPurchaseEmail({ doc: current.doc, subject: current.subject, preheader: current.preheader, layout, vars: SAMPLE(ownerName, accessUrl), stopUrl: idx > 0 ? "https://grow.greaterinside.com/email/stop" : null }) : null),
-    [current, preview, layout, ownerName, accessUrl, idx],
+    () =>
+      current && preview
+        ? renderPostPurchaseEmail({ doc: current.doc, subject: current.subject, preheader: current.preheader, layout, vars: SAMPLE(ownerName, accessUrl), stopUrl: store || idx > 0 ? "https://grow.greaterinside.com/email/stop" : null })
+        : null,
+    [current, preview, layout, ownerName, accessUrl, idx, store],
   );
 
   const num = (k: keyof EmailLayout, v: string) => setLayout((l) => ({ ...l, [k]: Number(v) }));
@@ -118,22 +129,28 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, se
       <div className="flex items-start justify-between gap-4 p-5">
         <div>
           <h2 id="pp-title" className="text-base font-semibold">
-            Post-purchase emails{" "}
+            {store ? "Follow-up emails" : "Post-purchase emails"}{" "}
             <span className={`ml-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${enabled ? "bg-emerald-600/10 text-emerald-700" : "bg-surface-2 text-muted"}`}>{enabled ? "On" : "Off"}</span>
           </h2>
           <p className="mt-1 max-w-[62ch] text-sm text-muted">
-            Emails sent to the buyer after they buy this, in addition to the store&rsquo;s welcome email. The first goes right after the welcome. Add follow-ups with a delay between each.
+            {store
+              ? "Sent after the welcome email, on a buyer's first purchase. Later purchases get only the welcome. A buyer who clicks Stop these emails gets no more follow-ups, from here or any offer, until they buy again."
+              : "Emails sent to the buyer after they buy this, in addition to the store’s welcome email. The first goes right after the welcome. Add follow-ups with a delay between each."}
           </p>
         </div>
         <label className="relative inline-flex h-6 w-11 shrink-0 cursor-pointer">
-          <input type="checkbox" className="peer sr-only" checked={enabled} onChange={(e) => turn(e.target.checked)} aria-label={`Send post-purchase emails for ${ownerName}`} />
+          <input type="checkbox" className="peer sr-only" checked={enabled} onChange={(e) => turn(e.target.checked)} aria-label={store ? "Send follow-up emails after the welcome" : `Send post-purchase emails for ${ownerName}`} />
           <span className="absolute inset-0 rounded-full bg-border transition-colors peer-checked:bg-primary peer-focus-visible:outline-2 peer-focus-visible:outline-primary" />
           <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
         </label>
       </div>
 
       {!enabled && emails.length === 0 ? (
-        <p className="border-t border-border px-5 py-4 text-sm text-muted">Nothing extra is sent for this. Turn it on to write the email; a starter email is filled in for you to edit.</p>
+        <p className="border-t border-border px-5 py-4 text-sm text-muted">
+          {store
+            ? "No follow-ups are sent after the welcome. Turn this on to write the first one."
+            : "Nothing extra is sent for this. Turn it on to write the email; a starter email is filled in for you to edit."}
+        </p>
       ) : (
         current && (
           <>
@@ -141,7 +158,9 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, se
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <h3 className="text-sm font-semibold">Emails in this sequence</h3>
                 <span className="text-xs text-muted">
-                  The rest stop if the order is refunded, access ends, or the buyer clicks Stop these emails. Edits reach buyers who are part-way through. Turning this off stops the rest for everyone.
+                  {store
+                    ? "Each email waits its delay after the one before. Edits reach buyers who are part-way through. Turning this off stops the rest for everyone."
+                    : "The rest stop if the order is refunded or access ends. Stop these emails pauses every follow-up for that buyer until they buy again. Edits reach buyers who are part-way through. Turning this off stops the rest for everyone."}
                 </span>
               </div>
               <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Emails in this sequence">
@@ -149,7 +168,7 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, se
                   <button key={e.key} type="button" role="tab" aria-selected={i === idx} onClick={() => { setIdx(i); setPreview(false); }}
                     className={`grid w-52 shrink-0 gap-0.5 rounded-xl border p-3 text-left ${i === idx ? "border-primary bg-primary/5" : "border-border hover:border-primary"}`}>
                     <span className="text-[11px] font-semibold text-muted">Email {i + 1}</span>
-                    <span className="text-xs font-semibold text-primary">{when(e, i)}</span>
+                    <span className="text-xs font-semibold text-primary">{when(e, i, store)}</span>
                     <span className="truncate text-sm">{e.subject || "(no subject yet)"}</span>
                   </button>
                 ))}
@@ -174,7 +193,7 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, se
 
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-surface-2 px-3 py-2.5 text-sm">
                   <b>Email {idx + 1}</b>
-                  {idx === 0 ? (
+                  {idx === 0 && !store ? (
                     <span>Sent right after the welcome email, once checkout is over.</span>
                   ) : (
                     <>
@@ -184,9 +203,9 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, se
                         <option value="hours">hours</option>
                         <option value="days">days</option>
                       </select>
-                      <span>after email {idx}</span>
+                      <span>after {idx === 0 ? "the welcome email" : `email ${idx}`}</span>
                       <span className="flex-1" />
-                      <button type="button" className="rounded-md px-2 py-1 disabled:opacity-40" disabled={idx <= 1} onClick={() => move(idx - 1)} aria-label="Move earlier">↑</button>
+                      <button type="button" className="rounded-md px-2 py-1 disabled:opacity-40" disabled={idx <= (store ? 0 : 1)} onClick={() => move(idx - 1)} aria-label="Move earlier">↑</button>
                       <button type="button" className="rounded-md px-2 py-1 disabled:opacity-40" disabled={idx >= emails.length - 1} onClick={() => move(idx + 1)} aria-label="Move later">↓</button>
                       <button type="button" className="text-xs text-muted underline" onClick={remove}>Delete email</button>
                     </>

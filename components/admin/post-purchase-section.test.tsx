@@ -102,3 +102,40 @@ describe("the post-purchase section", () => {
     expect((host.querySelector("#pp-subject") as HTMLInputElement).value).toBe("{{first_name}}, thank you for getting Funnel App");
   });
 });
+
+function mountStore() {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  root = createRoot(host);
+  act(() => {
+    root!.render(
+      <PostPurchaseSection ownerType="store" ownerId="22222222-2222-4222-8222-222222222222" ownerName="Funnel App"
+        initial={{ id: null, enabled: false, layout: LAYOUT_DEFAULTS, emails: [] }} senderName="Ajit" accessUrl="https://grow.greaterinside.com/login" />,
+    );
+  });
+  return host;
+}
+
+describe("the store series section", () => {
+  it("names itself as the welcome email's follow-ups", () => {
+    const host = mountStore();
+    expect(host.querySelector("#pp-title")?.textContent).toContain("Follow-up emails");
+    expect(host.textContent).toContain("Later purchases get only the welcome");
+  });
+
+  it("turning it on starts one follow-up 2 days after the welcome, which can be deleted", () => {
+    const host = mountStore();
+    click(host.querySelector('input[type="checkbox"]'));
+    expect(host.textContent).toContain("2 days after the welcome email");
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent === "Delete email")).toBe(true);
+  });
+
+  it("saves email 1's own delay", async () => {
+    const host = mountStore();
+    click(host.querySelector('input[type="checkbox"]'));
+    await act(async () => click([...host.querySelectorAll("button")].find((b) => b.textContent === "Save")!));
+    const payload = save.mock.calls.at(-1)?.[0] as { ownerType: string; emails: { delayAmount: number }[] };
+    expect(payload.ownerType).toBe("store");
+    expect(payload.emails[0].delayAmount).toBe(2);
+  });
+});
