@@ -68,21 +68,33 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial }: 
     emails: emails.map((e, i) => ({ id: e.id, delayAmount: i === 0 ? 0 : e.delayAmount, delayUnit: e.delayUnit, subject: e.subject, preheader: e.preheader, doc: e.doc })),
   });
 
+  // A thrown action (offline, a deploy mid-save) leaves the draft as it is.
+  const unreachable = { kind: "error", text: "Could not reach the server. Your changes are still here; try again." } as const;
   const save = async () => {
     setBusy(true);
     setStatus(null);
-    const res = await savePostPurchaseAction(payload());
-    setBusy(false);
-    if (!res.ok) return setStatus({ kind: "error", text: res.error });
-    setEmails((all) => all.map((e, i) => ({ ...e, id: res.emailIds[i] ?? e.id })));
-    setStatus({ kind: "ok", text: "Saved." });
+    try {
+      const res = await savePostPurchaseAction(payload());
+      if (!res.ok) return setStatus({ kind: "error", text: res.error });
+      setEmails((all) => all.map((e, i) => ({ ...e, id: res.emailIds[i] ?? e.id })));
+      setStatus({ kind: "ok", text: "Saved." });
+    } catch {
+      setStatus(unreachable);
+    } finally {
+      setBusy(false);
+    }
   };
   const test = async () => {
     setBusy(true);
     setStatus(null);
-    const res = await sendPostPurchaseTestAction({ sequence: payload(), index: idx, ownerName });
-    setBusy(false);
-    setStatus(res.ok ? { kind: "ok", text: `Test sent to ${res.to}.` } : { kind: "error", text: res.error });
+    try {
+      const res = await sendPostPurchaseTestAction({ sequence: payload(), index: idx, ownerName });
+      setStatus(res.ok ? { kind: "ok", text: `Test sent to ${res.to}.` } : { kind: "error", text: res.error });
+    } catch {
+      setStatus(unreachable);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const rendered = useMemo(

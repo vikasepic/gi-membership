@@ -68,4 +68,15 @@ describe("the post-purchase section", () => {
     await act(async () => click([...host.querySelectorAll("button")].find((b) => b.textContent === "Save")!));
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("Email 2 needs a subject line.");
   });
+
+  it("keeps the draft and lets the owner try again when the server cannot be reached", async () => {
+    save.mockRejectedValueOnce(new Error("Failed to fetch"));
+    const host = mount();
+    click(host.querySelector('input[type="checkbox"]'));
+    const saveButton = [...host.querySelectorAll("button")].find((b) => b.textContent === "Save")!;
+    await act(async () => click(saveButton));
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe("Could not reach the server. Your changes are still here; try again.");
+    expect(saveButton.disabled).toBe(false);
+    expect((host.querySelector("#pp-subject") as HTMLInputElement).value).toBe("{{first_name}}, thank you for getting Funnel App");
+  });
 });
