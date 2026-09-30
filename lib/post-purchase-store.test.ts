@@ -92,3 +92,13 @@ describe("the store series", () => {
     expect(saveProblem(store({ emails: [email({ delayAmount: 2 })] }))).toBeNull();
   });
 });
+
+describe("the reply-to address", () => {
+  it("is optional, and must be an email address when given", async () => {
+    const { saveInputSchema } = await import("@/lib/post-purchase-store");
+    expect(saveInputSchema.safeParse({ ...input(), replyTo: "a@greaterinside.com" }).success).toBe(true);
+    expect(saveInputSchema.safeParse({ ...input(), replyTo: "" }).success).toBe(true);
+    expect(saveInputSchema.safeParse(input()).success).toBe(true);
+    expect(saveInputSchema.safeParse({ ...input(), replyTo: "not an address" }).success).toBe(false);
+  });
+});

@@ -16,6 +16,8 @@ create table if not exists post_purchase_sequences (
   owner_id    uuid not null,
   enabled     boolean not null default false,
   layout      jsonb not null default '{}'::jsonb,
+  -- Where replies go; empty means the store's own reply-to address.
+  reply_to    text not null default '' check (reply_to = '' or reply_to ~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$'),
   updated_at  timestamptz not null default now(),
   unique (store_id, owner_type, owner_id)
 );

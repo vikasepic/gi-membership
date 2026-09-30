@@ -9,7 +9,7 @@ import {
 
 export type OwnerType = "store" | "offer" | "product";
 export type SequenceEmail = { id: string | null; delayAmount: number; delayUnit: DelayUnit; subject: string; preheader: string; doc: DocNode };
-export type Sequence = { id: string | null; enabled: boolean; layout: EmailLayout; emails: SequenceEmail[] };
+export type Sequence = { id: string | null; enabled: boolean; layout: EmailLayout; replyTo?: string; emails: SequenceEmail[] };
 
 const emailInputSchema = z.object({
   id: z.uuid().nullable(),
@@ -24,6 +24,8 @@ export const saveInputSchema = z.object({
   ownerId: z.uuid(),
   enabled: z.boolean(),
   layout: layoutSchema,
+  /** Where replies go; empty or missing means the store's own reply-to. */
+  replyTo: z.union([z.literal(""), z.email()]).optional(),
   emails: z.array(emailInputSchema).max(20),
 });
 export type SaveInput = z.infer<typeof saveInputSchema>;
@@ -53,13 +55,13 @@ export async function getSequence(ownerType: OwnerType, ownerId: string): Promis
   const db = createServiceClient();
   const { data: seq, error: seqErr } = await db
     .from("post_purchase_sequences")
-    .select("id, enabled, layout")
+    .select("id, enabled, layout, reply_to")
     .eq("store_id", await getStoreId())
     .eq("owner_type", ownerType)
     .eq("owner_id", ownerId)
     .maybeSingle();
   if (seqErr) throw new Error(`getSequence: post_purchase_sequences: ${seqErr.message}`);
-  if (!seq) return { id: null, enabled: false, layout: parseLayout({}), emails: [] };
+  if (!seq) return { id: null, enabled: false, layout: parseLayout({}), replyTo: "", emails: [] };
   const { data: rows, error: rowsErr } = await db
     .from("post_purchase_emails")
     .select("id, position, delay_amount, delay_unit, subject, preheader, doc")
@@ -70,6 +72,7 @@ export async function getSequence(ownerType: OwnerType, ownerId: string): Promis
     id: seq.id as string,
     enabled: Boolean(seq.enabled),
     layout: parseLayout(seq.layout),
+    replyTo: (seq.reply_to as string | null) ?? "",
     emails: (rows ?? []).map((r) => ({
       id: r.id as string,
       delayAmount: r.delay_amount as number,
@@ -100,7 +103,7 @@ export async function saveSequence(
   const { data: seq, error: seqErr } = await db
     .from("post_purchase_sequences")
     .upsert(
-      { store_id: await getStoreId(), owner_type: input.ownerType, owner_id: input.ownerId, enabled: input.enabled, layout: input.layout, updated_at: now },
+      { store_id: await getStoreId(), owner_type: input.ownerType, owner_id: input.ownerId, enabled: input.enabled, layout: input.layout, reply_to: input.replyTo ?? "", updated_at: now },
       { onConflict: "store_id,owner_type,owner_id" },
     )
     .select("id")

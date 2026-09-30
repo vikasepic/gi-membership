@@ -47,7 +47,7 @@ export async function sendPostPurchaseTestAction(input: unknown) {
     // Every store email carries the stop link; an item's first email does not.
     stopUrl: sequence.ownerType === "store" || index > 0 ? `${settings.accessUrl}#test-stop-link` : null,
   });
-  const res = await sendEmail(to, mail, { from: settings.senderName ? `${settings.senderName} <${settings.senderEmail}>` : settings.senderEmail, replyTo: settings.replyTo });
+  const res = await sendEmail(to, mail, { from: settings.senderName ? `${settings.senderName} <${settings.senderEmail}>` : settings.senderEmail, replyTo: sequence.replyTo || settings.replyTo });
   if (res !== "sent") return { ok: false as const, error: res === "disabled" ? "Email sending is not set up on this server." : "The email provider refused it. Try again in a minute." };
   return { ok: true as const, to };
 }

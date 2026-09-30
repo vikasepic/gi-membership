@@ -36,13 +36,13 @@ type OwnerType = "store" | "offer" | "product";
 type Line = { id: string; kind: string; offer_id: string | null; product_id: string | null };
 type Order = { id: string; store_id: string; email: string | null; status: string; created_at: string };
 type Flow = { id: string; store_id: string; sequence_id: string; email: string; status: "running" | "paused" | "done"; run: number; order_id: string | null; updated_at: string };
-type Sequence = { id: string; enabled: boolean; layout: unknown; owner_type: OwnerType; owner_id: string };
+type Sequence = { id: string; enabled: boolean; layout: unknown; owner_type: OwnerType; owner_id: string; reply_to?: string };
 type EmailRow = { id: string; position: number; subject: string; preheader: string; doc: DocNode; delay_amount: number; delay_unit: DelayUnit };
 /** What a queued step needs to know about its flow. A claimed send row carries the same fields. */
 type StepTarget = { store_id: string; flow_id: string; sequence_id: string; to_email: string };
 
 const FLOW_COLUMNS = "id, store_id, sequence_id, email, status, run, order_id, updated_at";
-const SEQUENCE_COLUMNS = "id, enabled, layout, owner_type, owner_id";
+const SEQUENCE_COLUMNS = "id, enabled, layout, owner_type, owner_id, reply_to";
 
 /** A buyer is their order email, trimmed and lower-cased. */
 export const buyerKey = (email: string) => email.trim().toLowerCase();
@@ -396,7 +396,8 @@ async function sendOne(sendId: string, now: Date): Promise<keyof SequenceSendSum
     });
     const res = await sendEmail(row.to_email, mail, {
       from: settings.senderName ? `${settings.senderName} <${settings.senderEmail}>` : settings.senderEmail,
-      replyTo: settings.replyTo,
+      // The sequence's own reply-to when it has one, else the store's.
+      replyTo: seq.reply_to || settings.replyTo,
       ...(stop ? { headers: { "List-Unsubscribe": `<${stop}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } } : {}),
     });
     // Not set up yet is not a no: retried later like any other failure before delivery.

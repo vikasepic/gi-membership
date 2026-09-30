@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 
-const sent: { to: string; subject: string; headers?: Record<string, string> }[] = [];
+const sent: { to: string; subject: string; headers?: Record<string, string>; replyTo?: string }[] = [];
 let nextResult: "sent" | "failed" | "disabled" = "sent";
 vi.mock("@/lib/email", async (orig) => ({
   ...(await orig<typeof import("@/lib/email")>()),
-  sendEmail: async (to: string, mail: { subject: string }, over?: { headers?: Record<string, string> }) => {
-    if (nextResult === "sent") sent.push({ to, subject: mail.subject, headers: over?.headers });
+  sendEmail: async (to: string, mail: { subject: string }, over?: { headers?: Record<string, string>; replyTo?: string }) => {
+    if (nextResult === "sent") sent.push({ to, subject: mail.subject, headers: over?.headers, replyTo: over?.replyTo });
     return nextResult;
   },
 }));
@@ -67,9 +67,9 @@ describe.skipIf(!canRun)("post-purchase flows (integration)", () => {
     return id;
   }
 
-  async function series(ownerType: "offer" | "store", ownerId: string, subjects: string[], opts: { delays?: number[]; unit?: "hours" | "days"; enabled?: boolean } = {}) {
+  async function series(ownerType: "offer" | "store", ownerId: string, subjects: string[], opts: { delays?: number[]; unit?: "hours" | "days"; enabled?: boolean; replyTo?: string } = {}) {
     const res = await saveSequence({
-      ownerType, ownerId, enabled: opts.enabled ?? true, layout: LAYOUT_DEFAULTS,
+      ownerType, ownerId, enabled: opts.enabled ?? true, layout: LAYOUT_DEFAULTS, replyTo: opts.replyTo,
       emails: subjects.map((subject, i) => ({ id: null, delayAmount: opts.delays?.[i] ?? 2, delayUnit: opts.unit ?? "days", subject, preheader: "", doc: starterDoc("x") })),
     });
     if (!res.ok) throw new Error(res.error);
@@ -128,6 +128,22 @@ describe.skipIf(!canRun)("post-purchase flows (integration)", () => {
       const rows = await sendsOf(flow.id);
       expect(rows.map((r) => [r.run, r.position, r.status])).toEqual([[1, 1, "pending"]]);
       expect(new Date(rows[0].due_at).getTime()).toBe(now.getTime() + 60_000);
+    });
+
+    it("replies go to the sequence's own address, else the store's", async () => {
+      const t = tag();
+      const own = await makeOffer();
+      await series("offer", own, [`${t} Own`], { replyTo: "a@greaterinside.com" });
+      const plain = await makeOffer();
+      await series("offer", plain, [`${t} Plain`]);
+      const b = await buyer();
+      const t0 = new Date();
+      await startFlowsForOrder((await buy(b, own)).orderId, t0);
+      await startFlowsForOrder((await buy(b, plain)).orderId, t0);
+      await sendDueSequenceEmails({ now: new Date(t0.getTime() + 61_000) });
+      expect(sent.find((s) => s.subject === `${t} Own`)?.replyTo).toBe("a@greaterinside.com");
+      // The store's reply-to, as the settings mock pins it.
+      expect(sent.find((s) => s.subject === `${t} Plain`)?.replyTo).toBe("");
     });
 
     it("a renewal starts nothing and is never marked processed", async () => {

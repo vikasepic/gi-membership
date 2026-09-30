@@ -38,6 +38,7 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, se
   const store = ownerType === "store";
   const [enabled, setEnabled] = useState(initial.enabled);
   const [layout, setLayout] = useState<EmailLayout>(initial.layout);
+  const [replyTo, setReplyTo] = useState(initial.replyTo ?? "");
   const [emails, setEmails] = useState<Draft[]>(initial.emails.map((e) => ({ ...e, key: newKey() })));
   const [idx, setIdx] = useState(0);
   const [view, setView] = useState<"desktop" | "mobile">("desktop");
@@ -81,6 +82,7 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, se
     ownerId,
     enabled,
     layout,
+    replyTo,
     emails: emails.map((e, i) => ({ id: e.id, delayAmount: i === 0 && !store ? 0 : e.delayAmount, delayUnit: e.delayUnit, subject: e.subject, preheader: e.preheader, doc: e.doc })),
   });
 
@@ -240,6 +242,11 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, se
                     <span>{fillLine(current.subject, SAMPLE(ownerName, accessUrl)) || "(no subject yet)"}</span>
                     <span className="truncate text-xs text-muted">{fillLine(current.preheader, SAMPLE(ownerName, accessUrl)) || "Preview text shows here"}</span>
                   </div>
+                </div>
+                <div className="grid gap-1">
+                  <label htmlFor="pp-reply-to" className="text-xs font-semibold">Replies go to</label>
+                  <input id="pp-reply-to" type="email" className={inputCls} value={replyTo} placeholder="The store's reply-to address" onChange={(e) => setReplyTo(e.target.value.trim())} />
+                  <span className="text-xs text-muted">Leave empty to use the store&rsquo;s reply-to address.</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2.5">
                   <h3 className="col-span-2 text-sm font-semibold">Body width</h3>

@@ -10,7 +10,7 @@ const email = (subject: string, delayAmount = 2) => ({ id: null, delayAmount, de
 describe.skipIf(!canRun)("saving a sequence (integration)", () => {
   it("an owner with nothing saved reads as off, default layout, no emails", async () => {
     const s = await getSequence("offer", crypto.randomUUID());
-    expect(s).toEqual({ id: null, enabled: false, layout: LAYOUT_DEFAULTS, emails: [] });
+    expect(s).toEqual({ id: null, enabled: false, layout: LAYOUT_DEFAULTS, replyTo: "", emails: [] });
   });
 
   it("saves, reads back in order, and keeps each email's id across saves", async () => {
@@ -50,10 +50,18 @@ describe.skipIf(!canRun)("saving a sequence (integration)", () => {
     expect(r.ok).toBe(true);
     expect((await getSequence("store", owner)).emails[0].delayAmount).toBe(3);
   });
+  it("keeps the sequence's own reply-to address", async () => {
+    const owner = crypto.randomUUID();
+    owners.push(owner);
+    const r = await saveSequence({ ownerType: "store", ownerId: owner, enabled: false, layout: LAYOUT_DEFAULTS, replyTo: "a@greaterinside.com", emails: [email("First", 3)] });
+    expect(r.ok).toBe(true);
+    expect((await getSequence("store", owner)).replyTo).toBe("a@greaterinside.com");
+  });
 });
 
 afterAll(async () => {
   if (!canRun) return;
   const db = createServiceClient();
   for (const o of owners) await db.from("post_purchase_sequences").delete().eq("owner_id", o);
+
 });

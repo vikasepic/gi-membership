@@ -146,4 +146,18 @@ describe("the store series section", () => {
     click([...host.querySelectorAll("button")].find((b) => b.textContent === "+ Add email")!);
     expect(del()).toBe(true);
   });
+
+  it("sends its own reply-to address with the sequence", async () => {
+    const host = mountStore();
+    click(host.querySelector('input[type="checkbox"]'));
+    const field = host.querySelector("#pp-reply-to") as HTMLInputElement;
+    expect(field).not.toBeNull();
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      setter.call(field, "a@greaterinside.com");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => click([...host.querySelectorAll("button")].find((b) => b.textContent === "Save")!));
+    expect((save.mock.calls.at(-1)?.[0] as { replyTo?: string }).replyTo).toBe("a@greaterinside.com");
+  });
 });
