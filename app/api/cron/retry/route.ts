@@ -3,7 +3,7 @@ import { runDueJobs } from "@/lib/retry";
 import { flushDueLeads } from "@/lib/leads";
 import { repairSubscriptionDrift } from "@/lib/subscription-reconcile";
 import { sweepPostPurchaseEmails } from "@/lib/post-purchase-send";
-import { sendDueSequenceEmails } from "@/lib/post-purchase-sequences";
+import { requeueMissedSequences, sendDueSequenceEmails } from "@/lib/post-purchase-sequences";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +36,9 @@ export async function POST(request: Request) {
     // thank-you page. They have paid, they own what they bought, and nothing
     // has told them so — without this they simply never get the email.
     const welcome = await sweepPostPurchaseEmails();
-    // Post-purchase sequences: each due email, stop rules checked first.
+    // Post-purchase sequences: first any the checkout-over step missed, then
+    // each due email, stop rules checked first.
+    const requeued = await requeueMissedSequences();
     const sequences = await sendDueSequenceEmails();
     return NextResponse.json({
       ok: true,
@@ -45,6 +47,7 @@ export async function POST(request: Request) {
       driftRepaired: drift.repaired.length,
       driftSkipped: drift.skipped.length,
       welcomeSent: welcome.sent,
+      sequenceRequeued: requeued,
       sequenceSent: sequences.sent,
       sequenceSkipped: sequences.skipped,
       sequenceFailed: sequences.failed,

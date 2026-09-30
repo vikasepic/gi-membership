@@ -20,7 +20,7 @@ vi.mock("@/lib/settings", () => ({
 const { createServiceClient } = await import("@/lib/supabase/server");
 const { getStoreId } = await import("@/lib/store");
 const { saveSequence, getSequence } = await import("@/lib/post-purchase-store");
-const { queueSequencesForOrder, sendDueSequenceEmails } = await import("@/lib/post-purchase-sequences");
+const { queueSequencesForOrder, sendDueSequenceEmails, requeueMissedSequences } = await import("@/lib/post-purchase-sequences");
 const { LAYOUT_DEFAULTS, starterDoc } = await import("@/lib/post-purchase-layout");
 
 const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -184,6 +184,40 @@ describe.skipIf(!canRun)("post-purchase sequences (integration)", () => {
     expect(res).toBe("disabled");
     expect((await sends(p.itemId)).map((r) => r.position)).toEqual([1]);
   });
+
+  /** The checkout-over step ran and found no line to queue (the webhook race), then stamped the welcome as sent. */
+  async function missedAtCheckout(p: Awaited<ReturnType<typeof purchase>>, now: Date) {
+    const upd = await createServiceClient()
+      .from("orders")
+      .update({ post_purchase_sent_at: now.toISOString(), created_at: new Date(now.getTime() - 20 * 60_000).toISOString() })
+      .eq("id", p.orderId);
+    if (upd.error) throw new Error(`fixture order: ${upd.error.message}`);
+    expect(await sends(p.itemId)).toEqual([]);
+  }
+
+  it("the retry sweep queues a sequence the checkout-over step missed, once", async () => {
+    const p = await purchase();
+    const now = new Date();
+    await missedAtCheckout(p, now);
+    await requeueMissedSequences(now);
+    expect((await sends(p.itemId)).map((r) => [r.position, r.status])).toEqual([[1, "pending"]]);
+    // The sweep also sees other suites' orders, so this looks at this buyer only.
+    await requeueMissedSequences(now);
+    expect(await sends(p.itemId)).toHaveLength(1);
+  });
+
+  it("the retry sweep leaves an order alone while its upsell is still open", async () => {
+    const p = await purchase();
+    const now = new Date();
+    await missedAtCheckout(p, now);
+    const tok = await createServiceClient().from("oto_tokens").insert({
+      store_id: await getStoreId(), order_id: p.orderId, user_id: p.userId, offer_id: p.offerId,
+      token_hash: `zz-pps-${crypto.randomUUID()}`, status: "pending", expires_at: new Date(now.getTime() + 10 * 60_000).toISOString(),
+    });
+    if (tok.error) throw new Error(`fixture oto token: ${tok.error.message}`);
+    await requeueMissedSequences(now);
+    expect(await sends(p.itemId)).toEqual([]);
+  });
 });
 
 afterAll(async () => {
@@ -193,6 +227,7 @@ afterAll(async () => {
     await db.from("ownership").delete().eq("user_id", u);
     const { data: orders } = await db.from("orders").select("id").eq("user_id", u);
     for (const o of orders ?? []) {
+      await db.from("oto_tokens").delete().eq("order_id", o.id);
       const { data: items } = await db.from("order_items").select("id").eq("order_id", o.id);
       for (const i of items ?? []) {
         await db.from("post_purchase_sends").delete().eq("order_item_id", i.id);

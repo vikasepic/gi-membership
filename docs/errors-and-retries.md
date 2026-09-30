@@ -125,4 +125,6 @@ walks the subscription ids the sync just refreshed.
 each claimed before sending. A send the provider refuses is marked `failed`,
 logged here as `post_purchase_sequence`, and ends that buyer's sequence; it is
 not retried. Email 1 of each sequence is queued by `sendPostPurchaseIfDue`
-once the checkout is over, whether or not the welcome email is on.
+once the checkout is over, whether or not the welcome email is on. The retry
+sweep also re-queues paid orders from the last two hours whose sequence was
+never queued (`requeueMissedSequences`).

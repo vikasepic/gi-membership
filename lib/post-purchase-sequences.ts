@@ -108,6 +108,49 @@ export async function queueSequencesForOrder(orderId: string, now = new Date()):
   return queued;
 }
 
+/**
+ * The safety net under the checkout-over step. completeOfferCheckout
+ * (lib/offer-checkout.ts) marks an order paid before its order_items line is
+ * guaranteed to exist, so the return route's sendPostPurchaseIfDue can find no
+ * lines, queue nothing and, with the welcome on, stamp post_purchase_sent_at:
+ * the welcome sweep then never revisits the order. A transient queueing
+ * failure ends the same way. queueSequencesForOrder is idempotent, so going
+ * over recent paid orders again queues only what is missing.
+ * ponytail: the 2-hour window also means a sequence switched on now starts for
+ * buyers from the last 2 hours. The 50-order limit is fine at this store's volume.
+ */
+export async function requeueMissedSequences(now = new Date()): Promise<number> {
+  const db = createServiceClient();
+  const orders = await unwrap(
+    db
+      .from("orders")
+      .select("id")
+      .eq("status", "paid")
+      .gte("created_at", new Date(now.getTime() - 2 * 3_600_000).toISOString())
+      .lte("created_at", new Date(now.getTime() - 5 * 60_000).toISOString())
+      .order("created_at")
+      .limit(50),
+    "requeueMissedSequences: orders",
+  );
+  let queued = 0;
+  for (const o of orders ?? []) {
+    const orderId = o.id as string;
+    try {
+      // Still deciding on an upsell, so the checkout is not over: the same
+      // test sendPostPurchaseIfDue makes.
+      const pending = await unwrap(
+        db.from("oto_tokens").select("id").eq("order_id", orderId).eq("status", "pending").gt("expires_at", now.toISOString()).limit(1),
+        "requeueMissedSequences: oto_tokens",
+      );
+      if (pending?.length) continue;
+      queued += await queueSequencesForOrder(orderId, now);
+    } catch (e) {
+      await recordError({ source: "post_purchase_sequence", message: `could not queue post-purchase emails: ${messageOf(e)}`, context: { orderId } });
+    }
+  }
+  return queued;
+}
+
 export type SequenceSendSummary = { sent: number; skipped: number; failed: number };
 
 export async function sendDueSequenceEmails(opts: { now?: Date; limit?: number } = {}): Promise<SequenceSendSummary> {
