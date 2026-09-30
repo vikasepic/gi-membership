@@ -119,3 +119,10 @@ the send is ours.
 
 `sync-subscriptions` runs before `backfill-renewals` on purpose: the backfill
 walks the subscription ids the sync just refreshed.
+
+`retry-sweep` also sends due post-purchase sequence emails
+(`sendDueSequenceEmails`, lib/post-purchase-sequences.ts): up to 50 per run,
+each claimed before sending. A send the provider refuses is marked `failed`,
+logged here as `post_purchase_sequence`, and ends that buyer's sequence; it is
+not retried. Email 1 of each sequence is queued by `sendPostPurchaseIfDue`
+once the checkout is over, whether or not the welcome email is on.

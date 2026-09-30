@@ -175,6 +175,15 @@ describe.skipIf(!canRun)("post-purchase sequences (integration)", () => {
     const { data: errs } = await createServiceClient().from("error_events").select("source, context").eq("source", "post_purchase_sequence").order("created_at", { ascending: false }).limit(5);
     expect((errs ?? []).some((e) => (e.context as { orderItemId?: string }).orderItemId === p.itemId)).toBe(true);
   });
+
+  it("the checkout ending queues the sequence even with the welcome email off", async () => {
+    const { sendPostPurchaseIfDue } = await import("@/lib/post-purchase-send");
+    const p = await purchase();
+    // The welcome is pinned off by this file's settings mock.
+    const res = await sendPostPurchaseIfDue(p.orderId);
+    expect(res).toBe("disabled");
+    expect((await sends(p.itemId)).map((r) => r.position)).toEqual([1]);
+  });
 });
 
 afterAll(async () => {

@@ -4,6 +4,8 @@ import { publicCoverUrl } from "@/lib/media";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import { buildPostPurchaseEmail, firstNameOf } from "@/lib/post-purchase-email";
 import { sendEmail } from "@/lib/email";
+import { queueSequencesForOrder } from "@/lib/post-purchase-sequences";
+import { recordError, messageOf } from "@/lib/errors";
 
 /**
  * The welcome email, sent when the checkout is actually over.
@@ -45,10 +47,6 @@ export async function sendPostPurchaseIfDue(orderId: string): Promise<Sent> {
   if (!order || order.status !== "paid" || !order.email) return "no-order";
   if (order.post_purchase_sent_at) return "already";
 
-  const settings = await getSettingsOrDefaults();
-  const conf = settings.postPurchaseEmail;
-  if (!conf.enabled) return "disabled";
-
   // Still deciding on an upsell. The token expiring is what eventually releases
   // this — checked against the clock rather than the row's status, because an
   // abandoned token stays "pending" for ever.
@@ -60,6 +58,28 @@ export async function sendPostPurchaseIfDue(orderId: string): Promise<Sent> {
     .gt("expires_at", new Date().toISOString())
     .limit(1);
   if (pending && pending.length > 0) return "waiting";
+
+  // The checkout is over. Each item's own post-purchase sequence starts now,
+  // whether or not the store's welcome email is switched on: they are sent in
+  // addition to it, not through it. Idempotent, so the sweep calling this
+  // again for an order whose welcome is off queues nothing twice. A failure
+  // here must not cost the buyer their welcome.
+  // ponytail: with the welcome off, post_purchase_sent_at is never stamped, so
+  // the sweep re-reads its 50 oldest orders of the last day every run. Fine at
+  // this store's volume; stamp a separate queued-at column if it outgrows 50/day.
+  try {
+    await queueSequencesForOrder(orderId);
+  } catch (e) {
+    await recordError({
+      source: "post_purchase_sequence",
+      message: `could not queue post-purchase emails: ${messageOf(e)}`,
+      context: { orderId },
+    });
+  }
+
+  const settings = await getSettingsOrDefaults();
+  const conf = settings.postPurchaseEmail;
+  if (!conf.enabled) return "disabled";
 
   // Everything they bought, in the order it was bought: the product, then the
   // bump taken beside it, then any upsell. `order_items` is written by all
