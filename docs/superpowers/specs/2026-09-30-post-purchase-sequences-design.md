@@ -385,8 +385,10 @@ emails" and the flow stays `paused`.
   replace `order_item_id`; `position` is the step within the run (1, 2, 3
   in the order they are sent or skipped). Unique (`flow_id`, `run`,
   `position`), which keeps queueing idempotent.
-- `orders.post_purchase_flows_at`: stamped when a purchase has been
-  processed for flows, so the re-queue sweep never processes an order twice.
+- `order_items.post_purchase_flows_at`: stamped on each purchase line once
+  it has been processed for flows. Per line, not per order: an order can be
+  paid before its lines are written (the webhook race), and a bump or upsell
+  line can arrive after the host line.
 - `order_items.post_purchase_stopped_at` is removed (the stop now lives on
   the flows).
 - Same RLS and revoke as Part 1; the file still ends with the schema reload.
@@ -400,11 +402,13 @@ current order not yet sent in this run. None left: the flow is `done`.
 `startFlowsForOrder(orderId)` runs when the checkout is over (where Part 1
 queues today) and from the re-queue sweep (Part 1's F1 rules: paid in the
 last two hours, no pending upsell token, welcome already stamped or switched
-off, and now also `post_purchase_flows_at` still empty). Every step is safe
-to run twice: a flow whose `order_id` is already this order is skipped, state
-changes are compare-and-set, and queueing relies on the unique step. It
-stamps `post_purchase_flows_at` when done; an error is recorded on the Errors
-page and the sweep retries within the window.
+off, and now only lines whose `post_purchase_flows_at` is still empty).
+Every step is safe to run twice: a flow whose `order_id` is already this
+order is skipped, state changes are compare-and-set, and queueing relies on
+the unique step. Only a purchase placed after a stop resumes a paused flow
+(processing an older order's late line does not). It stamps the lines it
+processed; an error is recorded on the Errors page and the sweep retries
+within the window.
 
 ## Stop link (replaces Part 1's)
 

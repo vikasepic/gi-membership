@@ -130,7 +130,7 @@ describe.skipIf(!canRun)("post-purchase flows (integration)", () => {
       expect(new Date(rows[0].due_at).getTime()).toBe(now.getTime() + 60_000);
     });
 
-    it("a renewal starts nothing, and the order is still marked processed", async () => {
+    it("a renewal starts nothing and is never marked processed", async () => {
       const t = tag();
       const offer = await makeOffer();
       const seq = await series("offer", offer, [`${t} One`]);
@@ -138,8 +138,8 @@ describe.skipIf(!canRun)("post-purchase flows (integration)", () => {
       const o = await buy(b, offer, { kind: "renewal" });
       expect(await startFlowsForOrder(o.orderId)).toBe(0);
       expect(await flowOf(seq.id!, b.email)).toBeNull();
-      const { data } = await db().from("orders").select("post_purchase_flows_at").eq("id", o.orderId).single();
-      expect(data!.post_purchase_flows_at).not.toBeNull();
+      const { data } = await db().from("order_items").select("post_purchase_flows_at").eq("id", o.itemId).single();
+      expect(data!.post_purchase_flows_at).toBeNull();
     });
 
     it("sends email 1 once without a stop link, then email 2 its delay later with one, then the flow is done", async () => {
@@ -341,6 +341,61 @@ describe.skipIf(!canRun)("post-purchase flows (integration)", () => {
       expect((await sendsOf(flow.id)).map((r) => [r.position, r.status])).toEqual([[1, "failed"]]);
       const { data: errs } = await db().from("error_events").select("context").eq("source", "post_purchase_sequence").order("created_at", { ascending: false }).limit(20);
       expect((errs ?? []).some((e) => (e.context as { flowId?: string }).flowId === flow.id)).toBe(true);
+      // The chain ended, so the flow is done and buying the item again starts it over.
+      expect((await flowOf(seq.id!, b.email))!.status).toBe("done");
+      nextResult = "sent";
+      await startFlowsForOrder((await buy(b, offer)).orderId, new Date(t0.getTime() + DAY));
+      expect((await flowOf(seq.id!, b.email))).toMatchObject({ status: "running", run: 2 });
+    });
+
+    it("an email that may already have gone out (its row still sending) is never sent again", async () => {
+      const t = tag();
+      const offer = await makeOffer();
+      const seq = await series("offer", offer, [`${t} One`, `${t} Two`]);
+      const b = await buyer();
+      const t0 = new Date();
+      await startFlowsForOrder((await buy(b, offer)).orderId, t0);
+      const flow = (await flowOf(seq.id!, b.email))!;
+      // A sweep claimed One and the process died before it could mark it sent; later the buyer clicked stop.
+      await db().from("post_purchase_sends").update({ status: "sending" }).eq("flow_id", flow.id).eq("position", 1);
+      await db().from("post_purchase_flows").update({ status: "paused" }).eq("id", flow.id);
+      await startFlowsForOrder((await buy(b, await makeOffer())).orderId, new Date(t0.getTime() + DAY));
+      const [one, two] = (await getSequence("offer", offer)).emails;
+      const queued = (await sendsOf(flow.id)).filter((r) => r.status === "pending");
+      expect(queued.map((r) => r.email_id)).toEqual([two.id]);
+      expect(queued.map((r) => r.email_id)).not.toContain(one.id);
+    });
+
+    it("a stop made after a purchase is not undone when that purchase's late line is processed", async () => {
+      const { stopBuyer } = await import("@/lib/post-purchase-stop");
+      const t = tag();
+      const a = await makeOffer();
+      const seq = await series("offer", a, [`${t} One`, `${t} Two`]);
+      const b = await buyer();
+      const o = await buy(b, a);
+      const t0 = new Date();
+      await startFlowsForOrder(o.orderId, t0);
+      await sendDueSequenceEmails({ now: new Date(t0.getTime() + 61_000) });
+      expect(await stopBuyer((await flowOf(seq.id!, b.email))!.id)).toEqual({ ok: true });
+      // A bump line on the same order is written after the stop.
+      await db().from("order_items").insert({ store_id: storeId, order_id: o.orderId, kind: "bump", description: "zz Bump", amount_cents: 900, offer_id: await makeOffer() });
+      await startFlowsForOrder(o.orderId, new Date(t0.getTime() + HOUR));
+      expect((await flowOf(seq.id!, b.email))!.status).toBe("paused");
+    });
+
+    it("resuming never leaves two queued emails in one run", async () => {
+      const t = tag();
+      const offer = await makeOffer();
+      const seq = await series("offer", offer, [`${t} One`, `${t} Two`, `${t} Three`]);
+      const b = await buyer();
+      const t0 = new Date();
+      await startFlowsForOrder((await buy(b, offer)).orderId, t0);
+      await sendDueSequenceEmails({ now: new Date(t0.getTime() + 61_000) });
+      const flow = (await flowOf(seq.id!, b.email))!;
+      // Paused while its next email stayed queued (a stop that landed mid-send).
+      await db().from("post_purchase_flows").update({ status: "paused" }).eq("id", flow.id);
+      await startFlowsForOrder((await buy(b, await makeOffer())).orderId, new Date(t0.getTime() + DAY));
+      expect((await sendsOf(flow.id)).filter((r) => r.status === "pending")).toHaveLength(1);
     });
 
     it("the checkout ending starts flows even with the welcome off", async () => {
@@ -389,6 +444,25 @@ describe.skipIf(!canRun)("post-purchase flows (integration)", () => {
   });
 
   describe("the re-queue sweep", () => {
+    it("picks up a line written after the checkout step ran (the webhook race)", async () => {
+      settings.welcome = true;
+      const t = tag();
+      const offer = await makeOffer();
+      const seq = await series("offer", offer, [`${t} One`]);
+      const b = await buyer();
+      const now = new Date();
+      // Paid, welcome sent, but the winner of the race has not written the line yet.
+      const { data: order, error } = await db().from("orders")
+        .insert({ store_id: storeId, user_id: b.userId, email: b.email, status: "paid", total_cents: 2900, subtotal_cents: 2900, currency: "usd", created_at: new Date(now.getTime() - 20 * 60_000).toISOString(), post_purchase_sent_at: now.toISOString() })
+        .select("id").single();
+      if (error || !order) throw new Error(`fixture order: ${error?.message}`);
+      expect(await startFlowsForOrder(order.id as string, now)).toBe(0);
+      await db().from("order_items").insert({ store_id: storeId, order_id: order.id, kind: "oto", description: "zz Funnel App", amount_cents: 2900, offer_id: offer });
+      await db().from("ownership").insert({ store_id: storeId, user_id: b.userId, app_id: APP, offer_id: offer, status: "active", source: "purchase" });
+      await requeueMissedSequences(now);
+      expect((await flowOf(seq.id!, b.email))?.status).toBe("running");
+    });
+
     it("processes a paid order the checkout step missed, once, even after its flow finished", async () => {
       settings.welcome = true;
       const t = tag();

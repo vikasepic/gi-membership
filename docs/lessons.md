@@ -686,8 +686,10 @@ before it is sent, so edits reach buyers mid-sequence.
 
 A flow is one buyer (order email, trimmed and lower-cased) on one sequence.
 "Stop these emails" pauses all of that buyer's flows; their next purchase
-resumes them. `orders.post_purchase_flows_at` is what makes processing an
-order once-only: the thank-you page and the re-queue sweep both process it,
-and without the stamp a flow that finished in between would start again. The
-store-series integration tests skip themselves when a local store series
-exists, rather than overwrite a developer's work.
+resumes them, but only a purchase placed after the stop does. The
+"processed" stamp lives on each purchase line (`order_items.post_purchase_flows_at`),
+not on the order: an order can be paid before its lines are written (the
+webhook race in completeOfferCheckout), and a bump or upsell line can arrive
+after the host line. A per-order stamp written before the lines existed lost
+those buyers' flows silently. The store-series integration tests skip
+themselves when a local store series exists, rather than overwrite a developer's work.

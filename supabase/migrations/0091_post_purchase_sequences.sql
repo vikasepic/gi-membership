@@ -75,9 +75,12 @@ create table if not exists post_purchase_sends (
 create index if not exists post_purchase_sends_due_idx
   on post_purchase_sends (due_at) where status = 'pending';
 
--- Set once an order has been processed for flows, so the re-queue sweep never
--- processes it twice (a flow that finished in between would start again).
-alter table orders add column if not exists post_purchase_flows_at timestamptz;
+-- Set on each purchase line once it has been processed for flows. Per line,
+-- not per order: an order can be paid before its lines are written (the
+-- webhook race in completeOfferCheckout), and a bump or upsell line can
+-- arrive after the host line, so the re-queue sweep looks for lines not yet
+-- processed.
+alter table order_items add column if not exists post_purchase_flows_at timestamptz;
 
 -- Service role only. Supabase grants new tables to anon and authenticated by
 -- default; 0067 revoked what existed then, not what is created after.

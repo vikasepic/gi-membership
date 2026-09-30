@@ -123,11 +123,10 @@ describe("the store series section", () => {
     expect(host.textContent).toContain("Later purchases get only the welcome");
   });
 
-  it("turning it on starts one follow-up 2 days after the welcome, which can be deleted", () => {
+  it("turning it on starts one follow-up 2 days after the welcome", () => {
     const host = mountStore();
     click(host.querySelector('input[type="checkbox"]'));
     expect(host.textContent).toContain("2 days after the welcome email");
-    expect([...host.querySelectorAll("button")].some((b) => b.textContent === "Delete email")).toBe(true);
   });
 
   it("saves email 1's own delay", async () => {
@@ -137,5 +136,14 @@ describe("the store series section", () => {
     const payload = save.mock.calls.at(-1)?.[0] as { ownerType: string; emails: { delayAmount: number }[] };
     expect(payload.ownerType).toBe("store");
     expect(payload.emails[0].delayAmount).toBe(2);
+  });
+
+  it("the only store email cannot be deleted, so the section never goes blank", () => {
+    const host = mountStore();
+    click(host.querySelector('input[type="checkbox"]'));
+    const del = () => [...host.querySelectorAll("button")].some((b) => b.textContent === "Delete email");
+    expect(del()).toBe(false);
+    click([...host.querySelectorAll("button")].find((b) => b.textContent === "+ Add email")!);
+    expect(del()).toBe(true);
   });
 });

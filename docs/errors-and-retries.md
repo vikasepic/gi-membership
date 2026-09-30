@@ -122,7 +122,7 @@ walks the subscription ids the sync just refreshed.
 
 `retry-sweep` also runs post-purchase flows (lib/post-purchase-sequences.ts).
 First `requeueMissedSequences` processes paid orders from the last two hours
-that were never processed for flows (`orders.post_purchase_flows_at` empty,
+whose purchase lines were never processed for flows (`order_items.post_purchase_flows_at` empty,
 no open upsell, and with the welcome on, only orders whose welcome has gone).
 Then `sendDueSequenceEmails` sends up to 50 due emails, each claimed before
 sending. A send the provider refuses is marked `failed`, logged here as

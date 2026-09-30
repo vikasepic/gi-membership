@@ -34,14 +34,14 @@ const HOLDS = ["active", "trialing", "past_due"];
 
 type OwnerType = "store" | "offer" | "product";
 type Line = { id: string; kind: string; offer_id: string | null; product_id: string | null };
-type Order = { id: string; store_id: string; email: string | null; status: string; post_purchase_flows_at: string | null };
-type Flow = { id: string; store_id: string; sequence_id: string; email: string; status: "running" | "paused" | "done"; run: number; order_id: string | null };
+type Order = { id: string; store_id: string; email: string | null; status: string; created_at: string };
+type Flow = { id: string; store_id: string; sequence_id: string; email: string; status: "running" | "paused" | "done"; run: number; order_id: string | null; updated_at: string };
 type Sequence = { id: string; enabled: boolean; layout: unknown; owner_type: OwnerType; owner_id: string };
 type EmailRow = { id: string; position: number; subject: string; preheader: string; doc: DocNode; delay_amount: number; delay_unit: DelayUnit };
 /** What a queued step needs to know about its flow. A claimed send row carries the same fields. */
 type StepTarget = { store_id: string; flow_id: string; sequence_id: string; to_email: string };
 
-const FLOW_COLUMNS = "id, store_id, sequence_id, email, status, run, order_id";
+const FLOW_COLUMNS = "id, store_id, sequence_id, email, status, run, order_id, updated_at";
 const SEQUENCE_COLUMNS = "id, enabled, layout, owner_type, owner_id";
 
 /** A buyer is their order email, trimmed and lower-cased. */
@@ -68,45 +68,46 @@ async function unwrap<T>(query: PromiseLike<{ data: T; error: { message: string 
 }
 
 /**
- * Apply the rules table to one purchase, once. Called when the checkout is
- * over (lib/post-purchase-send.ts) and by the re-queue sweep; both may call it
- * for the same order, so every step is safe to run twice and the order is
- * stamped when done.
+ * Apply the rules table to one purchase. Called when the checkout is over
+ * (lib/post-purchase-send.ts) and by the re-queue sweep; both may call it for
+ * the same order, so every step is safe to run twice. Only lines not yet
+ * processed count, and each is stamped once processed: a line written after
+ * the checkout step ran (the webhook race, a late bump or upsell) is picked up
+ * on a later call.
  */
 export async function startFlowsForOrder(orderId: string, now = new Date()): Promise<number> {
   const db = createServiceClient();
   const order = (await unwrap(
-    db.from("orders").select("id, store_id, email, status, post_purchase_flows_at").eq("id", orderId).maybeSingle(),
+    db.from("orders").select("id, store_id, email, status, created_at").eq("id", orderId).maybeSingle(),
     "startFlowsForOrder: orders",
   )) as Order | null;
-  if (!order || order.status !== "paid" || order.post_purchase_flows_at) return 0;
+  if (!order || order.status !== "paid") return 0;
+  const lines = ((await unwrap(
+    db.from("order_items").select("id, kind, offer_id, product_id").eq("order_id", orderId).is("post_purchase_flows_at", null).order("created_at"),
+    "startFlowsForOrder: order_items",
+  )) ?? []) as Line[];
+  // A renewal is a payment on something bought earlier, not a purchase.
+  const fresh = lines.filter((l) => l.kind !== "renewal");
+  if (fresh.length === 0) return 0;
 
   let queued = 0;
   if (order.email) {
     const email = buyerKey(order.email);
-    const lines = ((await unwrap(
-      db.from("order_items").select("id, kind, offer_id, product_id").eq("order_id", orderId).order("created_at"),
-      "startFlowsForOrder: order_items",
-    )) ?? []) as Line[];
-    // A renewal is a payment on something bought earlier, not a purchase.
-    const bought = lines.filter((l) => l.kind !== "renewal");
-    if (bought.length > 0) {
-      // Buying again removes a stop: every flow the buyer paused picks up where it stopped.
-      queued += await resumePausedFlows(order, email, now);
-      const store = await enabledSequence(order.store_id, "store", order.store_id);
-      if (store) queued += await startFlow(order, email, store, now);
-      for (const line of bought) {
-        const owner = ownerOf(line);
-        if (!owner) continue;
-        const seq = await enabledSequence(order.store_id, owner.ownerType, owner.ownerId);
-        if (seq) queued += await startFlow(order, email, seq, now);
-      }
+    // Buying again removes a stop: every flow the buyer paused picks up where it stopped.
+    queued += await resumePausedFlows(order, email, now);
+    const store = await enabledSequence(order.store_id, "store", order.store_id);
+    if (store) queued += await startFlow(order, email, store, now);
+    for (const line of fresh) {
+      const owner = ownerOf(line);
+      if (!owner) continue;
+      const seq = await enabledSequence(order.store_id, owner.ownerType, owner.ownerId);
+      if (seq) queued += await startFlow(order, email, seq, now);
     }
   }
-  // Processed: the re-queue sweep never takes this order again.
+  // Processed: the re-queue sweep never takes these lines again.
   await unwrap(
-    db.from("orders").update({ post_purchase_flows_at: now.toISOString() }).eq("id", orderId).is("post_purchase_flows_at", null),
-    "startFlowsForOrder: stamp order",
+    db.from("order_items").update({ post_purchase_flows_at: now.toISOString() }).in("id", fresh.map((l) => l.id)).is("post_purchase_flows_at", null),
+    "startFlowsForOrder: stamp lines",
   );
   return queued;
 }
@@ -119,6 +120,9 @@ async function resumePausedFlows(order: Order, email: string, now: Date): Promis
   )) ?? []) as Flow[];
   let queued = 0;
   for (const f of paused) {
+    // Only a purchase made after the stop removes it. A flow paused after this
+    // order was placed (its late line processed now) stays paused.
+    if (f.order_id === order.id || new Date(f.updated_at) > new Date(order.created_at)) continue;
     // A sequence switched off stays paused: it has nothing to send.
     if (!(await sequenceById(f.sequence_id))?.enabled) continue;
     const flipped = (await unwrap(
@@ -136,6 +140,12 @@ async function resumePausedFlows(order: Order, email: string, now: Date): Promis
       await markDone(flow.id, flow.run);
       continue;
     }
+    // Anything still queued from before the stop (one that landed mid-send) is
+    // replaced, so the run never holds two queued emails.
+    await unwrap(
+      db.from("post_purchase_sends").update({ status: "skipped", reason: "replaced on resume" }).eq("flow_id", flow.id).eq("run", flow.run).eq("status", "pending"),
+      "resumePausedFlows: clear queued",
+    );
     // Its own delay, counted from this purchase, and never ahead of this purchase's welcome.
     const wait = Math.max(delayMs(next.delay_amount, next.delay_unit), FIRST_EMAIL_AFTER_MS);
     queued += await queueStep(targetOf(flow), flow.run, (await lastPosition(flow.id, flow.run)) + 1, next.id, new Date(now.getTime() + wait));
@@ -240,31 +250,32 @@ async function markDone(flowId: string, run: number): Promise<void> {
 
 /**
  * The safety net under the checkout-over step. completeOfferCheckout
- * (lib/offer-checkout.ts) marks an order paid before its order_items line is
- * guaranteed to exist, and a transient failure can stop processing part-way;
- * orders not yet stamped with post_purchase_flows_at are processed here.
+ * (lib/offer-checkout.ts) marks an order paid before its lines are written,
+ * a bump or upsell line can arrive after the host line, and a transient
+ * failure can stop processing part-way: purchase lines not yet stamped with
+ * post_purchase_flows_at are processed here.
  *
  * Only orders the welcome can no longer come before: post_purchase_sent_at
  * set, or the welcome switched off. With the welcome on and still to come, the
  * welcome path processes the order first. The owner chose "right after the welcome".
- * ponytail: the 2-hour window also means a sequence switched on now starts for
- * buyers from the last 2 hours. The 50-order limit is fine at this store's volume.
+ * ponytail: lines of orders from the last 2 hours only, 100 per run; fine at
+ * this store's volume.
  */
 export async function requeueMissedSequences(now = new Date()): Promise<number> {
   const db = createServiceClient();
   const welcomeOn = (await getSettingsOrDefaults()).postPurchaseEmail.enabled;
   let query = db
-    .from("orders")
-    .select("id")
-    .eq("status", "paid")
+    .from("order_items")
+    .select("order_id, orders!inner(status, created_at, post_purchase_sent_at)")
     .is("post_purchase_flows_at", null)
-    .gte("created_at", new Date(now.getTime() - 2 * 3_600_000).toISOString())
-    .lte("created_at", new Date(now.getTime() - 5 * 60_000).toISOString());
-  if (welcomeOn) query = query.not("post_purchase_sent_at", "is", null);
-  const orders = await unwrap(query.order("created_at").limit(50), "requeueMissedSequences: orders");
+    .neq("kind", "renewal")
+    .eq("orders.status", "paid")
+    .gte("orders.created_at", new Date(now.getTime() - 2 * 3_600_000).toISOString())
+    .lte("orders.created_at", new Date(now.getTime() - 5 * 60_000).toISOString());
+  if (welcomeOn) query = query.not("orders.post_purchase_sent_at", "is", null);
+  const lines = (await unwrap(query.order("created_at").limit(100), "requeueMissedSequences: order_items")) as { order_id: string }[] | null;
   let queued = 0;
-  for (const o of orders ?? []) {
-    const orderId = o.id as string;
+  for (const orderId of [...new Set((lines ?? []).map((l) => l.order_id))]) {
     try {
       // Still deciding on an upsell, so the checkout is not over: the same test sendPostPurchaseIfDue makes.
       const pending = await unwrap(
@@ -362,7 +373,7 @@ async function sendOne(sendId: string, now: Date): Promise<keyof SequenceSendSum
       if (!order.user_id || !(await stillHolds(order.user_id, seq))) return await end("access ended");
     }
 
-    const sent = await sentEmailIds(row.flow_id, row.run);
+    const sent = await sentEmailIds(row.flow_id, row.run, row.id);
     const email = await emailToSend(row, sent);
     if (!email) return await end("no email left in the sequence");
 
@@ -401,6 +412,8 @@ async function sendOne(sendId: string, now: Date): Promise<keyof SequenceSendSum
     if (e instanceof SendRefused) {
       await db.from("post_purchase_sends").update({ status: "failed", reason: messageOf(e).slice(0, 500) }).eq("id", sendId);
       await recordError({ source: "post_purchase_sequence", message: messageOf(e), context });
+      // The chain ends here, so the flow is done: buying the item again starts it over.
+      await markDone(row.flow_id, row.run).catch(() => {});
       return "failed";
     }
     if (!delivered) {
@@ -416,6 +429,7 @@ async function sendOne(sendId: string, now: Date): Promise<keyof SequenceSendSum
     // The buyer already has the email. A retry would send it twice, so the row
     // is left as it is and this only surfaces on the Errors page.
     await recordError({ source: "post_purchase_sequence", message: `email sent but the chain could not continue: ${messageOf(e)}`, context });
+    await markDone(row.flow_id, row.run).catch(() => {});
     return "sent";
   }
 }
@@ -457,11 +471,12 @@ async function stillHolds(userId: string, seq: Sequence): Promise<boolean> {
  * One rule covers every case: the next email is the first one, in the
  * sequence's current order, not yet sent in this run.
  */
-async function sentEmailIds(flowId: string, run: number): Promise<Set<string>> {
-  const data = await unwrap(
-    createServiceClient().from("post_purchase_sends").select("email_id").eq("flow_id", flowId).eq("run", run).eq("status", "sent"),
-    "sentEmailIds",
-  );
+async function sentEmailIds(flowId: string, run: number, exceptSendId?: string): Promise<Set<string>> {
+  // A row still 'sending' may have gone out before its process died: counted
+  // as sent, so it is never sent again. The row being sent right now is not.
+  let query = createServiceClient().from("post_purchase_sends").select("email_id").eq("flow_id", flowId).eq("run", run).in("status", ["sent", "sending"]);
+  if (exceptSendId) query = query.neq("id", exceptSendId);
+  const data = await unwrap(query, "sentEmailIds");
   return new Set(((data ?? []) as { email_id: string | null }[]).map((r) => r.email_id).filter((id): id is string => !!id));
 }
 

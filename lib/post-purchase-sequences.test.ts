@@ -36,7 +36,7 @@ function makeBuilder(table: string) {
     upsert: (p: unknown) => { setOp("upsert", p); return builder; },
     insert: (p: unknown) => { setOp("insert", p); return builder; },
     delete: () => { setOp("delete"); return builder; },
-    eq: filter, in: filter, is: filter, gt: filter, gte: filter, lte: filter, ilike: filter,
+    eq: filter, neq: filter, in: filter, is: filter, gt: filter, gte: filter, lte: filter, ilike: filter,
     not: (col: string, _op: string, val: unknown) => filter(col, val),
     order: () => builder,
     limit: () => builder,

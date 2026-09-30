@@ -1392,7 +1392,8 @@ document. A flow is one buyer (order email, lower-cased) on one sequence:
 their flows until they buy again) or `done`; `run` counts restarts of an item
 flow. A send row is one step of one flow run: `pending` until the 5-minute
 retry cron sends it, then `sent`, `skipped` (with `reason`) or `failed`.
-`orders.post_purchase_flows_at` marks an order already processed for flows.
+`order_items.post_purchase_flows_at` marks a purchase line already processed
+for flows (per line: an order can be paid before its lines exist).
 
 ---
 

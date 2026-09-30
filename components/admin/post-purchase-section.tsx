@@ -207,7 +207,8 @@ export function PostPurchaseSection({ ownerType, ownerId, ownerName, initial, se
                       <span className="flex-1" />
                       <button type="button" className="rounded-md px-2 py-1 disabled:opacity-40" disabled={idx <= (store ? 0 : 1)} onClick={() => move(idx - 1)} aria-label="Move earlier">↑</button>
                       <button type="button" className="rounded-md px-2 py-1 disabled:opacity-40" disabled={idx >= emails.length - 1} onClick={() => move(idx + 1)} aria-label="Move later">↓</button>
-                      <button type="button" className="text-xs text-muted underline" onClick={remove}>Delete email</button>
+                      {/* The only store email stays: with none, the section would have nothing to show. */}
+                      {!(store && emails.length === 1) && <button type="button" className="text-xs text-muted underline" onClick={remove}>Delete email</button>}
                     </>
                   )}
                 </div>
