@@ -7,6 +7,8 @@ import { hasCustomOtoPage } from "@/components/oto/registry";
 import { hasPageSections } from "@/lib/pages";
 import { ViewLive } from "@/components/admin/view-live";
 import { DuplicateButton } from "@/components/admin/duplicate-button";
+import { PostPurchaseSection } from "@/components/admin/post-purchase-section";
+import { getSequence } from "@/lib/post-purchase-store";
 
 export default async function EditOfferPage({
   params,
@@ -154,6 +156,8 @@ export default async function EditOfferPage({
           </ul>
         </div>
       )}
+      <PostPurchaseSection ownerType="offer" ownerId={offer.id} ownerName={offer.name} initial={await getSequence("offer", offer.id)} />
+
       <div className="flex justify-end">
         <DuplicateButton kind="offer" id={offer.id} currentKey={offer.key} />
       </div>

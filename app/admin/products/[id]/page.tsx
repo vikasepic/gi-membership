@@ -3,6 +3,8 @@ import { ProductForm } from "@/components/admin/product-form";
 import { publicCoverUrl } from "@/lib/media";
 import { AssetUpload } from "@/components/admin/asset-upload";
 import { DuplicateButton } from "@/components/admin/duplicate-button";
+import { PostPurchaseSection } from "@/components/admin/post-purchase-section";
+import { getSequence } from "@/lib/post-purchase-store";
 import { getProductById, listOfferOptions, priceUsage } from "@/lib/admin";
 import { listCourses, coursesForProduct } from "@/lib/courses";
 import { hasPageSections } from "@/lib/pages";
@@ -75,6 +77,8 @@ export default async function EditProductPage({
           </ul>
         </div>
       )}
+      <PostPurchaseSection ownerType="product" ownerId={product.id} ownerName={product.title} initial={await getSequence("product", product.id)} />
+
       <div className="flex justify-end">
         <DuplicateButton kind="product" id={product.id} currentKey={product.slug} />
       </div>

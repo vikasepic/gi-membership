@@ -1,0 +1,71 @@
+/** @vitest-environment jsdom */
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+
+const save = vi.hoisted(() => vi.fn(async (_input: unknown) => ({ ok: true, emailIds: ["e1"] })));
+vi.mock("@/app/admin/post-purchase/actions", () => ({
+  savePostPurchaseAction: save,
+  sendPostPurchaseTestAction: vi.fn(async () => ({ ok: true, to: "me@x.co" })),
+}));
+// The TipTap canvas is tested on its own; here a stand-in keeps the section's own logic in view.
+vi.mock("@/components/admin/email-editor", () => ({ EmailEditor: () => <div data-testid="editor" /> }));
+
+import { PostPurchaseSection } from "@/components/admin/post-purchase-section";
+import { LAYOUT_DEFAULTS } from "@/lib/post-purchase-layout";
+
+let root: Root | null = null;
+afterEach(() => {
+  const r = root;
+  root = null;
+  if (r) act(() => r.unmount());
+  save.mockClear();
+});
+
+function mount() {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  root = createRoot(host);
+  act(() => {
+    root!.render(
+      <PostPurchaseSection ownerType="offer" ownerId="11111111-1111-4111-8111-111111111111" ownerName="Funnel App" initial={{ id: null, enabled: false, layout: LAYOUT_DEFAULTS, emails: [] }} />,
+    );
+  });
+  return host;
+}
+const click = (el: Element | null) => act(() => (el as HTMLElement).click());
+
+describe("the post-purchase section", () => {
+  it("is off by default and shows no editor", () => {
+    const host = mount();
+    expect((host.querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(false);
+    expect(host.querySelector('[data-testid="editor"]')).toBeNull();
+  });
+
+  it("turning it on starts email 1 from the starter, right after the welcome", () => {
+    const host = mount();
+    click(host.querySelector('input[type="checkbox"]'));
+    expect(host.querySelector('[data-testid="editor"]')).not.toBeNull();
+    expect(host.textContent).toContain("Right after the welcome email");
+    expect((host.querySelector("#pp-subject") as HTMLInputElement).value).toBe("{{first_name}}, thank you for getting Funnel App");
+  });
+
+  it("adds a follow-up two days after the one before, and saves the whole sequence", async () => {
+    const host = mount();
+    click(host.querySelector('input[type="checkbox"]'));
+    click([...host.querySelectorAll("button")].find((b) => b.textContent === "+ Add email")!);
+    expect(host.textContent).toContain("2 days after email 1");
+    await act(async () => click([...host.querySelectorAll("button")].find((b) => b.textContent === "Save")!));
+    const payload = save.mock.calls[0][0] as { enabled: boolean; emails: { delayAmount: number; delayUnit: string }[] };
+    expect(payload.enabled).toBe(true);
+    expect(payload.emails.map((e) => [e.delayAmount, e.delayUnit])).toEqual([[0, "days"], [2, "days"]]);
+  });
+
+  it("shows the reason when a save is refused", async () => {
+    save.mockResolvedValueOnce({ ok: false, error: "Email 2 needs a subject line." } as never);
+    const host = mount();
+    click(host.querySelector('input[type="checkbox"]'));
+    await act(async () => click([...host.querySelectorAll("button")].find((b) => b.textContent === "Save")!));
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("Email 2 needs a subject line.");
+  });
+});
