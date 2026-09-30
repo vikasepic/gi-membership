@@ -424,3 +424,23 @@ h1, h2, h3, h4 {
   padding-top: 0.9rem;
   padding-bottom: 0.9rem;
 }
+
+/* Post-purchase email canvas (components/admin/email-editor.tsx). The email's
+   own colours come from inline styles; these only shape the elements. */
+.email-canvas .email-canvas-body { outline: none; min-height: 12rem; overflow-wrap: anywhere; }
+.email-canvas h1 { font-size: 26px; line-height: 1.25; margin: 0 0 14px; font-weight: 700; }
+.email-canvas h2 { font-size: 20px; line-height: 1.3; margin: 22px 0 10px; font-weight: 700; }
+.email-canvas h3 { font-size: 17px; line-height: 1.35; margin: 18px 0 8px; font-weight: 700; }
+.email-canvas p { margin: 0 0 14px; }
+.email-canvas ul, .email-canvas ol { margin: 0 0 14px; padding-left: 22px; }
+.email-canvas ul { list-style: disc; }
+.email-canvas ol { list-style: decimal; }
+.email-canvas li { margin: 0 0 6px; }
+.email-canvas a { color: var(--email-link); text-decoration: underline; }
+.email-canvas img { max-width: 100%; height: auto; display: block; border-radius: 6px; }
+.email-canvas img.ProseMirror-selectednode { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.email-canvas hr { border: 0; border-top: 1px solid #e4e1d9; margin: 22px 0; }
+.email-canvas .email-button { margin: 22px 0; }
+.email-canvas .email-button span { display: inline-block; padding: 13px 24px; border-radius: 6px; color: #fff; font-weight: 600; }
+.email-canvas .email-button.ProseMirror-selectednode span { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.email-canvas .merge-tag { background: #fbe9e1; color: #9a4526; border-radius: 4px; padding: 0 4px; font-size: .92em; white-space: nowrap; }
