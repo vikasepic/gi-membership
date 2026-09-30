@@ -1380,6 +1380,20 @@ distinct visits per button; read by `/admin/attribution/scroll`.
 
 ---
 
+### `post_purchase_sequences`, `post_purchase_emails`, `post_purchase_sends`
+
+Post-purchase email sequences, per offer and product (migration 0091, spec
+`docs/superpowers/specs/2026-09-30-post-purchase-sequences-design.md`).
+Sent in addition to the welcome email. A sequence (one per owner, off by
+default) holds the layout; its emails hold position, delay (hours or days
+after the previous email), subject, preview text and the TipTap document.
+A send row is one email for one order line: `pending` until the 5-minute
+retry cron sends it, then `sent`, `skipped` (with `reason`) or `failed`.
+Queueing is idempotent on `(order_item_id, sequence_id, position)`.
+`order_items.post_purchase_stopped_at` is set by the "Stop these emails" link.
+
+---
+
 ## Appendix: the raw DDL
 
 The complete `pg_dump --schema-only` output for the `public` schema is beside
