@@ -4,7 +4,7 @@ import { publicCoverUrl } from "@/lib/media";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import { buildPostPurchaseEmail, firstNameOf } from "@/lib/post-purchase-email";
 import { sendEmail } from "@/lib/email";
-import { queueSequencesForOrder } from "@/lib/post-purchase-sequences";
+import { startFlowsForOrder } from "@/lib/post-purchase-sequences";
 import { recordError, messageOf } from "@/lib/errors";
 
 /**
@@ -59,16 +59,17 @@ export async function sendPostPurchaseIfDue(orderId: string): Promise<Sent> {
     .limit(1);
   if (pending && pending.length > 0) return "waiting";
 
-  // The checkout is over. Each item's own post-purchase sequence starts now,
-  // whether or not the store's welcome email is switched on: they are sent in
-  // addition to it, not through it. Idempotent, so the sweep calling this
-  // again for an order whose welcome is off queues nothing twice. A failure
-  // here must not cost the buyer their welcome.
+  // The checkout is over. Post-purchase flows (the store series and each
+  // item's sequence) start or resume now, whether or not the store's welcome
+  // email is switched on: they are sent in addition to it, not through it.
+  // Processed once per order (post_purchase_flows_at), so the sweep calling
+  // this again changes nothing. A failure here must not cost the buyer their
+  // welcome.
   // ponytail: with the welcome off, post_purchase_sent_at is never stamped, so
   // the sweep re-reads its 50 oldest orders of the last day every run. Fine at
   // this store's volume; stamp a separate queued-at column if it outgrows 50/day.
   try {
-    await queueSequencesForOrder(orderId);
+    await startFlowsForOrder(orderId);
   } catch (e) {
     await recordError({
       source: "post_purchase_sequence",
