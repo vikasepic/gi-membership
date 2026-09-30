@@ -177,6 +177,9 @@ Charged to ${args.email}. Questions about this order? Reply to this email.`,
   };
 }
 
+/** What happened to one send. Callers that do not care may ignore it. */
+export type SendResult = "sent" | "failed" | "disabled";
+
 // Fire-and-forget send. Failures are logged, never thrown — an email outage
 // must not roll back a completed purchase.
 export async function sendEmail(
@@ -190,14 +193,16 @@ export async function sendEmail(
    * meant to reach that person, so it says so. Unset keeps the old behaviour
    * exactly — and an address on an unverified domain is refused by Resend
    * rather than sent from somewhere else, which is the failure worth having.
+   *
+   * `headers` is for List-Unsubscribe on post-purchase follow-ups.
    */
-  over?: { from?: string; replyTo?: string },
-): Promise<void> {
+  over?: { from?: string; replyTo?: string; headers?: Record<string, string> },
+): Promise<SendResult> {
   const env: EmailEnv = {
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     RESEND_FROM: process.env.RESEND_FROM,
   };
-  if (!emailEnabled(env)) return;
+  if (!emailEnabled(env)) return "disabled";
 
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -210,15 +215,21 @@ export async function sendEmail(
         from: over?.from?.trim() || env.RESEND_FROM,
         to: [to],
         ...(over?.replyTo?.trim() ? { reply_to: over.replyTo.trim() } : {}),
+        ...(over?.headers ? { headers: over.headers } : {}),
         subject: mail.subject,
         html: mail.html,
         text: mail.text,
       }),
       signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) console.error("[email] send failed:", res.status, await res.text());
+    if (!res.ok) {
+      console.error("[email] send failed:", res.status, await res.text());
+      return "failed";
+    }
+    return "sent";
   } catch (e) {
     console.error("[email] send threw:", e);
+    return "failed";
   }
 }
 
