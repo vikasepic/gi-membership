@@ -31,7 +31,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-const { stopToken, verifyStopToken, stopUrl } = await import("@/lib/post-purchase-stop");
+const { stopToken, verifyStopToken, stopUrl, pauseFlowsForBuyer } = await import("@/lib/post-purchase-stop");
 const { GET, POST } = await import("@/app/email/stop/route");
 
 const FLOW = "3f1e2d4c-5b6a-4789-8abc-def012345678";
@@ -110,5 +110,21 @@ describe("the stop page", () => {
       expect(await res.text()).toContain("This link is not valid");
     }
     expect(writes).toHaveLength(0);
+  });
+});
+
+describe("pausing a buyer for another reason (a chargeback)", () => {
+  it("pauses every running flow for that buyer, whatever the case of the address, and records why", async () => {
+    expect(await pauseFlowsForBuyer("store-9", " Priya@Example.com ", "charged back")).toEqual({ ok: true });
+    expect(writes[0]).toMatchObject({
+      table: "post_purchase_flows",
+      patch: expect.objectContaining({ status: "paused" }),
+      filters: { store_id: "store-9", email: "priya@example.com", status: "running" },
+    });
+    expect(writes[1]).toMatchObject({
+      table: "post_purchase_sends",
+      patch: { status: "skipped", reason: "charged back" },
+      filters: { flow_id: ["flow-1", "flow-2"], status: "pending" },
+    });
   });
 });

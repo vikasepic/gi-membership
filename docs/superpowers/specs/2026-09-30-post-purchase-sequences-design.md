@@ -371,6 +371,12 @@ it again):
 A paused flow's pending row is skipped with reason "buyer stopped these
 emails" and the flow stays `paused`.
 
+A chargeback pauses every flow for that buyer, exactly like "Stop these
+emails" (queued rows skipped as "charged back"); a purchase after it resumes
+them (owner's decision, 30 Sep 2026). `handleDispute` in lib/reversals.ts does
+it, and a failure to pause is logged on the Errors page rather than failing
+the webhook.
+
 ## Data (reshapes 0091, which has not reached production)
 
 - `post_purchase_sequences.owner_type` also allows `'store'`; a store series

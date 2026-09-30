@@ -399,6 +399,26 @@ describe.skipIf(!canRun)("post-purchase flows (integration)", () => {
       expect((await flowOf(seq.id!, b.email))!.status).toBe("paused");
     });
 
+    it("a chargeback pauses every flow for the buyer; buying again afterwards resumes them", async () => {
+      const { pauseFlowsForBuyer } = await import("@/lib/post-purchase-stop");
+      const t = tag();
+      const a = await makeOffer();
+      const seqA = await series("offer", a, [`${t} A1`, `${t} A2`]);
+      const c = await makeOffer();
+      const seqC = await series("offer", c, [`${t} C1`, `${t} C2`]);
+      const b = await buyer();
+      const t0 = new Date();
+      await startFlowsForOrder((await buy(b, a)).orderId, t0);
+      await startFlowsForOrder((await buy(b, c)).orderId, t0);
+      await sendDueSequenceEmails({ now: new Date(t0.getTime() + 61_000) });
+      expect(await pauseFlowsForBuyer(storeId, b.email.toUpperCase(), "charged back")).toEqual({ ok: true });
+      for (const s of [seqA, seqC]) expect((await flowOf(s.id!, b.email))!.status).toBe("paused");
+      const flowC = (await flowOf(seqC.id!, b.email))!;
+      expect((await sendsOf(flowC.id)).map((r) => [r.position, r.status, r.reason])).toEqual([[1, "sent", null], [2, "skipped", "charged back"]]);
+      await startFlowsForOrder((await buy(b, await makeOffer())).orderId, new Date(t0.getTime() + 6 * DAY));
+      for (const s of [seqA, seqC]) expect((await flowOf(s.id!, b.email))!.status).toBe("running");
+    });
+
     it("resuming never leaves two queued emails in one run", async () => {
       const t = tag();
       const offer = await makeOffer();

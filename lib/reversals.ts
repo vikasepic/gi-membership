@@ -5,6 +5,7 @@ import { trackServerEvent } from "@/lib/tracking";
 import { eventIdFor } from "@/lib/analytics/events";
 import { buyerContextFor } from "@/lib/checkout";
 import { recordError } from "@/lib/errors";
+import { pauseFlowsForBuyer } from "@/lib/post-purchase-stop";
 
 /**
  * Money going back, reported.
@@ -100,11 +101,26 @@ export async function handleDispute(
   const db = createServiceClient();
   const { data: order } = await db
     .from("orders")
-    .select("id, email, currency")
+    .select("id, email, currency, store_id")
     .eq("stripe_payment_intent_id", piId)
     .maybeSingle();
 
   const { revoked } = await revoke(piId);
+
+  // Their follow-up emails pause too, as if they had clicked "Stop these
+  // emails" (owner's decision, 30 Sep 2026); buying again resumes them. A
+  // failure here must not fail the webhook: Stripe would redeliver a dispute
+  // whose access is already revoked.
+  if (order?.email && order.store_id) {
+    const { ok } = await pauseFlowsForBuyer(order.store_id as string, order.email as string, "charged back").catch(() => ({ ok: false }));
+    if (!ok) {
+      await recordError({
+        source: "post_purchase_sequence",
+        message: `Chargeback on ${order.email}: could not pause their follow-up emails, so they may keep arriving.`,
+        context: { orderId: order.id, disputeId: dispute.id },
+      });
+    }
+  }
 
   await recordError({
     source: "chargeback",
