@@ -7,7 +7,7 @@ import {
   type DocNode, type EmailLayout, type DelayUnit,
 } from "@/lib/post-purchase-layout";
 
-export type OwnerType = "offer" | "product";
+export type OwnerType = "store" | "offer" | "product";
 export type SequenceEmail = { id: string | null; delayAmount: number; delayUnit: DelayUnit; subject: string; preheader: string; doc: DocNode };
 export type Sequence = { id: string | null; enabled: boolean; layout: EmailLayout; emails: SequenceEmail[] };
 
@@ -20,7 +20,7 @@ const emailInputSchema = z.object({
   doc: docSchema,
 });
 export const saveInputSchema = z.object({
-  ownerType: z.enum(["offer", "product"]),
+  ownerType: z.enum(["store", "offer", "product"]),
   ownerId: z.uuid(),
   enabled: z.boolean(),
   layout: layoutSchema,
@@ -34,7 +34,8 @@ export function saveProblem(input: SaveInput): string | null {
   for (const [i, e] of input.emails.entries()) {
     const n = i + 1;
     if (input.enabled && !e.subject.trim()) return `Email ${n} needs a subject line.`;
-    if (i > 0 && e.delayAmount < 1) return `Email ${n} needs a delay of at least 1 ${e.delayUnit === "hours" ? "hour" : "day"}.`;
+    // An item's email 1 goes right after the welcome; every store email follows it.
+    if ((input.ownerType === "store" || i > 0) && e.delayAmount < 1) return `Email ${n} needs a delay of at least 1 ${e.delayUnit === "hours" ? "hour" : "day"}.`;
     if (JSON.stringify(e.doc).length > 200_000) return `Email ${n} is too large. Upload images with the image button rather than pasting them.`;
     for (const u of docUrls(e.doc)) {
       const p = urlProblem(u);
@@ -116,7 +117,7 @@ export async function saveSequence(
     id: e.id && mine.has(e.id) ? e.id : crypto.randomUUID(),
     sequence_id: seq.id as string,
     position: i + 1,
-    delay_amount: i === 0 ? 0 : e.delayAmount,
+    delay_amount: i === 0 && input.ownerType !== "store" ? 0 : e.delayAmount,
     delay_unit: e.delayUnit,
     subject: e.subject.trim(),
     preheader: e.preheader.trim(),

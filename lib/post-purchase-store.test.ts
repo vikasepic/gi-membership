@@ -83,3 +83,12 @@ describe("a failed read never passes for an empty sequence", () => {
     await expect(getSequence("offer", crypto.randomUUID())).rejects.toThrow(/timeout/);
   });
 });
+
+describe("the store series", () => {
+  const store = (over: Partial<SaveInput> = {}) => input({ ownerType: "store", ...over });
+
+  it("needs a delay on email 1 too, because the welcome goes first", () => {
+    expect(saveProblem(store({ emails: [email({ delayAmount: 0, delayUnit: "hours" })] }))).toMatch(/Email 1 needs a delay of at least 1 hour/);
+    expect(saveProblem(store({ emails: [email({ delayAmount: 2 })] }))).toBeNull();
+  });
+});

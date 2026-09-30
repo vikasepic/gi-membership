@@ -41,6 +41,15 @@ describe.skipIf(!canRun)("saving a sequence (integration)", () => {
     expect((await getSequence("offer", o1)).emails[0].subject).toBe("mine");
     expect((await getSequence("product", o2)).emails[0].id).not.toBe(theirs.id);
   });
+
+  it("keeps the store series' first delay: every store email follows the welcome", async () => {
+    // A random owner, never this store's own id, so a developer's local store series is never touched.
+    const owner = crypto.randomUUID();
+    owners.push(owner);
+    const r = await saveSequence({ ownerType: "store", ownerId: owner, enabled: true, layout: LAYOUT_DEFAULTS, emails: [email("First", 3)] });
+    expect(r.ok).toBe(true);
+    expect((await getSequence("store", owner)).emails[0].delayAmount).toBe(3);
+  });
 });
 
 afterAll(async () => {

@@ -39,3 +39,17 @@ it("refuses a malformed sequence before it reaches the database", async () => {
   expect(res.ok).toBe(false);
   expect(save).not.toHaveBeenCalled();
 });
+
+vi.mock("@/lib/store", () => ({ getStoreId: async () => "22222222-2222-4222-8222-222222222222" }));
+
+it("saves the store series under this store, whatever id the page sent, and refreshes Settings", async () => {
+  const { revalidatePath } = await import("next/cache");
+  const { LAYOUT_DEFAULTS } = await import("@/lib/post-purchase-layout");
+  guard.admin = true;
+  const res = await savePostPurchaseAction({
+    ownerType: "store", ownerId: "11111111-1111-4111-8111-111111111111", enabled: false, layout: LAYOUT_DEFAULTS, emails: [],
+  });
+  expect(res.ok).toBe(true);
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({ ownerType: "store", ownerId: "22222222-2222-4222-8222-222222222222" }));
+  expect(vi.mocked(revalidatePath)).toHaveBeenCalledWith("/admin/settings");
+});

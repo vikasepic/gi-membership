@@ -7,13 +7,19 @@ import { saveInputSchema, saveProblem, saveSequence } from "@/lib/post-purchase-
 import { renderPostPurchaseEmail } from "@/lib/post-purchase-render";
 import { sendEmail } from "@/lib/email";
 import { getSettingsOrDefaults } from "@/lib/settings";
+import { getStoreId } from "@/lib/store";
+
+const pathFor = (ownerType: "store" | "offer" | "product", ownerId: string) =>
+  ownerType === "store" ? "/admin/settings" : ownerType === "offer" ? `/admin/offers/${ownerId}` : `/admin/products/${ownerId}`;
 
 export async function savePostPurchaseAction(input: unknown) {
   await requireAdmin();
   const parsed = saveInputSchema.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: "Something in this sequence is out of range. Check the widths, sizes and delays." };
-  const res = await saveSequence(parsed.data);
-  if (res.ok) revalidatePath(parsed.data.ownerType === "offer" ? `/admin/offers/${parsed.data.ownerId}` : `/admin/products/${parsed.data.ownerId}`);
+  // The store series always belongs to this store, whatever the page sent.
+  const data = parsed.data.ownerType === "store" ? { ...parsed.data, ownerId: await getStoreId() } : parsed.data;
+  const res = await saveSequence(data);
+  if (res.ok) revalidatePath(pathFor(data.ownerType, data.ownerId));
   return res;
 }
 
@@ -38,7 +44,8 @@ export async function sendPostPurchaseTestAction(input: unknown) {
     preheader: email.preheader,
     layout: sequence.layout,
     vars: { first_name: "Priya", offer_name: ownerName, access_link: settings.accessUrl },
-    stopUrl: index > 0 ? `${settings.accessUrl}#test-stop-link` : null,
+    // Every store email carries the stop link; an item's first email does not.
+    stopUrl: sequence.ownerType === "store" || index > 0 ? `${settings.accessUrl}#test-stop-link` : null,
   });
   const res = await sendEmail(to, mail, { from: settings.senderName ? `${settings.senderName} <${settings.senderEmail}>` : settings.senderEmail, replyTo: settings.replyTo });
   if (res !== "sent") return { ok: false as const, error: res === "disabled" ? "Email sending is not set up on this server." : "The email provider refused it. Try again in a minute." };
