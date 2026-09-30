@@ -33,13 +33,17 @@ export function stopUrl(orderItemId: string): string {
 }
 
 /** Stop the rest of this line's sequence. Safe to call again. */
-export async function stopSequence(orderItemId: string): Promise<{ name: string | null }> {
+export async function stopSequence(orderItemId: string): Promise<{ ok: boolean; name: string | null }> {
   const db = createServiceClient();
-  await db
+  const updateResult = await db
     .from("order_items")
     .update({ post_purchase_stopped_at: new Date().toISOString() })
     .eq("id", orderItemId)
     .is("post_purchase_stopped_at", null);
+  if (updateResult.error) {
+    console.error("Failed to stop sequence:", updateResult.error);
+    return { ok: false, name: null };
+  }
   const { data } = await db.from("order_items").select("description").eq("id", orderItemId).maybeSingle();
-  return { name: (data?.description as string | null) ?? null };
+  return { ok: true, name: (data?.description as string | null) ?? null };
 }

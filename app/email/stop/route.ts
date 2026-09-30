@@ -16,7 +16,8 @@ function page(status: number, message: string): Response {
 async function handle(req: Request): Promise<Response> {
   const id = verifyStopToken(new URL(req.url).searchParams.get("t"));
   if (!id) return page(400, "This link is not valid. If you want to stop these emails, reply to any of them and we will do it for you.");
-  const { name } = await stopSequence(id);
+  const { ok, name } = await stopSequence(id);
+  if (!ok) return page(500, "Something went wrong and your emails were not stopped. Reply to any of them and we will stop them for you.");
   return page(200, `Done. You won't get any more of these emails${name ? ` about ${esc(name)}` : ""}.`);
 }
 

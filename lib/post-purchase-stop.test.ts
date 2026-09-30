@@ -6,16 +6,32 @@ vi.mock("@/lib/env", () => ({
   siteUrl: () => "https://grow.greaterinside.com",
 }));
 const stopped: string[] = [];
+let updateError: { error: { message: string } } | null = null;
 vi.mock("@/lib/supabase/server", () => ({
   createServiceClient: () => ({
     from: () => {
       const q: Record<string, unknown> = {};
-      q.update = () => q;
-      q.eq = (_c: string, v: string) => { stopped.push(v); return q; };
+      q.mode = null as string | null;
+      q.eqValue = null as string | null;
+      q.update = () => { q.mode = "update"; return q; };
+      q.eq = (_c: string, v: string) => { if (q.mode === "update") q.eqValue = v; return q; };
       q.is = () => q;
       q.select = () => q;
       q.maybeSingle = async () => ({ data: { description: "Funnel App" } });
-      q.then = (res: (v: { data: unknown }) => unknown) => Promise.resolve({ data: null }).then(res);
+      q.then = (res: ((v: unknown) => unknown) | null | undefined) => {
+        if (q.mode === "update") {
+          if (updateError) {
+            if (res) return Promise.resolve(updateError).then(res);
+            return Promise.resolve(updateError);
+          }
+          // Only push to stopped if update succeeded (no error)
+          if (q.eqValue) stopped.push(q.eqValue as string);
+          if (res) return Promise.resolve({ data: null }).then(res);
+          return Promise.resolve({ data: null });
+        }
+        if (res) return Promise.resolve({ data: null }).then(res);
+        return Promise.resolve({ data: null });
+      };
       return q;
     },
   }),
@@ -25,7 +41,10 @@ const { stopToken, verifyStopToken, stopUrl } = await import("@/lib/post-purchas
 const { GET, POST } = await import("@/app/email/stop/route");
 
 const ITEM = "3f1e2d4c-5b6a-4789-8abc-def012345678";
-beforeEach(() => (stopped.length = 0));
+beforeEach(() => {
+  stopped.length = 0;
+  updateError = null;
+});
 
 describe("the stop token", () => {
   it("round-trips the order line it was made for", () => {
@@ -54,6 +73,16 @@ describe("the stop page", () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("You won't get any more of these emails about Funnel App.");
     expect(stopped).toContain(ITEM);
+  });
+
+  it("returns 500 when the update fails, tells the buyer to reply, and stops nothing", async () => {
+    updateError = { error: { message: "boom" } };
+    const res = await GET(req(stopToken(ITEM)));
+    expect(res.status).toBe(500);
+    const text = await res.text();
+    expect(text).not.toContain("Done");
+    expect(text).toContain("were not stopped");
+    expect(stopped).toHaveLength(0);
   });
 
   it("says the same the second time, rather than an error", async () => {
