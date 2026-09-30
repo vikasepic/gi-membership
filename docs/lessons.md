@@ -670,3 +670,14 @@ recorder skips an access row with neither; isAppBilledOrder (lib/app-billed)
 keeps the two orders already written out of the money screens, the
 dashboard total and the member's purchase list. The rows themselves were
 not deleted.
+
+## Post-purchase sequences: the editor and the renderer share one schema (30 Sep 2026)
+
+Every node and mark `lib/email-editor-extensions.ts` can put in a document
+has a branch in `lib/post-purchase-render.ts`, and
+`lib/email-editor-extensions.test.ts` round-trips through both. Add a
+toolbar feature and it must be added in both files, or the owner sees it in
+the editor and the buyer never gets it. Sequences are queued by
+`sendPostPurchaseIfDue` at checkout-over whatever the welcome's own switch
+says, and sent by the retry cron; a follow-up is queued only when the one
+before it is sent, so edits reach buyers mid-sequence.
