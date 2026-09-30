@@ -12,14 +12,14 @@ import type { Labels } from "@/lib/attribution";
  * less refunds — the same ledger the Transactions page sums.
  */
 
-export type Journey = "paying" | "on trial" | "trial cancelled" | "cancelling" | "lapsed" | "one-off buyer" | "no access";
-export const JOURNEYS: Journey[] = ["paying", "on trial", "trial cancelled", "cancelling", "lapsed", "one-off buyer", "no access"];
+export type Journey = "paying" | "on trial" | "free access" | "trial cancelled" | "cancelling" | "lapsed" | "one-off buyer" | "no access";
+export const JOURNEYS: Journey[] = ["paying", "on trial", "free access", "trial cancelled", "cancelling", "lapsed", "one-off buyer", "no access"];
 
 export type SubView = {
   stripeSubscriptionId: string;
   name: string;
   offerId: string | null;
-  state: "on trial" | "paying" | "cancelling" | "past due" | "trial cancelled" | "trial ended" | "cancelled";
+  state: "on trial" | "paying" | "free access" | "cancelling" | "past due" | "trial cancelled" | "trial ended" | "cancelled";
   amountCents: number;
   currency: string;
   interval: string | null;
@@ -86,6 +86,30 @@ export function monthlyCents(s: Pick<SubscriptionRow, "amountCents" | "interval"
   return Math.round((s.amountCents * per) / n);
 }
 
+/**
+ * What a subscription is called on every money screen.
+ *
+ * Its offer or product; failing that, the app a member holds through it,
+ * marked as the app's own signup. A subscription with no Grow offer or
+ * product was not sold by this store: on 30 Sep 2026 all sixteen of them were
+ * the Funnel App's own signup (Stripe metadata app: gi-funnel), fifteen on a
+ * 100% coupon, and "Subscription" left the owner asking whether they were
+ * Grow's. One namer so the member card, the Trials page and the ledger say
+ * the same thing.
+ */
+export function subscriptionNamer(d: MoneyData): (s: Pick<SubscriptionRow, "offerId" | "productId" | "stripeSubscriptionId">) => string {
+  const appBySub = new Map(
+    d.ownership
+      .filter((o) => o.stripeSubscriptionId && o.appId)
+      .map((o) => [o.stripeSubscriptionId as string, d.names.apps.get(o.appId as string) ?? null]),
+  );
+  return (s) =>
+    (s.offerId && d.names.offers.get(s.offerId)?.name) ||
+    (s.productId && d.names.products.get(s.productId)?.name) ||
+    (appBySub.get(s.stripeSubscriptionId) ? `${appBySub.get(s.stripeSubscriptionId)} (own signup)` : null) ||
+    "Subscription";
+}
+
 export function subView(s: SubscriptionRow, name: string): SubView {
   const paid = s.paidInvoices > 0;
   const trialing = s.status === "trialing";
@@ -99,6 +123,11 @@ export function subView(s: SubscriptionRow, name: string): SubView {
   if (trialing && !ending) state = "on trial";
   else if (s.status === "past_due") state = "past due";
   else if (ending) state = trialing ? "trial cancelled" : "cancelling";
+  // Active with nothing ever paid: Stripe only keeps a subscription active
+  // when its invoices are paid, so these were invoiced $0 — a 100% discount.
+  // Calling them "paying" put $29 a month into the figures for accounts that
+  // will never be charged (the Funnel App's comped signups, 30 Sep 2026).
+  else if (live && s.status === "active" && !paid) state = "free access";
   else if (live) state = "paying";
   else if (!paid && (s.canceledAt || s.endedAt)) state = "trial cancelled";
   else if (!paid) state = "trial ended";
@@ -142,10 +171,7 @@ export function deriveMembers(d: MoneyData): MemberMoney[] {
   const ownByUser = new Map<string, MoneyData["ownership"]>();
   for (const o of d.ownership) ownByUser.set(o.userId, [...(ownByUser.get(o.userId) ?? []), o]);
 
-  const nameOf = (s: SubscriptionRow) =>
-    (s.offerId && d.names.offers.get(s.offerId)?.name) ||
-    (s.productId && d.names.products.get(s.productId)?.name) ||
-    "Subscription";
+  const nameOf = subscriptionNamer(d);
 
   return d.users.map((u) => {
     const orders = (ordersByUser.get(u.id) ?? []).sort((a, b) => ms(a.createdAt) - ms(b.createdAt));
@@ -173,6 +199,7 @@ export function deriveMembers(d: MoneyData): MemberMoney[] {
     if (has("paying") || has("past due")) journey = "paying";
     else if (cancelling) journey = "cancelling";
     else if (has("on trial")) journey = "on trial";
+    else if (has("free access")) journey = "free access";
     else if (has("trial cancelled") || has("trial ended")) journey = "trial cancelled";
     else if (has("cancelled")) journey = "lapsed";
     else if (holds.length > 0) journey = "one-off buyer";

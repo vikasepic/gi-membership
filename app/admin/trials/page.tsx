@@ -14,6 +14,7 @@ const VIEWS: { key: TrialView; label: string }[] = [
   { key: "on trial", label: "On trial" },
   { key: "ending", label: "Ending this week" },
   { key: "converted", label: "Converted" },
+  { key: "free", label: "Free access" },
   { key: "lost", label: "Cancelled or lapsed" },
 ];
 
@@ -118,11 +119,12 @@ export default async function TrialsPage({ searchParams }: { searchParams: Promi
                     {t.outcome === "on trial" ? <><Soon iso={t.endsAt} now={data.now} /><div className="text-xs text-muted">{fmtDate(t.endsAt)}</div></> : fmtDate(t.endsAt)}
                   </td>
                   <td className="px-3 py-3">
-                    <Pill tone={t.outcome === "converted" ? "good" : t.outcome === "on trial" ? "warn" : "bad"}>{t.outcome}</Pill>{" "}
+                    <Pill tone={t.outcome === "converted" ? "good" : t.outcome === "on trial" ? "warn" : t.outcome === "free access" ? "quiet" : "bad"}>{t.outcome}</Pill>{" "}
                     <span className="text-xs text-muted">
                       {t.outcome === "converted" && `first payment ${fmtDate(t.outcomeAt)}${t.cancelledSince ? ", cancelled since" : ""}`}
                       {t.outcome === "cancelled" && `on ${fmtDate(t.outcomeAt)}, before paying`}
                       {t.outcome === "on trial" && `card on file, charges ${fmtDate(t.endsAt)}`}
+                      {t.outcome === "free access" && "still active at $0, fully discounted"}
                       {t.outcome === "ended unpaid" && "the card was not charged"}
                     </span>
                   </td>
@@ -136,16 +138,16 @@ export default async function TrialsPage({ searchParams }: { searchParams: Promi
 
       <section className="rounded-2xl border border-border bg-surface p-4">
         <h2 className="text-sm font-medium">By the week they started</h2>
-        <p className="text-xs text-muted">Green paid, red did not, amber still on trial.</p>
+        <p className="text-xs text-muted">Green paid, red did not, amber still on trial, grey free access.</p>
         {weeks.length === 0 ? (
           <p className="mt-2 text-sm text-muted">No trials yet.</p>
         ) : (
           <ul className="mt-2">
             {weeks.map((w) => {
               const pct = (n: number) => Math.round((n / w.started) * 100);
-              const sentence = w.pending === w.started ? `${w.started} started, all still on trial` : `${w.started} started: ${w.converted} paid, ${w.lost} did not${w.pending ? `, ${w.pending} still deciding` : ""}`;
+              const sentence = w.pending === w.started ? `${w.started} started, all still on trial` : `${w.started} started: ${w.converted} paid, ${w.lost} did not${w.free ? `, ${w.free} on free access` : ""}${w.pending ? `, ${w.pending} still deciding` : ""}`;
               return (
-                <li key={w.weekStart} className="grid grid-cols-[8rem_1fr_auto] items-center gap-3 border-t border-border py-2.5 text-sm first:border-t-0">
+                <li key={w.weekStart} className="grid grid-cols-[10.5rem_1fr_auto] items-center gap-3 border-t border-border py-2.5 text-sm first:border-t-0">
                   <span className="whitespace-nowrap text-muted">Week of {fmtDate(w.weekStart)}</span>
                   <span>
                     {sentence}
@@ -153,6 +155,7 @@ export default async function TrialsPage({ searchParams }: { searchParams: Promi
                       <i className="block bg-emerald-600" style={{ width: `${pct(w.converted)}%` }} />
                       <i className="block bg-primary" style={{ width: `${pct(w.lost)}%` }} />
                       <i className="block bg-amber-500" style={{ width: `${pct(w.pending)}%` }} />
+                      <i className="block bg-muted/40" style={{ width: `${pct(w.free)}%` }} />
                     </span>
                   </span>
                   <span className="whitespace-nowrap font-display tabular-nums">{w.paidCents ? `${money(w.paidCents, cur)} so far` : <span className="text-muted">$0 so far</span>}</span>

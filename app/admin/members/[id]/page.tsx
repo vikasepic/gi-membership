@@ -115,6 +115,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                     <dt className="text-muted">Started</dt><dd>{fmtDate(s.startedAt)}</dd>
                     {s.trialEnd && <><dt className="text-muted">Trial {new Date(s.trialEnd) > data.now ? "ends" : "ended"}</dt><dd>{fmtDate(s.trialEnd)}</dd></>}
                     {s.nextChargeAt && s.state !== "on trial" && <><dt className="text-muted">Next charge</dt><dd>{fmtDate(s.nextChargeAt)}</dd></>}
+                    {s.state === "free access" && <><dt className="text-muted">Charged</dt><dd>$0, fully discounted</dd></>}
                     {s.cancelsAt && <><dt className="text-muted">Cancels</dt><dd>{fmtDate(s.cancelsAt)}</dd></>}
                     {s.canceledAt && <><dt className="text-muted">Cancelled</dt><dd>{fmtDate(s.canceledAt)}</dd></>}
                     <dt className="text-muted">Paid so far</dt><dd>{s.paidInvoices} payment{s.paidInvoices === 1 ? "" : "s"}, {money(s.paidTotalCents, s.currency)}</dd>

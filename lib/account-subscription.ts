@@ -35,6 +35,8 @@ export function memberSubscriptionLine(s: SubscriptionRow, now = new Date()): Me
         detail: v.nextChargeAt ? `${s.installments ? "next payment" : "renews"} ${on(v.nextChargeAt)}` : null,
         tone: "ok",
       };
+    case "free access":
+      return { state: "Active", detail: "free, nothing to pay", tone: "ok" };
     case "past due":
       return { state: "Payment failed", detail: "update your card under Billing", tone: "warn" };
     case "cancelling":

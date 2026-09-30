@@ -1,4 +1,6 @@
 import type { MoneyData } from "@/lib/money-data";
+import type { SubscriptionRow } from "@/lib/subscriptions";
+import { subscriptionNamer } from "@/lib/member-money";
 
 /**
  * Every free trial, when it ends, and what became of it. Pure over MoneyData.
@@ -8,7 +10,32 @@ import type { MoneyData } from "@/lib/money-data";
  * failed or the subscription was left to expire.
  */
 
-export type TrialOutcome = "on trial" | "converted" | "cancelled" | "ended unpaid";
+export type TrialOutcome = "on trial" | "converted" | "free access" | "cancelled" | "ended unpaid";
+
+/**
+ * What became of one trial. The single rule the Trials page and the ledger
+ * both read, so they cannot disagree.
+ *
+ * "free access": the trial ended, the subscription is active, and nothing
+ * has been paid. Stripe only keeps a subscription active past its trial when
+ * the invoice was paid, so an active one with no paid invoice was invoiced
+ * $0: a 100% discount. Found 30 Sep 2026: eleven Funnel App signups on a
+ * repeating 100% coupon were shown as "ended unpaid, the card was not
+ * charged", which reads as eleven failed payments. There were none.
+ */
+export function trialOutcomeOf(
+  s: Pick<SubscriptionRow, "paidInvoices" | "status" | "cancelAt" | "cancelAtPeriodEnd" | "canceledAt">,
+): TrialOutcome {
+  if (s.paidInvoices > 0) return "converted";
+  // A trial with a cancellation already scheduled is running, but it will
+  // never be charged. Counting it as live overstates the trials in flight
+  // and flatters the conversion rate, since it never settles either way.
+  const stopping = !!s.cancelAt || s.cancelAtPeriodEnd;
+  if (s.status === "trialing" && !stopping) return "on trial";
+  if (s.canceledAt || stopping) return "cancelled";
+  if (s.status === "active") return "free access";
+  return "ended unpaid";
+}
 export type TrialRow = {
   stripeSubscriptionId: string;
   userId: string | null;
@@ -34,28 +61,23 @@ const ms = (s: string) => new Date(s).getTime();
 
 export function deriveTrials(d: MoneyData): TrialRow[] {
   const users = new Map(d.users.map((u) => [u.id, u]));
+  const nameOf = subscriptionNamer(d);
   const out: TrialRow[] = [];
   for (const s of d.subscriptions) {
     if (!s.trialEnd || !s.livemode) continue;
+    // Grow's trials only. A subscription with no Grow offer or product is a
+    // connected app's own signup (the Funnel App's, mostly on a 100% coupon):
+    // counting it made Grow's conversion rate about somebody else's funnel.
+    if (!s.offerId && !s.productId) continue;
     const u = s.userId ? users.get(s.userId) : undefined;
     const paid = s.paidInvoices > 0;
-    // A trial with a cancellation already scheduled is running, but it will
-    // never be charged. Counting it as live overstates the trials in flight
-    // and flatters the conversion rate, since it never settles either way.
-    const stopping = !!s.cancelAt || s.cancelAtPeriodEnd;
-    const outcome: TrialOutcome = paid
-      ? "converted"
-      : s.status === "trialing" && !stopping
-        ? "on trial"
-        : s.canceledAt || stopping
-          ? "cancelled"
-          : "ended unpaid";
+    const outcome = trialOutcomeOf(s);
     out.push({
       stripeSubscriptionId: s.stripeSubscriptionId,
       userId: s.userId,
       email: u?.email ?? "",
       name: u?.name ?? null,
-      what: (s.offerId && d.names.offers.get(s.offerId)?.name) || (s.productId && d.names.products.get(s.productId)?.name) || "Subscription",
+      what: nameOf(s),
       offerId: s.offerId,
       productId: s.productId,
       thenCents: s.amountCents,
@@ -64,7 +86,7 @@ export function deriveTrials(d: MoneyData): TrialRow[] {
       startedAt: s.trialStart ?? s.startedAt,
       endsAt: s.trialEnd,
       outcome,
-      outcomeAt: paid ? s.firstPaidAt : s.canceledAt ?? (outcome === "ended unpaid" ? s.trialEnd : null),
+      outcomeAt: paid ? s.firstPaidAt : s.canceledAt ?? (outcome === "ended unpaid" || outcome === "free access" ? s.trialEnd : null),
       daysLeft: Math.round((ms(s.trialEnd) - d.now.getTime()) / 864e5),
       paidTotalCents: s.paidTotalCents,
       cancelledSince: paid && !!s.canceledAt,
@@ -73,7 +95,7 @@ export function deriveTrials(d: MoneyData): TrialRow[] {
   return out.sort((a, b) => ms(b.startedAt) - ms(a.startedAt));
 }
 
-export type TrialView = "all" | "on trial" | "ending" | "converted" | "lost";
+export type TrialView = "all" | "on trial" | "ending" | "converted" | "free" | "lost";
 
 /**
  * Narrow to one product or offer.
@@ -107,12 +129,13 @@ export function trialsFor(rows: TrialRow[], view: TrialView): TrialRow[] {
     case "on trial": return rows.filter((t) => t.outcome === "on trial");
     case "ending": return rows.filter((t) => t.outcome === "on trial" && t.daysLeft <= 7);
     case "converted": return rows.filter((t) => t.outcome === "converted");
+    case "free": return rows.filter((t) => t.outcome === "free access");
     case "lost": return rows.filter((t) => t.outcome === "cancelled" || t.outcome === "ended unpaid");
     default: return rows;
   }
 }
 
-export type TrialWeek = { weekStart: string; started: number; converted: number; lost: number; pending: number; paidCents: number };
+export type TrialWeek = { weekStart: string; started: number; converted: number; lost: number; pending: number; free: number; paidCents: number };
 
 export function trialsByWeek(rows: TrialRow[]): TrialWeek[] {
   const weeks = new Map<string, TrialWeek>();
@@ -120,10 +143,12 @@ export function trialsByWeek(rows: TrialRow[]): TrialWeek[] {
     const d = new Date(t.startedAt);
     const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7)));
     const k = monday.toISOString();
-    const w = weeks.get(k) ?? { weekStart: k, started: 0, converted: 0, lost: 0, pending: 0, paidCents: 0 };
+    const w = weeks.get(k) ?? { weekStart: k, started: 0, converted: 0, lost: 0, pending: 0, free: 0, paidCents: 0 };
     w.started += 1;
     if (t.outcome === "converted") w.converted += 1;
     else if (t.outcome === "on trial") w.pending += 1;
+    // Neither won nor lost: nobody was ever going to be charged.
+    else if (t.outcome === "free access") w.free += 1;
     else w.lost += 1;
     w.paidCents += t.paidTotalCents;
     weeks.set(k, w);

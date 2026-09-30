@@ -635,3 +635,21 @@ store. Connected-app subscriptions on a member's access row stay on the
 ledger by design (see originFromOwnership in lib/renewals.ts).
 
 Any handler for an account-wide event starts by asking whose it is.
+
+## "Active, never paid" is a 100% coupon, not a failed card (30 Sep 2026)
+
+The Trials page read eleven people as "ended unpaid, the card was not
+charged", which is what a run of failed payments looks like. Stripe had
+every one active, invoicing $0 under a repeating 100% coupon, and none of
+them was Grow's: all sixteen member-linked subscriptions with no Grow offer
+or product were the Funnel App's own signup (metadata app: gi-funnel). The
+money screens called them "Subscription", counted $29 a month each as
+"paying", and promised a next charge.
+
+Stripe only keeps a subscription active past its trial when the invoice was
+paid, so active with no paid invoice means it was invoiced $0. That is now
+"free access" in one rule (trialOutcomeOf, subView): no monthly figure, no
+next charge, neither converted nor lost. subscriptionNamer names a
+subscription with no Grow offer or product "<App> (own signup)", and the
+Trials page counts only Grow-sold trials. Before calling a status a
+failure, read the subscription in Stripe: status, invoices and discounts.

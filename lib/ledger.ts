@@ -1,5 +1,6 @@
 import type { MoneyData } from "@/lib/money-data";
-import { sourceOf } from "@/lib/member-money";
+import { trialOutcomeOf, type TrialOutcome } from "@/lib/trials-view";
+import { sourceOf, subscriptionNamer } from "@/lib/member-money";
 
 /**
  * The ledger: every time money moved, or was promised, one row each.
@@ -39,7 +40,7 @@ export type LedgerRow = {
   stripeSubscriptionId: string | null;
   stripePaymentIntentId: string | null;
   /** For a trial row: when it ends and what it will cost. */
-  trial?: { endsAt: string | null; thenCents: number; interval: string | null; outcome: "on trial" | "converted" | "cancelled" | "ended unpaid"; outcomeAt: string | null };
+  trial?: { endsAt: string | null; thenCents: number; interval: string | null; outcome: TrialOutcome; outcomeAt: string | null };
   /** For a purchase or refund: the order's status, so a refunded purchase can be struck. */
   refunded?: boolean;
 };
@@ -55,11 +56,7 @@ export function deriveLedger(d: MoneyData): LedgerRow[] {
     (offerId && d.names.offers.get(offerId)?.name) || (productId && d.names.products.get(productId)?.name) || fallback;
   // A subscription a connected app started carries no offer or product, so
   // the only name anyone ever gave it is the app that holds the access.
-  const appBySub = new Map(
-    d.ownership.filter((o) => o.stripeSubscriptionId && o.appId).map((o) => [o.stripeSubscriptionId as string, d.names.apps.get(o.appId as string) ?? null]),
-  );
-  const subName = (s: MoneyData["subscriptions"][number]) =>
-    nameOf(s.offerId, s.productId, appBySub.get(s.stripeSubscriptionId) || "Subscription");
+  const subName = subscriptionNamer(d);
 
   const rows: LedgerRow[] = [];
   for (const o of d.orders) {
@@ -120,15 +117,7 @@ export function deriveLedger(d: MoneyData): LedgerRow[] {
                   endsAt: sub?.trialEnd ?? null,
                   thenCents: sub?.amountCents ?? offerMeta?.priceCents ?? 0,
                   interval: sub?.interval ?? null,
-                  outcome: !sub
-                    ? "on trial"
-                    : sub.paidInvoices > 0
-                      ? "converted"
-                      : sub.status === "trialing"
-                        ? "on trial"
-                        : sub.canceledAt
-                          ? "cancelled"
-                          : "ended unpaid",
+                  outcome: !sub ? "on trial" : trialOutcomeOf(sub),
                   outcomeAt: sub ? (sub.paidInvoices > 0 ? sub.firstPaidAt : sub.canceledAt ?? sub.trialEnd) : null,
                 },
               }
@@ -179,8 +168,7 @@ export function deriveLedger(d: MoneyData): LedgerRow[] {
         endsAt: s.trialEnd,
         thenCents: s.amountCents,
         interval: s.interval,
-        outcome:
-          s.paidInvoices > 0 ? "converted" : s.status === "trialing" && !s.cancelAt && !s.cancelAtPeriodEnd ? "on trial" : s.canceledAt || s.cancelAt ? "cancelled" : "ended unpaid",
+        outcome: trialOutcomeOf(s),
         outcomeAt: s.paidInvoices > 0 ? s.firstPaidAt : s.canceledAt ?? s.trialEnd,
       },
     });

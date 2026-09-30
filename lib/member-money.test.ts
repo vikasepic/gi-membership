@@ -289,8 +289,10 @@ describe("a subscription with no order of its own", () => {
     expect(trial?.trial?.outcome).toBe("converted");
   });
 
-  it("names it after the app that holds the access, not 'Subscription'", () => {
-    expect(deriveLedger(appStarted).find((r) => r.kind === "trial")?.what).toBe("Content Engine");
+  it("names it after the app that holds the access, marked as that app's own signup", () => {
+    // Not "Subscription", and not the bare app name either: the owner has to
+    // be able to tell it apart from a Grow sale of the same app (30 Sep 2026).
+    expect(deriveLedger(appStarted).find((r) => r.kind === "trial")?.what).toBe("Content Engine (own signup)");
   });
 
   it("does not double up when an order already recorded the trial", () => {
