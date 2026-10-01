@@ -117,6 +117,22 @@ async function intentOfInvoice(invoiceId: string): Promise<string | null> {
   return null;
 }
 
+/**
+ * The subscriptions Grow sold: a Grow offer or product behind them. The table
+ * also holds other apps' subscriptions on the shared Stripe account, synced
+ * before the 30 Sep rule, and their renewals are not ours to book; the first
+ * dry run on production flagged 31 of their invoices. Same rule as
+ * listSubscriptions.
+ */
+export async function ourSubscriptionIds(): Promise<Set<string>> {
+  const { data } = await createServiceClient()
+    .from("subscriptions")
+    .select("stripe_subscription_id")
+    .eq("store_id", await getStoreId())
+    .or("offer_id.not.is.null,product_id.not.is.null");
+  return new Set((data ?? []).map((s) => s.stripe_subscription_id as string));
+}
+
 /** Reads both sides. `days` is how far back Stripe's refunds and invoices are read. */
 export async function gatherReconcileInput(opts: { days?: number; now?: Date; budgetMs?: number } = {}): Promise<ReconcileInput> {
   // A night's work is seconds (4 refunds, 64 paid invoices in three days on
@@ -181,11 +197,7 @@ export async function gatherReconcileInput(opts: { days?: number; now?: Date; bu
   //    hour: the webhook that writes the order may still be on its way.
   const paidInvoices: ReconcileInput["paidInvoices"] = [];
   const invoicesDeadline = Date.now() + budget / 2;
-  const ours = new Set(
-    ((await db.from("subscriptions").select("stripe_subscription_id").eq("store_id", storeId)).data ?? []).map(
-      (s) => s.stripe_subscription_id as string,
-    ),
-  );
+  const ours = await ourSubscriptionIds();
   for await (const inv of stripe().invoices.list({ status: "paid", created: { gte: since, lte: now - HOUR }, limit: 100 })) {
     if (Date.now() > invoicesDeadline) { partial = true; break; }
     const sub = subscriptionIdOf(inv as Stripe.Invoice);
