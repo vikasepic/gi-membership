@@ -13,7 +13,10 @@ import { recordOfferClick } from "@/lib/member-activity";
  * paid and is still at the till.
  */
 export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const go = (path: string) => Response.redirect(new URL(path, req.url), 302);
+  // A relative Location, as the offer checkout's return route does: behind
+  // the proxy req.url is the container's own address (seen 1 Oct 2026 as a
+  // redirect to https://0.0.0.0:3000/login).
+  const go = (path: string) => new Response(null, { status: 303, headers: { Location: path } });
   const user = await viewer();
   if (!user) return go("/login");
   const offer = await getOffer((await ctx.params).id);

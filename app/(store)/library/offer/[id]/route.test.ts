@@ -33,30 +33,30 @@ beforeEach(() => {
 });
 
 describe("clicking the library offer", () => {
-  it("records the click and sends the member to the offer's page", async () => {
+  it("records the click and sends the member to the offer's page, by a relative Location (req.url is the container's behind the proxy)", async () => {
     const res = await get("o1");
-    expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("https://grow.test/o/funnel-app");
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toBe("/o/funnel-app");
     expect(record).toHaveBeenCalledWith({ userId: "u1", offerId: "o1", userAgent: "UA test" });
   });
 
   it("asks a signed-out visitor to sign in, and records nothing", async () => {
     state.user = null;
     const res = await get("o1");
-    expect(res.headers.get("location")).toBe("https://grow.test/login");
+    expect(res.headers.get("location")).toBe("/login");
     expect(record).not.toHaveBeenCalled();
   });
 
   it("goes back to the library for an offer that no longer exists", async () => {
     const res = await get("gone");
-    expect(res.headers.get("location")).toBe("https://grow.test/library");
+    expect(res.headers.get("location")).toBe("/library");
     expect(record).not.toHaveBeenCalled();
   });
 
   it("lets an admin viewing as the member through, but not in the member's name", async () => {
     state.viewingAs = true;
     const res = await get("o1");
-    expect(res.headers.get("location")).toBe("https://grow.test/o/funnel-app");
+    expect(res.headers.get("location")).toBe("/o/funnel-app");
     expect(record).not.toHaveBeenCalled();
   });
 });
