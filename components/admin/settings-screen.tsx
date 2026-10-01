@@ -6,6 +6,7 @@ import { useFormStatus } from "react-dom";
 import { MediaButton, type PickedMedia } from "@/components/admin/media-modal";
 import { ImageField } from "@/components/admin/image-field";
 import { EmailPrototype } from "@/components/admin/email-prototype";
+import { RenewalEmailEditor } from "@/components/admin/renewal-email-editor";
 import { RedirectFields } from "@/components/admin/redirect-fields";
 import { publicCoverUrl } from "@/lib/media-url";
 import { inputClass as input, Field, Group } from "@/components/admin/form-controls";
@@ -198,6 +199,9 @@ function GroupForm({
       )}
       {group === "email" && (
         <EmailPrototype value={settings.postPurchaseEmail} fieldName="postPurchaseEmail" />
+      )}
+      {group === "renewal" && (
+        <RenewalEmailEditor value={settings.renewalEmail} look={settings.postPurchaseEmail} fieldName="renewalEmail" />
       )}
       {group === "advanced" && <AdvancedFields s={settings} errors={errors} />}
 

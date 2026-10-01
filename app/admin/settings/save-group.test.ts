@@ -77,6 +77,13 @@ describe("saving one settings group", () => {
     expect(patchOf().siteTypography?.h2.weight).toBe("700");
   });
 
+  it("saves the renewal email's copy and switch as an object", async () => {
+    const renewal = { ...(SETTINGS_DEFAULTS as Settings).renewalEmail, enabled: false, subject: "{{plan}} renewed" };
+    const res = await saveSettingsGroup({}, form("renewal", { renewalEmail: JSON.stringify(renewal) }));
+    expect(res.errors).toBeUndefined();
+    expect(patchOf().renewalEmail).toMatchObject({ enabled: false, subject: "{{plan}} renewed" });
+  });
+
   it("leaves a stored object alone when the form did not carry it", async () => {
     await saveSettingsGroup({}, form("typography", { headingFont: "", bodyFont: "" }));
     expect(patchOf()).not.toHaveProperty("siteTypography");

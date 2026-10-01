@@ -100,7 +100,7 @@ export const postPurchaseSchema = z.object({
 
 export const POST_PURCHASE_DEFAULTS: PostPurchaseSettings = postPurchaseSchema.parse({});
 
-const escapeHtml = (s: string) =>
+export const escapeHtml = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /**
@@ -124,7 +124,7 @@ function autoLink(escaped: string, linkColor: string): string {
 }
 
 /** Blank lines become paragraphs; single newlines become breaks. */
-function paragraphs(text: string, s: PostPurchaseSettings): string {
+export function paragraphs(text: string, s: Pick<PostPurchaseSettings, "textColor" | "linkColor">): string {
   return text
     .split(/\n{2,}/)
     .map((p) => p.trim())
@@ -151,6 +151,23 @@ export function firstNameOf(fullName: string | null | undefined): string {
   // An address in the name field is not a name. It happens often enough —
   // browsers autofill it — and "hi jane@gmail.com" is worse than "hi".
   return first.includes("@") ? "" : first;
+}
+
+/** The band at the top: the header image, or a plain band in its colour. Shared with the renewal email. */
+export function headerRow(s: Pick<PostPurchaseSettings, "headerImageUrl" | "headerBackground">): string {
+  return s.headerImageUrl
+    ? `<tr><td style="background:${s.headerBackground};padding:0;">
+         <img src="${escapeHtml(s.headerImageUrl)}" alt="Greater Inside" width="600"
+              style="display:block;width:100%;max-width:600px;height:auto;border:0;" /></td></tr>`
+    : `<tr><td style="background:${s.headerBackground};height:84px;"></td></tr>`;
+}
+
+/** The photo-and-signature strip, or nothing. Shared with the renewal email. */
+export function signatureImage(s: Pick<PostPurchaseSettings, "signatureImageUrl">): string {
+  return s.signatureImageUrl
+    ? `<img src="${escapeHtml(s.signatureImageUrl)}" alt="Ajit Nawalkha, Founder, Greater Inside"
+            width="360" style="display:block;width:100%;max-width:360px;height:auto;border:0;margin-top:8px;" />`
+    : "";
 }
 
 export type BuiltEmail = { subject: string; html: string; text: string };
@@ -199,16 +216,8 @@ export function buildPostPurchaseEmail(args: {
                 style="margin:0 0 18px;">${args.products.map(row).join("")}</table>`
       : "";
 
-  const header = s.headerImageUrl
-    ? `<tr><td style="background:${s.headerBackground};padding:0;">
-         <img src="${escapeHtml(s.headerImageUrl)}" alt="Greater Inside" width="600"
-              style="display:block;width:100%;max-width:600px;height:auto;border:0;" /></td></tr>`
-    : `<tr><td style="background:${s.headerBackground};height:84px;"></td></tr>`;
-
-  const signature = s.signatureImageUrl
-    ? `<img src="${escapeHtml(s.signatureImageUrl)}" alt="Ajit Nawalkha, Founder, Greater Inside"
-            width="360" style="display:block;width:100%;max-width:360px;height:auto;border:0;margin-top:8px;" />`
-    : "";
+  const header = headerRow(s);
+  const signature = signatureImage(s);
 
   const html = `<!doctype html>
 <html><body style="margin:0;padding:0;background:${s.background};">

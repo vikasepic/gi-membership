@@ -3,6 +3,7 @@ import { GLOBAL_COLOR_RE, paletteSchema } from "@/lib/palette";
 import { LEGAL_DEFAULTS } from "@/lib/legal-defaults";
 import { codeSnippetsSchema } from "@/lib/code-snippets";
 import { postPurchaseSchema } from "@/lib/post-purchase-email";
+import { renewalEmailSchema } from "@/lib/renewal-email";
 import { redirectsSchema } from "@/lib/redirects";
 import { checkoutDesignSchema } from "@/lib/checkout-design";
 import { SITE_TYPOGRAPHY_SCHEMA } from "@/lib/site-typography";
@@ -144,6 +145,7 @@ export const SETTINGS_SCHEMA = z.object({
   // edited by a single form, and flattening it would put twenty names into a
   // schema that every other part of the store has to read past.
   postPurchaseEmail: postPurchaseSchema.default(() => postPurchaseSchema.parse({})),
+  renewalEmail: renewalEmailSchema.default(() => renewalEmailSchema.parse({})),
   checkoutDesign: checkoutDesignSchema.default(() => checkoutDesignSchema.parse({})),
 });
 
@@ -168,6 +170,7 @@ export const SETTINGS_GROUPS = [
   { key: "seo", label: "SEO & social" },
   { key: "checkout", label: "Checkout" },
   { key: "email", label: "Post-purchase email" },
+  { key: "renewal", label: "Renewal email" },
   { key: "redirects", label: "Redirects" },
   { key: "advanced", label: "Advanced" },
 ] as const;
@@ -205,6 +208,7 @@ export const GROUP_FIELDS: Record<SettingsGroupKey, readonly (keyof Settings)[]>
   ],
   checkout: ["checkoutDesign"],
   email: ["postPurchaseEmail"],
+  renewal: ["renewalEmail"],
   redirects: ["redirects"],
   advanced: ["customCss", "customJs", "codeSnippets"],
 };

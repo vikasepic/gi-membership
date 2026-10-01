@@ -5,6 +5,9 @@ import { trackServerEvent } from "@/lib/tracking";
 import { eventIdFor } from "@/lib/analytics/events";
 import { buyerContextFor } from "@/lib/checkout";
 import { sendEmail, buildReceiptEmail } from "@/lib/email";
+import { getSettingsOrDefaults } from "@/lib/settings";
+import { firstNameOf } from "@/lib/post-purchase-email";
+import { buildRenewalEmail, planNameOf } from "@/lib/renewal-email";
 
 /**
  * The money that arrives after the checkout.
@@ -155,18 +158,48 @@ export async function recordRenewal(
   // already recorded — which the unique index then rejects, turning a missing
   // receipt into an endlessly retried delivery.
   if (opts?.receipt !== false) try {
-    await sendEmail(
-      origin.email,
-      buildReceiptEmail({
-        email: origin.email,
-        orderId,
-        lines: [{ description, amountCents }],
-        totalCents: amountCents,
-        taxCents,
-        currency: (invoice.currency ?? origin.currency) || "usd",
-        siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://grow.greaterinside.com",
-      }),
-    );
+    const currency = (invoice.currency ?? origin.currency) || "usd";
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://grow.greaterinside.com";
+    // A plan that renewed gets the thank-you with the receipt inside it, in
+    // the welcome email's look and from its sender. Anything else (a plan
+    // change, an instalment, the thank-you switched off) gets the plain receipt.
+    const period = renewedPeriodOf(invoice);
+    const settings = period ? await getSettingsOrDefaults() : null;
+    if (period && settings?.renewalEmail.enabled) {
+      const look = settings.postPurchaseEmail;
+      const { data: profile } = await db.from("users").select("username").eq("email", origin.email).maybeSingle();
+      await sendEmail(
+        origin.email,
+        buildRenewalEmail({
+          firstName: firstNameOf(profile?.username as string | null),
+          plan: planNameOf(description),
+          amountCents,
+          taxCents,
+          currency,
+          paidAt: new Date(paidAt),
+          periodStart: period.start,
+          nextDate: period.end,
+          orderId,
+          siteUrl,
+          settings: settings.renewalEmail,
+          look,
+        }),
+        { from: look.senderName ? `${look.senderName} <${look.senderEmail}>` : look.senderEmail, replyTo: look.replyTo },
+      );
+    } else {
+      await sendEmail(
+        origin.email,
+        buildReceiptEmail({
+          email: origin.email,
+          orderId,
+          lines: [{ description, amountCents }],
+          totalCents: amountCents,
+          taxCents,
+          currency,
+          siteUrl,
+        }),
+      );
+    }
   } catch (e) {
     console.error("[recordRenewal] receipt failed (the order is recorded):", e);
   }
@@ -196,6 +229,27 @@ export async function recordRenewal(
   }
 
   return { recorded: true, orderId, amountCents };
+}
+
+/**
+ * The period a plan renewed for, or null when "your plan has renewed" would be
+ * untrue: a plan change, an instalment of a payment plan (it ends after N
+ * payments, so there may be no next one), or a line with no period.
+ */
+function renewedPeriodOf(invoice: Stripe.Invoice): { start: Date; end: Date } | null {
+  if (invoice.billing_reason !== "subscription_cycle") return null;
+  // The subscription's metadata, snapshotted onto the invoice: under `parent`
+  // now, on the root in older API versions. Checkout writes `installments`
+  // there for a payment plan.
+  const i = invoice as unknown as {
+    parent?: { subscription_details?: { metadata?: Record<string, string> | null } | null } | null;
+    subscription_details?: { metadata?: Record<string, string> | null } | null;
+  };
+  const meta = i.parent?.subscription_details?.metadata ?? i.subscription_details?.metadata ?? {};
+  if (meta.installments) return null;
+  const p = invoice.lines?.data?.[0]?.period;
+  if (!p?.end) return null;
+  return { start: new Date(p.start * 1000), end: new Date(p.end * 1000) };
 }
 
 /** Total tax on the invoice, across the API versions that moved it. */

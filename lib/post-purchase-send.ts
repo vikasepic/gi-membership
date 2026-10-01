@@ -34,18 +34,23 @@ import { recordError, messageOf } from "@/lib/errors";
 /** How long an unanswered upsell holds the email back before the sweep gives up. */
 const ABANDON_GRACE_MINUTES = 30;
 
-type Sent = "sent" | "already" | "waiting" | "disabled" | "no-order";
+type Sent = "sent" | "already" | "waiting" | "disabled" | "no-order" | "renewal";
 
 export async function sendPostPurchaseIfDue(orderId: string): Promise<Sent> {
   const db = createServiceClient();
 
   const { data: order } = await db
     .from("orders")
-    .select("id, email, status, post_purchase_sent_at, created_at")
+    .select("id, email, status, post_purchase_sent_at, created_at, stripe_invoice_id")
     .eq("id", orderId)
     .maybeSingle();
   if (!order || order.status !== "paid" || !order.email) return "no-order";
   if (order.post_purchase_sent_at) return "already";
+  // A renewal is a payment on something bought earlier, not a purchase: it
+  // gets the renewal email from recordRenewal and no welcome or follow-up.
+  // Only renewals carry an invoice id (lib/renewals.ts). Checked on the order
+  // rather than its lines, which are written a moment after it.
+  if (order.stripe_invoice_id) return "renewal";
 
   // Still deciding on an upsell. The token expiring is what eventually releases
   // this — checked against the clock rather than the row's status, because an
@@ -176,6 +181,8 @@ export async function sweepPostPurchaseEmails(): Promise<{ sent: number; skipped
     .select("id")
     .eq("status", "paid")
     .is("post_purchase_sent_at", null)
+    // Renewals are never stamped, so they would sit in this window all day.
+    .is("stripe_invoice_id", null)
     .lt("created_at", new Date(now - ABANDON_GRACE_MINUTES * 60_000).toISOString())
     .gt("created_at", new Date(now - 24 * 60 * 60_000).toISOString())
     .order("created_at")
