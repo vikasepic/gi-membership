@@ -10,9 +10,9 @@ export async function GET(req: Request) {
   const rows = applyLedgerFilter(deriveLedger(data), ledgerFilterFrom(sp), data.now);
   const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const lines = [
-    ["at", "name", "email", "kind", "what", "amount", "currency", "source", "livemode", "order_id", "subscription_id", "trial_ends", "trial_outcome"].join(","),
+    ["at", "name", "email", "kind", "what", "amount", "currency", "source", "livemode", "order_id", "subscription_id", "trial_ends", "trial_outcome", "coupon"].join(","),
     ...rows.map((r) =>
-      [r.at, r.name, r.email, r.kind, r.what, (r.amountCents / 100).toFixed(2), r.currency, r.source, r.livemode ? "live" : "test", r.orderId, r.stripeSubscriptionId, r.trial?.endsAt ?? "", r.trial?.outcome ?? ""]
+      [r.at, r.name, r.email, r.kind, r.what, (r.amountCents / 100).toFixed(2), r.currency, r.source, r.livemode ? "live" : "test", r.orderId, r.stripeSubscriptionId, r.trial?.endsAt ?? "", r.trial?.outcome ?? "", r.couponCode ?? ""]
         .map(cell)
         .join(","),
     ),

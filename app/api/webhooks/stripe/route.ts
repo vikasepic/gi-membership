@@ -2,7 +2,7 @@ import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { recordRenewal, subscriptionIdOf } from "@/lib/renewals";
 import { reportReversal, handleDispute, disputeWon } from "@/lib/reversals";
-import { orderForPaymentIntent } from "@/lib/orders";
+import { orderForPaymentIntent, orderForInvoicePayment } from "@/lib/orders";
 import { finalizeOrder } from "@/lib/checkout";
 import { completeOfferCheckout } from "@/lib/offer-checkout";
 import { sendPaymentFailedEmail } from "@/lib/subscription-emails";
@@ -10,6 +10,7 @@ import {
   syncSubscriptionOwnership,
   markPlanPaidOff,
   revokeOwnershipForPaymentIntent,
+  revokeOwnershipForOrder,
 } from "@/lib/subscription-sync";
 import { planOutcome } from "@/lib/payment-plans";
 import { syncSubscriptionQuietly } from "@/lib/subscriptions";
@@ -168,7 +169,14 @@ export async function POST(req: Request) {
       if (!piId) break;
       await revokeOwnershipForPaymentIntent(piId);
 
-      const order = await orderForPaymentIntent(piId);
+      let order = await orderForPaymentIntent(piId);
+      // A renewal order is keyed on its invoice, so the PaymentIntent finds
+      // nothing above: no access revoked, no reversal reported, the sale
+      // still counted (seen 1 Oct 2026). Reach it through the invoice.
+      if (!order) {
+        order = await orderForInvoicePayment(piId).catch(() => null);
+        if (order) await revokeOwnershipForOrder(order.id);
+      }
       if (order) {
         await reportReversal({
           orderId: order.id,

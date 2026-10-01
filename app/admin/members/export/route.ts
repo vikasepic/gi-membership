@@ -10,12 +10,12 @@ export async function GET(req: Request) {
   const rows = applyMemberFilter(deriveMembers(data), memberFilterFrom(sp), data.now, adminEmails());
   const cell = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const lines = [
-    ["name", "email", "joined", "source", "journey", "converted", "next_event", "next_event_at", "payments", "refunds", "total_paid", "refunded", "last_payment", "holds"].join(","),
+    ["name", "email", "joined", "source", "journey", "converted", "next_event", "next_event_at", "payments", "refunds", "total_paid", "refunded", "last_payment", "holds", "coupons"].join(","),
     ...rows.map((m) =>
       [
         m.name, m.email, m.joinedAt, m.source, m.journey, m.converted ? "yes" : "no",
         m.nextEvent?.what ?? "", m.nextEvent?.at ?? "", m.payments, m.refunds,
-        (m.totalPaidCents / 100).toFixed(2), (m.refundedCents / 100).toFixed(2), m.lastPaidAt ?? "", m.holds.join("; "),
+        (m.totalPaidCents / 100).toFixed(2), (m.refundedCents / 100).toFixed(2), m.lastPaidAt ?? "", m.holds.join("; "), m.coupons.join("; "),
       ].map(cell).join(","),
     ),
   ];

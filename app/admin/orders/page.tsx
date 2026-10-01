@@ -120,6 +120,7 @@ export default async function TransactionsPage({
                         <Pill tone={kindTone(r.kind)}>{KIND_LABEL[r.kind]}</Pill> {r.what}
                         {!r.livemode && <> <Pill tone="quiet">test</Pill></>}
                         {r.refunded && r.kind !== "refund" && <> <Pill tone="bad">refunded</Pill></>}
+                        {r.couponCode && <> <Pill tone="quiet">coupon {r.couponCode}</Pill></>}
                         {r.trial && (
                           <div className="mt-1 text-xs text-muted">
                             {money(r.trial.thenCents, r.currency)} a {r.trial.interval ?? "month"} after ·{" "}
@@ -151,6 +152,7 @@ export default async function TransactionsPage({
         <div className="flex flex-col gap-4">
           <Breakdown title="By product or offer" rows={breakdown(shown, (r) => r.what)} cur={cur} />
           <Breakdown title="By source" rows={breakdown(shown.filter((r) => r.source), (r) => r.source)} cur={cur} />
+          <Breakdown title="By coupon" rows={breakdown(shown.filter((r) => r.couponCode), (r) => r.couponCode!)} cur={cur} />
         </div>
       </div>
     </div>

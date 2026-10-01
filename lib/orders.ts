@@ -149,7 +149,7 @@ export async function refundOrder(orderId: string): Promise<RefundResult> {
   const db = createServiceClient();
   const { data: order, error } = await db
     .from("orders")
-    .select("id, status, stripe_payment_intent_id, total_cents")
+    .select("id, status, stripe_payment_intent_id, stripe_invoice_id, total_cents")
     .eq("id", orderId)
     .maybeSingle();
   if (error) return { ok: false, error: error.message };
@@ -159,7 +159,19 @@ export async function refundOrder(orderId: string): Promise<RefundResult> {
     return { ok: false, error: "Only a paid order can be refunded." };
   }
 
-  const piId = order.stripe_payment_intent_id as string | null;
+  // A renewal order (lib/renewals.ts) carries the invoice, not a
+  // PaymentIntent. Without this it fell into the $0 branch below: the
+  // subscription ended and access went, but nothing was given back (seen
+  // 1 Oct 2026, refunded by hand instead).
+  let piId = order.stripe_payment_intent_id as string | null;
+  if (!piId && order.stripe_invoice_id) {
+    try {
+      piId = await paymentIntentOfInvoice(order.stripe_invoice_id as string);
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Could not read the invoice's payment." };
+    }
+    if (!piId) return { ok: false, error: "Could not find the payment for this renewal in Stripe." };
+  }
   if (!piId) {
     // A $0 trial-start order books no PaymentIntent. Nothing was charged, so
     // there is nothing to give back — but access must still be withdrawn, so
@@ -217,6 +229,42 @@ async function endSubscriptionsOf(orderId: string): Promise<void> {
 }
 
 /** The order a Stripe charge belongs to, for a webhook that has only the intent. */
+/** The PaymentIntent that paid an invoice, through the invoice's payments (the current API has no invoice.payment_intent). */
+async function paymentIntentOfInvoice(invoiceId: string): Promise<string | null> {
+  const { data } = await stripe().invoicePayments.list({ invoice: invoiceId, limit: 10 });
+  for (const p of data) {
+    const pi = p.payment?.payment_intent;
+    if (pi) return typeof pi === "string" ? pi : pi.id;
+  }
+  return null;
+}
+
+/** The invoice a PaymentIntent paid, or null when it paid none. */
+async function invoiceOfPaymentIntent(paymentIntentId: string): Promise<string | null> {
+  const { data } = await stripe().invoicePayments.list({ payment: { type: "payment_intent", payment_intent: paymentIntentId }, limit: 1 });
+  const inv = data[0]?.invoice;
+  return inv ? (typeof inv === "string" ? inv : (inv.id ?? null)) : null;
+}
+
+/**
+ * A renewal order, from the PaymentIntent that paid its invoice. For the
+ * refund webhook: a charge names its PaymentIntent, and a renewal order is
+ * keyed on the invoice. `invoiceOf` is the Stripe lookup, injectable for tests.
+ */
+export async function orderForInvoicePayment(
+  paymentIntentId: string,
+  invoiceOf: (pi: string) => Promise<string | null> = invoiceOfPaymentIntent,
+): Promise<{ id: string; currency: string } | null> {
+  const invoice = await invoiceOf(paymentIntentId);
+  if (!invoice) return null;
+  const { data } = await createServiceClient()
+    .from("orders")
+    .select("id, currency")
+    .eq("stripe_invoice_id", invoice)
+    .maybeSingle();
+  return data ? { id: data.id as string, currency: (data.currency as string) ?? "usd" } : null;
+}
+
 export async function orderForPaymentIntent(
   paymentIntentId: string,
 ): Promise<{ id: string; currency: string } | null> {

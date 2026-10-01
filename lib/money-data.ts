@@ -30,6 +30,8 @@ export type OrderRowLite = {
   stripeInvoiceId: string | null;
   stripePaymentIntentId: string | null;
   hostOfferId: string | null;
+  /** The coupon code typed at checkout, as the order recorded it. */
+  couponCode: string | null;
   utmFirst: Labels;
   utmLast: Labels;
   referrer: string | null;
@@ -85,7 +87,7 @@ export async function loadMoneyData(): Promise<MoneyData> {
       db
         .from("orders")
         .select(
-          "id, user_id, email, status, total_cents, currency, livemode, created_at, updated_at, stripe_invoice_id, stripe_payment_intent_id, host_offer_id, utm_first, utm_last, referrer",
+          "id, user_id, email, status, total_cents, currency, livemode, created_at, updated_at, stripe_invoice_id, stripe_payment_intent_id, host_offer_id, coupon_code, utm_first, utm_last, referrer",
         )
         .eq("store_id", storeId)
         .order("created_at", { ascending: false })
@@ -152,6 +154,7 @@ export async function loadMoneyData(): Promise<MoneyData> {
       stripeInvoiceId: (o.stripe_invoice_id as string) ?? null,
       stripePaymentIntentId: (o.stripe_payment_intent_id as string) ?? null,
       hostOfferId: (o.host_offer_id as string) ?? null,
+      couponCode: (o.coupon_code as string) || null,
       utmFirst: (o.utm_first as Labels | null) ?? {},
       utmLast: (o.utm_last as Labels | null) ?? {},
       referrer: (o.referrer as string) ?? null,

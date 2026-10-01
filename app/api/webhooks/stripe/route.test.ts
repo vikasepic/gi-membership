@@ -27,13 +27,30 @@ vi.mock("@/lib/stripe", async (orig) => ({
   stripe: () => ({ webhooks: { constructEvent: () => fakeEvent }, invoices: { list: invoicesList } }),
 }));
 
+const orderForPaymentIntent = vi.fn(async (_pi: string): Promise<{ id: string; currency: string } | null> => null);
+const orderForInvoicePayment = vi.fn(async (_pi: string): Promise<{ id: string; currency: string } | null> => null);
+vi.mock("@/lib/orders", async (orig) => ({
+  ...(await orig<typeof import("@/lib/orders")>()),
+  orderForPaymentIntent: (pi: string) => orderForPaymentIntent(pi),
+  orderForInvoicePayment: (pi: string) => orderForInvoicePayment(pi),
+}));
+const reportReversal = vi.fn(async (_a: Record<string, unknown>) => {});
+vi.mock("@/lib/reversals", async (orig) => ({
+  ...(await orig<typeof import("@/lib/reversals")>()),
+  reportReversal: (a: Record<string, unknown>) => reportReversal(a),
+}));
+
 const invoicesList = vi.fn(async (): Promise<{ data: { status: string; amount_paid: number }[] }> => ({ data: [] }));
 const syncSubscriptionOwnership = vi.fn(async () => {});
 const markPlanPaidOff = vi.fn(async () => ({ paidOff: 1 }));
+const revokeOwnershipForPaymentIntent = vi.fn(async () => ({ revoked: 0 }));
+const revokeOwnershipForOrder = vi.fn(async () => ({ revoked: 1 }));
 vi.mock("@/lib/subscription-sync", async (orig) => ({
   ...(await orig<typeof import("@/lib/subscription-sync")>()),
   syncSubscriptionOwnership,
   markPlanPaidOff,
+  revokeOwnershipForPaymentIntent,
+  revokeOwnershipForOrder,
 }));
 
 const finalizeOrder = vi.fn(async () => {});
@@ -212,5 +229,40 @@ describe("customer.subscription.deleted on a plan", () => {
     await post();
     expect(syncSubscriptionOwnership).toHaveBeenCalledWith("sub_p", "canceled");
     expect(invoicesList).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A refund on a RENEWAL. The renewal order carries the Stripe invoice, not a
+ * PaymentIntent, so the lookup by PaymentIntent finds nothing: on 1 Oct 2026
+ * a Funnel App renewal refunded by hand revoked nothing and reported no
+ * reversal, leaving the sale counted in Meta's revenue.
+ */
+describe("charge.refunded on a renewal", () => {
+  beforeEach(() => {
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+    orderForPaymentIntent.mockClear();
+    orderForInvoicePayment.mockClear();
+    revokeOwnershipForOrder.mockClear();
+    reportReversal.mockClear();
+    fakeEvent = {
+      type: "charge.refunded",
+      data: { object: { id: "ch_r", payment_intent: "pi_renewal", amount_refunded: 2900, currency: "usd" } },
+    };
+  });
+
+  it("finds the order through the invoice the charge paid, revokes it and reports the reversal", async () => {
+    orderForInvoicePayment.mockImplementation(async (pi) => (pi === "pi_renewal" ? { id: "ord_renewal", currency: "usd" } : null));
+    await post();
+    expect(revokeOwnershipForOrder).toHaveBeenCalledWith("ord_renewal");
+    expect(reportReversal).toHaveBeenCalledWith(expect.objectContaining({ orderId: "ord_renewal", amountCents: 2900, kind: "Refund", stripeId: "ch_r" }));
+  });
+
+  it("does not go looking through invoices when the PaymentIntent is an order's own", async () => {
+    orderForPaymentIntent.mockImplementation(async () => ({ id: "ord_checkout", currency: "usd" }));
+    await post();
+    expect(orderForInvoicePayment).not.toHaveBeenCalled();
+    expect(revokeOwnershipForOrder).not.toHaveBeenCalled();
+    expect(reportReversal).toHaveBeenCalledWith(expect.objectContaining({ orderId: "ord_checkout" }));
   });
 });

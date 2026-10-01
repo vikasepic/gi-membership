@@ -43,6 +43,8 @@ export type LedgerRow = {
   trial?: { endsAt: string | null; thenCents: number; interval: string | null; outcome: TrialOutcome; outcomeAt: string | null };
   /** For a purchase or refund: the order's status, so a refunded purchase can be struck. */
   refunded?: boolean;
+  /** The coupon code the order was bought with. */
+  couponCode?: string | null;
 };
 
 const ms = (s: string) => new Date(s).getTime();
@@ -70,6 +72,7 @@ export function deriveLedger(d: MoneyData): LedgerRow[] {
       source: sourceOf(o.utmLast, o.referrer),
       orderId: o.id,
       stripePaymentIntentId: o.stripePaymentIntentId,
+      couponCode: o.couponCode,
     };
     const items = itemsByOrder.get(o.id) ?? [];
     if (o.stripeInvoiceId) {

@@ -60,6 +60,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           {m.email} · joined {fmtDate(m.joinedAt)} · came from {m.source}
           {" · "}<Pill tone={journeyTone(m.journey)}>{m.journey}</Pill>
           {m.converted && <> <Pill tone="good">converted</Pill></>}
+          {m.coupons.map((c) => <span key={c}> <Pill tone="quiet">coupon {c}</Pill></span>)}
           {(m.isAdmin || isOwner) && <> <Pill tone="quiet">{isOwner ? "owner" : "admin"}</Pill></>}
         </p>
       </div>
@@ -87,6 +88,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                         <span className="text-muted"> · {money(r.trial.thenCents, r.currency)} a {r.trial.interval ?? "month"} after · {r.trial.outcome === "on trial" && r.trial.endsAt ? <>ends <Soon iso={r.trial.endsAt} now={data.now} /></> : r.trial.outcome}{r.trial.outcome !== "on trial" && r.trial.outcomeAt ? ` ${fmtDate(r.trial.outcomeAt)}` : ""}</span>
                       )}
                       {!r.livemode && <> <Pill tone="quiet">test mode</Pill></>}
+                      {r.couponCode && <> <Pill tone="quiet">coupon {r.couponCode}</Pill></>}
                       {r.kind === "purchase" && r.orderId && !r.refunded && r.amountCents > 0 && (
                         <span className="ml-2 inline-block"><RefundButton orderId={r.orderId} email={r.email} amount={money(r.amountCents, r.currency)} /></span>
                       )}

@@ -45,6 +45,8 @@ export type MemberMoney = {
   isAdmin: boolean;
   joinedAt: string;
   source: string;
+  /** Every coupon code on their orders, oldest first. */
+  coupons: string[];
   journey: Journey;
   converted: boolean;
   cancelling: boolean;
@@ -225,6 +227,7 @@ export function deriveMembers(d: MoneyData): MemberMoney[] {
         .filter((x): x is string => !!x)
         .reduce((a, b) => (ms(b) < ms(a) ? b : a)),
       source: first ? sourceOf(first.utmFirst, first.referrer) : "direct",
+      coupons: [...new Set(orders.map((o) => o.couponCode).filter((c): c is string => !!c))],
       journey,
       converted,
       cancelling,

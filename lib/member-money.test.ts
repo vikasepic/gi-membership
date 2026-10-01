@@ -54,6 +54,7 @@ const order = (o: Partial<MoneyData["orders"][number]> & { id: string; userId: s
   stripeInvoiceId: null,
   stripePaymentIntentId: "pi",
   hostOfferId: null,
+  couponCode: null,
   utmFirst: {},
   utmLast: {},
   referrer: null,
@@ -71,7 +72,7 @@ const DATA: MoneyData = {
   ],
   orders: [
     // Eric: bought the Micro-Product Builder from a Meta ad and started a Funnel App trial as a bump.
-    order({ id: "o1", userId: "eric", hostOfferId: "mpb", utmFirst: { utm_source: "meta", utm_campaign: "MPB" }, utmLast: { utm_source: "meta", utm_campaign: "MPB" } }),
+    order({ id: "o1", userId: "eric", hostOfferId: "mpb", couponCode: "LAUNCH20", utmFirst: { utm_source: "meta", utm_campaign: "MPB" }, utmLast: { utm_source: "meta", utm_campaign: "MPB" } }),
     // Dael: trial on 10 Sep, converted 17 Sep (a renewal order), renews again 17 Oct.
     order({ id: "o2", userId: "dael", totalCents: 0, createdAt: "2026-09-10T10:00:00Z", updatedAt: "2026-09-10T10:00:00Z", stripePaymentIntentId: null, hostOfferId: "ce" }),
     order({ id: "o3", userId: "dael", totalCents: 5800, createdAt: "2026-09-17T10:00:00Z", updatedAt: "2026-09-17T10:00:00Z", stripeInvoiceId: "in_1", stripePaymentIntentId: null }),
@@ -117,6 +118,12 @@ const DATA: MoneyData = {
 };
 
 describe("members", () => {
+  it("lists the coupons a member used, and none for one who used none", () => {
+    const ms = deriveMembers(DATA);
+    expect(ms.find((m) => m.id === "eric")?.coupons).toEqual(["LAUNCH20"]);
+    expect(ms.find((m) => m.id === "dael")?.coupons).toEqual([]);
+  });
+
   const members = deriveMembers(DATA);
   const by = (id: string) => members.find((m) => m.id === id)!;
 
@@ -157,6 +164,16 @@ describe("members", () => {
 });
 
 describe("ledger", () => {
+  it("names the coupon a purchase used, on every line of that order and on nothing else", () => {
+    // Asked for 1 Oct 2026: "who used what". The code is on the order, so the
+    // bump bought beside the product carries it too; a renewal has no coupon.
+    const rows = deriveLedger(DATA);
+    const o1 = rows.filter((r) => r.orderId === "o1" && r.kind !== "trial");
+    expect(o1.length).toBeGreaterThan(0);
+    for (const r of o1) expect(r.couponCode).toBe("LAUNCH20");
+    expect(rows.filter((r) => r.orderId !== "o1").every((r) => !r.couponCode)).toBe(true);
+  });
+
   const rows = deriveLedger(DATA);
   it("gives every movement a kind, and a trial its end and outcome", () => {
     const kinds = rows.map((r) => `${r.kind}:${r.what}`);

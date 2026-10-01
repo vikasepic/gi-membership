@@ -155,6 +155,7 @@ export default async function AdminMembersPage({
                     <Pill tone={journeyTone(m.journey)}>{m.journey}</Pill>
                     {m.converted && m.journey === "paying" && <> <Pill tone="good">converted</Pill></>}
                     {m.isAdmin && <> <Pill tone="quiet">admin</Pill></>}
+                    {m.coupons.map((c) => <span key={c}> <Pill tone="quiet">coupon {c}</Pill></span>)}
                     {(m.subs.length > 0 || m.holds.length > 0) && (
                       <div className="mt-1 text-xs text-muted">{[...new Set([...m.subs.map((s) => s.name), ...m.holds])].join(", ")}</div>
                     )}
