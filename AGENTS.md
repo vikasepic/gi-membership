@@ -67,6 +67,14 @@ same PR — that is how the next person's Claude avoids your mistake.
 - **Saving a page writes a draft.** `page_sections.draft` and `page_settings.draft`
   are what the editor and `?preview=1` read; visitors read the live columns,
   and only `publishPage()` moves one into the other. See `docs/lessons.md`.
+- **A renewal order has no PaymentIntent**; it is keyed on `stripe_invoice_id`.
+  "No PaymentIntent" never means "$0 order". New kinds of order reach every
+  old reader of `orders`; grep them. Stripe, not `orders.status`, says
+  whether money went back. See `docs/lessons.md`, 1 Oct.
+- **Nothing in the library charges.** One tap on a saved card is for upsells
+  only; every other buy goes through the sales page and checkout (owner, 1 Oct).
+- **Behind the proxy, `req.url` is the container.** Redirect with a relative
+  `Location`, never `new URL(path, req.url)`.
 - **A grant records its target at that moment.** Fix an offer's grant before
   granting anyone; a wrong one means revoke, then re-grant.
 - **After any deploy, a tab left open breaks on its next navigation** (404 or

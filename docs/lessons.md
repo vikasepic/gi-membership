@@ -693,3 +693,74 @@ webhook race in completeOfferCheckout), and a bump or upsell line can arrive
 after the host line. A per-order stamp written before the lines existed lost
 those buyers' flows silently. The store-series integration tests skip
 themselves when a local store series exists, rather than overwrite a developer's work.
+
+## A renewal is an order nobody else expected (1 Oct 2026)
+
+Renewal orders (`stripe_invoice_id` set, one `renewal` line) were added in
+0062 and then flowed through readers written before they existed. The
+welcome sweep sent "You're in. Welcome" to 26 of 28 renewals. The Refund
+button read "no PaymentIntent" as "the $0 trial order": it ended the
+subscription, revoked access and marked the order refunded, and gave back
+nothing (a $398 renewal, 30 Sep; found a day later from the member's
+account page). The refund webhook could not find a renewal at all.
+
+When a new kind of row starts landing in an existing table, grep every
+reader of that table (sweeps, crons, emails, refunds, CRM, tracking, the
+account page) and decide for each. A null-branch ("no X, so it must be Y")
+has to check that Y is the only way to have no X; for anything that moves
+money, branch on what the row positively is and refuse a shape you don't
+recognise, rather than run the destructive default.
+
+## Stripe is the record of money; our status is a claim about it (1 Oct 2026)
+
+The order above said "refunded" for a day while Stripe said $0 refunded,
+and every screen believed the order. A refund is real when Stripe has a
+succeeded refund object for it; mark ours refunded from that, never instead
+of it. Stripe shows a refund on an invoice only through a credit note: a
+refund made on the charge leaves the invoice "paid" in full. Renewals are
+refunded through `creditNotes.create({ refund_amount })`, and the
+`charge.refunded` webhook links any other refund (`lib/credit-notes.ts`).
+Both use `email_type: none`; telling the member is the owner's call.
+
+## Nothing in the library charges; one tap is for upsells (1 Oct 2026)
+
+The library's "Still available" card charged the saved card on one tap
+(`acceptStandingOffer`). Nine buyers started a second subscription that way,
+five within a minute of checkout; two cancelled before paying and one wrote
+to support after being charged. Nothing recorded the tap, so the only
+evidence was the code. The card now links to the offer's page and normal
+checkout (`/library/offer/[id]`), the click is logged, and so is every page a
+signed-in member opens (0092, Activity on the member's admin page). The
+owner's rule: no charge and no trial from any library button without the
+sales page. Any new button that can charge a saved card outside the upsell
+flow needs the owner's yes first, and must leave an audit row.
+
+## Behind the proxy, req.url is the container (1 Oct 2026)
+
+`Response.redirect(new URL(path, req.url))` in a route handler sent
+visitors to `https://0.0.0.0:3000/login`: behind Coolify's proxy the
+request URL is the container's bind address. Use a relative `Location`
+(as `checkout/offer/complete` does) or `NEXT_PUBLIC_SITE_URL`. Found by
+curling the new route anonymously after the deploy, which is worth doing
+for every new route.
+
+## A partner can only show what we send it (1 Oct 2026)
+
+The app bridge told Content Engine and the Funnel App only whether a
+member had access: no trial end, no payment dates, and a cancellation
+scheduled for month end looked like a paying member. Every push with a
+subscription behind it now carries a `billing` block, and a paid renewal
+pushes too. Additive, read at send time, documented in
+`docs/app-integration-guide.md`. Both partners confirmed first that their
+endpoint ignores unknown fields; Content Engine's repo is checked out
+locally and its provision route could be read directly. A backfill written
+for one field ("send names") skipped members without one; once the payload
+grew, that filter was wrong, so the re-send is now "everyone".
+
+## A failure only in the console is a failure nobody sees (1 Oct 2026)
+
+The CRM's Zapier hook answers 404 (its Zap is off or gone). `sendCrmEvent`
+logs that with `console.error` and nothing else, and the container's logs
+reset on every deploy, so the CRM may have been missing events for days.
+Outbound calls the business depends on should write to `error_events`, as
+the app bridge does, so they show on /admin/errors.
