@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId, getStoreName, getProductBySlug, getProductById, getOffer } from "@/lib/store";
-import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerForChoice, offerWithCouponTrial, type Ownership } from "@/lib/offers";
+import { shouldShowOffer, immediateChargeCents, offerAtPrice, offerForChoice, offerWithCouponTrial, type Ownership } from "@/lib/offers";
 import { isPlan } from "@/lib/payment-plans";
 import { scheduleInstalments } from "@/lib/payment-plans-stripe";
 import { priceForChoice, shownPrices, type OfferPrice } from "@/lib/offer-prices";
@@ -2011,81 +2011,6 @@ export async function trackOfferSale(
   }
 }
 
-// Accept a standing offer from the library (buyer who declined the OTO). Uses
-// the card on file. Eligibility is re-checked, so it can't grant something
-// already owned.
-export async function acceptStandingOffer(
-  userId: string,
-  offerId: string,
-): Promise<{ ok: true } | { ok: false; error: string }> {
-  const offer = await getOffer(offerId);
-  if (!offer) return { ok: false, error: "unavailable" };
-  const owned = await ownershipFor(userId);
-  // Distinguish the two reasons so the library can say which one it is.
-  if (!offer.active) return { ok: false, error: "unavailable" };
-  if (!isOfferEligible(offer, owned)) return { ok: false, error: "already_owned" };
-
-  const db = createServiceClient();
-  // Whichever order is currently newest — not necessarily the one this offer
-  // was ever shown against, and not one this function created. The order_items
-  // row this writes below (kind: "oto") lands on THAT order, whatever it turns
-  // out to be, which is exactly the ambiguity hostOfferIdFor's own docblock
-  // warns about: if this attach races a fresh completeOfferCheckout order
-  // becoming "the newest paid order" before ITS OWN "oto" row is written, this
-  // row can be mistaken for that order's host purchase.
-  const { data: order } = await db
-    .from("orders")
-    .select("id, store_id, stripe_customer_id, stripe_payment_intent_id, email")
-    .eq("user_id", userId)
-    .eq("status", "paid")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  // A customer is enough — a buyer whose only order is a $0 trial start has a
-  // saved card but no PaymentIntent behind it.
-  if (!order?.stripe_customer_id) return { ok: false, error: "no_saved_card" };
-
-  const pm = await savedPaymentMethodFor(order.stripe_customer_id as string);
-  if (!pm) return { ok: false, error: "no_saved_card" };
-
-  // A saved card can decline off-session, and an expired/removed Stripe
-  // customer 404s. Both are ordinary outcomes of pressing this button, not
-  // crashes — let them through and the server action 500s with nothing on
-  // screen. Grant and order_items stay outside: they must only run on success.
-  let result: { subscriptionId?: string; paymentIntentId?: string };
-  try {
-    result = await fulfilOffer({
-      order: { id: order.id as string, stripeCustomerId: order.stripe_customer_id as string },
-      offer,
-      paymentMethodId: pm,
-    });
-  } catch {
-    return { ok: false, error: "charge_failed" };
-  }
-
-  await grantOfferOwnership(order.store_id as string, userId, offer, "grant", result.subscriptionId ?? null, {
-    email: order.email as string,
-    stripeCustomerId: order.stripe_customer_id as string,
-  });
-  await db.from("order_items").insert({
-    store_id: order.store_id,
-    order_id: order.id,
-    kind: "oto",
-    offer_id: offer.id,
-    description: offer.name,
-    amount_cents: immediateChargeCents(offer),
-    stripe_subscription_id: result.subscriptionId ?? null,
-    stripe_payment_intent_id: result.paymentIntentId ?? null,
-  });
-
-  await trackOfferSale(order.id as string, offer, result);
-  // The upsell is a new line on the same order, so the basket on the base
-  // intent is now out of date.
-  void stampOrderMetadata(order.id as string);
-
-  return { ok: true };
-}
-
 export type OtoAcceptResult =
   | { ok: true }
   | { ok: false; error: "invalid" | "expired" | "used" | "charge_failed" };
@@ -2333,25 +2258,10 @@ export async function orderEmailFor(orderId: string): Promise<string | null> {
  * exist — there is nothing to accept until the order that would carry it is
  * real — so a chronologically later row can only be an accepted upsell.
  *
- * That theory has a hole. THIRD writer this function does not fully account
- * for: acceptStandingOffer (the library's one-tap accept) ALSO writes a
- * `kind: "oto"` row, and attaches it to the buyer's CURRENT newest PAID
- * order — one it did not create and has no way to know is (or isn't) the
- * order this function will later be asked about. And completeOfferCheckout's
- * own order row is inserted with status "paid" directly — not staged
- * "pending" then flipped — so there is a real window, spanning fulfilOffer
- * (a Stripe subscription-create round trip on the recurring path) and
- * grantOfferOwnership, in which that order is already visible as "the
- * buyer's newest paid order" but has not yet written its OWN "oto" row. An
- * acceptStandingOffer call landing in that window writes a row that is
- * chronologically EARLIER than the real host row still to come, and this
- * function would return the standing offer's id as "the host" instead.
- *
- * The failure mode when that happens is not a crash or an empty result:
- * upsellPricesFor reads a real offer's upsell_offer_id/upsell_price_ids —
- * just the WRONG offer's — so a chained-upsell buyer can be shown a
- * perfectly resolvable upsell at the wrong placement's price list. Right
- * offer, wrong price, which is exactly the shape of bug that ships unnoticed.
+ * There was a third writer: acceptStandingOffer, the library's one-tap
+ * accept, which attached its row to the buyer's newest paid order and could
+ * land inside completeOfferCheckout's window. Removed 1 Oct 2026; the library
+ * card now links to the offer's page and goes through the ordinary checkout.
  *
  * This has not been made airtight, on purpose, for this pass: doing that
  * needs either a column that marks a row as "the purchase" independent of

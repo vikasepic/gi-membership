@@ -36,7 +36,15 @@ describe("where a buy button goes", () => {
 });
 
 describe("nothing links straight past a sales page any more", () => {
-  const pages = ["app/(store)/page.tsx", "app/(store)/library/page.tsx"];
+  // The library card goes through its click route, and the route is what
+  // resolves the offer's page.
+  const pages = ["app/(store)/page.tsx", "app/(store)/library/offer/[id]/route.ts"];
+
+  it("the library card goes through its click route, not to a checkout", () => {
+    const src = readFileSync("app/(store)/library/page.tsx", "utf8");
+    expect(src).toContain("href={`/library/offer/${standing.id}`}");
+    expect(src).not.toMatch(/href=\{`\/checkout\/offer\?offer=/);
+  });
 
   it.each(pages)("%s routes through offerHref", (file) => {
     const src = readFileSync(file, "utf8");
@@ -162,7 +170,7 @@ describe("the add-on decisions are reported", () => {
 describe("an offer reports as itself", () => {
   const checkout = readFileSync("lib/checkout.ts", "utf8");
   const block = checkout.slice(checkout.indexOf("async function trackOfferSale"));
-  const sale = block.slice(0, block.indexOf("export async function acceptStandingOffer"));
+  const sale = block.slice(0, block.indexOf("export async function acceptOto"));
 
   it("uses the offer's own name and key, not the order's", () => {
     // `who` describes the whole ORDER — content ids are every product on it,

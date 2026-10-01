@@ -106,9 +106,13 @@ describe("the line this does not cross", () => {
     }
   });
 
-  it("refuses the one-tap offer, which charges a card on file", () => {
-    const lib = readFileSync("app/(store)/library/actions.ts", "utf8");
-    expect(lib).toContain("if (await isViewingAs()) redirect(\"/library?offer=viewing_as\")");
+  it("does not write the member's activity when it is really the admin looking", () => {
+    // The library card and every page view are logged against the member;
+    // an admin browsing as them must not leave tracks in that member's name.
+    const route = readFileSync("app/(store)/library/offer/[id]/route.ts", "utf8");
+    const view = readFileSync("app/api/track/view/route.ts", "utf8");
+    expect(route).toContain("if (!(await isViewingAs()))");
+    expect(view).toContain("await isViewingAs()");
   });
 
   it("explains itself on the page rather than failing silently", () => {

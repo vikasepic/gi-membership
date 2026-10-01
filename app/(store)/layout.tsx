@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { AppShell } from "@/components/app-shell";
 import { AttributionTracker } from "@/components/attribution-tracker";
+import { MemberViewTracker } from "@/components/member-view-tracker";
 import { Analytics } from "@/components/analytics";
 import { publicAnalyticsIds } from "@/lib/env";
 import { pixelMatch } from "@/lib/pixel-match";
@@ -66,6 +67,7 @@ export default async function StoreLayout({ children }: { children: React.ReactN
         publicBase={process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}
       />
       <AttributionTracker />
+      <MemberViewTracker />
       <Analytics ids={publicAnalyticsIds()} match={match} />
       <AppShell settings={settings}>{children}</AppShell>
       <CodeSnippets snippets={settings.codeSnippets} place="bodyEnd" onCheckout={onCheckout} />

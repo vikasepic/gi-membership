@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 // The library page renders OFFER_STATUS[searchParams.offer] — an unknown key
 // renders NOTHING, so a buyer who just paid and hit a snag lands on a bare
 // library page with no idea what happened. Two callers feed this same
-// ?offer= param: acceptStandingOfferAction (lib/checkout.ts) and the offer
+// ?offer= param: otoBounceHref (lib/checkout.ts, an upsell's outcome) and the offer
 // checkout's own return route (app/(store)/checkout/offer/complete/route.ts,
 // which passes completeOfferCheckout's error straight through, and adds its
 // own "unknown" on an uncaught exception). This asserts every key either can
@@ -27,7 +27,6 @@ describe("the library page has a message for every offer-checkout outcome", () =
   it("covers every error key completeOfferCheckout and its return route can produce", () => {
     for (const status of [
       "unavailable",
-      "no_saved_card",
       "charge_failed",
       "grant_failed",
       "card_not_saved",
@@ -48,10 +47,10 @@ describe("the library page has a message for every offer-checkout outcome", () =
   });
 
   it("keeps charge_failed meaning what it says — a genuine decline before any money moved", () => {
-    // This key is acceptStandingOfferAction's own one-tap charge, a different
-    // function from completeOfferCheckout's paid path (which uses
-    // grant_failed instead — see above). Pinned so nobody "simplifies" the
-    // two back into one key.
+    // This key is acceptOto's: the upsell's off-session charge declined before
+    // any money moved. A different function from completeOfferCheckout's paid
+    // path (which uses grant_failed instead — see above). Pinned so nobody
+    // "simplifies" the two back into one key.
     expect(messageFor("charge_failed")).toMatch(/nothing was charged/i);
   });
 });

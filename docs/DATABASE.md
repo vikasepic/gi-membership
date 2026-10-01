@@ -1397,6 +1397,33 @@ for flows (per line: an order can be paid before its lines exist).
 
 ---
 
+### `member_page_views`, `library_offer_clicks`
+
+What a signed-in member did (migration 0092, 1 Oct 2026). Nothing had
+recorded it: when a buyer held two subscriptions 25 seconds apart, the only
+evidence was the code. The cause was the library's "Still available" card,
+which charged the saved card on one tap; that one-tap path
+(`acceptStandingOffer`) is gone. The card now links to
+`/library/offer/[id]`, which writes a `library_offer_clicks` row and sends
+the member to the offer's own page, where the checkout is the same as
+anyone else's. One tap is for upsells only.
+
+`member_page_views` is one row per store page a member opens, posted by
+`components/member-view-tracker.tsx` from the store layout on every
+navigation to `app/api/track/view` (keyed on the session, never the body).
+Both skip an admin viewing as the member. Read together by
+`activityFor` (`lib/member-activity.ts`) for the Activity list on
+`/admin/members/[id]`. Anonymous visitors stay in the `visits` tables.
+
+| Table | Columns |
+|---|---|
+| `member_page_views` | `user_id`, `path` (200 chars max, query stripped), `at` |
+| `library_offer_clicks` | `user_id`, `offer_id` (`ON DELETE SET NULL`), `user_agent`, `at` |
+
+Both have RLS on with anon and authenticated revoked (service role only).
+
+---
+
 ## Appendix: the raw DDL
 
 The complete `pg_dump --schema-only` output for the `public` schema is beside

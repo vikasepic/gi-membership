@@ -2,25 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { viewer, isViewingAs } from "@/lib/view-as";
-import { acceptStandingOffer } from "@/lib/checkout";
+import { viewer } from "@/lib/view-as";
 import { setProductProgress, ownsProduct, subscribedToApp } from "@/lib/library";
 import { getAppById, buildHandoffUrl, isInternalApp } from "@/lib/apps";
 import { builtinAppRoute } from "@/lib/builtin-apps/registry";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
-
-export async function acceptStandingOfferAction(formData: FormData) {
-  const offerId = formData.get("offerId");
-  const user = await viewer();
-  if (!user || typeof offerId !== "string") redirect("/library");
-  // Accepting puts a charge on the member's saved card. See isViewingAs.
-  if (await isViewingAs()) redirect("/library?offer=viewing_as");
-
-  const res = await acceptStandingOffer(user.id, offerId);
-  revalidatePath("/library");
-  redirect(`/library?offer=${res.ok ? "added" : res.error}`);
-}
 
 // "Open the app": verify the user subscribes, mint a signed handoff token, and
 // send them to the app's handoff endpoint (which mints a session on arrival).

@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { requireAdmin, adminEmails } from "@/lib/admin-guard";
 import { listProductOptions, listOfferOptions } from "@/lib/admin";
 import { accessForMember } from "@/lib/members";
+import { activityFor } from "@/lib/member-activity";
+import { shortDateTime } from "@/lib/dates";
 import { loadMoneyData } from "@/lib/money-data";
 import { coursesForUser } from "@/lib/courses";
 import { progressForCourses, lastLessonFor, lastSignInForAll } from "@/lib/learning";
@@ -22,7 +24,7 @@ import { Tile, Pill, journeyTone, kindTone, KIND_LABEL, fmtDate, relative, Soon 
  */
 export default async function MemberPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [me, data, access, products, offers, courses, signIns] = await Promise.all([
+  const [me, data, access, products, offers, courses, signIns, clicks] = await Promise.all([
     requireAdmin(),
     loadMoneyData(),
     accessForMember(id),
@@ -30,6 +32,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
     listOfferOptions(),
     coursesForUser(id),
     lastSignInForAll(),
+    activityFor(id),
   ]);
   const [progress, lastLesson] = await Promise.all([
     progressForCourses(id, courses),
@@ -173,6 +176,29 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
               <summary className="cursor-pointer text-sm text-primary hover:underline">Grant access</summary>
               <div className="mt-2"><GrantMore userId={m.id} held={held} grants={grants} /></div>
             </details>
+          </section>
+
+          <section className="rounded-2xl border border-border bg-surface p-4">
+            <h2 className="text-sm font-medium">Activity</h2>
+            <p className="mt-1 text-xs text-muted">Every store page they opened while signed in, and the library’s “Still available” card when they clicked it. Logged since 1 Oct 2026.</p>
+            {clicks.length === 0 ? (
+              <p className="mt-2 text-sm text-muted">Nothing yet.</p>
+            ) : (
+              <ul className="mt-2 flex max-h-96 flex-col gap-1.5 overflow-y-auto text-sm">
+                {clicks.map((c, i) => (
+                  <li key={i} className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="whitespace-nowrap text-xs text-muted">{shortDateTime(c.at)}</span>
+                    {c.kind === "view" ? (
+                      <span className="break-all">{c.path}</span>
+                    ) : (
+                      <span>
+                        <Pill tone="warn">library card</Pill> {c.offerName ?? "an offer since removed"}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="rounded-2xl border border-border bg-surface p-4 text-sm">

@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { BuyLink } from "@/components/buy-link";
-import { offerHref } from "@/lib/offer-link";
 import { redirect } from "next/navigation";
 import { viewer } from "@/lib/view-as";
-import { getStandingOffer, listOwnedApps, hasSavedCard, ownedProductIdsForViewer } from "@/lib/library";
+import { getStandingOffer, listOwnedApps, ownedProductIdsForViewer } from "@/lib/library";
 import { coursesForUser } from "@/lib/courses";
 import { channelsLabel } from "@/lib/app-channels";
 import { publicCoverUrl } from "@/lib/media";
@@ -11,9 +10,9 @@ import { LibraryCourseCard } from "@/components/library/course-card";
 import { ContinueBox } from "@/components/library/continue-box";
 import { progressForCourses, lastLessonFor } from "@/lib/learning";
 import { immediateChargeCents } from "@/lib/offers";
-import { acceptStandingOfferAction, openAppAction } from "./actions";
+import { openAppAction } from "./actions";
 
-// Every outcome of acceptStandingOfferAction AND of the offer checkout's own
+// Every outcome of the offer checkout's own
 // return trip (app/(store)/checkout/offer/complete/route.ts, which reads
 // completeOfferCheckout's error straight through to this same ?offer= param),
 // in the buyer's words. Without an entry here the redirect lands silently and
@@ -26,9 +25,7 @@ const OFFER_STATUS: Record<string, string> = {
   added: "Added — it’s ready in your library.",
   already_owned: "You already have this — nothing was charged.",
   unavailable: "That offer isn’t available any more.",
-  no_saved_card:
-    "We don’t have a card on file for you yet. Buy anything from the store once and this becomes one tap.",
-  // acceptStandingOfferAction's own one-tap charge (lib/checkout.ts) — a
+  // acceptOto's off-session charge for an upsell (lib/checkout.ts) — a
   // genuine decline BEFORE any money moves. True here; NOT the key the paid
   // checkout uses for its own fulfilment failures (see grant_failed below).
   charge_failed:
@@ -136,7 +133,6 @@ export default async function LibraryPage({
   const courses = await coursesForUser(user.id);
   const apps = await listOwnedApps(user.id);
   const standing = await getStandingOffer(user.id);
-  const cardOnFile = standing ? await hasSavedCard(user.id) : false;
   // Distinguishes "you have bought nothing" from "what you bought has no
   // content attached" — two very different messages for the reader.
   const ownedProductCount = (await ownedProductIdsForViewer()).size;
@@ -366,27 +362,18 @@ export default async function LibraryPage({
                 {standing.trialDays ? ` after a ${standing.trialDays}-day trial` : ""}
               </span>
             )}
-            {/* One tap only when there's genuinely a card to charge. Otherwise
-                this goes to checkout to collect one, rather than offering a
-                button whose only possible outcome is an error. */}
-            {cardOnFile ? (
-              <form action={acceptStandingOfferAction} className="w-full sm:ml-auto sm:w-auto">
-                <input type="hidden" name="offerId" value={standing.id} />
-                <button className="w-full rounded-full bg-primary px-6 py-3 font-medium text-primary-fg transition-colors hover:bg-primary-hover">
-                  {standing.acceptLabel}
-                </button>
-              </form>
-            ) : (
-              <BuyLink
-                href={await offerHref(standing)}
-                valueCents={standing.priceCents}
-                currency={standing.currency}
-                contentId={standing.key}
-                className="w-full rounded-full bg-primary px-6 py-3 text-center font-medium text-primary-fg transition-colors hover:bg-primary-hover sm:ml-auto sm:w-auto"
-              >
-                {standing.acceptLabel}
-              </BuyLink>
-            )}
+            {/* A link to the offer's own page, through a route that records
+                the click. Never a charge from here: one tap is for upsells,
+                where the buyer has just paid and is still at the till. */}
+            <BuyLink
+              href={`/library/offer/${standing.id}`}
+              valueCents={standing.priceCents}
+              currency={standing.currency}
+              contentId={standing.key}
+              className="w-full rounded-full bg-primary px-6 py-3 text-center font-medium text-primary-fg transition-colors hover:bg-primary-hover sm:ml-auto sm:w-auto"
+            >
+              {standing.acceptLabel}
+            </BuyLink>
           </div>
           </div>
         </section>

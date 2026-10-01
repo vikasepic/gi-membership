@@ -4,7 +4,7 @@ import type { AppKind } from "@/lib/apps";
 import { builtinAppRoute } from "@/lib/builtin-apps/registry";
 import { camelize } from "@/lib/case";
 import { getStoreId, hydrateOffer, hydrateProduct, OFFER_COLUMNS, PRODUCT_COLUMNS } from "@/lib/store";
-import { savedPaymentMethodFor, ownershipFor } from "@/lib/checkout";
+import { ownershipFor } from "@/lib/checkout";
 import { createClient } from "@/lib/supabase/server";
 import { coursesForProduct } from "@/lib/courses";
 import { isOfferEligible, type Ownership } from "@/lib/offers";
@@ -248,22 +248,6 @@ export async function setProductProgress(
       position_seconds: patch.positionSeconds ?? null,
     });
   }
-}
-
-// Whether we can charge this member off-session without asking for a card.
-// Drives which control the standing offer renders: a one-tap accept, or a link
-// to the offer checkout. A button that cannot work should not be a button.
-export async function hasSavedCard(userId: string): Promise<boolean> {
-  const db = createServiceClient();
-  const { data } = await db
-    .from("orders")
-    .select("stripe_customer_id")
-    .eq("user_id", userId)
-    .not("stripe_customer_id", "is", null)
-    .limit(1)
-    .maybeSingle();
-  if (!data?.stripe_customer_id) return false;
-  return (await savedPaymentMethodFor(data.stripe_customer_id as string)) !== null;
 }
 
 // What the person currently browsing the store already owns. Anonymous

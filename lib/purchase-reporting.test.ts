@@ -53,13 +53,16 @@ describe("the browser's copy of the purchase", () => {
 describe("a sale charged to a card already on file", () => {
   const fn = checkout.slice(
     checkout.indexOf("async function trackOfferSale"),
-    checkout.indexOf("// Accept a standing offer from the library"),
+    checkout.indexOf("export type OtoAcceptResult ="),
   );
 
   it("is reported by every one of the ones that make it", () => {
-    // The upsell, an offer accepted from the library afterwards, and — since
-    // 18 Sep 2026 — the bump, under its own name rather than the host's.
-    expect(checkout.match(/await trackOfferSale\(/g)!.length).toBe(3);
+    // The upsell and — since 18 Sep 2026 — the bump, under its own name
+    // rather than the host's. The library's one-tap accept was the third
+    // until 1 Oct 2026; the card now goes through the ordinary checkout,
+    // which reports its own sale.
+    expect(fn.length).toBeGreaterThan(0);
+    expect(checkout.match(/await trackOfferSale\(/g)!.length).toBe(2);
   });
 
   it("does not collide with the purchase already reported for the order", () => {
