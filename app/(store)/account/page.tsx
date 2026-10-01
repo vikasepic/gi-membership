@@ -43,6 +43,8 @@ export default async function AccountPage({
     getLegal(),
     hasBillingAccount(user.id),
   ]);
+  // A renewal's document is its invoice, which is already on the list below.
+  const invoiceById = new Map(invoices.map((i) => [i.id, i]));
   const subs = await subscriptionsForUser(
     user.id,
     purchases.map((p) => p.subscriptionId).filter((id): id is string => !!id),
@@ -101,8 +103,13 @@ export default async function AccountPage({
                   <span className="truncate text-sm">{p.description}</span>
                   <span className="text-xs text-muted">
                     {when(p.createdAt)} · {money(p.totalCents, p.currency)}
-                    {p.status === "refunded" && " · refunded"}
                   </span>
+                  {p.status === "refunded" && (
+                    <span className="mt-1 text-xs font-medium text-primary">
+                      Refunded {money(p.refundedCents || p.totalCents, p.currency)}
+                      {p.refundedAt ? ` on ${when(p.refundedAt)}` : ""}
+                    </span>
+                  )}
                   {(() => {
                     const sub = p.subscriptionId ? subs.get(p.subscriptionId) : undefined;
                     if (!sub) return null;
@@ -132,6 +139,15 @@ export default async function AccountPage({
                   >
                     Receipt &rarr;
                   </a>
+                ) : p.invoiceId && invoiceById.get(p.invoiceId)?.hostedUrl ? (
+                  <a
+                    href={invoiceById.get(p.invoiceId)!.hostedUrl!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-sm text-primary hover:underline"
+                  >
+                    Invoice &rarr;
+                  </a>
                 ) : (
                   <span className="shrink-0 text-xs text-muted">No receipt</span>
                 )}
@@ -152,11 +168,21 @@ export default async function AccountPage({
                   <span className="text-xs text-muted">
                     {when(inv.createdAt)} · {money(inv.totalCents, inv.currency)}
                   </span>
+                  {inv.refundedCents > 0 && (
+                    <span className="mt-1 text-xs font-medium text-primary">
+                      Refunded {money(inv.refundedCents, inv.currency)}
+                    </span>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-4">
                   {inv.pdfUrl && (
                     <a href={inv.pdfUrl} className="text-sm text-primary hover:underline">
                       PDF &darr;
+                    </a>
+                  )}
+                  {inv.creditNotePdfUrl && (
+                    <a href={inv.creditNotePdfUrl} className="text-sm text-primary hover:underline">
+                      Credit note &darr;
                     </a>
                   )}
                   {inv.hostedUrl && (

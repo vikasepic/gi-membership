@@ -14,6 +14,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 
 const stripeCalls = vi.hoisted(() => ({
   refunds: [] as { args: Record<string, unknown>; opts?: Record<string, unknown> }[],
+  creditNotes: [] as { args: Record<string, unknown>; opts?: Record<string, unknown> }[],
   cancelled: [] as string[],
   invoicePayments: [] as Record<string, unknown>[],
 }));
@@ -26,6 +27,7 @@ vi.mock("@/lib/stripe", async (orig) => ({
         return params.invoice === "in_zz_refund" ? { data: [{ payment: { type: "payment_intent", payment_intent: "pi_zz_refund" } }] } : { data: [] };
       },
     },
+    creditNotes: { create: async (args: Record<string, unknown>, opts?: Record<string, unknown>) => { stripeCalls.creditNotes.push({ args, opts }); return { id: "cn_zz" }; } },
     refunds: { create: async (args: Record<string, unknown>, opts?: Record<string, unknown>) => { stripeCalls.refunds.push({ args, opts }); return { id: "re_zz" }; } },
     subscriptions: {
       retrieve: async () => ({ schedule: null }),
@@ -73,11 +75,17 @@ describe.skipIf(!canRun)("refunding a renewal order (integration)", () => {
     return order.id as string;
   }
 
-  it("refunds the invoice's payment, ends the subscription and marks the order refunded", async () => {
+  it("refunds through a credit note on the invoice, ends the subscription and marks the order refunded", async () => {
+    // A credit note with refund_amount makes the refund AND records it on the
+    // invoice in one step, so the invoice the member downloads says refunded.
+    // email_type none: whether the member is emailed is the owner's call.
     const orderId = await renewalOrder("in_zz_refund");
     expect(await refundOrder(orderId)).toMatchObject({ ok: true });
-    expect(stripeCalls.invoicePayments).toContainEqual(expect.objectContaining({ invoice: "in_zz_refund" }));
-    expect(stripeCalls.refunds).toContainEqual({ args: { payment_intent: "pi_zz_refund" }, opts: { idempotencyKey: `refund_order_${orderId}` } });
+    expect(stripeCalls.creditNotes).toContainEqual({
+      args: { invoice: "in_zz_refund", amount: 2900, refund_amount: 2900, email_type: "none" },
+      opts: { idempotencyKey: `refund_order_${orderId}` },
+    });
+    expect(stripeCalls.refunds).toEqual([]);
     expect(stripeCalls.cancelled).toContain("sub_zz_refund");
     const { data } = await db().from("orders").select("status").eq("id", orderId).single();
     expect(data!.status).toBe("refunded");

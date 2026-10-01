@@ -37,13 +37,19 @@ export type PurchaseDoc = {
    * began, and the status belongs on that one line, not on every month.
    */
   subscriptionId: string | null;
+  /** A renewal's Stripe invoice: its document, and where its refund shows. */
+  invoiceId: string | null;
+  /** What went back, per Stripe's charge where there is one. */
+  refundedCents: number;
+  /** When the order was marked refunded; null when it was not. */
+  refundedAt: string | null;
 };
 
 export async function purchaseDocsForUser(userId: string): Promise<PurchaseDoc[]> {
   const db = createServiceClient();
   const { data: orders } = await db
     .from("orders")
-    .select("id, created_at, total_cents, currency, status, stripe_payment_intent_id")
+    .select("id, created_at, updated_at, total_cents, currency, status, stripe_payment_intent_id, stripe_invoice_id")
     .eq("store_id", await getStoreId())
     .eq("user_id", userId)
     .in("status", ["paid", "refunded"])
@@ -89,6 +95,11 @@ export async function purchaseDocsForUser(userId: string): Promise<PurchaseDoc[]
       pdfUrl: null,
       kind: "none",
       subscriptionId: subscriptionByOrder.get(order.id as string) ?? null,
+      invoiceId: (order.stripe_invoice_id as string | null) ?? null,
+      // The whole order until Stripe says otherwise below; a partial refund
+      // is read off the charge.
+      refundedCents: order.status === "refunded" ? ((order.total_cents as number) ?? 0) : 0,
+      refundedAt: order.status === "refunded" ? ((order.updated_at as string) ?? null) : null,
     };
 
     const piId = order.stripe_payment_intent_id as string | null;
@@ -105,6 +116,7 @@ export async function purchaseDocsForUser(userId: string): Promise<PurchaseDoc[]
       if (charge && typeof charge !== "string") {
         base.documentUrl = charge.receipt_url ?? null;
         base.kind = charge.receipt_url ? "receipt" : "none";
+        if ((charge.amount_refunded ?? 0) > 0) base.refundedCents = charge.amount_refunded;
       }
     } catch {
       // Leave it linkless rather than failing the page: the purchase record is
@@ -120,9 +132,22 @@ export async function purchaseDocsForUser(userId: string): Promise<PurchaseDoc[]
  * Invoices for this customer's subscriptions — the only place Stripe issues a
  * real invoice with a PDF.
  */
+export type SubscriptionInvoice = {
+  id: string;
+  number: string;
+  createdAt: number;
+  totalCents: number;
+  currency: string;
+  pdfUrl: string | null;
+  hostedUrl: string | null;
+  /** Refunded through credit notes: the only way Stripe shows a refund on an invoice. */
+  refundedCents: number;
+  creditNotePdfUrl: string | null;
+};
+
 export async function subscriptionInvoicesForUser(
   userId: string,
-): Promise<{ number: string; createdAt: number; totalCents: number; currency: string; pdfUrl: string | null; hostedUrl: string | null }[]> {
+): Promise<SubscriptionInvoice[]> {
   const db = createServiceClient();
   const { data: order } = await db
     .from("orders")
@@ -135,17 +160,28 @@ export async function subscriptionInvoicesForUser(
   if (!customerId) return [];
 
   try {
-    const invoices = await stripe().invoices.list({ customer: customerId, limit: 24 });
+    const [invoices, notes] = await Promise.all([
+      stripe().invoices.list({ customer: customerId, limit: 24 }),
+      stripe().creditNotes.list({ customer: customerId, limit: 100 }),
+    ]);
+    const notePdf = new Map<string, string>();
+    for (const n of notes.data) {
+      const inv = typeof n.invoice === "string" ? n.invoice : n.invoice?.id;
+      if (inv && n.status !== "void" && !notePdf.has(inv)) notePdf.set(inv, n.pdf);
+    }
     return invoices.data
       // A $0 trial invoice is noise on this list — there is nothing to account for.
       .filter((i) => (i.amount_paid ?? 0) > 0)
       .map((i) => ({
+        id: i.id ?? "",
         number: i.number ?? i.id ?? "",
         createdAt: i.created,
         totalCents: i.amount_paid ?? 0,
         currency: i.currency ?? "usd",
         pdfUrl: i.invoice_pdf ?? null,
         hostedUrl: i.hosted_invoice_url ?? null,
+        refundedCents: i.post_payment_credit_notes_amount ?? 0,
+        creditNotePdfUrl: notePdf.get(i.id ?? "") ?? null,
       }));
   } catch {
     return [];

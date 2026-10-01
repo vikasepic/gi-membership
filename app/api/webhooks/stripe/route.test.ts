@@ -28,7 +28,9 @@ vi.mock("@/lib/stripe", async (orig) => ({
 }));
 
 const orderForPaymentIntent = vi.fn(async (_pi: string): Promise<{ id: string; currency: string } | null> => null);
-const orderForInvoicePayment = vi.fn(async (_pi: string): Promise<{ id: string; currency: string } | null> => null);
+const orderForInvoicePayment = vi.fn(async (_pi: string): Promise<{ id: string; currency: string; invoiceId: string } | null> => null);
+const linkRefundsToInvoice = vi.fn(async (_inv: string, _ch: string) => 1);
+vi.mock("@/lib/credit-notes", () => ({ linkRefundsToInvoice: (inv: string, ch: string) => linkRefundsToInvoice(inv, ch) }));
 vi.mock("@/lib/orders", async (orig) => ({
   ...(await orig<typeof import("@/lib/orders")>()),
   orderForPaymentIntent: (pi: string) => orderForPaymentIntent(pi),
@@ -266,9 +268,11 @@ describe("charge.refunded on a renewal", () => {
   });
 
   it("finds the order through the invoice the charge paid, revokes it and reports the reversal", async () => {
-    orderForInvoicePayment.mockImplementation(async (pi) => (pi === "pi_renewal" ? { id: "ord_renewal", currency: "usd" } : null));
+    orderForInvoicePayment.mockImplementation(async (pi) => (pi === "pi_renewal" ? { id: "ord_renewal", currency: "usd", invoiceId: "in_renewal" } : null));
     await post();
     expect(revokeOwnershipForOrder).toHaveBeenCalledWith("ord_renewal");
+    // The invoice the member downloads has to say refunded too.
+    expect(linkRefundsToInvoice).toHaveBeenCalledWith("in_renewal", "ch_r");
     expect(reportReversal).toHaveBeenCalledWith(expect.objectContaining({ orderId: "ord_renewal", amountCents: 2900, kind: "Refund", stripeId: "ch_r" }));
   });
 

@@ -14,6 +14,7 @@ import {
 } from "@/lib/subscription-sync";
 import { planOutcome } from "@/lib/payment-plans";
 import { pushSubscriptionToApps } from "@/lib/app-sync";
+import { linkRefundsToInvoice } from "@/lib/credit-notes";
 import { syncSubscriptionQuietly } from "@/lib/subscriptions";
 
 // Stripe webhook — the authoritative order finalizer and subscription-state
@@ -179,8 +180,16 @@ export async function POST(req: Request) {
       // nothing above: no access revoked, no reversal reported, the sale
       // still counted (seen 1 Oct 2026). Reach it through the invoice.
       if (!order) {
-        order = await orderForInvoicePayment(piId).catch(() => null);
-        if (order) await revokeOwnershipForOrder(order.id);
+        const renewal = await orderForInvoicePayment(piId).catch(() => null);
+        if (renewal) {
+          order = renewal;
+          await revokeOwnershipForOrder(renewal.id);
+          // Stripe shows a refund on an invoice only through a credit note,
+          // and a refund made on the charge has none (lib/credit-notes.ts).
+          await linkRefundsToInvoice(renewal.invoiceId, charge.id).catch((e) =>
+            console.error("[stripe webhook] could not put the refund on its invoice:", e),
+          );
+        }
       }
       if (order) {
         await reportReversal({
