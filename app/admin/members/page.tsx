@@ -14,6 +14,7 @@ import {
 } from "@/lib/member-money";
 import { money } from "@/lib/money";
 import { AddMember } from "@/components/admin/add-member";
+import { ClickableRow } from "@/components/admin/clickable-row";
 import { Tile, Chip, Pill, journeyTone, fmtDate, Soon, Th, Empty } from "@/components/admin/money-ui";
 import { lastViewedForUsers, lastSignInForAll } from "@/lib/learning";
 import { agoLabel } from "@/lib/watch";
@@ -139,7 +140,8 @@ export default async function AdminMembersPage({
               <tr><td colSpan={8}><Empty>Nobody matches. Clear a filter to see everyone.</Empty></td></tr>
             ) : (
               shown.map((m) => (
-                <tr key={m.id} className="border-t border-border align-top hover:bg-surface-2">
+                // The whole row opens the member, as on Transactions.
+                <ClickableRow key={m.id} href={`/admin/members/${m.id}`} className="border-t border-border align-top hover:bg-surface-2">
                   {/* Long text is capped and shortened, never allowed to set a
                       column's width: a campaign name under Joined once pushed
                       Journey off the right edge (29 Sep 2026). Full text on hover. */}
@@ -194,7 +196,7 @@ export default async function AdminMembersPage({
                     )}
                   </td>
                   <td className="px-2 py-3 text-muted"><Link href={`/admin/members/${m.id}`} aria-label="Open">›</Link></td>
-                </tr>
+                </ClickableRow>
               ))
             )}
           </tbody>
