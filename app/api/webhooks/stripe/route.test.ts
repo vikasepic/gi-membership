@@ -34,6 +34,20 @@ vi.mock("@/lib/orders", async (orig) => ({
   orderForPaymentIntent: (pi: string) => orderForPaymentIntent(pi),
   orderForInvoicePayment: (pi: string) => orderForInvoicePayment(pi),
 }));
+const pushSubscriptionToApps = vi.fn(async (_sub: string) => {});
+vi.mock("@/lib/app-sync", async (orig) => ({
+  ...(await orig<typeof import("@/lib/app-sync")>()),
+  pushSubscriptionToApps: (sub: string) => pushSubscriptionToApps(sub),
+}));
+const recordRenewal = vi.fn(async (_i: unknown) => ({ recorded: true, orderId: "ord_r", amountCents: 2900 }));
+vi.mock("@/lib/renewals", async (orig) => ({
+  ...(await orig<typeof import("@/lib/renewals")>()),
+  recordRenewal: (i: unknown) => recordRenewal(i),
+}));
+vi.mock("@/lib/subscriptions", async (orig) => ({
+  ...(await orig<typeof import("@/lib/subscriptions")>()),
+  syncSubscriptionQuietly: async () => {},
+}));
 const reportReversal = vi.fn(async (_a: Record<string, unknown>) => {});
 vi.mock("@/lib/reversals", async (orig) => ({
   ...(await orig<typeof import("@/lib/reversals")>()),
@@ -264,5 +278,32 @@ describe("charge.refunded on a renewal", () => {
     expect(orderForInvoicePayment).not.toHaveBeenCalled();
     expect(revokeOwnershipForOrder).not.toHaveBeenCalled();
     expect(reportReversal).toHaveBeenCalledWith(expect.objectContaining({ orderId: "ord_checkout" }));
+  });
+});
+
+/**
+ * A paid renewal tells the app. Before 1 Oct 2026 nothing did: the app heard
+ * the same "active" from the subscription update and nothing about the money,
+ * so it could not show when a member was last charged or next will be.
+ */
+describe("invoice.payment_succeeded", () => {
+  beforeEach(() => {
+    process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
+    pushSubscriptionToApps.mockClear();
+  });
+
+  it("pushes the subscription's state, billing and all, to its apps", async () => {
+    fakeEvent = {
+      type: "invoice.payment_succeeded",
+      data: { object: { id: "in_1", billing_reason: "subscription_cycle", parent: { subscription_details: { subscription: "sub_paid" } }, lines: { data: [] } } },
+    };
+    await post();
+    expect(pushSubscriptionToApps).toHaveBeenCalledWith("sub_paid");
+  });
+
+  it("pushes nothing for an invoice with no subscription", async () => {
+    fakeEvent = { type: "invoice.payment_succeeded", data: { object: { id: "in_2", billing_reason: "manual", lines: { data: [] } } } };
+    await post();
+    expect(pushSubscriptionToApps).not.toHaveBeenCalled();
   });
 });

@@ -78,29 +78,11 @@ export async function planNameBackfill(appId: string): Promise<BackfillPlan> {
  * chance for a flaky endpoint to queue a retry for no reason.
  */
 export async function runNameBackfill(appId: string): Promise<{ sent: number; skipped: number }> {
-  const db = createServiceClient();
+  // Every entitlement, named or not. It once sent only named members, while a
+  // name was all it added; since 1 Oct 2026 each push also carries the billing
+  // block (lib/app-billing.ts), which every member has.
   const plan = await planNameBackfill(appId);
   if (plan.ownershipIds.length === 0) return { sent: 0, skipped: 0 };
-
-  const { data: rows } = await db
-    .from("ownership")
-    .select("id, user_id")
-    .in("id", plan.ownershipIds);
-
-  const { data: users } = await db
-    .from("users")
-    .select("id, username")
-    .in("id", [...new Set((rows ?? []).map((r) => r.user_id as string))]);
-  const withName = new Set(
-    (users ?? [])
-      .filter((u) => ((u.username as string | null) ?? "").trim().length > 0)
-      .map((u) => u.id as string),
-  );
-
-  const toSend = (rows ?? [])
-    .filter((r) => withName.has(r.user_id as string))
-    .map((r) => r.id as string);
-
-  await pushOwnershipStateToApps(toSend);
-  return { sent: toSend.length, skipped: plan.ownershipIds.length - toSend.length };
+  await pushOwnershipStateToApps(plan.ownershipIds);
+  return { sent: plan.ownershipIds.length, skipped: 0 };
 }

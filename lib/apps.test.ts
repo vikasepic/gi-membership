@@ -137,3 +137,74 @@ describe("the name goes with the person", () => {
     expect(createHmac("sha256", secret).update(forged).digest("base64url")).not.toBe(sig);
   });
 });
+
+/**
+ * The billing facts ride beside the entitlement (1 Oct 2026). Read at send
+ * time from the subscription the push names, so a retry carries what is true
+ * when it lands rather than what was true when it first failed.
+ */
+describe("the billing block on the provision call", () => {
+  const ROW = {
+    id: "app-1", key: "funnel", name: "Funnel App", base_url: "https://funnel.example",
+    provision_endpoint: "/api/store/provision", handoff_endpoint: "/h", shared_secret: "s3cret",
+    entitlement_mapping: {}, active: true,
+  };
+  const BILLING = { subscriptionStatus: "active", nextPaymentAt: "2026-10-30T15:29:38.000Z", lastPaymentAt: "2026-09-30T16:30:31.000Z" };
+  const lookups: (string | null)[] = [];
+
+  const send = async (stripeSubscriptionId: string | null, billing: Record<string, unknown> | null) => {
+    vi.resetModules();
+    lookups.length = 0;
+    vi.doMock("@/lib/supabase/server", () => ({
+      createServiceClient: () => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: ROW }) }) }) }) }),
+    }));
+    vi.doMock("@/lib/app-billing", () => ({
+      billingForSubscription: async (id: string | null) => {
+        lookups.push(id);
+        return billing;
+      },
+    }));
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", async (_u: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return new Response("{}", { status: 200 });
+    });
+    const { notifyAppEntitlement } = await import("@/lib/apps");
+    await notifyAppEntitlement({ appId: "app-1", email: "b@e.com", entitlementKey: "funnel", status: "active", stripeCustomerId: "cus_1", stripeSubscriptionId });
+    return bodies[0];
+  };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+    vi.doUnmock("@/lib/supabase/server");
+    vi.doUnmock("@/lib/app-billing");
+  });
+
+  it("carries the subscription's billing facts", async () => {
+    const body = await send("sub_1", BILLING);
+    expect(lookups).toEqual(["sub_1"]);
+    expect(body.billing).toEqual(BILLING);
+    // Beside the fields every app already reads, never instead of them.
+    expect(body).toMatchObject({ status: "active", hasAccess: true, stripeSubscriptionId: "sub_1" });
+  });
+
+  it("is left out when there is no subscription behind the access", async () => {
+    const body = await send(null, null);
+    expect("billing" in body).toBe(false);
+  });
+
+  it("is left out, and the push still goes, when the lookup fails", async () => {
+    vi.resetModules();
+    vi.doMock("@/lib/supabase/server", () => ({
+      createServiceClient: () => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: ROW }) }) }) }) }),
+    }));
+    vi.doMock("@/lib/app-billing", () => ({ billingForSubscription: async () => { throw new Error("db down"); } }));
+    const bodies: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", async (_u: string, init: RequestInit) => { bodies.push(JSON.parse(String(init.body))); return new Response("{}", { status: 200 }); });
+    const { notifyAppEntitlement } = await import("@/lib/apps");
+    const res = await notifyAppEntitlement({ appId: "app-1", email: "b@e.com", entitlementKey: "funnel", status: "active", stripeCustomerId: null, stripeSubscriptionId: "sub_1" });
+    expect(res.ok).toBe(true);
+    expect("billing" in bodies[0]).toBe(false);
+  });
+});

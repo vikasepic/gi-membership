@@ -124,6 +124,43 @@ x-store-secret: <the shared secret we give you>
 | `stripeCustomerId` | string \| null | The Stripe customer **in the store's Stripe account**. See §7 before assuming you can use it. |
 | `stripeSubscriptionId` | string \| null | The store-created subscription. Null for one-off, non-subscription grants. |
 | `occurredAt` | number | Unix seconds. Use it to discard a stale message that arrives out of order. |
+| `billing` | object \| absent | What the member pays and when. Present whenever a Stripe subscription is behind the access; **absent** for a comped or one-time grant. Added 1 Oct 2026, beside the fields above and never instead of them. See "The billing block" below. |
+
+### The billing block
+
+Sent on every push that has a subscription behind it, and on its own after
+each paid renewal, so a member's dates are current the day their card is
+charged. Every date is an ISO 8601 string in UTC. Store what you need; keep
+deciding access on `hasAccess` alone.
+
+```
+"billing": {
+  "subscriptionStatus": "active",                  // Stripe's own status
+  "amountCents": 2900,                              // price per period
+  "currency": "usd",
+  "interval": "month",                              // month | year | week | day
+  "intervalCount": 1,
+  "installments": null,                             // a payment plan's number of payments
+  "trialEndsAt": "2026-09-30T15:29:38.000Z",        // null if there was no trial
+  "currentPeriodStart": "2026-09-30T15:29:38.000Z",
+  "currentPeriodEnd": "2026-10-30T15:29:38.000Z",
+  "nextPaymentAt": "2026-10-30T15:29:38.000Z",      // null when nothing more will be charged
+  "cancelAtPeriodEnd": false,
+  "cancelsAt": null,                                // last day of access when a cancel is scheduled
+  "canceledAt": null,
+  "lastPaymentAt": "2026-09-30T16:30:31.000Z",      // null until the first real charge
+  "paidInvoices": 1,
+  "paidTotalCents": 2900
+}
+```
+
+- **`nextPaymentAt`** is the trial end while on trial, the period end while
+  paying, and `null` once a cancellation is scheduled, the subscription has
+  ended, or a payment plan is paid off. It is the date to show as "renews on".
+- **A scheduled cancellation** keeps `status: "active"` and `hasAccess: true`
+  until the day it takes effect, as above. `cancelAtPeriodEnd: true` and
+  `cancelsAt` are how you can say "ends on 30 Oct" in the meantime.
+- **Ignore any field you don't know.** More may be added the same way.
 
 **`past_due` keeps access** (`hasAccess: true`). Stripe retries a failed renewal
 for days, and cutting someone off over a card that is about to succeed is worse
@@ -531,6 +568,7 @@ test mode will call your provision endpoint for real.
 | `stripeCustomerId` | string | yes |
 | `stripeSubscriptionId` | string | yes |
 | `occurredAt` | number (unix seconds) | no |
+| `billing` | object (see "The billing block") | absent when no subscription |
 
 **You → store: `POST /api/apps/entitlement` body**
 

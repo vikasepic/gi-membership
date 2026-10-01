@@ -92,21 +92,20 @@ describe.skipIf(!canRun)("backfilling names to a connected app", () => {
     expect(after.unnamed).toBe(before.unnamed + 1);
   });
 
-  it("sends only the ones it can actually name", async () => {
+  it("sends every entitlement, named or not, since each now carries its billing dates", async () => {
+    // It skipped nameless members while a name was the only thing it added.
+    // Since 1 Oct 2026 every push carries the billing block too, so a nameless
+    // member is no longer a call that changes nothing at the far end.
     sent.length = 0;
-    const { email } = await member("Mary Anne van der Berg", "active");
+    const { email: named } = await member("Mary Anne van der Berg", "active");
+    const { email: nameless } = await member(null, "active");
     const { sent: n } = await runNameBackfill(APP_ID);
 
-    const mine = sent.filter((s) => (s as { email: string }).email === email);
-    expect(mine).toHaveLength(1);
-    expect((mine[0] as { fullName: string }).fullName).toBe("Mary Anne van der Berg");
-    expect(n).toBeGreaterThan(0);
-
-    // A nameless entitlement is a network call that changes nothing at the far
-    // end, and one more chance for a flaky endpoint to queue a pointless retry.
-    for (const s of sent) {
-      expect((s as { fullName: string | null }).fullName).toBeTruthy();
-    }
+    const one = sent.filter((s) => (s as { email: string }).email === named);
+    expect(one).toHaveLength(1);
+    expect((one[0] as { fullName: string }).fullName).toBe("Mary Anne van der Berg");
+    expect(sent.filter((s) => (s as { email: string }).email === nameless)).toHaveLength(1);
+    expect(n).toBeGreaterThan(1);
   });
 
   it("re-sends a cancelled entitlement as cancelled", async () => {

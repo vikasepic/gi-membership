@@ -453,3 +453,21 @@ export async function applyPendingEntitlements(userId: string, email: string): P
   }
   return pending.length;
 }
+
+/**
+ * Tell the apps behind a subscription where it stands now: access plus the
+ * billing facts. For a paid renewal, which changes nothing about access but
+ * everything about "last paid" and "next payment", so nothing else pushes it.
+ */
+export async function pushSubscriptionToApps(stripeSubscriptionId: string): Promise<void> {
+  try {
+    const { data } = await createServiceClient()
+      .from("ownership")
+      .select("id")
+      .eq("stripe_subscription_id", stripeSubscriptionId)
+      .not("app_id", "is", null);
+    await pushOwnershipStateToApps((data ?? []).map((r) => r.id as string));
+  } catch (e) {
+    console.error("[app-sync] renewal push failed:", e);
+  }
+}

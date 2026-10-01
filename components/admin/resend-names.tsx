@@ -6,7 +6,7 @@ import { ConfirmSubmit } from "@/components/admin/confirm-submit";
 import { resendNames, type BackfillState } from "@/app/admin/apps/actions";
 
 /**
- * Re-send an app everything the store already told it, with names attached.
+ * Re-send an app every member's current state: status, name and billing dates.
  *
  * The count is shown before the button rather than after the send, so the
  * decision is made on a number rather than on hope. It asks twice because it
@@ -32,7 +32,7 @@ export function ResendNames({
   if (total === 0) {
     return (
       <p className="text-xs text-muted">
-        The store holds no entitlements for {appName}, so there are no names to send.
+        The store holds no entitlements for {appName}, so there is nothing to send.
       </p>
     );
   }
@@ -41,9 +41,9 @@ export function ResendNames({
     <form action={action} className="flex flex-col gap-2 border-t border-border pt-3">
       <input type="hidden" name="appId" value={appId} />
       <p className="text-xs text-muted">
-        {named} of {total} {total === 1 ? "entitlement has" : "entitlements have"} a name stored.
-        Re-sends each one&rsquo;s <em>current</em> status with the name attached — it grants
-        nothing and takes nothing away.
+        {total} {total === 1 ? "member" : "members"} ({named} with a name stored). Re-sends each
+        one&rsquo;s <em>current</em> status with their name and billing dates (last payment, next
+        payment, trial end, scheduled cancellation) — it grants nothing and takes nothing away.
       </p>
       {!active && (
         <p className="text-xs text-primary">
@@ -71,7 +71,7 @@ function Row() {
   return (
     <span className="flex items-center gap-3">
       <ConfirmSubmit
-        label="Send names"
+        label="Re-send everyone"
         confirmLabel="Send — this reaches their server"
         cancelLabel="Not now"
         kind="send"

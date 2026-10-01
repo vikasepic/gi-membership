@@ -13,6 +13,7 @@ import {
   revokeOwnershipForOrder,
 } from "@/lib/subscription-sync";
 import { planOutcome } from "@/lib/payment-plans";
+import { pushSubscriptionToApps } from "@/lib/app-sync";
 import { syncSubscriptionQuietly } from "@/lib/subscriptions";
 
 // Stripe webhook — the authoritative order finalizer and subscription-state
@@ -145,8 +146,12 @@ export async function POST(req: Request) {
     // never told it converted.
     case "invoice.payment_succeeded": {
       const invoice = event.data.object as Stripe.Invoice;
-      await syncSubscriptionQuietly(subscriptionIdOf(invoice) ?? undefined);
+      const paidSub = subscriptionIdOf(invoice);
+      await syncSubscriptionQuietly(paidSub ?? undefined);
       const res = await recordRenewal(invoice);
+      // The apps hear about the payment too: last paid, next payment. After
+      // the sync above, which is where those dates come from.
+      if (paidSub) await pushSubscriptionToApps(paidSub);
       // Loud on purpose. This is the one webhook that arrives every month for
       // the life of every subscription, so a reason that turns out to be wrong
       // is a reason worth being able to grep for.

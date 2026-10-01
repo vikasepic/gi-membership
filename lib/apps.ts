@@ -1,6 +1,7 @@
 import "server-only";
 import { createHmac } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/server";
+import { billingForSubscription } from "@/lib/app-billing";
 import { camelize } from "@/lib/case";
 import { getStoreId } from "@/lib/store";
 import { recordError } from "@/lib/errors";
@@ -201,6 +202,10 @@ export async function notifyAppEntitlement(args: {
   }
 
   const url = `${app.baseUrl}${app.provisionEndpoint}`;
+  // What they pay and when (lib/app-billing.ts), read now rather than carried
+  // through the retry queue, so a late retry says what is true when it lands.
+  // Optional to the app and to us: a failed lookup sends the push without it.
+  const billing = await billingForSubscription(args.stripeSubscriptionId).catch(() => null);
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -215,6 +220,7 @@ export async function notifyAppEntitlement(args: {
         stripeCustomerId: args.stripeCustomerId,
         stripeSubscriptionId: args.stripeSubscriptionId,
         occurredAt,
+        ...(billing ? { billing } : {}),
       }),
       signal: AbortSignal.timeout(5000),
       // A provision call is server-to-server and authenticated by the header.

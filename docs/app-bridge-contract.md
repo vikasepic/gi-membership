@@ -47,12 +47,22 @@ content-type: application/json
   "hasAccess": true,                  // false only when canceled
   "stripeCustomerId": "cus_...",
   "stripeSubscriptionId": "sub_...",  // the store-created subscription
-  "occurredAt": 1785300000
+  "occurredAt": 1785300000,
+  "billing": { … }                    // when a subscription is behind it; see below
 }
 ```
 
 This fires on EVERY state change, not just the grant — trial conversion,
-dunning, cancellation, refund. `status: "canceled"` means revoke.
+dunning, cancellation, refund — and after every paid renewal.
+`status: "canceled"` means revoke.
+
+**`billing`** (added 1 Oct 2026): what the member pays and when, read from the
+`subscriptions` table at send time (`lib/app-billing.ts`): Stripe's status,
+price, interval, trial end, current period, `nextPaymentAt`,
+`cancelAtPeriodEnd`/`cancelsAt`, `lastPaymentAt`, and invoices paid. Absent
+when no subscription is behind the access. Field list and rules in
+`docs/app-integration-guide.md`, "The billing block". Not carried through the
+retry queue: a retry reads it again, so it says what is true when it lands.
 
 **`hasAccess` is the field that takes access away, and it must not move
 early.** Content Engine acts on `hasAccess` alone and never reads `status`, so
