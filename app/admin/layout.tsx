@@ -31,7 +31,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           curriculum with nested rows were both being asked to live in half a
           screen while the other half stayed empty. */}
       <main className="w-full min-w-0 flex-1 px-5 py-7 md:px-8">
-        <div className="mx-auto w-full max-w-6xl">{children}</div>
+        {/* 6xl by default; a page that is mostly a wide table (Transactions)
+            opts into the whole screen by carrying the `admin-wide` class. */}
+        <div className="mx-auto w-full max-w-6xl has-[.admin-wide]:max-w-[1800px]">{children}</div>
       </main>
       {/* Every admin page, not only the editors.
           Somebody halfway through writing a sales page is the person this is

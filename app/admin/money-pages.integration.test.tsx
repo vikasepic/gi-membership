@@ -17,7 +17,8 @@ vi.mock("@/lib/admin-guard", () => ({
   adminEmails: () => ["admin@example.com"],
   isAdminEmail: (e: string) => e === "admin@example.com",
 }));
-vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("notFound"); } }));
+// useRouter for the clickable Transactions rows (components/admin/clickable-row.tsx).
+vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("notFound"); }, useRouter: () => ({ push: () => {} }) }));
 
 describe.skipIf(!canRun)("the money screens (integration)", () => {
   it("Members renders its tiles, chips and rows", async () => {

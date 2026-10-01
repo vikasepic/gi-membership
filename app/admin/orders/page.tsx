@@ -16,6 +16,7 @@ import {
 } from "@/lib/ledger";
 import { money } from "@/lib/money";
 import { RefundButton } from "@/components/admin/refund-button";
+import { ClickableRow } from "@/components/admin/clickable-row";
 import { Tile, Chip, Pill, kindTone, KIND_LABEL, fmtDate, fmtTime, Soon, Th, Empty } from "@/components/admin/money-ui";
 
 /**
@@ -50,7 +51,7 @@ export default async function TransactionsPage({
   let lastDay = "";
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="admin-wide flex flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl">Transactions</h1>
         <p className="max-w-2xl text-sm text-muted">
@@ -96,31 +97,32 @@ export default async function TransactionsPage({
         {(filter.q || filter.offer || filter.source) && <Link href={href({ q: "", offer: "", source: "" })} className="text-xs text-muted hover:text-fg">Clear</Link>}
       </form>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,2.2fr)_minmax(16rem,1fr)]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">
         <div className="overflow-x-auto rounded-2xl border border-border bg-surface">
           <table className="w-full min-w-[48rem] text-sm">
-            <thead className="bg-surface-2"><tr><Th>When</Th><Th>Person</Th><Th>What</Th><Th>Source</Th><Th right>Amount</Th><Th /></tr></thead>
+            <thead className="bg-surface-2"><tr><Th>When</Th><Th>Person</Th><Th>What</Th><Th>Coupon</Th><Th>Source</Th><Th right>Amount</Th><Th /></tr></thead>
             <tbody>
               {shown.length === 0 ? (
-                <tr><td colSpan={6}><Empty>Nothing in this range.</Empty></td></tr>
+                <tr><td colSpan={7}><Empty>Nothing in this range.</Empty></td></tr>
               ) : (
                 shown.flatMap((r) => {
                   const day = fmtDate(r.at);
-                  const head = day !== lastDay ? [<tr key={`d:${day}`} className="bg-surface-2"><td colSpan={6} className="px-3 py-1 kicker text-muted">{day}</td></tr>] : [];
+                  const head = day !== lastDay ? [<tr key={`d:${day}`} className="bg-surface-2"><td colSpan={7} className="px-3 py-1 kicker text-muted">{day}</td></tr>] : [];
                   lastDay = day;
                   return [
                     ...head,
-                    <tr key={r.id} className="border-t border-border align-top hover:bg-surface-2">
+                    // The whole row opens the member; the Refund button and the
+                    // name link inside it still do their own thing.
+                    <ClickableRow key={r.id} href={r.userId ? `/admin/members/${r.userId}` : null} className="border-t border-border align-top hover:bg-surface-2">
                       <td className="whitespace-nowrap px-3 py-3 text-muted">{fmtTime(r.at)}</td>
                       <td className="px-3 py-3">
                         {r.userId ? <Link href={`/admin/members/${r.userId}`} className="font-medium hover:text-primary">{r.name || r.email}</Link> : <span className="font-medium">{r.name || r.email}</span>}
                         {r.name && <div className="text-xs text-muted">{r.email}</div>}
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="min-w-[16rem] px-3 py-3">
                         <Pill tone={kindTone(r.kind)}>{KIND_LABEL[r.kind]}</Pill> {r.what}
                         {!r.livemode && <> <Pill tone="quiet">test</Pill></>}
                         {r.refunded && r.kind !== "refund" && <> <Pill tone="bad">refunded</Pill></>}
-                        {r.couponCode && <> <Pill tone="quiet">coupon {r.couponCode}</Pill></>}
                         {r.trial && (
                           <div className="mt-1 text-xs text-muted">
                             {money(r.trial.thenCents, r.currency)} a {r.trial.interval ?? "month"} after ·{" "}
@@ -128,7 +130,10 @@ export default async function TransactionsPage({
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-3 text-xs text-muted">{r.source}</td>
+                      <td className="whitespace-nowrap px-3 py-3">
+                        {r.couponCode ? <Pill tone="warn">{r.couponCode}</Pill> : <span className="text-xs text-muted">—</span>}
+                      </td>
+                      <td className="min-w-[11rem] px-3 py-3 text-xs text-muted">{r.source}</td>
                       <td className={`whitespace-nowrap px-3 py-3 text-right font-display tabular-nums ${r.amountCents < 0 ? "text-primary" : r.amountCents === 0 ? "text-muted" : ""}`}>
                         {r.amountCents === 0 ? "$0" : money(r.amountCents, r.currency)}
                       </td>
@@ -137,7 +142,7 @@ export default async function TransactionsPage({
                           <RefundButton orderId={r.orderId} email={r.email} amount={money(r.amountCents, r.currency)} />
                         )}
                       </td>
-                    </tr>,
+                    </ClickableRow>,
                   ];
                 })
               )}
