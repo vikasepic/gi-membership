@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { sendCrmEvent } from "@/lib/crm";
+// The failure path records to error_events; that is tested on its own.
+vi.mock("@/lib/errors", async (orig) => ({ ...(await orig<typeof import("@/lib/errors")>()), recordError: async () => {} }));
+const { sendCrmEvent } = await import("@/lib/crm");
 
 // The CRM feed is fire-and-forget, which is exactly why it needs a test: a
 // broken hook is silent by design, and the first symptom in production is
@@ -73,16 +75,18 @@ describe("sendCrmEvent", () => {
     stubFetch(async () => {
       throw new Error("ECONNREFUSED");
     });
+    // Never throws; says it failed, and queues it (lib/outbound-failures.test.ts).
     await expect(
       sendCrmEvent({ type: "purchase", email: "a@b.com", occurredAt: 1 }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
   });
 
   it("swallows a non-2xx response", async () => {
     vi.stubEnv("CRM_WEBHOOK_URL", HOOK);
     stubFetch(async () => new Response("nope", { status: 500 }));
+    // Never throws; says it failed, and queues it (lib/outbound-failures.test.ts).
     await expect(
       sendCrmEvent({ type: "purchase", email: "a@b.com", occurredAt: 1 }),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
   });
 });

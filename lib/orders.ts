@@ -131,7 +131,33 @@ export async function listOrders(limit = 100): Promise<OrderRow[]> {
   });
 }
 
-export type RefundResult = { ok: true; alreadyRefunded?: boolean } | { ok: false; error: string };
+export type RefundResult =
+  | {
+      ok: true;
+      alreadyRefunded?: boolean;
+      /** The refund Stripe made; absent when there was nothing to give back. */
+      refundId?: string;
+      refundedCents?: number;
+      /** Stripe's word on it: "succeeded", or "pending" for a slow method. */
+      refundStatus?: string;
+      currency?: string;
+    }
+  | { ok: false; error: string };
+
+/**
+ * Stripe's refund, or the reason not to act on it. Our side (access, the
+ * order's status) moves only on a refund that succeeded or is on its way: a
+ * $398 renewal sat "refunded" here for a day with nothing given back.
+ */
+function confirmed(refund: { id: string; amount: number; status: string | null } | null | undefined, currency: string):
+  | { ok: true; refundId: string; refundedCents: number; refundStatus: string; currency: string }
+  | { ok: false; error: string } {
+  if (!refund) return { ok: false, error: "Stripe did not return a refund. Nothing was changed here; check the payment in Stripe." };
+  if (refund.status !== "succeeded" && refund.status !== "pending") {
+    return { ok: false, error: `Stripe says the refund ${refund.status ?? "did not complete"} (${refund.id}). Nothing was changed here.` };
+  }
+  return { ok: true, refundId: refund.id, refundedCents: refund.amount, refundStatus: refund.status, currency };
+}
 
 // Refund a paid order and take back what it granted.
 //
@@ -149,7 +175,7 @@ export async function refundOrder(orderId: string): Promise<RefundResult> {
   const db = createServiceClient();
   const { data: order, error } = await db
     .from("orders")
-    .select("id, status, stripe_payment_intent_id, stripe_invoice_id, total_cents")
+    .select("id, status, stripe_payment_intent_id, stripe_invoice_id, total_cents, currency")
     .eq("id", orderId)
     .maybeSingle();
   if (error) return { ok: false, error: error.message };
@@ -166,20 +192,25 @@ export async function refundOrder(orderId: string): Promise<RefundResult> {
   // makes the refund and records it on the invoice in one step, so the
   // invoice the member downloads says refunded too. No email from Stripe:
   // telling the member is the owner's call.
+  const currency = (order.currency as string) ?? "usd";
   const piId = order.stripe_payment_intent_id as string | null;
   if (!piId && order.stripe_invoice_id) {
     const total = (order.total_cents as number) ?? 0;
+    let made: ReturnType<typeof confirmed>;
     try {
-      await stripe().creditNotes.create(
-        { invoice: order.stripe_invoice_id as string, amount: total, refund_amount: total, email_type: "none" },
+      const note = await stripe().creditNotes.create(
+        { invoice: order.stripe_invoice_id as string, amount: total, refund_amount: total, email_type: "none", expand: ["refunds.refund"] },
         { idempotencyKey: `refund_order_${orderId}` },
       );
+      const r = note.refunds?.[0]?.refund;
+      made = confirmed(r && typeof r !== "string" ? { id: r.id, amount: r.amount, status: r.status } : null, currency);
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : "Refund failed" };
     }
+    if (!made.ok) return made;
     await endSubscriptionsOf(orderId);
     await revokeOwnershipForOrder(orderId);
-    return { ok: true };
+    return made;
   }
   if (!piId) {
     // A $0 trial-start order books no PaymentIntent. Nothing was charged, so
@@ -192,11 +223,13 @@ export async function refundOrder(orderId: string): Promise<RefundResult> {
     return { ok: true };
   }
 
+  let made: ReturnType<typeof confirmed>;
   try {
-    await stripe().refunds.create(
+    const r = await stripe().refunds.create(
       { payment_intent: piId },
       { idempotencyKey: `refund_order_${orderId}` },
     );
+    made = confirmed({ id: r.id, amount: r.amount, status: r.status }, currency);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Refund failed";
     // Stripe refuses a second refund on a fully-refunded charge. That is the
@@ -209,10 +242,11 @@ export async function refundOrder(orderId: string): Promise<RefundResult> {
     return { ok: false, error: message };
   }
 
+  if (!made.ok) return made;
   await endSubscriptionsOf(orderId);
   // revokeOwnershipForOrder also flips the order to refunded.
   await revokeOwnershipForOrder(orderId);
-  return { ok: true };
+  return made;
 }
 
 /**

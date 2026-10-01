@@ -1,4 +1,5 @@
 import "server-only";
+import { recordError, messageOf } from "@/lib/errors";
 
 // Outbound CRM feed — one clean event per thing that actually happened, posted
 // to a Zapier Catch Hook (and from there to ActiveCampaign or anywhere else).
@@ -70,10 +71,19 @@ export type CrmEvent = {
  * No-ops when CRM_WEBHOOK_URL is unset, so local development and the test suite
  * never post anywhere.
  */
-export async function sendCrmEvent(event: CrmEvent): Promise<void> {
+/**
+ * Never throws: it runs beside purchases and refunds. A failure is queued for
+ * the retry sweep and shows on /admin/errors. It used to be a console line
+ * only, so a Zapier hook answering 404 went unnoticed (1 Oct 2026).
+ *
+ * The retry runner passes `queueOnFailure: false`: it IS the retry, and
+ * reads the `false` this returns to record the attempt.
+ */
+export async function sendCrmEvent(event: CrmEvent, opts: { queueOnFailure?: boolean } = {}): Promise<boolean> {
   const url = process.env.CRM_WEBHOOK_URL;
-  if (!url) return;
+  if (!url) return true;
 
+  let problem: string;
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -81,12 +91,21 @@ export async function sendCrmEvent(event: CrmEvent): Promise<void> {
       body: JSON.stringify(event),
       signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) {
-      console.error(`[crm] ${event.type} rejected: ${res.status}`);
-    }
+    if (res.ok) return true;
+    problem = `rejected: ${res.status}`;
   } catch (e) {
-    // Logged, not rethrown. There is no error_events table yet, so the console
-    // is the only record — worth knowing when the first tags go missing.
-    console.error(`[crm] ${event.type} failed:`, e);
+    problem = `failed: ${messageOf(e)}`;
   }
+  if (opts.queueOnFailure === false) {
+    console.error(`[crm] ${event.type} ${problem}`);
+  } else {
+    await recordError({
+      source: "crm",
+      message: `CRM ${event.type} ${problem}`,
+      context: { type: event.type, email: event.email },
+      jobKind: "crm_event",
+      jobPayload: event as unknown as Record<string, unknown>,
+    });
+  }
+  return false;
 }

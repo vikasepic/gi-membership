@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import { refundOrder } from "@/lib/orders";
+import { money } from "@/lib/money";
 
 export type RefundState = { error?: string; ok?: string };
 
@@ -28,9 +29,16 @@ export async function refundOrderAction(
 
   revalidatePath("/admin/orders");
   revalidatePath("/admin/members");
+  // What Stripe did, with its id, so this can be checked against the
+  // dashboard. It said "Refunded" whatever had happened (1 Oct 2026).
+  const amount = money(res.refundedCents ?? 0, res.currency ?? "usd");
   return {
     ok: res.alreadyRefunded
       ? "Already refunded in Stripe — records and access are now in step."
-      : "Refunded. Access has been withdrawn.",
+      : !res.refundId
+        ? "Nothing was charged, so nothing to refund. Access has been withdrawn."
+        : res.refundStatus === "pending"
+          ? `Refund of ${amount} is pending in Stripe (${res.refundId}). Access has been withdrawn.`
+          : `Refunded ${amount} in Stripe (${res.refundId}). Access has been withdrawn.`,
   };
 }

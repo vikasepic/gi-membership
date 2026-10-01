@@ -88,7 +88,7 @@ retry would succeed.
 
 ## Every scheduled task on this deploy
 
-Coolify → gi-membership → Scheduled Tasks. All five run the same shape: a
+Coolify → gi-membership → Scheduled Tasks. All of them run the same shape: a
 `node -e` fetch to `127.0.0.1:3000` with the bearer secret read from the
 container's own environment. Container field `r11f09w16h8afmpt0ilxey2q`.
 
@@ -100,6 +100,7 @@ container's own environment. Container field `r11f09w16h8afmpt0ilxey2q`.
 | `backfill-renewals` | `/api/cron/backfill-renewals` | `40 3 * * *` | a renewal Stripe charged but never delivered is money with no order; it also repairs a renewal's date |
 | `prune-visits` | `/api/cron/prune-visits` | `20 4 * * 0` | `visits` only grows |
 | `trial-reminders` | `/api/cron/trial-reminders` | `5 * * * *` | nobody is warned before their trial converts |
+| `reconcile-money` | `/api/cron/reconcile-money` | `10 4 * * *` | an order marked refunded that Stripe never refunded, a Stripe refund we never recorded, or a renewal with no order goes unnoticed until a member says so (`lib/money-reconcile.ts`; `?dry=1` reports without recording) |
 
 `POST /api/cron/backfill-ac-tags` exists but is deliberately NOT scheduled. It
 is a repair for the 22 Sep 2026 gap where offer-page purchases never reached

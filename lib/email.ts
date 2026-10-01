@@ -1,5 +1,6 @@
 import "server-only";
 import { longDate } from "@/lib/dates";
+import { recordError, messageOf } from "@/lib/errors";
 
 // Transactional email. Without this a buyer pays, gets an account created at
 // checkout, and is never told how to reach it — and a forgotten password is
@@ -223,12 +224,23 @@ export async function sendEmail(
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) {
-      console.error("[email] send failed:", res.status, await res.text());
+      // On /admin/errors, not only the console: a receipt, welcome or renewal
+      // email that never left is otherwise invisible (1 Oct 2026). Not retried:
+      // a send that half-worked and is sent again is a duplicate in an inbox.
+      await recordError({
+        source: "email",
+        message: `Email "${mail.subject}" to ${to} failed: ${res.status} ${(await res.text().catch(() => "")).slice(0, 300)}`,
+        context: { to, subject: mail.subject, status: res.status },
+      });
       return "failed";
     }
     return "sent";
   } catch (e) {
-    console.error("[email] send threw:", e);
+    await recordError({
+      source: "email",
+      message: `Email "${mail.subject}" to ${to} could not be sent: ${messageOf(e)}`,
+      context: { to, subject: mail.subject },
+    });
     return "failed";
   }
 }

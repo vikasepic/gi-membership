@@ -764,3 +764,17 @@ logs that with `console.error` and nothing else, and the container's logs
 reset on every deploy, so the CRM may have been missing events for days.
 Outbound calls the business depends on should write to `error_events`, as
 the app bridge does, so they show on /admin/errors.
+
+## What now catches these (1 Oct 2026)
+
+Built the same day from the lessons above:
+- `reconcile-money` runs nightly at 04:10 and puts any disagreement between
+  our orders and Stripe on /admin/errors, once per mismatch
+  (`lib/money-reconcile.ts`).
+- The Refund button acts only on a refund Stripe says succeeded or is
+  pending, and tells the admin the amount and Stripe's refund id.
+- CRM and email failures are written to `error_events`; a failed CRM event
+  is queued for the retry sweep, whose runner now throws while it fails.
+- `lib/saved-card-charges.test.ts` lists every function that can charge a
+  card. A new one fails the suite until it is added to that list, which is
+  where the owner's yes is written down.

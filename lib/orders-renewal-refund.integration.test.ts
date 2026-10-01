@@ -17,6 +17,9 @@ const stripeCalls = vi.hoisted(() => ({
   creditNotes: [] as { args: Record<string, unknown>; opts?: Record<string, unknown> }[],
   cancelled: [] as string[],
   invoicePayments: [] as Record<string, unknown>[],
+  // What Stripe answers about the refund it made. Tests set "failed" to see
+  // the order left alone.
+  refundStatus: "succeeded" as string,
 }));
 vi.mock("@/lib/stripe", async (orig) => ({
   ...(await orig<typeof import("@/lib/stripe")>()),
@@ -27,8 +30,18 @@ vi.mock("@/lib/stripe", async (orig) => ({
         return params.invoice === "in_zz_refund" ? { data: [{ payment: { type: "payment_intent", payment_intent: "pi_zz_refund" } }] } : { data: [] };
       },
     },
-    creditNotes: { create: async (args: Record<string, unknown>, opts?: Record<string, unknown>) => { stripeCalls.creditNotes.push({ args, opts }); return { id: "cn_zz" }; } },
-    refunds: { create: async (args: Record<string, unknown>, opts?: Record<string, unknown>) => { stripeCalls.refunds.push({ args, opts }); return { id: "re_zz" }; } },
+    creditNotes: {
+      create: async (args: Record<string, unknown>, opts?: Record<string, unknown>) => {
+        stripeCalls.creditNotes.push({ args, opts });
+        return { id: "cn_zz", refunds: [{ refund: { id: "re_cn", amount: args.refund_amount, status: stripeCalls.refundStatus } }] };
+      },
+    },
+    refunds: {
+      create: async (args: Record<string, unknown>, opts?: Record<string, unknown>) => {
+        stripeCalls.refunds.push({ args, opts });
+        return { id: "re_pi", amount: 5000, status: stripeCalls.refundStatus };
+      },
+    },
     subscriptions: {
       retrieve: async () => ({ schedule: null }),
       cancel: async (id: string) => { stripeCalls.cancelled.push(id); return { id, status: "canceled" }; },
@@ -82,13 +95,42 @@ describe.skipIf(!canRun)("refunding a renewal order (integration)", () => {
     const orderId = await renewalOrder("in_zz_refund");
     expect(await refundOrder(orderId)).toMatchObject({ ok: true });
     expect(stripeCalls.creditNotes).toContainEqual({
-      args: { invoice: "in_zz_refund", amount: 2900, refund_amount: 2900, email_type: "none" },
+      args: { invoice: "in_zz_refund", amount: 2900, refund_amount: 2900, email_type: "none", expand: ["refunds.refund"] },
       opts: { idempotencyKey: `refund_order_${orderId}` },
     });
     expect(stripeCalls.refunds).toEqual([]);
     expect(stripeCalls.cancelled).toContain("sub_zz_refund");
     const { data } = await db().from("orders").select("status").eq("id", orderId).single();
     expect(data!.status).toBe("refunded");
+  });
+
+  it("reports the refund Stripe made: its id, amount and status", async () => {
+    stripeCalls.refundStatus = "succeeded";
+    const orderId = await renewalOrder("in_zz_report");
+    expect(await refundOrder(orderId)).toEqual({ ok: true, refundId: "re_cn", refundedCents: 2900, refundStatus: "succeeded", currency: "usd" });
+  });
+
+  it("leaves the order paid and the access in place when Stripe says the refund failed", async () => {
+    // Marking it refunded on our side alone is what kept a $398 renewal
+    // "refunded" for a day with nothing given back (30 Sep 2026).
+    stripeCalls.refundStatus = "failed";
+    stripeCalls.cancelled.length = 0;
+    const orderId = await renewalOrder("in_zz_failed");
+    const res = await refundOrder(orderId);
+    expect(res.ok).toBe(false);
+    expect((res as { error: string }).error).toMatch(/failed/i);
+    expect(stripeCalls.cancelled).toEqual([]);
+    const { data } = await db().from("orders").select("status").eq("id", orderId).single();
+    expect(data!.status).toBe("paid");
+    stripeCalls.refundStatus = "succeeded";
+  });
+
+  it("a checkout order reports its refund too", async () => {
+    stripeCalls.refundStatus = "succeeded";
+    const { data: order } = await db().from("orders")
+      .insert({ store_id: storeId, user_id: userId, email: "zzrefund@example.com", status: "paid", total_cents: 5000, subtotal_cents: 5000, currency: "usd", stripe_payment_intent_id: `pi_zz_${Date.now()}`, livemode: false })
+      .select("id").single();
+    expect(await refundOrder(order!.id as string)).toEqual({ ok: true, refundId: "re_pi", refundedCents: 5000, refundStatus: "succeeded", currency: "usd" });
   });
 
   it("finds a renewal order from the PaymentIntent that paid its invoice", async () => {

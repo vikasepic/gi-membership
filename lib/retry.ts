@@ -20,7 +20,7 @@ import { messageOf, nextAttemptAt, MAX_ATTEMPTS, type JobKind } from "@/lib/erro
 
 type Runner = (payload: Record<string, unknown>) => Promise<void>;
 
-const RUNNERS: Record<JobKind, Runner> = {
+export const RUNNERS: Record<JobKind, Runner> = {
   ac_tag: async (p) => {
     const { ok } = await tagContact({
       email: String(p.email),
@@ -82,7 +82,11 @@ const RUNNERS: Record<JobKind, Runner> = {
     });
   },
   crm_event: async (p) => {
-    await sendCrmEvent(p as unknown as CrmEvent);
+    // This IS the retry: no second job, and a failure throws so the sweep
+    // records the attempt and backs off. It used to always "succeed".
+    if (!(await sendCrmEvent(p as unknown as CrmEvent, { queueOnFailure: false }))) {
+      throw new Error("CRM still failing");
+    }
   },
   // A conversion whose one send timed out. Safe twice: Meta deduplicates on
   // the event id, which is derived from the order, so a replay landing beside
