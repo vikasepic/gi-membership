@@ -16,9 +16,9 @@ const state = vi.hoisted(() => ({
   apps: [] as App[],
   courses: [] as Record<string, unknown>[],
   productIds: new Set<string>(),
-  standing: null as Record<string, unknown> | null,
+  more: [] as Record<string, unknown>[],
   fullName: "Priya Shah" as string | null,
-  standingAsked: null as unknown,
+  moreAsked: null as unknown,
   last: null as Record<string, unknown> | null,
 }));
 
@@ -26,9 +26,9 @@ vi.mock("next/navigation", () => ({ redirect: (u: string) => { throw new Error(`
 vi.mock("@/lib/view-as", () => ({ viewer: async () => ({ id: "member-1", email: "priya.shah@gmail.com" }) }));
 vi.mock("@/lib/library", () => ({
   listOwnedApps: async () => state.apps,
-  getStandingOffer: async (_u: string, opts: unknown) => {
-    state.standingAsked = opts;
-    return state.standing;
+  listMoreForMember: async (_u: string, opts: unknown) => {
+    state.moreAsked = opts;
+    return state.more;
   },
   // The bug: this reads the signed-in admin, not the member being viewed.
   ownedProductIdsForViewer: async () => new Set(["admin-product-1", "admin-product-2"]),
@@ -66,9 +66,9 @@ beforeEach(() => {
   state.apps = [];
   state.courses = [];
   state.productIds = new Set();
-  state.standing = null;
+  state.more = [];
   state.fullName = "Priya Shah";
-  state.standingAsked = null;
+  state.moreAsked = null;
   state.last = null;
 });
 
@@ -159,19 +159,68 @@ describe("a member with several things", () => {
 });
 
 describe("what else is on offer", () => {
+  const funnel = {
+    id: "fa-offer", kind: "app", name: "Funnel App", imageUrl: "https://cdn.test/funnel.webp",
+    priceLine: "7 days free, then $29 a month", blurb: "Build the entire low-ticket funnel in one sitting.",
+    href: "/library/offer/fa-offer", valueCents: 2900, currency: "usd", contentId: "funnel-builder",
+  };
+  const carousels = {
+    id: "p-carousels", kind: "course", name: "The Guide to Viral Carousels", imageUrl: "https://cdn.test/carousels.webp",
+    priceLine: "$19, one payment", blurb: "150 hooks, 5 formats, and a posting schedule.",
+    href: "/p/the-guide-to-viral-carousels", valueCents: 1900, currency: "usd", contentId: "the-guide-to-viral-carousels",
+  };
+
   it("sits at the bottom, marked as not theirs, and never repeats an app they already have", async () => {
     state.apps = [contentEngine()];
-    state.standing = {
-      id: "fa-offer", key: "funnel-app", name: "Funnel App", headline: "Build the entire low-ticket funnel in one sitting.",
-      description: "A product outline, a 21-step sales letter.", billingType: "recurring", interval: "month", intervalCount: 1,
-      trialDays: 7, priceCents: 2900, currency: "usd", grantAppId: "funnel",
-    };
+    state.more = [funnel];
     const html = await render();
     expect(html).toContain("More from Greater Inside");
     expect(html).toContain("Not in your plan");
     expect(html).toContain('href="/library/offer/fa-offer"');
     expect(html).toContain("7 days free, then $29 a month");
-    expect(state.standingAsked).toEqual({ excludeAppIds: ["ce"] });
+    expect(state.moreAsked).toEqual({ excludeAppIds: ["ce"] });
+  });
+
+  it("shows courses beside apps, each with its picture and its kind", async () => {
+    state.apps = [contentEngine()];
+    state.more = [funnel, carousels];
+    const html = await render();
+    expect(html).toContain("The Guide to Viral Carousels");
+    expect(html).toContain('href="/p/the-guide-to-viral-carousels"');
+    expect(html).toContain('src="https://cdn.test/carousels.webp"');
+    expect(html).toContain('src="https://cdn.test/funnel.webp"');
+    expect(html).toContain(">Course<");
+    expect(html).toContain(">App<");
+  });
+
+  it("shows at most eight, with the way to the rest of the store", async () => {
+    state.apps = [contentEngine()];
+    state.more = Array.from({ length: 10 }, (_, i) => ({ ...carousels, id: `p${i}`, name: `Course ${i}`, href: `/p/course-${i}` }));
+    const html = await render();
+    expect(html).toContain("Course 7");
+    expect(html).not.toContain("Course 8");
+    expect(html).toContain("Everything in the store");
+  });
+
+  it("leaves the section out when there is nothing they don't own", async () => {
+    state.apps = [contentEngine()];
+    expect(await render()).not.toContain("More from Greater Inside");
+  });
+});
+
+describe("an app's picture", () => {
+  it("shows the product picture instead of the initials", async () => {
+    state.apps = [contentEngine({ imageUrl: "https://cdn.test/ce.webp" })];
+    const html = await render();
+    expect(html).toContain('src="https://cdn.test/ce.webp"');
+    expect(html).not.toContain(">CE<");
+  });
+
+  it("falls back to the initials when the app has no picture", async () => {
+    state.apps = [contentEngine({ imageUrl: null }), contentEngine({ id: "fa", key: "funnel", name: "Funnel App", initials: "FA", imageUrl: null })];
+    const html = await render();
+    expect(html).toContain(">CE<");
+    expect(html).toContain(">FA<");
   });
 });
 

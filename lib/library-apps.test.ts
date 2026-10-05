@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mergeAppRows, channelBadges, appStatus, shortDescription, appInitials, offerPriceLine } from "@/lib/library-apps";
+import { mergeAppRows, channelBadges, appStatus, shortDescription, appInitials, offerPriceLine, offerBlurb, moreItems } from "@/lib/library-apps";
 
 /**
  * What one app card in the library says.
@@ -156,5 +156,73 @@ describe("offerPriceLine", () => {
   });
   it("a one-time price", () => {
     expect(offerPriceLine({ ...offer, billingType: "one_time", interval: null, trialDays: null, priceCents: 4700 })).toBe("$47, one payment");
+  });
+});
+
+describe("offerBlurb", () => {
+  it("uses the headline when it reads as a line of copy", () => {
+    expect(offerBlurb({ headline: "Build the entire low-ticket funnel in one sitting.", description: "A product outline." })).toBe(
+      "Build the entire low-ticket funnel in one sitting.",
+    );
+  });
+
+  it("skips a headline that is the page's browser title and falls back to the description", () => {
+    // Two live offers carry "Name | Greater Inside" as their headline.
+    expect(
+      offerBlurb({
+        headline: "Viral Hook Generator for Instagram & Social Media | Greater Inside",
+        description: "Generate viral hooks for Instagram carousels, posts, and LinkedIn content in seconds.",
+      }),
+    ).toBe("Generate viral hooks for Instagram carousels, posts, and LinkedIn content in seconds.");
+  });
+
+  it("is null when there is nothing to say", () => {
+    expect(offerBlurb({ headline: "Micro-Product Builder | Greater Inside", description: null })).toBeNull();
+  });
+});
+
+describe("moreItems", () => {
+  const offer = (over: Record<string, unknown> = {}) => ({
+    id: "fa-offer", key: "funnel-builder", name: "Funnel App", headline: "Build the entire low-ticket funnel in one sitting.",
+    description: "A product outline.", imageUrl: "https://cdn.test/funnel.webp", grantType: "subscription" as const,
+    grantAppId: "funnel", grantProductId: null, grantChannels: [] as string[], billingType: "recurring" as const,
+    interval: "month", intervalCount: 1, trialDays: 7, priceCents: 2900, currency: "usd", ...over,
+  });
+  const product = (over: Record<string, unknown> = {}) => ({
+    id: "p-carousels", slug: "the-guide-to-viral-carousels", title: "The Guide to Viral Carousels",
+    tagline: "150 hooks, 5 formats.", coverUrl: "https://cdn.test/carousels.webp", priceCents: 1900, currency: "usd", ...over,
+  });
+  const nobody = { productIds: new Set<string>(), appIds: new Set<string>(), appChannels: new Map<string, Set<string>>() };
+
+  it("lists the store's apps, then its courses, each going to its sales page", () => {
+    const items = moreItems({ offers: [offer()], products: [product()], owned: nobody, excludeAppIds: [] });
+    expect(items.map((i) => [i.kind, i.name, i.href])).toEqual([
+      ["app", "Funnel App", "/library/offer/fa-offer"],
+      ["course", "The Guide to Viral Carousels", "/p/the-guide-to-viral-carousels"],
+    ]);
+    expect(items[0].priceLine).toBe("7 days free, then $29 a month");
+    expect(items[1].priceLine).toBe("$19, one payment");
+    expect(items[1].imageUrl).toBe("https://cdn.test/carousels.webp");
+  });
+
+  it("leaves out what the member owns, and an app already on their shelf", () => {
+    const owned = { ...nobody, productIds: new Set(["p-carousels"]) };
+    const items = moreItems({
+      offers: [offer(), offer({ id: "ce-offer", name: "Content Engine", grantAppId: "ce" })],
+      products: [product()],
+      owned,
+      excludeAppIds: ["ce"],
+    });
+    expect(items.map((i) => i.name)).toEqual(["Funnel App"]);
+  });
+
+  it("does not list a course twice when an offer on the store already sells it", () => {
+    const items = moreItems({
+      offers: [offer({ id: "dpv-offer", name: "Validator bundle", grantType: "product", grantAppId: null, grantProductId: "p-carousels" })],
+      products: [product()],
+      owned: nobody,
+      excludeAppIds: [],
+    });
+    expect(items.map((i) => [i.kind, i.name])).toEqual([["course", "Validator bundle"]]);
   });
 });

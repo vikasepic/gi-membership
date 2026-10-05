@@ -2,12 +2,11 @@ import Link from "next/link";
 import { BuyLink } from "@/components/buy-link";
 import { redirect } from "next/navigation";
 import { viewer } from "@/lib/view-as";
-import { getStandingOffer, listOwnedApps } from "@/lib/library";
+import { listMoreForMember, listOwnedApps } from "@/lib/library";
 import { ownershipFor } from "@/lib/checkout";
 import { coursesForUser } from "@/lib/courses";
 import { getProfile } from "@/lib/profile";
 import { firstNameOf } from "@/lib/post-purchase-email";
-import { appInitials, offerPriceLine, shortDescription } from "@/lib/library-apps";
 import { publicCoverUrl } from "@/lib/media";
 import { AppCard } from "@/components/library/app-card";
 import { LibraryCourseCard } from "@/components/library/course-card";
@@ -104,6 +103,9 @@ import { NOINDEX } from "@/lib/seo";
 
 export const metadata = NOINDEX;
 
+// The shelf of things they don't own stays a shelf, not the whole catalogue.
+const MORE_SHOWN = 8;
+
 /**
  * The member's library (redesigned 5 Oct 2026, direction A of the mockups).
  *
@@ -113,6 +115,7 @@ export const metadata = NOINDEX;
  * button that opens it already signed in. Courses follow, and anything they
  * don't own sits at the bottom, marked as such.
  */
+
 export default async function LibraryPage({
   searchParams,
 }: {
@@ -134,7 +137,7 @@ export default async function LibraryPage({
   const ownedProductCount = owned.productIds.size;
   const ownsProducts = ownedProductCount > 0;
   // An app the member has offers its missing channel on its own card.
-  const standing = await getStandingOffer(user.id, { excludeAppIds: apps.map((a) => a.id) });
+  const more = await listMoreForMember(user.id, { excludeAppIds: apps.map((a) => a.id) });
 
   // Both read the same rows, so they are fetched together.
   const [progress, last] = await Promise.all([
@@ -263,37 +266,49 @@ export default async function LibraryPage({
       {/* What they don't own, at the bottom and marked as such. Through the
           click route, which logs the tap and sends them to the sales page:
           nothing in the library charges (owner, 1 Oct 2026). */}
-      {standing && (
+      {more.length > 0 && (
         <section className="flex flex-col gap-[18px]">
           <div className={heading}>
             <h2 className={h2}>More from Greater Inside</h2>
-            <span className="text-[13px] text-muted">Not in your plan</span>
+            {more.length > MORE_SHOWN ? (
+              <Link href="/" className="text-[13px] font-semibold text-primary hover:underline">
+                Everything in the store &rarr;
+              </Link>
+            ) : (
+              <span className="text-[13px] text-muted">Not in your plan</span>
+            )}
           </div>
-          <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,20rem),1fr))]">
-            <div className="flex flex-col gap-3 rounded-[20px] border border-border p-5">
-              <div className="flex items-center gap-3">
-                <span
-                  aria-hidden
-                  className="grid size-[42px] shrink-0 place-items-center rounded-xl bg-plum font-display text-sm font-extrabold tracking-tight text-white"
-                >
-                  {appInitials(standing.name)}
-                </span>
-                <div className="flex min-w-0 flex-col">
-                  <span className="font-display text-base font-bold">{standing.name}</span>
-                  <span className="text-[13px] text-muted">{offerPriceLine(standing)}</span>
-                </div>
-              </div>
-              <span className="text-sm text-muted">{shortDescription(standing.headline) ?? shortDescription(standing.description)}</span>
+          <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]">
+            {more.slice(0, MORE_SHOWN).map((item) => (
               <BuyLink
-                href={`/library/offer/${standing.id}`}
-                valueCents={standing.priceCents}
-                currency={standing.currency}
-                contentId={standing.key}
-                className="mt-auto flex min-h-[42px] items-center justify-center rounded-full border border-border font-display text-sm font-semibold transition-colors hover:border-primary"
+                key={item.id}
+                href={item.href}
+                valueCents={item.valueCents}
+                currency={item.currency}
+                contentId={item.contentId}
+                // A row on a phone, so six of them are a list and not six screens.
+                className="group flex overflow-hidden rounded-[20px] border border-border bg-surface transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.45)] sm:flex-col"
               >
-                See what&rsquo;s inside
+                <div
+                  className="relative m-3 size-[88px] shrink-0 self-start overflow-hidden rounded-xl sm:m-0 sm:aspect-[16/9] sm:size-auto sm:w-full sm:rounded-none sm:border-b sm:border-border"
+                  style={{ background: "linear-gradient(135deg, color-mix(in srgb, var(--primary) 14%, var(--surface)), var(--surface-2))" }}
+                >
+                  {item.imageUrl && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={item.imageUrl} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+                  )}
+                </div>
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5 py-3.5 pl-1 pr-4 sm:gap-2 sm:px-[18px] sm:pb-[18px] sm:pt-4">
+                  <span className="kicker text-[11px] text-muted">{item.kind === "app" ? "App" : "Course"}</span>
+                  <h3 className="text-[17px]! font-bold! leading-snug! tracking-tight">{item.name}</h3>
+                  {item.blurb && <p className="line-clamp-2 text-[13.5px] leading-relaxed text-muted">{item.blurb}</p>}
+                  <div className="mt-auto flex flex-col gap-1.5 pt-2">
+                    <span className="text-[13px] text-fg">{item.priceLine}</span>
+                    <span className="font-display text-sm font-semibold text-primary group-hover:underline">See what&rsquo;s inside &rarr;</span>
+                  </div>
+                </div>
               </BuyLink>
-            </div>
+            ))}
           </div>
         </section>
       )}

@@ -3,10 +3,11 @@ import { createServiceClient } from "@/lib/supabase/server";
 import type { AppKind } from "@/lib/apps";
 import { builtinAppRoute } from "@/lib/builtin-apps/registry";
 import { camelize } from "@/lib/case";
-import { getStoreId, hydrateOffer, hydrateProduct, OFFER_COLUMNS, PRODUCT_COLUMNS } from "@/lib/store";
+import { getStoreId, hydrateOffer, hydrateProduct, listHomeOffers, listPublishedProducts, OFFER_COLUMNS, PRODUCT_COLUMNS } from "@/lib/store";
 import { ownershipFor } from "@/lib/checkout";
 import { createClient } from "@/lib/supabase/server";
-import { coursesForProduct } from "@/lib/courses";
+import { coursesForProduct, productDisplay } from "@/lib/courses";
+import { publicCoverUrl } from "@/lib/media";
 import { isOfferEligible, type Ownership } from "@/lib/offers";
 import type { Product, Offer } from "@/lib/types";
 import {
@@ -14,9 +15,11 @@ import {
   appStatus,
   channelBadges,
   mergeAppRows,
+  moreItems,
   offerPriceLine,
   shortDescription,
   type ChannelBadge,
+  type MoreItem,
   type OwnedStatus,
   type StatusLine,
 } from "@/lib/library-apps";
@@ -72,6 +75,8 @@ export type LibraryApp = {
   /** Every channel the app has, included or not, with the way to add a missing one. */
   badges: ChannelBadge[];
   description: string | null;
+  /** The product picture: from the offer they bought, else any active offer for the app. */
+  imageUrl: string | null;
   initials: string;
 };
 
@@ -102,7 +107,7 @@ export async function listOwnedApps(userId: string, now = new Date()): Promise<L
   const [{ data: apps }, { data: offers }, { data: subs }, { data: addable }] = await Promise.all([
     db.from("apps").select("id, key, name, kind, base_url, channels").in("id", appIds),
     offerIds.length
-      ? db.from("offers").select("id, grant_channels, description").in("id", offerIds)
+      ? db.from("offers").select("id, grant_channels, description, image_url").in("id", offerIds)
       : Promise.resolve({ data: [] as Record<string, unknown>[] }),
     subIds.length
       ? db.from("subscriptions").select("stripe_subscription_id, status, trial_end, cancel_at, cancel_at_period_end, current_period_end").in("stripe_subscription_id", subIds)
@@ -111,7 +116,7 @@ export async function listOwnedApps(userId: string, now = new Date()): Promise<L
     // channel's "Add" goes. Oldest first, so the choice is the store's and not
     // the heap's.
     db.from("offers")
-      .select("id, grant_app_id, grant_channels, price_cents, currency, billing_type, interval, interval_count, trial_days")
+      .select("id, grant_app_id, grant_channels, price_cents, currency, billing_type, interval, interval_count, trial_days, image_url")
       .in("grant_app_id", appIds)
       .eq("active", true)
       .order("created_at", { ascending: true })
@@ -182,9 +187,27 @@ export async function listOwnedApps(userId: string, now = new Date()): Promise<L
       channels: m.channels,
       badges: channelBadges((app?.channels as string[] | null) ?? [], m.channels, addOffers),
       description: m.description,
+      imageUrl: imageFor(m.appId, rows, offerById, addable ?? []),
       initials: appInitials(name),
     };
   });
+}
+
+/**
+ * The picture on an app's card: the one on the offer the member bought (oldest
+ * purchase first), else the oldest active offer that sells the app.
+ */
+function imageFor(
+  appId: string,
+  rows: Record<string, unknown>[],
+  bought: Map<string, Record<string, unknown>>,
+  selling: Record<string, unknown>[],
+): string | null {
+  const theirs = rows
+    .filter((r) => r.app_id === appId && r.offer_id)
+    .map((r) => bought.get(r.offer_id as string)?.image_url as string | null | undefined);
+  const others = selling.filter((o) => o.grant_app_id === appId).map((o) => o.image_url as string | null);
+  return [...theirs, ...others].find((u) => !!u) ?? null;
 }
 
 /** "contentengine.app" — where the button actually goes, without the scheme. */
@@ -213,6 +236,33 @@ export async function subscribedToApp(userId: string, appId: string): Promise<bo
     .in("status", ["active", "trialing", "past_due"])
     .limit(1);
   return (data?.length ?? 0) > 0;
+}
+
+/**
+ * What the storefront sells that this member does not have yet: the offers on
+ * the home page in their order, then the published courses. See moreItems.
+ */
+export async function listMoreForMember(
+  userId: string,
+  opts: { excludeAppIds?: string[] } = {},
+): Promise<MoreItem[]> {
+  const [offers, products, owned] = await Promise.all([listHomeOffers(), listPublishedProducts(), ownershipFor(userId)]);
+  const display = await productDisplay(products.map((p) => p.id));
+  return moreItems({
+    offers,
+    products: products.map((p) => ({
+      id: p.id,
+      slug: p.slug,
+      title: p.title,
+      tagline: p.tagline ?? null,
+      // A product's own image wins; otherwise it inherits its course's, as on the storefront.
+      coverUrl: publicCoverUrl(p.coverPath ?? display.get(p.id)?.coverPath ?? null),
+      priceCents: p.priceCents,
+      currency: p.currency ?? "usd",
+    })),
+    owned,
+    excludeAppIds: opts.excludeAppIds ?? [],
+  });
 }
 
 // A standing offer to surface in the library: an active subscription offer the

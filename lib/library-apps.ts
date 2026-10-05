@@ -11,6 +11,7 @@
 import { APP_CHANNELS, channelLabel } from "@/lib/app-channels";
 import { shortDate } from "@/lib/dates";
 import { money } from "@/lib/money";
+import { isOfferEligible, type Ownership } from "@/lib/offers";
 
 export type OwnedStatus = "active" | "trialing" | "past_due";
 
@@ -159,4 +160,109 @@ export function offerPriceLine(offer: {
   return offer.trialDays && offer.trialDays > 0
     ? `${offer.trialDays} days free, then ${price} ${every}`
     : `${price} ${every}`;
+}
+
+/**
+ * The line a card shows under an offer's name. Two live offers carry the sales
+ * page's browser title ("Name | Greater Inside") as their headline, which
+ * reads as a broken card, so a headline with " | " in it gives way to the
+ * description.
+ */
+export function offerBlurb(offer: { headline: string | null; description: string | null }): string | null {
+  const headline = offer.headline?.trim();
+  if (headline && !headline.includes(" | ")) return shortDescription(headline);
+  return shortDescription(offer.description);
+}
+
+type MoreOffer = {
+  id: string;
+  key: string;
+  name: string;
+  headline: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  grantType: "product" | "subscription";
+  grantAppId: string | null;
+  grantProductId: string | null;
+  grantChannels: string[] | null;
+  billingType: "one_time" | "recurring";
+  interval: string | null;
+  intervalCount: number | null;
+  trialDays: number | null;
+  priceCents: number;
+  currency: string;
+};
+
+type MoreProduct = {
+  id: string;
+  slug: string;
+  title: string;
+  tagline: string | null;
+  coverUrl: string | null;
+  priceCents: number;
+  currency: string;
+};
+
+export type MoreItem = {
+  id: string;
+  kind: "app" | "course";
+  name: string;
+  imageUrl: string | null;
+  priceLine: string;
+  blurb: string | null;
+  href: string;
+  valueCents: number;
+  currency: string;
+  contentId: string;
+};
+
+/**
+ * "More from Greater Inside": what the storefront sells that this member does
+ * not have yet, apps first in the store's own order, then courses.
+ *
+ * Every link goes to a sales page. An offer goes through /library/offer/[id],
+ * which logs the tap; a course goes to its product page. Nothing in the
+ * library charges (owner, 1 Oct 2026).
+ */
+export function moreItems(input: {
+  offers: MoreOffer[];
+  products: MoreProduct[];
+  owned: Ownership;
+  /** Apps already on the member's shelf: their card offers the missing channel. */
+  excludeAppIds: string[];
+}): MoreItem[] {
+  const skipApps = new Set(input.excludeAppIds);
+  const offers = input.offers.filter(
+    (o) => isOfferEligible(o, input.owned) && !(o.grantAppId && skipApps.has(o.grantAppId)),
+  );
+  const soldByOffer = new Set(offers.map((o) => o.grantProductId).filter(Boolean));
+  const fromOffers: MoreItem[] = offers.map((o) => ({
+    id: o.id,
+    kind: o.grantType === "product" ? "course" : "app",
+    name: o.name,
+    imageUrl: o.imageUrl,
+    priceLine: offerPriceLine(o),
+    blurb: offerBlurb(o),
+    href: `/library/offer/${o.id}`,
+    valueCents: o.priceCents,
+    currency: o.currency,
+    contentId: o.key,
+  }));
+  const fromProducts: MoreItem[] = input.products
+    .filter((p) => !input.owned.productIds.has(p.id) && !soldByOffer.has(p.id))
+    .map((p) => ({
+      id: p.id,
+      kind: "course",
+      name: p.title,
+      imageUrl: p.coverUrl,
+      priceLine: offerPriceLine({ billingType: "one_time", interval: null, intervalCount: null, trialDays: null, priceCents: p.priceCents, currency: p.currency }),
+      blurb: shortDescription(p.tagline),
+      href: `/p/${p.slug}`,
+      valueCents: p.priceCents,
+      currency: p.currency,
+      contentId: p.slug,
+    }));
+  const apps = fromOffers.filter((i) => i.kind === "app");
+  const courses = [...fromOffers.filter((i) => i.kind === "course"), ...fromProducts];
+  return [...apps, ...courses];
 }

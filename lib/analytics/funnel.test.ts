@@ -41,9 +41,14 @@ describe("nothing links straight past a sales page any more", () => {
   const pages = ["app/(store)/page.tsx", "app/(store)/library/offer/[id]/route.ts"];
 
   it("the library card goes through its click route, not to a checkout", () => {
-    const src = readFileSync("app/(store)/library/page.tsx", "utf8");
-    expect(src).toContain("href={`/library/offer/${standing.id}`}");
-    expect(src).not.toMatch(/href=\{`\/checkout\/offer\?offer=/);
+    // The library's "More" cards link to item.href; moreItems builds it, and
+    // its unit test pins offers to /library/offer/<id> (lib/library-apps.test.ts).
+    const page = readFileSync("app/(store)/library/page.tsx", "utf8");
+    expect(page).toContain("href={item.href}");
+    expect(page).not.toMatch(/href=\{`\/checkout\/offer\?offer=/);
+    const build = readFileSync("lib/library-apps.ts", "utf8");
+    expect(build).toContain("href: `/library/offer/${o.id}`");
+    expect(build).not.toMatch(/`\/checkout\/offer\?offer=/);
   });
 
   it.each(pages)("%s routes through offerHref", (file) => {

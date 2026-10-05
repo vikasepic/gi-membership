@@ -17,6 +17,8 @@ export type CourseProgress = {
   done: number;
   total: number;
   fraction: number;
+  /** A lesson in it has been opened. A reading lesson left unfinished has no watched time, so fraction alone says "not started". */
+  opened: boolean;
 };
 
 export type LastLesson = {
@@ -84,7 +86,8 @@ export async function progressForCourses(
     courses.map(async (c) => {
       const nodes = await listCurriculum(c.id);
       const ids = countableItems(nodes.flatMap((n) => [n, ...n.children])).map((i) => i.id);
-      out.set(c.id, { courseId: c.id, ...courseProgress(ids, byCourse.get(c.id) ?? new Map()) });
+      const rows = byCourse.get(c.id) ?? new Map<string, WatchRow>();
+      out.set(c.id, { courseId: c.id, ...courseProgress(ids, rows), opened: ids.some((id) => rows.has(id)) });
     }),
   );
   return out;

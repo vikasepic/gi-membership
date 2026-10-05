@@ -33,7 +33,7 @@ export function LibraryCourseCard({
   progress?: CourseProgress | null;
 }) {
   const meta = metaFor(type);
-  const started = !!progress && progress.total > 0 && progress.fraction > 0;
+  const started = !!progress && progress.total > 0 && (progress.fraction > 0 || progress.opened);
   const finished = started && progress!.done === progress!.total;
   return (
     <Link
