@@ -34,7 +34,8 @@ export default async function EditOfferPage({
   ]);
   if (!offer) notFound();
   // The real sender and access link, so the post-purchase preview shows what buyers get.
-  const postPurchaseMail = (await getSettingsOrDefaults()).postPurchaseEmail;
+  const storeSettings = await getSettingsOrDefaults();
+  const postPurchaseMail = storeSettings.postPurchaseEmail;
 
   // The offer's own sales page needs both: the offer live, and a page actually
   // built. Either missing and /o/<key> is a 404.
@@ -141,6 +142,7 @@ export default async function EditOfferPage({
         apps={apps}
         offers={offers}
         usage={usage}
+        homeSteps={storeSettings.homeSteps}
       />
 
       {/* Beside the destructive control at the foot of the form above, not

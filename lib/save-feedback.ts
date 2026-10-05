@@ -35,6 +35,7 @@ export const PRODUCT_FIELD_TABS: FieldTabs = {
   adEventName: "marketing",
   contentName: "marketing",
   homeOrder: "basics",
+  homeStep: "basics",
 };
 
 export const OFFER_FIELD_TABS: FieldTabs = {
@@ -56,6 +57,8 @@ export const OFFER_FIELD_TABS: FieldTabs = {
   acceptLabel: "copy",
   declineLabel: "copy",
   otoTemplate: "copy",
+  homeOrder: "basics",
+  homeStep: "basics",
 };
 
 /**
@@ -105,6 +108,7 @@ const NAMES: Record<string, string> = {
   key: "Key",
   headline: "Headline",
   cover: "Cover image",
+  homeStep: "Home page step",
 };
 
 /**

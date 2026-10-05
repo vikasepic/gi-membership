@@ -1,5 +1,6 @@
 "use client";
 
+import type { HomeStep } from "@/lib/home-steps-schema";
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { saveOffer, removeOffer, type SaveState } from "@/app/admin/offers/actions";
 import { inputClass as input, Field, Section } from "@/components/admin/form-controls";
@@ -26,6 +27,7 @@ export function OfferForm({
   offers = [],
   defaultCurrency = "usd",
   usage = {},
+  homeSteps = [],
 }: {
   offer?: Offer;
   products: ProductOption[];
@@ -36,6 +38,8 @@ export function OfferForm({
   defaultCurrency?: string;
   /** How many people are on each price — a row with any cannot be repriced. */
   usage?: PriceUsage;
+  /** The home page steps (Settings › Home steps), for the step this offer sits under. */
+  homeSteps?: HomeStep[];
 }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveOffer, {});
   const sections = sectionsToForm(offer?.otoSections as never);
@@ -194,6 +198,24 @@ export function OfferForm({
             placeholder="not shown"
             className={`${input} max-w-40`}
           />
+        </Field>
+        <Field
+          label="Home page step"
+          hint="Which step of the home page it sits under. None shows it under Everything else. The steps are in Settings › Home steps."
+        >
+          <select name="homeStep" defaultValue={offer?.homeStep ?? ""} className={`${input} max-w-64`}>
+            <option value="">None</option>
+            {homeSteps.map((s, i) => (
+              <option key={s.id} value={s.id}>
+                {i + 1}. {s.short}
+              </option>
+            ))}
+            {/* A step since removed stays selected as itself, so saving the
+                offer for some other reason does not quietly move it. */}
+            {offer?.homeStep && !homeSteps.some((s) => s.id === offer.homeStep) && (
+              <option value={offer.homeStep}>A removed step (shows under Everything else)</option>
+            )}
+          </select>
         </Field>
       </Section>
 

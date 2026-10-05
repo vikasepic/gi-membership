@@ -596,6 +596,35 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
     style: [],
   },
 
+  steps: {
+    content: [
+      { kind: "text", key: "title", label: "Heading", hint: "The steps themselves are in Settings › Home steps. Each offer and product picks its step on its own page." },
+      { kind: "text", key: "note", label: "Line beside it" },
+      {
+        kind: "text",
+        key: "otherTitle",
+        label: "Heading over the rest",
+        hint: "Anything with no step, or a step since removed, shows under this. Empty hides the heading, never the products.",
+      },
+    ],
+    style: [],
+  },
+
+  staircase: {
+    content: [
+      {
+        kind: "number",
+        key: "max",
+        label: "Pictures per step",
+        min: 1,
+        max: 6,
+        step: 1,
+        hint: "More than this shows as \"+2 more\", linking down to the step.",
+      },
+    ],
+    style: [],
+  },
+
   featured: {
     content: [
       { kind: "product", key: "product", label: "Which product", hint: "Left at the first in the catalogue, it follows the catalogue's order." },
@@ -2225,6 +2254,8 @@ export const PALETTE: { type: BlockType; label: string; props?: Record<string, u
   { type: "catalog", label: "Catalogue" },
   { type: "memberships", label: "Memberships" },
   { type: "featured", label: "Featured" },
+  { type: "steps", label: "Step sections" },
+  { type: "staircase", label: "Step staircase" },
   // Checkout only, and for the same reason: nothing else can supply an order.
   { type: "buyerdetails", label: "Their details" },
   { type: "orderbump", label: "Order bump" },
@@ -2357,7 +2388,7 @@ export const PALETTE_GROUPS: { title: string; types: string[] }[] = [
   { title: "Basic", types: ["Heading", "Text", "Image", "Video", "Buy button", "Button", "List", "Slides"] },
   { title: "Layout", types: ["Container", "Divider", "Spacer"] },
   { title: "Sales", types: ["Ways to pay", "Cards", "Figures", "Schedule", "Price card", "Price table", "FAQ", "Countdown", "Sticky bar", "HTML"] },
-  { title: "Storefront", types: ["Catalogue", "Memberships", "Featured"] },
+  { title: "Storefront", types: ["Catalogue", "Memberships", "Featured", "Step sections", "Step staircase"] },
   {
     title: "Checkout",
     types: ["Their details", "Order bump", "Order summary", "Coupon field", "Card fields", "Due today", "Pay button"],
@@ -2377,6 +2408,10 @@ export const BLOCK_ICON: Record<BlockType, string> = {
   catalog: "M3 4h8v7H3V4Zm10 0h8v7h-8V4ZM3 13h8v7H3v-7Zm10 0h8v7h-8v-7Z",
   memberships: "M3 6h18v12H3V6Zm2 2v8h14V8H5Zm2 2h6v2H7v-2Zm0 3h4v2H7v-2Z",
   featured: "M12 2.6l2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9l6.1-.8L12 2.6Z",
+  // Three bands, one under another: a step's words beside its products.
+  steps: "M3 4h6v4H3V4Zm8 0h10v4H11V4ZM3 10h6v4H3v-4Zm8 0h10v4H11v-4ZM3 16h6v4H3v-4Zm8 0h10v4H11v-4Z",
+  // Three columns rising left to right.
+  staircase: "M3 20v-5h5v5H3Zm6.5 0V10h5v10h-5ZM16 20V4h5v16h-5Z",
   // A receipt with two lines and a torn foot.
   // A person's head and shoulders.
   buyerdetails: "M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0 10c4.4 0 8 2.2 8 5v3H4v-3c0-2.8 3.6-5 8-5Z",

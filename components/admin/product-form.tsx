@@ -1,5 +1,6 @@
 "use client";
 
+import type { HomeStep } from "@/lib/home-steps-schema";
 import { useActionState, useEffect, useMemo, useState } from "react";
 import { saveProduct, removeProduct, type SaveState } from "@/app/admin/actions";
 import { inputClass, Field, Group } from "@/components/admin/form-controls";
@@ -52,8 +53,11 @@ export function ProductForm({
   salesPageHref,
   liveHref,
   priceUsage = {},
+  homeSteps = [],
 }: {
   product?: Product;
+  /** The home page steps (Settings › Home steps), for the step this product sits under. */
+  homeSteps?: HomeStep[];
   /** How many people are on each price, so one they are on cannot be repriced. */
   priceUsage?: PriceUsage;
   offers: OfferOption[];
@@ -392,6 +396,26 @@ export function ProductForm({
           >
             <option value="draft">Draft — hidden from the store</option>
             <option value="published">Published</option>
+          </select>
+        </Field>
+
+        <Field
+          label="Home page step"
+          hint="Which step of the home page it sits under. None shows it under Everything else. The steps are in Settings › Home steps."
+          error={err("homeStep")}
+        >
+          <select name="homeStep" defaultValue={product?.homeStep ?? ""} className={inputClass}>
+            <option value="">None</option>
+            {homeSteps.map((s, i) => (
+              <option key={s.id} value={s.id}>
+                {i + 1}. {s.short}
+              </option>
+            ))}
+            {/* A step since removed stays selected as itself, so saving the
+                product for some other reason does not quietly move it. */}
+            {product?.homeStep && !homeSteps.some((s) => s.id === product.homeStep) && (
+              <option value={product.homeStep}>A removed step (shows under Everything else)</option>
+            )}
           </select>
         </Field>
       </Group>

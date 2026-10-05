@@ -8,6 +8,7 @@ import { ImageField } from "@/components/admin/image-field";
 import { EmailPrototype } from "@/components/admin/email-prototype";
 import { RenewalEmailEditor } from "@/components/admin/renewal-email-editor";
 import { RedirectFields } from "@/components/admin/redirect-fields";
+import { HomeStepsFields } from "@/components/admin/home-steps-fields";
 import { publicCoverUrl } from "@/lib/media-url";
 import { inputClass as input, Field, Group } from "@/components/admin/form-controls";
 import { useSlowSave, useJustSaved } from "@/components/admin/save-status";
@@ -186,6 +187,14 @@ function GroupForm({
       {group === "shell" && <ShellFields siteShell={settings.siteShell} errors={errors} />}
       {group === "commerce" && <CommerceFields s={settings} errors={errors} />}
       {group === "seo" && <SeoFields s={settings} errors={errors} />}
+      {group === "steps" && (
+        <Group
+          label="Home steps"
+          hint="The steps the home page sorts the store into. Each offer and product picks its step on its own page; anything without one shows under Everything else."
+        >
+          <HomeStepsFields steps={settings.homeSteps} name="homeSteps" />
+        </Group>
+      )}
       {group === "redirects" && (
         <Group
           label="Redirects"

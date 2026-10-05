@@ -8,6 +8,7 @@ import { redirectsSchema } from "@/lib/redirects";
 import { checkoutDesignSchema } from "@/lib/checkout-design";
 import { SITE_TYPOGRAPHY_SCHEMA } from "@/lib/site-typography";
 import { SITE_SHELL_SCHEMA } from "@/lib/site-shell";
+import { homeStepsSchema } from "@/lib/home-steps-schema";
 
 /**
  * Everything that is true of the whole store.
@@ -140,6 +141,11 @@ export const SETTINGS_SCHEMA = z.object({
   // page would 404, so a working page pays nothing for them.
   redirects: redirectsSchema,
 
+  // ---- Home steps ---------------------------------------------------------
+  // The steps the home page sorts the store into. Offers and products name one
+  // by id; see lib/home-steps-schema.ts.
+  homeSteps: homeStepsSchema,
+
   // ---- Post-purchase email ------------------------------------------------
   // One nested object rather than twenty flat fields: it is a single document
   // edited by a single form, and flattening it would put twenty names into a
@@ -171,6 +177,7 @@ export const SETTINGS_GROUPS = [
   { key: "checkout", label: "Checkout" },
   { key: "email", label: "Post-purchase email" },
   { key: "renewal", label: "Renewal email" },
+  { key: "steps", label: "Home steps" },
   { key: "redirects", label: "Redirects" },
   { key: "advanced", label: "Advanced" },
 ] as const;
@@ -209,6 +216,7 @@ export const GROUP_FIELDS: Record<SettingsGroupKey, readonly (keyof Settings)[]>
   checkout: ["checkoutDesign"],
   email: ["postPurchaseEmail"],
   renewal: ["renewalEmail"],
+  steps: ["homeSteps"],
   redirects: ["redirects"],
   advanced: ["customCss", "customJs", "codeSnippets"],
 };

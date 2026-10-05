@@ -48,6 +48,8 @@ export type Product = {
   /** Overrides the title/name as Meta's content_name. Null keeps the old value. */
   contentName?: string | null;
   status: ProductStatus;
+  /** The home page step it sits under, by id (settings.homeSteps). Null: Everything else. */
+  homeStep?: string | null;
   bumpOfferId: string | null;
   upsellOfferId: string | null;
   /**
@@ -129,6 +131,8 @@ export type Offer = {
   contentName?: string | null;
   /** Position on the storefront. Null means it is not shown there; 1 is first. */
   homeOrder?: number | null;
+  /** The home page step it sits under, by id (settings.homeSteps). Null: Everything else. */
+  homeStep?: string | null;
   activecampaignTagId: string | null;
   /**
    * A second price on this offer's OWN page at /o/<key>.

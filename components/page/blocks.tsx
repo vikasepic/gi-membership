@@ -13,6 +13,7 @@ import {
   MembershipsBlock,
   type StoreRender,
 } from "@/components/page/storefront-blocks";
+import { StepsBlock, StaircaseBlock } from "@/components/page/home-steps-blocks";
 import {
   BuyerDetailsSlot,
   CardFieldsSlot,
@@ -742,6 +743,14 @@ function Inner({
           billing={p.billing === "recurring" || p.billing === "one_time" ? p.billing : "all"}
         />
       ) : null;
+
+    case "steps":
+      return store ? (
+        <StepsBlock store={store} title={str(p.title)} note={str(p.note)} otherTitle={str(p.otherTitle)} />
+      ) : null;
+
+    case "staircase":
+      return store ? <StaircaseBlock store={store} max={num(p.max, 3)} /> : null;
 
     case "featured":
       return store ? (

@@ -34,7 +34,8 @@ export default async function EditProductPage({
   ]);
   if (!product) notFound();
   // The real sender and access link, so the post-purchase preview shows what buyers get.
-  const postPurchaseMail = (await getSettingsOrDefaults()).postPurchaseEmail;
+  const storeSettings = await getSettingsOrDefaults();
+  const postPurchaseMail = storeSettings.postPurchaseEmail;
 
   return (
     <div className="flex flex-col gap-5">
@@ -55,6 +56,7 @@ export default async function EditProductPage({
         // go to SEE that it 404s; hiding the way there is how somebody decides
         // the page is broken rather than unpublished.
         liveHref={`/p/${product.slug}`}
+        homeSteps={storeSettings.homeSteps}
       />
 
       {/* Legacy single-file delivery, only for a product with no course yet.

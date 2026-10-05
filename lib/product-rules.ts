@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { HOME_STEP_ID } from "@/lib/home-steps-schema";
 import { pricesField } from "@/lib/prices-field";
 import type { OfferPrice } from "@/lib/offer-prices";
 
@@ -128,6 +129,8 @@ export const productSchema = z.object({
       .nullable()
       .default(null),
   ),
+  // The home page step, by id. Blank is Everything else.
+  homeStep: z.preprocess(emptyToNull, z.string().trim().regex(HOME_STEP_ID, "That is not a home step").nullable().default(null)),
 });
 
 export type ParsedProduct = {
@@ -152,6 +155,7 @@ export type ParsedProduct = {
   checkoutNote: string | null;
   adEventName: string | null;
   contentName: string | null;
+  homeStep: string | null;
 };
 
 export type ParseResult =
@@ -203,6 +207,7 @@ export function parseProductForm(raw: Record<string, unknown>): ParseResult {
       checkoutNote: v.checkoutNote,
       adEventName: v.adEventName,
       contentName: v.contentName,
+      homeStep: v.homeStep,
     },
   };
 }

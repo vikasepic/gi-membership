@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { HOME_STEP_ID } from "@/lib/home-steps-schema";
 import { normalizeChannels } from "@/lib/app-channels";
 import { appChannels } from "@/lib/apps";
 import { pricesField } from "@/lib/prices-field";
@@ -88,6 +89,11 @@ const schema = z
         .max(999, "That is not a position")
         .nullable()
         .default(null),
+    ),
+    // The home page step, by id. Blank is Everything else, not a step named "".
+    homeStep: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? null : v),
+      z.string().trim().regex(HOME_STEP_ID, "That is not a home step").nullable().default(null),
     ),
     activecampaignTagId: z
       .string()
@@ -243,6 +249,7 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     adEventName: v.adEventName?.trim() || null,
     contentName: v.contentName?.trim() || null,
     homeOrder: v.homeOrder,
+    homeStep: v.homeStep,
     activecampaignTagId: v.activecampaignTagId?.trim() || null,
     activecampaignTrialTagId: v.activecampaignTrialTagId?.trim() || null,
     activecampaignCancelledTagId: v.activecampaignCancelledTagId?.trim() || null,

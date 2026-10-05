@@ -6,6 +6,8 @@ import { offerHref } from "@/lib/offer-link";
 import type { StoreRender } from "@/components/page/storefront-blocks";
 import type { Product } from "@/lib/types";
 import type { CatalogItem } from "@/components/product-card";
+import { getSettingsOrDefaults } from "@/lib/settings";
+import { buildHomeSteps } from "@/lib/home-steps";
 
 /**
  * The catalogue and the memberships, as the BUILDER should draw them.
@@ -22,7 +24,7 @@ import type { CatalogItem } from "@/components/product-card";
  * they are actually working on. The live page still resolves real ownership.
  */
 export async function storefrontPreview(): Promise<StoreRender> {
-  const [products, offers] = await Promise.all([listPublishedProducts(), listHomeOffers()]);
+  const [products, offers, settings] = await Promise.all([listPublishedProducts(), listHomeOffers(), getSettingsOrDefaults()]);
   const display = await productDisplay(products.map((p) => p.id));
 
   const card = (p: Product): CatalogItem => ({
@@ -36,11 +38,22 @@ export async function storefrontPreview(): Promise<StoreRender> {
     owned: false,
   });
 
+  const memberships = await Promise.all(
+    offers.map(async (offer) => ({ offer, href: await offerHref(offer), owned: false })),
+  );
   return {
     products: products.map(card),
     featured: products[0] ? card(products[0]) : null,
-    memberships: await Promise.all(
-      offers.map(async (offer) => ({ offer, href: await offerHref(offer), owned: false })),
-    ),
+    memberships,
+    steps: buildHomeSteps({
+      steps: settings.homeSteps,
+      offers: memberships,
+      products: products.map((p) => ({
+        product: p,
+        coverUrl: publicCoverUrl(p.coverPath ?? display.get(p.id)?.coverPath ?? null),
+        type: display.get(p.id)?.type ?? null,
+        owned: false,
+      })),
+    }),
   };
 }

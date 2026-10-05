@@ -25,6 +25,16 @@ const formPayload = (over: Record<string, string> = {}) => ({
 });
 
 describe("parseProductForm", () => {
+  it("keeps the home page step, and reads none as Everything else", () => {
+    const put = parseProductForm(formPayload({ homeStep: "idea" }));
+    if (!put.ok) throw new Error(JSON.stringify(put.errors));
+    expect(put.data.homeStep).toBe("idea");
+    const none = parseProductForm(formPayload({ homeStep: "" }));
+    if (!none.ok) throw new Error(JSON.stringify(none.errors));
+    expect(none.data.homeStep).toBeNull();
+    expect(parseProductForm(formPayload({ homeStep: "Not An Id" })).ok).toBe(false);
+  });
+
   it("accepts what the form actually submits, with the media fields absent", () => {
     const res = parseProductForm(formPayload());
     if (!res.ok) throw new Error(`should have parsed, got: ${JSON.stringify(res.errors)}`);

@@ -22,6 +22,8 @@ import { siteUrl } from "@/lib/env";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import { homeJsonLd, jsonLdText } from "@/lib/structured-data";
 import { storeLines, faqsIn } from "@/lib/store-facts";
+import { buildHomeSteps } from "@/lib/home-steps";
+import type { Block } from "@/lib/blocks";
 
 /**
  * The home page is the one address the store has, and the canonical says so:
@@ -139,6 +141,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       owned: d.ownedOfferIds.has(offer.id),
     })),
   );
+  const settings = await getSettingsOrDefaults();
   const store: StoreRender = {
     products: d.products.map((p) =>
       toCard(p, d.display.get(p.id) ?? null, d.coverFor(p), d.ownedIds.has(p.id), d.accessHrefs.get(p.id)),
@@ -147,6 +150,17 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     featured: d.featured
       ? toCard(d.featured, d.display.get(d.featured.id) ?? null, d.featuredCover, d.featuredOwned, d.featuredHref)
       : null,
+    steps: buildHomeSteps({
+      steps: settings.homeSteps,
+      offers: memberships,
+      products: d.products.map((p) => ({
+        product: p,
+        coverUrl: d.coverFor(p),
+        type: d.display.get(p.id)?.type ?? null,
+        owned: d.ownedIds.has(p.id),
+        accessHref: d.accessHrefs.get(p.id),
+      })),
+    }),
   };
 
   const rows = await getPageSections("store", await getStoreId(), { draft: preview });
@@ -154,8 +168,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   // sale at the price the cards show, and the questions the page answers.
   // Never allowed to cost the page — a store with a broken row still opens.
   const base = siteUrl();
-  const jsonLd = await Promise.all([getSettingsOrDefaults(), storeLines(base).catch(() => [])])
-    .then(([settings, lines]) => jsonLdText(homeJsonLd({ settings, base, lines, faqs: preview ? [] : faqsIn(rows) })))
+  const jsonLd = await storeLines(base)
+    .catch(() => [])
+    .then((lines) => jsonLdText(homeJsonLd({ settings, base, lines, faqs: preview ? [] : faqsIn(rows) })))
     .catch(() => null);
   const machine = jsonLd ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} /> : null;
   // "Built" means a band with something in it. A row can exist with nothing on
@@ -166,9 +181,16 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
     return view ? blocksForSection(view).length > 0 : false;
   });
 
+  // A page built on the steps uses the store's wide width, as the library does;
+  // every other built page keeps the column it was designed in.
+  const wide = rows.some((row) => {
+    const view = buildSectionView(row);
+    return view ? usesSteps(blocksForSection(view)) : false;
+  });
+
   if (built) {
     return (
-      <div className="flex flex-col">
+      <div className={`flex flex-col${wide ? " store-wide" : ""}`}>
         {machine}
         {preview && <PreviewBar />}
         {rows.map((row) => (
@@ -188,6 +210,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       {machine}
       <DefaultHome d={d} memberships={memberships} />
     </>
+  );
+}
+
+/** A Step sections or Step staircase block anywhere in these, columns included. */
+function usesSteps(blocks: Block[]): boolean {
+  return blocks.some(
+    (b) => b.type === "steps" || b.type === "staircase" || (b.columns ?? []).some((col) => usesSteps(col)),
   );
 }
 

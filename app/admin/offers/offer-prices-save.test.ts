@@ -217,4 +217,20 @@ describe("where the offer sits on the storefront", () => {
     expect(res.error).toMatch(/first position is 1/);
     expect(updated).not.toHaveBeenCalled();
   });
+
+  it("saves the home page step it was put under", async () => {
+    await saveOffer({}, form([PRICE], { homeStep: "build" }));
+    expect(updated.mock.calls[0][1]).toMatchObject({ homeStep: "build" });
+  });
+
+  it("treats no step as Everything else, not as a step called nothing", async () => {
+    await saveOffer({}, form([PRICE], { homeStep: "" }));
+    expect(updated.mock.calls[0][1]).toMatchObject({ homeStep: null });
+  });
+
+  it("refuses a step id the column's CHECK would refuse", async () => {
+    const res = await saveOffer({}, form([PRICE], { homeStep: "Not An Id" }));
+    expect(res.error).toBeTruthy();
+    expect(updated).not.toHaveBeenCalled();
+  });
 });

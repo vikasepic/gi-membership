@@ -81,7 +81,7 @@ describe("the palette", () => {
     // nothing wherever they were dropped.
     const labels = (owner: "product" | "offer" | "store" | "checkout") =>
       groupedPalette("", owner).flatMap((g) => g.items.map((i) => i.label));
-    for (const label of ["Catalogue", "Memberships", "Featured"]) {
+    for (const label of ["Catalogue", "Memberships", "Featured", "Step sections", "Step staircase"]) {
       expect(labels("store"), label).toContain(label);
       expect(labels("product"), label).not.toContain(label);
       expect(labels("offer"), label).not.toContain(label);
@@ -89,7 +89,7 @@ describe("the palette", () => {
     }
     // And nothing else was lost on the way.
     expect(labels("product")).toContain("Heading");
-    expect(labels("product").length).toBe(labels("store").length - 3);
+    expect(labels("product").length).toBe(labels("store").length - 5);
   });
 
   it("offers the checkout blocks on the checkout and nowhere else", () => {

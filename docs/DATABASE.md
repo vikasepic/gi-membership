@@ -1422,6 +1422,21 @@ Both skip an admin viewing as the member. Read together by
 
 Both have RLS on with anon and authenticated revoked (service role only).
 
+### Home page steps
+
+The step each offer and product sits under on the home page (migration 0093,
+5 Oct 2026). The steps themselves are a list in `stores.settings.homeSteps`
+(`lib/home-steps-schema.ts`), each with an id that never changes; these columns
+hold that id. Null, or an id no longer in the list, puts the thing under
+"Everything else", so removing a step never hides a product.
+`lib/home-steps.ts` sorts the storefront into steps for the Step sections and
+Step staircase blocks.
+
+| Table | Column |
+|---|---|
+| `offers` | `home_step` text, CHECK `^[a-z0-9-]{1,40}$` or null |
+| `products` | `home_step` text, same CHECK |
+
 ---
 
 ## Appendix: the raw DDL

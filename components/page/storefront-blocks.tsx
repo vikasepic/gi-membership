@@ -4,6 +4,7 @@ import { ProductCard, type CatalogItem } from "@/components/product-card";
 import type { Offer } from "@/lib/types";
 import { money } from "@/lib/money";
 import { membershipTerms } from "@/lib/offer-terms";
+import type { HomeStepsView } from "@/lib/home-steps";
 
 /**
  * The three parts of the storefront that read live data.
@@ -25,6 +26,8 @@ export type StoreRender = {
   memberships: MembershipView[];
   /** The one product to lead with, if the page wants a Featured block. */
   featured?: CatalogItem | null;
+  /** The store sorted into the home page's steps, for the Step blocks. */
+  steps?: HomeStepsView;
 };
 
 /** One subscription, with its link and ownership already worked out. */

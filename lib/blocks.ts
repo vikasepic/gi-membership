@@ -64,6 +64,10 @@ export const BLOCK_TYPES = [
   "catalog",
   "memberships",
   "featured",
+  // The home page as steps: the step sections and the staircase at the top.
+  // Same rule as the three above; see lib/home-steps.ts.
+  "steps",
+  "staircase",
   // The checkout's five living parts. Same reasoning as the storefront three:
   // they read the live order — what is in it, what it costs, what the card is
   // about to be charged — so they cannot be built out of typed blocks, and they
@@ -98,7 +102,7 @@ export type BlockType = (typeof BLOCK_TYPES)[number];
  * embedding the whole catalogue is a way out of the page you are selling from,
  * and a memberships list on an upsell competes with the offer being made.
  */
-export const STOREFRONT_TYPES: readonly BlockType[] = ["catalog", "memberships", "featured"];
+export const STOREFRONT_TYPES: readonly BlockType[] = ["catalog", "memberships", "featured", "steps", "staircase"];
 
 /**
  * Blocks that draw the live order. Offered on the checkout and nowhere else.
@@ -862,6 +866,8 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
   catalog: { title: "", limit: 0, columns: 3, showPrice: true },
   memberships: { title: "", showOwned: true, layout: "cards", billing: "all" },
   featured: { title: "", note: "", product: "", tag: "", line: "" },
+  steps: { title: "", note: "", otherTitle: "Everything else" },
+  staircase: { max: 3 },
   // The checkout five. Every default is what the hand-written panel does
   // today, so a store that opens the editor and saves without touching
   // anything gets the checkout it already had.
@@ -1123,6 +1129,7 @@ const TEXT_MEASURE: Partial<Record<BlockType, Partial<BlockStyle>>> = {
  * from the offer, and a typed figure would override a fact with a guess.
  */
 const STARTER_PROPS: Partial<Record<BlockType, Record<string, unknown>>> = {
+  steps: { title: "Pick the step you're on", note: "New apps join the step they help with" },
   cards: {
     items: [
       { title: "The first thing", body: "One sentence about what this is and why it matters.", icon: "", image: "" },
@@ -2260,6 +2267,8 @@ export function blockRendersNothing(block: Block): boolean {
     case "catalog":
     case "memberships":
     case "featured":
+    case "steps":
+    case "staircase":
       return false;
     // Unlike those three, this one CAN answer. No deadline chosen, or one that
     // cannot be read, means no clock — and the wrapper must go too, or the page

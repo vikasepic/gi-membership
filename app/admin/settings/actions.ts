@@ -35,7 +35,7 @@ function parseBaseline(raw: FormDataEntryValue | null): Record<string, unknown> 
 }
 
 /** Settings that are an object, posted as one JSON string from a hidden input. */
-const JSON_FIELDS = new Set(["siteTypography", "siteShell", "codeSnippets", "palette", "postPurchaseEmail", "renewalEmail", "redirects", "checkoutDesign"]);
+const JSON_FIELDS = new Set(["siteTypography", "siteShell", "codeSnippets", "palette", "postPurchaseEmail", "renewalEmail", "redirects", "checkoutDesign", "homeSteps"]);
 
 const FIELD_LABELS: Record<string, string> = {
   legalEntity: "the registered entity",
@@ -48,6 +48,7 @@ const FIELD_LABELS: Record<string, string> = {
   deepColor: "the deep colour",
   palette: "the global colours",
   name: "the store name",
+  homeSteps: "the home steps",
 };
 
 const labelOf = (f: string | number | symbol) => FIELD_LABELS[String(f)] ?? String(f);
@@ -113,6 +114,7 @@ export async function saveSettingsGroup(
               | "renewalEmail"
               | "redirects"
               | "checkoutDesign"
+              | "homeSteps"
           ];
         patch[field as string] = shape.parse(JSON.parse(raw));
       } catch {
