@@ -33,14 +33,16 @@ export function LibraryCourseCard({
   progress?: CourseProgress | null;
 }) {
   const meta = metaFor(type);
+  const started = !!progress && progress.total > 0 && progress.fraction > 0;
+  const finished = started && progress!.done === progress!.total;
   return (
     <Link
       href={`/library/${slug}`}
-      className="rise group flex flex-col overflow-hidden rounded-2xl border border-border bg-surface transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.45)]"
+      className="rise group flex flex-col overflow-hidden rounded-[20px] border border-border bg-surface transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.45)]"
       style={{ animationDelay: `${100 + index * 70}ms` }}
     >
       <div
-        className="relative aspect-[16/10] w-full overflow-hidden"
+        className="relative aspect-[16/9] w-full overflow-hidden"
         style={{ background: `linear-gradient(145deg, ${meta.wash}, var(--surface-2))` }}
       >
         {coverUrl && (
@@ -60,27 +62,29 @@ export function LibraryCourseCard({
             claim, and what keeps a card with no artwork from reading as a
             blank box. */}
       </div>
-      <div className="flex flex-1 flex-col gap-2 p-5">
-        <h3 className="text-lg leading-snug">{title}</h3>
-        {subtitle && <p className="flex-1 text-sm text-muted">{subtitle}</p>}
-        {/* Only once a course has something to count. A bar reading 0% on
-            every card of an untouched library is decoration that tells the
-            reader they have failed at something they have not started. */}
-        {progress && progress.total > 0 && progress.fraction > 0 && (
-          <div className="mt-2 flex flex-col gap-1.5">
-            <div className="h-1 w-full overflow-hidden rounded-full bg-surface-2">
-              <div className="h-full bg-primary" style={{ width: `${percent(progress.fraction)}%` }} />
+      <div className="flex flex-1 flex-col gap-2 px-[18px] pb-[18px] pt-4">
+        {/* `!`: the store's h3 setting (28px) is for sales pages and outranks
+            a utility class; a shelf of four needs its own size. */}
+        <h3 className="text-[17px]! font-bold! leading-snug! tracking-tight">{title}</h3>
+        {subtitle && <p className="line-clamp-2 text-[13.5px] leading-relaxed text-muted">{subtitle}</p>}
+        <div className="mt-auto flex flex-col gap-2 pt-2">
+          {/* Only once a course has something to count. A bar reading 0% on
+              every card of an untouched library is decoration that tells the
+              reader they have failed at something they have not started. */}
+          {started && (
+            <div className="flex items-center gap-2.5">
+              <div className="h-1 flex-1 overflow-hidden rounded-full bg-surface-2">
+                <div className="h-full bg-primary" style={{ width: `${percent(progress!.fraction)}%` }} />
+              </div>
+              <span className="whitespace-nowrap text-xs text-muted">
+                {finished ? "Finished" : `${progress!.done} of ${progress!.total}`}
+              </span>
             </div>
-            <span className="text-xs text-muted">
-              {progress.done === progress.total
-                ? "Finished"
-                : `${progress.done} of ${progress.total} \u00b7 ${percent(progress.fraction)}%`}
-            </span>
-          </div>
-        )}
-        <span className="mt-2 border-t border-border pt-3 text-sm font-medium text-primary group-hover:underline">
-          {progress && progress.fraction > 0 && progress.done !== progress.total ? "Continue \u2192" : "Open \u2192"}
-        </span>
+          )}
+          <span className="font-display text-sm font-semibold text-primary group-hover:underline">
+            {!started ? "Start \u2192" : finished ? "Open \u2192" : "Continue \u2192"}
+          </span>
+        </div>
       </div>
     </Link>
   );

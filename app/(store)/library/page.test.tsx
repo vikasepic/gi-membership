@@ -19,6 +19,7 @@ const state = vi.hoisted(() => ({
   standing: null as Record<string, unknown> | null,
   fullName: "Priya Shah" as string | null,
   standingAsked: null as unknown,
+  last: null as Record<string, unknown> | null,
 }));
 
 vi.mock("next/navigation", () => ({ redirect: (u: string) => { throw new Error(`redirect ${u}`); } }));
@@ -34,7 +35,7 @@ vi.mock("@/lib/library", () => ({
 }));
 vi.mock("@/lib/checkout", () => ({ ownershipFor: async () => ({ productIds: state.productIds, appIds: new Set(), appChannels: new Map() }) }));
 vi.mock("@/lib/courses", () => ({ coursesForUser: async () => state.courses }));
-vi.mock("@/lib/learning", () => ({ progressForCourses: async () => new Map(), lastLessonFor: async () => null }));
+vi.mock("@/lib/learning", () => ({ progressForCourses: async () => new Map(), lastLessonFor: async () => state.last }));
 vi.mock("@/lib/profile", () => ({ getProfile: async () => ({ fullName: state.fullName, email: "priya.shah@gmail.com" }) }));
 vi.mock("@/app/(store)/library/actions", () => ({ openAppAction: async () => {} }));
 
@@ -68,6 +69,7 @@ beforeEach(() => {
   state.standing = null;
   state.fullName = "Priya Shah";
   state.standingAsked = null;
+  state.last = null;
 });
 
 describe("a member who bought one app", () => {
@@ -77,12 +79,12 @@ describe("a member who bought one app", () => {
     expect(html).toContain("Welcome back, Priya");
     expect(html).toContain("Content Engine is ready for you.");
     expect(html).toContain("Open Content Engine");
-    expect(html).toContain("Opens content.greaterinside.com. You&#x27;ll already be signed in.");
     expect(html).not.toContain("Nothing here yet");
     // The app's own tile, not the offer's marketing banner.
     expect(html).toMatch(/>CE<\/span>/);
-    // One app is the whole library: no section heading over a single card.
-    expect(html).not.toContain(">Your apps<");
+    // One app: one large card under "Your app".
+    expect(html).toContain(">Your app<");
+    expect(html).toContain("Opens content.greaterinside.com. You&#x27;ll be signed in automatically.");
   });
 
   it("sees what their plan includes, and what it doesn't, with the way to add it", async () => {
@@ -119,7 +121,30 @@ describe("the welcome", () => {
   });
 });
 
+describe("the page uses the screen", () => {
+  it("asks the store layout for the wide width", async () => {
+    // The store shell keeps every other page at its usual width; a page that
+    // carries this marker gets 1240px (components/app-shell.tsx).
+    state.apps = [contentEngine()];
+    expect(await render()).toContain("store-wide");
+  });
+});
+
 describe("a member with several things", () => {
+  it("gets compact cards side by side, each with Open at the bottom and one small billing link", async () => {
+    state.apps = [
+      contentEngine({ status: "active", statusLine: { tone: "ok", text: "Active" } }),
+      { ...contentEngine(), id: "mp", key: "micro-product-builder", name: "Micro-Product Builder", kind: "internal", route: "/apps/micro-product-builder", host: null, initials: "MP", badges: [], description: null },
+    ];
+    const html = await render();
+    expect(html).toContain("Open Content Engine");
+    expect(html).toContain("Open Micro-Product Builder");
+    expect(html).toContain("Signed in automatically");
+    expect(html).toContain("Opens right here");
+    expect(html).toMatch(/>Billing<\/a>/);
+    expect(html).not.toContain("Billing and invoices");
+  });
+
   it("gets a heading over their apps, and both cards", async () => {
     state.apps = [
       contentEngine({ status: "active", statusLine: { tone: "ok", text: "Active" }, badges: [] }),
@@ -173,5 +198,27 @@ describe("messages after a purchase", () => {
   it("still shows the outcome the checkout sent them back with", async () => {
     state.apps = [contentEngine()];
     expect(await render("added")).toContain("Added — it’s ready in your library.");
+  });
+});
+
+describe("picking up where they left off", () => {
+  it("sits beside the welcome as one slim card that opens the lesson", async () => {
+    state.apps = [contentEngine()];
+    state.courses = [{ id: "c1", slug: "book-launch", title: "The Book Launch System", subtitle: "From manuscript to book.", type: "course", coverPath: null }];
+    state.last = { courseId: "c1", itemId: "i9", title: "Complete Book Launch System", courseTitle: "The Book Launch System", courseSlug: "book-launch", at: "2026-09-21T10:00:00Z", positionSeconds: null, durationSeconds: null, completed: false };
+    const html = await render();
+    expect(html).toContain("Pick up where you left off");
+    expect(html).toContain("Complete Book Launch System");
+    expect(html).toContain('href="/library/book-launch/i9"');
+  });
+});
+
+describe("courses", () => {
+  it("an untouched course says Start, with its title at the library's size", async () => {
+    state.courses = [{ id: "c1", slug: "book-launch", title: "The Book Launch System", subtitle: "From manuscript to book.", type: "course", coverPath: null }];
+    const html = await render();
+    expect(html).toContain(">Your course<");
+    expect(html).toContain("Start");
+    expect(html).toContain('href="/library/book-launch"');
   });
 });

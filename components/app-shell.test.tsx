@@ -71,10 +71,13 @@ const TODAY = {
   mobileBar:
     "sticky top-0 z-20 flex items-center justify-center border-b border-border bg-surface/85 px-5 py-3.5 backdrop-blur md:hidden",
   desktopBar: "sticky top-0 z-20 hidden border-b border-border bg-surface/80 backdrop-blur md:block",
-  desktopBarInner: "mx-auto flex max-w-5xl items-center justify-between px-6 py-4",
-  main: "mx-auto w-full max-w-5xl flex-1 px-5 pt-6 md:px-6",
+  // Since 5 Oct 2026 each of these also names the width a page marked
+  // `store-wide` opts into (the member library). Nothing else changes: on a
+  // page without the marker the variant matches nothing.
+  desktopBarInner: "mx-auto flex max-w-5xl group-has-[.store-wide]/shell:max-w-[1240px] items-center justify-between px-6 py-4",
+  main: "mx-auto w-full max-w-5xl group-has-[.store-wide]/shell:max-w-[1240px] flex-1 px-5 pt-6 md:px-6",
   footer:
-    "mx-auto w-full max-w-5xl px-5 pt-10 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-10",
+    "mx-auto w-full max-w-5xl group-has-[.store-wide]/shell:max-w-[1240px] px-5 pt-10 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-10",
   tabBar: "fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/90 backdrop-blur md:hidden",
   linkCurrent: "rounded-full px-4 py-2 text-sm transition-colors bg-surface-2 text-fg",
   linkIdle: "rounded-full px-4 py-2 text-sm transition-colors text-muted hover:text-fg",
@@ -340,5 +343,16 @@ describe("the stylesheet", () => {
     expect(shellLinks(normalizeSiteShell({ links: [] }))).toEqual([]);
     expect(shellHasTabs(normalizeSiteShell({ links: [] }))).toBe(false);
     expect(shellLinks(normalizeSiteShell({}))).toHaveLength(3);
+  });
+});
+
+describe("a page that asks for the wide layout", () => {
+  it("is what the root's group looks for: header, main and footer all widen together", () => {
+    // The member library marks itself `store-wide`; the header and footer
+    // widen with it so the logo lines up with the content beneath.
+    const html = render();
+    expect(classes(html).some((c) => c.split(" ").includes("group/shell"))).toBe(true);
+    const wide = classes(html).filter((c) => c.includes("group-has-[.store-wide]/shell:max-w-[1240px]"));
+    expect(wide).toHaveLength(3);
   });
 });

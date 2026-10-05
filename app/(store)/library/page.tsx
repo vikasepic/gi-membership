@@ -145,7 +145,6 @@ export default async function LibraryPage({
   // As typed, but with a capital: "vikas" at checkout reads "Welcome back, Vikas".
   const typed = firstNameOf(profile?.fullName ?? null);
   const firstName = typed ? typed.charAt(0).toUpperCase() + typed.slice(1) : "";
-  const several = apps.length + courses.length > 1;
   const intro =
     apps.length === 1 && courses.length === 0
       ? `${apps[0].name} is ready for you. Press Open and you're signed in. There's no separate password.`
@@ -155,16 +154,31 @@ export default async function LibraryPage({
           ? "Your courses are below. Pick up where you left off, or start one."
           : null;
 
+  const heading = "flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-3";
+  // `!` on every heading: the store's heading settings (h1 60px, h2 45px) are
+  // :root rules meant for sales pages and outrank a utility class.
+  const h2 = "text-[21px]! font-bold! leading-tight! tracking-tight";
+  const lastCover = last ? courses.find((c) => c.id === last.courseId)?.coverPath ?? null : null;
+
   return (
-    <div className="flex flex-col gap-12 py-4">
-      <section className="flex flex-col gap-3">
-        <span className="kicker text-muted">Your library</span>
-        {/* `!` throughout: the store's heading settings (h1 60px, h2 45px)
-            are :root rules meant for sales pages, and they outrank utilities. */}
-        <h1 className="text-balance text-4xl! font-extrabold! leading-[1.05]! tracking-tight sm:text-[44px]!">
-          Welcome back{firstName ? `, ${firstName}` : ""}
-        </h1>
-        {intro && <p className="max-w-[58ch] text-pretty text-[17px] text-muted">{intro}</p>}
+    // `store-wide`: the store layout widens to 1240px for this page alone
+    // (components/app-shell.tsx), so a big screen holds three apps a row.
+    <div className="store-wide flex flex-col gap-11 py-4">
+      <section className="flex flex-wrap items-stretch gap-x-8 gap-y-5">
+        <div className="flex min-w-0 flex-col justify-center gap-2 [flex:999_1_28rem]">
+          <span className="kicker text-muted">Your library</span>
+          <h1 className="text-balance text-[32px]! font-extrabold! leading-[1.08]! tracking-tight sm:text-[38px]!">
+            Welcome back{firstName ? `, ${firstName}` : ""}
+          </h1>
+          {intro && <p className="max-w-[56ch] text-pretty text-base text-muted">{intro}</p>}
+        </div>
+        {last && (
+          <div className="flex min-w-0 items-center [flex:1_1_30rem]">
+            <div className="w-full">
+              <ContinueBox last={last} now={new Date()} coverUrl={publicCoverUrl(lastCover)} />
+            </div>
+          </div>
+        )}
       </section>
 
       {offerStatus && OFFER_STATUS[offerStatus] && (
@@ -182,35 +196,33 @@ export default async function LibraryPage({
         </p>
       )}
 
-      {last && <ContinueBox last={last} now={new Date()} />}
-
       {apps.length > 0 && (
-        <section className="flex flex-col gap-5">
-          {several && (
-            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-4">
-              <h2 className="text-2xl! font-bold! leading-tight!">Your apps</h2>
-              <span className="kicker text-muted">Press Open and you&rsquo;re in</span>
+        <section className="flex flex-col gap-[18px]">
+          <div className={heading}>
+            <h2 className={h2}>{apps.length === 1 ? "Your app" : "Your apps"}</h2>
+            <span className="text-[13px] text-muted">Press Open and you&rsquo;re signed in</span>
+          </div>
+          {apps.length === 1 ? (
+            <AppCard app={apps[0]} variant="featured" />
+          ) : (
+            <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,20rem),1fr))]">
+              {apps.map((a) => (
+                <AppCard key={a.id} app={a} variant="compact" />
+              ))}
             </div>
           )}
-          <div className="flex flex-col gap-5">
-            {apps.map((a) => (
-              <AppCard key={a.id} app={a} />
-            ))}
-          </div>
         </section>
       )}
 
       {courses.length > 0 && (
-        <section className="flex flex-col gap-5">
-          <div className="flex items-baseline justify-between border-b border-border pb-4">
-            <h2 className="text-2xl! font-bold! leading-tight!">{courses.length === 1 ? "Your course" : "Your courses"}</h2>
-            {courses.length > 1 && <span className="kicker text-muted">{courses.length} in your library</span>}
+        <section className="flex flex-col gap-[18px]">
+          <div className={heading}>
+            <h2 className={h2}>{courses.length === 1 ? "Your course" : "Your courses"}</h2>
+            <span className="text-[13px] text-muted">{courses.length === 1 ? "1 course" : `${courses.length} courses`}</span>
           </div>
-          {/* auto-FILL, not auto-fit. auto-fit collapses the empty tracks, so a
-              single course stretched to the full width and its 16:10 cover
-              became a wall of image. auto-fill keeps the empty tracks, so one
-              card is card-sized and the grid still reflows on any width. */}
-          <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr))]">
+          {/* auto-FILL, not auto-fit: one course stays card-sized instead of
+              stretching its cover across the row. Four across on a wide screen. */}
+          <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,16rem),1fr))]">
             {courses.map((c, i) => (
               <LibraryCourseCard
                 key={c.id}
@@ -252,32 +264,36 @@ export default async function LibraryPage({
           click route, which logs the tap and sends them to the sales page:
           nothing in the library charges (owner, 1 Oct 2026). */}
       {standing && (
-        <section className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-4">
-            <h2 className="text-2xl! font-bold! leading-tight!">More from Greater Inside</h2>
-            <span className="kicker text-muted">Not in your plan</span>
+        <section className="flex flex-col gap-[18px]">
+          <div className={heading}>
+            <h2 className={h2}>More from Greater Inside</h2>
+            <span className="text-[13px] text-muted">Not in your plan</span>
           </div>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-4 rounded-[20px] border border-border px-5 py-5 sm:px-6">
-            <span
-              aria-hidden
-              className="grid size-11 shrink-0 place-items-center rounded-[13px] bg-plum font-display text-[15px] font-extrabold tracking-tight text-white"
-            >
-              {appInitials(standing.name)}
-            </span>
-            <div className="flex min-w-0 flex-col gap-0.5 [flex:999_1_14rem]">
-              <span className="font-display text-base font-semibold">{standing.name}</span>
+          <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,20rem),1fr))]">
+            <div className="flex flex-col gap-3 rounded-[20px] border border-border p-5">
+              <div className="flex items-center gap-3">
+                <span
+                  aria-hidden
+                  className="grid size-[42px] shrink-0 place-items-center rounded-xl bg-plum font-display text-sm font-extrabold tracking-tight text-white"
+                >
+                  {appInitials(standing.name)}
+                </span>
+                <div className="flex min-w-0 flex-col">
+                  <span className="font-display text-base font-bold">{standing.name}</span>
+                  <span className="text-[13px] text-muted">{offerPriceLine(standing)}</span>
+                </div>
+              </div>
               <span className="text-sm text-muted">{shortDescription(standing.headline) ?? shortDescription(standing.description)}</span>
-              <span className="text-[13px] text-muted">{offerPriceLine(standing)}</span>
+              <BuyLink
+                href={`/library/offer/${standing.id}`}
+                valueCents={standing.priceCents}
+                currency={standing.currency}
+                contentId={standing.key}
+                className="mt-auto flex min-h-[42px] items-center justify-center rounded-full border border-border font-display text-sm font-semibold transition-colors hover:border-primary"
+              >
+                See what&rsquo;s inside
+              </BuyLink>
             </div>
-            <BuyLink
-              href={`/library/offer/${standing.id}`}
-              valueCents={standing.priceCents}
-              currency={standing.currency}
-              contentId={standing.key}
-              className="flex min-h-11 items-center justify-center rounded-full border border-border px-5 font-display text-sm font-semibold transition-colors [flex:1_1_10rem] hover:border-primary"
-            >
-              See what&rsquo;s inside
-            </BuyLink>
           </div>
         </section>
       )}

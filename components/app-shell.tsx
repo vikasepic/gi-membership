@@ -143,7 +143,9 @@ export function AppShell({
     }${hook(SHELL_CLASS.link)}`;
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    // `group/shell`: a page that marks itself `store-wide` (the member
+    // library) widens the header, main and footer below to 1240px together.
+    <div className="group/shell flex min-h-dvh flex-col">
       {/* After StoreBrand's, so what is set here beats the theme it sits on.
           Empty string until something is actually set, and an empty <style>
           is not rendered at all. */}
@@ -192,7 +194,7 @@ export function AppShell({
 
       {/* Desktop top bar */}
       <header className={`sticky top-0 z-20 hidden border-b border-border bg-surface/80 backdrop-blur md:block${hook(SHELL_CLASS.bar)}`}>
-        <div className={`mx-auto flex max-w-5xl items-center justify-between px-6 py-4${hook(SHELL_CLASS.barInner)}`}>
+        <div className={`mx-auto flex max-w-5xl group-has-[.store-wide]/shell:max-w-[1240px] items-center justify-between px-6 py-4${hook(SHELL_CLASS.barInner)}`}>
           <Link href="/" aria-label={settings.name || "Home"}>
             <Mark className={`h-7 w-auto text-fg${hook(SHELL_CLASS.brandDesktop)}`} />
           </Link>
@@ -214,7 +216,7 @@ export function AppShell({
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-5 pt-6 md:px-6">
+      <main className="mx-auto w-full max-w-5xl group-has-[.store-wide]/shell:max-w-[1240px] flex-1 px-5 pt-6 md:px-6">
         {children}
       </main>
 
@@ -223,7 +225,7 @@ export function AppShell({
           page when they go looking. Bottom padding clears the mobile tab bar,
           and goes when the tab bar does — six empty rems at the end of every
           page is what "just leave the padding" costs. */}
-      <footer className={`mx-auto w-full max-w-5xl px-5 pt-10 ${
+      <footer className={`mx-auto w-full max-w-5xl group-has-[.store-wide]/shell:max-w-[1240px] px-5 pt-10 ${
           hasTabs ? "pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-10" : "pb-10 md:px-6"
         }`}>
         <div className="flex flex-col gap-4 border-t border-border pt-6 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
