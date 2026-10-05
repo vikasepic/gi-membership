@@ -9,6 +9,17 @@ import { createClient } from "@/lib/supabase/server";
 import { coursesForProduct } from "@/lib/courses";
 import { isOfferEligible, type Ownership } from "@/lib/offers";
 import type { Product, Offer } from "@/lib/types";
+import {
+  appInitials,
+  appStatus,
+  channelBadges,
+  mergeAppRows,
+  offerPriceLine,
+  shortDescription,
+  type ChannelBadge,
+  type OwnedStatus,
+  type StatusLine,
+} from "@/lib/library-apps";
 
 
 // Ownership-gated library reads + signed-URL delivery. Paid assets live in the
@@ -44,72 +55,134 @@ export async function ownsProduct(userId: string, productId: string): Promise<bo
   return !!data;
 }
 
-export async function listOwnedApps(
-  userId: string,
-): Promise<
-  {
-    id: string;
-    key: string;
-    name: string;
-    /** internal opens a route on this site; external goes through the handoff. */
-    kind: AppKind;
-    /** Where an internal app opens. Null for external, and for a key with no code. */
-    route: string | null;
-    status: string;
-    host: string | null;
-    channels: string[];
-    imageUrl: string | null;
-  }[]
-> {
+export type LibraryApp = {
+  id: string;
+  key: string;
+  name: string;
+  /** internal opens a route on this site; external goes through the handoff. */
+  kind: AppKind;
+  /** Where an internal app opens. Null for external, and for a key with no code. */
+  route: string | null;
+  status: OwnedStatus;
+  /** The one line of billing the card shows: trial end, a failed payment, an end date. */
+  statusLine: StatusLine;
+  host: string | null;
+  /** Every channel the member owns in this app, across all their purchases of it. */
+  channels: string[];
+  /** Every channel the app has, included or not, with the way to add a missing one. */
+  badges: ChannelBadge[];
+  description: string | null;
+  initials: string;
+};
+
+/**
+ * The member's apps, one entry per app however many purchases sit behind it.
+ *
+ * It drew one card per purchase, so a member who added LinkedIn to Instagram
+ * got two Content Engine cards (5 Oct 2026). Live rows only, the same three
+ * statuses subscribedToApp counts: a cancelled row drew a card whose Open
+ * button posted to an action that refused it.
+ */
+export async function listOwnedApps(userId: string, now = new Date()): Promise<LibraryApp[]> {
   const db = createServiceClient();
-  // Live rows only, the same three subscribedToApp counts. A cancelled row is
-  // a record that they once had it: on the shelf it drew a card whose "Open
-  // the app" posted to an action that refused it, above the "Still available"
-  // card that is the real way back in.
   const { data: owns } = await db
     .from("ownership")
-    .select("app_id, status, offer_id")
+    .select("app_id, status, offer_id, stripe_subscription_id")
     .eq("user_id", userId)
     .not("app_id", "is", null)
-    .in("status", ["active", "trialing", "past_due"]);
+    .in("status", ["active", "trialing", "past_due"])
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
   const rows = owns ?? [];
   if (rows.length === 0) return [];
-  const ids = rows.map((r) => r.app_id as string);
-  const { data: apps } = await db.from("apps").select("id, key, name, kind, base_url").in("id", ids);
-  const byId = new Map((apps ?? []).map((a) => [a.id as string, a]));
 
-  // What was actually bought, per app. A member on the Instagram plan and a
-  // member on both see the same card otherwise, and "which channels do I
-  // have" is the one thing about a connected app the store knows and the
-  // member cannot check anywhere else.
-  const offerIds = rows.map((r) => r.offer_id as string | null).filter(Boolean) as string[];
-  const { data: offers } = offerIds.length
-    ? await db.from("offers").select("id, grant_channels, image_url").in("id", offerIds)
-    : { data: [] };
-  const channelsByOffer = new Map(
-    (offers ?? []).map((o) => [o.id as string, (o.grant_channels as string[]) ?? []]),
-  );
-  // The picture the offer was sold with. An app has no cover of its own, and a
-  // letter in a box is what you draw when there is nothing better — there is.
-  const imageByOffer = new Map(
-    (offers ?? []).map((o) => [o.id as string, (o.image_url as string | null) ?? null]),
+  const appIds = [...new Set(rows.map((r) => r.app_id as string))];
+  const offerIds = [...new Set(rows.map((r) => r.offer_id as string | null).filter(Boolean) as string[])];
+  const subIds = [...new Set(rows.map((r) => r.stripe_subscription_id as string | null).filter(Boolean) as string[])];
+  const [{ data: apps }, { data: offers }, { data: subs }, { data: addable }] = await Promise.all([
+    db.from("apps").select("id, key, name, kind, base_url, channels").in("id", appIds),
+    offerIds.length
+      ? db.from("offers").select("id, grant_channels, description").in("id", offerIds)
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    subIds.length
+      ? db.from("subscriptions").select("stripe_subscription_id, status, trial_end, cancel_at, cancel_at_period_end, current_period_end").in("stripe_subscription_id", subIds)
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    // The offers that sell one channel of an app on its own: where a missing
+    // channel's "Add" goes. Oldest first, so the choice is the store's and not
+    // the heap's.
+    db.from("offers")
+      .select("id, grant_app_id, grant_channels, price_cents, currency, billing_type, interval, interval_count, trial_days")
+      .in("grant_app_id", appIds)
+      .eq("active", true)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true }),
+  ]);
+  const appById = new Map((apps ?? []).map((a) => [a.id as string, a]));
+  const offerById = new Map((offers ?? []).map((o) => [o.id as string, o]));
+  const subById = new Map((subs ?? []).map((x) => [x.stripe_subscription_id as string, x]));
+
+  const merged = mergeAppRows(
+    rows.map((r) => {
+      const offer = r.offer_id ? offerById.get(r.offer_id as string) : undefined;
+      return {
+        appId: r.app_id as string,
+        status: r.status as OwnedStatus,
+        channels: ((offer?.grant_channels as string[] | null) ?? []),
+        offerId: (r.offer_id as string | null) ?? null,
+        description: shortDescription(offer?.description as string | null),
+        subscriptionId: (r.stripe_subscription_id as string | null) ?? null,
+      };
+    }),
   );
 
-  return rows.map((r) => {
-    const app = byId.get(r.app_id as string);
+  return merged.map((m) => {
+    const app = appById.get(m.appId);
     const kind: AppKind = app?.kind === "internal" ? "internal" : "external";
     const key = (app?.key as string) ?? "";
+    const name = (app?.name as string) ?? "App";
+
+    // First offer (oldest) per channel that sells that channel alone.
+    const addOffers: Record<string, { href: string; priceLabel: string }> = {};
+    for (const o of addable ?? []) {
+      const ch = (o.grant_channels as string[] | null) ?? [];
+      if (o.grant_app_id !== m.appId || ch.length !== 1 || addOffers[ch[0]]) continue;
+      addOffers[ch[0]] = {
+        // Through the click route: it logs the tap and sends them to the
+        // offer's sales page (or its checkout when it has none).
+        href: `/library/offer/${o.id as string}`,
+        priceLabel: offerPriceLine({
+          billingType: o.billing_type as "one_time" | "recurring",
+          interval: o.interval as string | null,
+          intervalCount: o.interval_count as number | null,
+          trialDays: null,
+          priceCents: o.price_cents as number,
+          currency: (o.currency as string) ?? "usd",
+        }),
+      };
+    }
+
+    // The trial's end, and an end date only when every subscription behind the
+    // app is ending: cancelling Instagram while LinkedIn renews ends nothing.
+    const live = m.subscriptionIds.map((id) => subById.get(id)).filter(Boolean) as Record<string, unknown>[];
+    const endOf = (x: Record<string, unknown>) =>
+      (x.cancel_at as string | null) ?? (x.cancel_at_period_end ? ((x.current_period_end as string | null) ?? null) : null);
+    const ends = live.length > 0 && live.every((x) => endOf(x)) ? live.map(endOf).sort().at(-1)! : null;
+    const trial = live.find((x) => x.status === "trialing");
+
     return {
-      id: r.app_id as string,
+      id: m.appId,
       key,
-      name: (app?.name as string) ?? "App",
+      name,
       kind,
       route: kind === "internal" ? builtinAppRoute(key) : null,
-      status: r.status as string,
+      status: m.status,
+      statusLine: appStatus(m.status, live.length ? { trialEndsAt: (trial?.trial_end as string | null) ?? null, cancelsAt: ends } : null, now),
       // An internal app has no host of its own; it is this one.
       host: kind === "internal" ? null : hostOf(app?.base_url as string | undefined),
-      channels: channelsByOffer.get(r.offer_id as string) ?? [],
-      imageUrl: imageByOffer.get(r.offer_id as string) ?? null,
+      channels: m.channels,
+      badges: channelBadges((app?.channels as string[] | null) ?? [], m.channels, addOffers),
+      description: m.description,
+      initials: appInitials(name),
     };
   });
 }
@@ -148,7 +221,10 @@ export async function subscribedToApp(userId: string, appId: string): Promise<bo
 // Asks isOfferEligible rather than subscribedToApp, because "are they in this
 // app?" is the wrong question once one app is sold as three subscriptions: an
 // Instagram subscriber is in the app and should still be shown LinkedIn.
-export async function getStandingOffer(userId: string): Promise<Offer | null> {
+export async function getStandingOffer(
+  userId: string,
+  opts: { excludeAppIds?: string[] } = {},
+): Promise<Offer | null> {
   const db = createServiceClient();
   const { data } = await db
     .from("offers")
@@ -164,7 +240,11 @@ export async function getStandingOffer(userId: string): Promise<Offer | null> {
     .order("created_at", { ascending: true })
     .order("id", { ascending: true });
   const owned = await ownershipFor(userId);
+  // An app the member already has is offered on its own card ("Add LinkedIn
+  // to your plan"), not a second time under "More from Greater Inside".
+  const skip = new Set(opts.excludeAppIds ?? []);
   for (const offer of (data ?? []).map(hydrateOffer)) {
+    if (offer.grantAppId && skip.has(offer.grantAppId)) continue;
     if (isOfferEligible(offer, owned)) return offer;
   }
   return null;

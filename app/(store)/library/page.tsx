@@ -2,15 +2,17 @@ import Link from "next/link";
 import { BuyLink } from "@/components/buy-link";
 import { redirect } from "next/navigation";
 import { viewer } from "@/lib/view-as";
-import { getStandingOffer, listOwnedApps, ownedProductIdsForViewer } from "@/lib/library";
+import { getStandingOffer, listOwnedApps } from "@/lib/library";
+import { ownershipFor } from "@/lib/checkout";
 import { coursesForUser } from "@/lib/courses";
-import { channelsLabel } from "@/lib/app-channels";
+import { getProfile } from "@/lib/profile";
+import { firstNameOf } from "@/lib/post-purchase-email";
+import { appInitials, offerPriceLine, shortDescription } from "@/lib/library-apps";
 import { publicCoverUrl } from "@/lib/media";
+import { AppCard } from "@/components/library/app-card";
 import { LibraryCourseCard } from "@/components/library/course-card";
 import { ContinueBox } from "@/components/library/continue-box";
 import { progressForCourses, lastLessonFor } from "@/lib/learning";
-import { immediateChargeCents } from "@/lib/offers";
-import { openAppAction } from "./actions";
 
 // Every outcome of the offer checkout's own
 // return trip (app/(store)/checkout/offer/complete/route.ts, which reads
@@ -98,29 +100,19 @@ const OFFER_STATUS: Record<string, string> = {
   // since a buyer has no way to act differently on one versus the other.
   invalid: "That one-time offer link wasn’t valid, so nothing was added.",
 };
-import { money } from "@/lib/money";
 import { NOINDEX } from "@/lib/seo";
 
 export const metadata = NOINDEX;
 
 /**
- * The ground a piece of offer artwork sits on while it loads, and behind the
- * letter drawn when there is none.
+ * The member's library (redesigned 5 Oct 2026, direction A of the mockups).
  *
- * The app cards once contained their artwork on this wash with a margin all
- * round, on the theory that a mockup on a transparent field should float.
- * Beside the course cards, whose covers fill their band edge to edge, the
- * apps read as the poor relations — small pictures in grey boxes. The owner
- * asked for the course treatment (10 Sep 2026), so the app cards now cover
- * their band the way a course does, and this wash is what shows through
- * before the image arrives. The standing offer below still floats its image;
- * that panel is a different shape and was never beside a course.
+ * Most members own one app and nothing else, and the old page opened on
+ * "Nothing here yet" with their app underneath it. Now it opens on a welcome
+ * and one big card per app: what it is, what their plan includes, and a
+ * button that opens it already signed in. Courses follow, and anything they
+ * don't own sits at the bottom, marked as such.
  */
-const WASH = {
-  backgroundImage:
-    "radial-gradient(120% 100% at 50% 0%, color-mix(in srgb, var(--navy) 8%, var(--surface)), var(--surface-2))",
-} as const;
-
 export default async function LibraryPage({
   searchParams,
 }: {
@@ -130,24 +122,46 @@ export default async function LibraryPage({
   if (!user) redirect("/login");
 
   const { offer: offerStatus } = await searchParams;
-  const courses = await coursesForUser(user.id);
-  const apps = await listOwnedApps(user.id);
-  const standing = await getStandingOffer(user.id);
-  // Distinguishes "you have bought nothing" from "what you bought has no
-  // content attached" — two very different messages for the reader.
-  const ownedProductCount = (await ownedProductIdsForViewer()).size;
+  const [courses, apps, owned, profile] = await Promise.all([
+    coursesForUser(user.id),
+    listOwnedApps(user.id),
+    // The member's own ownership. `user` is whoever is being viewed, so an
+    // admin using "Open the store as them" sees the member's products; the
+    // signed-in reader this used to ask for counted the admin's own.
+    ownershipFor(user.id),
+    getProfile(user.id),
+  ]);
+  const ownedProductCount = owned.productIds.size;
   const ownsProducts = ownedProductCount > 0;
+  // An app the member has offers its missing channel on its own card.
+  const standing = await getStandingOffer(user.id, { excludeAppIds: apps.map((a) => a.id) });
 
-  // Both read the same rows, so they are fetched together rather than once
-  // for the shelf and again for the box above it.
+  // Both read the same rows, so they are fetched together.
   const [progress, last] = await Promise.all([
     progressForCourses(user.id, courses),
     lastLessonFor(user.id, courses),
   ]);
 
+  const firstName = firstNameOf(profile?.fullName ?? null);
+  const several = apps.length + courses.length > 1;
+  const intro =
+    apps.length === 1 && courses.length === 0
+      ? `${apps[0].name} is ready for you. Press Open and you're signed in. There's no separate password.`
+      : apps.length > 0
+        ? `Your ${courses.length > 0 ? "apps and courses are" : "apps are"} below. Press Open on an app and you're signed in. There's no separate password.`
+        : courses.length > 0
+          ? "Your courses are below. Pick up where you left off, or start one."
+          : null;
+
   return (
-    <div className="flex flex-col gap-10 py-4">
-      <h1 className="text-3xl">Your library</h1>
+    <div className="flex flex-col gap-12 py-4">
+      <section className="flex flex-col gap-3">
+        <span className="kicker text-muted">Your library</span>
+        <h1 className="text-balance text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-[44px]">
+          Welcome back{firstName ? `, ${firstName}` : ""}
+        </h1>
+        {intro && <p className="max-w-[58ch] text-pretty text-[17px] text-muted">{intro}</p>}
+      </section>
 
       {offerStatus && OFFER_STATUS[offerStatus] && (
         <p
@@ -166,35 +180,27 @@ export default async function LibraryPage({
 
       {last && <ContinueBox last={last} now={new Date()} />}
 
-      {courses.length === 0 ? (
-        ownsProducts ? (
-          // Owning something that delivers nothing is a store misconfiguration,
-          // not an empty library. Saying "nothing here yet" to someone who has
-          // paid reads as a bug and sends them hunting; name the real cause.
-          <div className="flex flex-col gap-2 rounded-2xl border border-primary/30 bg-primary/5 px-5 py-4">
-            <span className="font-medium text-fg">Your purchases don&rsquo;t have content attached yet</span>
-            <p className="text-sm text-muted">
-              You own {ownedProductCount === 1 ? "a product" : `${ownedProductCount} products`}, but
-              no course has been attached to {ownedProductCount === 1 ? "it" : "them"} yet, so
-              there&rsquo;s nothing to open. This is on us, not you — it will appear here as soon as
-              it&rsquo;s published.
-            </p>
+      {apps.length > 0 && (
+        <section className="flex flex-col gap-5">
+          {several && (
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-4">
+              <h2 className="text-xl">Your apps</h2>
+              <span className="kicker text-muted">Press Open and you&rsquo;re in</span>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-6">
+            {apps.map((a) => (
+              <AppCard key={a.id} app={a} />
+            ))}
           </div>
-        ) : (
-          <p className="text-muted">
-            Nothing here yet.{" "}
-            <Link href="/" className="text-primary hover:underline">Browse the store</Link>.
-          </p>
-        )
-      ) : (
+        </section>
+      )}
+
+      {courses.length > 0 && (
         <section className="flex flex-col gap-5">
           <div className="flex items-baseline justify-between border-b border-border pb-4">
-            <h2 className="text-xl">
-              {courses.length === 1 ? "Your course" : `Your courses`}
-            </h2>
-            {courses.length > 1 && (
-              <span className="kicker text-muted">{courses.length} in your library</span>
-            )}
+            <h2 className="text-xl">{courses.length === 1 ? "Your course" : "Your courses"}</h2>
+            {courses.length > 1 && <span className="kicker text-muted">{courses.length} in your library</span>}
           </div>
           {/* auto-FILL, not auto-fit. auto-fit collapses the empty tracks, so a
               single course stretched to the full width and its 16:10 cover
@@ -217,164 +223,57 @@ export default async function LibraryPage({
         </section>
       )}
 
-      {/* Connected apps — signed handoff, lands the user already signed in. */}
-      {apps.length > 0 && (
-        <section className="flex flex-col gap-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-4">
-            <h2 className="text-xl">Your apps</h2>
-            <span className="kicker text-muted">Included with your purchase</span>
+      {apps.length === 0 && courses.length === 0 &&
+        (ownsProducts ? (
+          // Owning something that delivers nothing is a store misconfiguration,
+          // not an empty library. Saying "nothing here yet" to someone who has
+          // paid reads as a bug and sends them hunting; name the real cause.
+          <div className="flex flex-col gap-2 rounded-2xl border border-primary/30 bg-primary/5 px-5 py-4">
+            <span className="font-medium text-fg">Your purchases don&rsquo;t have content attached yet</span>
+            <p className="text-sm text-muted">
+              You own {ownedProductCount === 1 ? "a product" : `${ownedProductCount} products`}, but
+              no course has been attached to {ownedProductCount === 1 ? "it" : "them"} yet, so
+              there&rsquo;s nothing to open. This is on us, not you — it will appear here as soon as
+              it&rsquo;s published.
+            </p>
           </div>
-          {/* The same grid and the same card shape as the courses above. An
-              app is a thing they bought; a full-width bar under a wall of
-              cards read as an afterthought. */}
-          <div className="grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr))]">
-            {apps.map((a) => {
-              const tone =
-                a.status === "past_due"
-                  ? { dot: "var(--primary)", label: "Payment failed — update your card" }
-                  : a.status === "trialing"
-                    ? { dot: "var(--navy)", label: "On trial" }
-                    : a.status === "active"
-                      ? { dot: "var(--navy)", label: "Active" }
-                      : { dot: "var(--muted)", label: a.status };
-              return (
-                <div
-                  key={a.id}
-                  className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-surface"
-                >
-                  {/* The offer's artwork is a wide banner with its name set
-                      into it — not an icon. Squeezed into a 44px square beside
-                      the title it was unreadable and the title said the same
-                      thing twice. It gets the band the courses use, and the
-                      same cover treatment, so the two rows read as one shelf. */}
-                  <div className="relative aspect-[16/10] w-full overflow-hidden" style={WASH}>
-                    {a.imageUrl ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={a.imageUrl}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                      />
-                    ) : (
-                      // A letter on the same ground. What you draw when there
-                      // is nothing better — never instead of something better.
-                      <span
-                        aria-hidden
-                        className="absolute inset-0 grid place-items-center font-display text-5xl font-semibold text-navy/30"
-                      >
-                        {a.name.trim().charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                  </div>
+        ) : (
+          <p className="text-muted">
+            Nothing here yet.{" "}
+            <Link href="/" className="text-primary hover:underline">Browse the store</Link>.
+          </p>
+        ))}
 
-                  <div className="flex flex-1 flex-col gap-2 p-5">
-                    <h3 className="text-lg leading-snug">{a.name}</h3>
-                    <div className="flex flex-1 flex-col gap-1 text-sm">
-                      <span className="flex items-center gap-2 text-muted">
-                        <span
-                          aria-hidden
-                          className="h-1.5 w-1.5 shrink-0 rounded-full"
-                          style={{ background: tone.dot }}
-                        />
-                        {tone.label}
-                      </span>
-                      {a.channels.length > 0 && (
-                        <span className="text-muted">{channelsLabel(a.channels)}</span>
-                      )}
-                      {a.host && <span className="truncate text-xs text-muted">{a.host}</span>}
-                    </div>
-
-                    {/* An internal app is a page on this site: a link, and
-                        the session cookie does the rest. External apps go
-                        through the signed handoff as before. */}
-                    {a.kind === "internal" ? (
-                      a.route ? (
-                        <Link
-                          href={a.route}
-                          className="mt-2 border-t border-border pt-3 text-sm font-medium text-primary hover:underline"
-                        >
-                          Open &rarr;
-                        </Link>
-                      ) : (
-                        <span className="mt-2 border-t border-border pt-3 text-xs text-muted">
-                          Not available yet
-                        </span>
-                      )
-                    ) : (
-                      <form action={openAppAction} className="mt-2 border-t border-border pt-3">
-                        <button className="text-sm font-medium text-primary hover:underline">
-                          Open the app &rarr;
-                        </button>
-                        <input type="hidden" name="appId" value={a.id} />
-                      </form>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Standing offer for buyers who declined — one-click on the saved card. */}
+      {/* What they don't own, at the bottom and marked as such. Through the
+          click route, which logs the tap and sends them to the sales page:
+          nothing in the library charges (owner, 1 Oct 2026). */}
       {standing && (
-        <section
-          className="grid overflow-hidden rounded-3xl border border-border bg-surface md:grid-cols-2"
-          style={{
-            backgroundImage:
-              "radial-gradient(90% 60% at 100% 0%, color-mix(in srgb, var(--primary) 10%, transparent), transparent 60%)",
-          }}
-        >
-          {/* Full bleed, beside the words rather than above them.
-              It was a fixed-height box with a border inside a padded card, so
-              a wide banner sat pillarboxed in white with its own frame around
-              it — a screenshot pasted into a card rather than part of one.
-              Given half the card and its own aspect ratio, it fills the space
-              it is in and the card reads as one thing. */}
-          {standing.imageUrl && (
-            <div
-              className="relative order-first aspect-[16/10] w-full overflow-hidden md:order-last md:aspect-auto md:h-full"
-              style={WASH}
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-4">
+            <h2 className="text-xl">More from Greater Inside</h2>
+            <span className="kicker text-muted">Not in your plan</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-4 rounded-[20px] border border-border px-5 py-5 sm:px-6">
+            <span
+              aria-hidden
+              className="grid size-11 shrink-0 place-items-center rounded-[13px] bg-plum font-display text-[15px] font-extrabold tracking-tight text-white"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={standing.imageUrl}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                className="absolute inset-0 h-full w-full object-contain p-6"
-              />
-            </div>
-          )}
-          <div className="flex flex-col gap-4 p-7">
-          <span className="kicker text-primary">Still available</span>
-          <h2 className="text-xl">{standing.headline}</h2>
-          {standing.description && <p className="text-sm text-muted">{standing.description}</p>}
-          <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-3">
-            <span className="font-display text-2xl">
-              {money(immediateChargeCents(standing), standing.currency)} now
+              {appInitials(standing.name)}
             </span>
-            {standing.billingType === "recurring" && (
-              <span className="text-sm text-muted">
-                then {money(standing.priceCents, standing.currency)}/{standing.interval}
-                {standing.trialDays ? ` after a ${standing.trialDays}-day trial` : ""}
-              </span>
-            )}
-            {/* A link to the offer's own page, through a route that records
-                the click. Never a charge from here: one tap is for upsells,
-                where the buyer has just paid and is still at the till. */}
+            <div className="flex min-w-0 flex-col gap-0.5 [flex:999_1_14rem]">
+              <span className="font-display text-base font-semibold">{standing.name}</span>
+              <span className="text-sm text-muted">{shortDescription(standing.headline) ?? shortDescription(standing.description)}</span>
+              <span className="text-[13px] text-muted">{offerPriceLine(standing)}</span>
+            </div>
             <BuyLink
               href={`/library/offer/${standing.id}`}
               valueCents={standing.priceCents}
               currency={standing.currency}
               contentId={standing.key}
-              className="w-full rounded-full bg-primary px-6 py-3 text-center font-medium text-primary-fg transition-colors hover:bg-primary-hover sm:ml-auto sm:w-auto"
+              className="flex min-h-11 items-center justify-center rounded-full border border-border px-5 font-display text-sm font-semibold transition-colors [flex:1_1_10rem] hover:border-primary"
             >
-              {standing.acceptLabel}
+              See what&rsquo;s inside
             </BuyLink>
-          </div>
           </div>
         </section>
       )}

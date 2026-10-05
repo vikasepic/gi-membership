@@ -20,8 +20,6 @@ const field = readFileSync("components/admin/image-field.tsx", "utf8");
 const settings = readFileSync("components/admin/settings-screen.tsx", "utf8");
 const thumb = readFileSync("components/admin/catalogue-thumb.tsx", "utf8");
 const list = readFileSync("app/admin/offers/page.tsx", "utf8");
-const library = readFileSync("app/(store)/library/page.tsx", "utf8");
-const libLib = readFileSync("lib/library.ts", "utf8");
 
 describe("choosing it", () => {
   it("is a picker, not a URL to type", () => {
@@ -65,45 +63,10 @@ describe("showing it", () => {
     expect(thumb).toMatch(/publicCoverUrl\(coverPath\) \?\? imageUrl/);
   });
 
-  it("puts it on the app card in the library, ahead of the letter", () => {
-    expect(libLib).toContain("image_url");
-    expect(libLib).toContain("imageUrl: imageByOffer.get(r.offer_id as string) ?? null");
-    expect(library).toContain("{a.imageUrl ? (");
-  });
-
-  it("keeps the letter for an app with no picture", () => {
-    // A mark drawn from the name is what you use when there is nothing better.
-    expect(library).toContain("a.name.trim().charAt(0).toUpperCase()");
-  });
-
-  it("puts it on the standing offer, the one place a member met it bare", () => {
-    expect(library).toContain("{standing.imageUrl && (");
-  });
-
-  it("floats the standing offer's artwork on the wash, uncropped", () => {
-    // A mockup on a transparent field, on a panel of its own: contained, it
-    // floats and the panel is part of the card. This one never sits beside a
-    // course, so it keeps that treatment.
-    expect(library).toContain("object-contain p-6");
-    expect(library).toContain("const WASH");
-  });
-
-  it("gives the app cards the cover the course cards have", () => {
-    // Contained with a margin, the app cards read as the poor relations of
-    // the course cards beside them — small pictures in grey boxes on a shelf
-    // where everything else is a picture. The owner asked for the course
-    // treatment on 10 Sep 2026: same band, same object-cover, same hover.
-    // Up to the standing offer's own image, which floats and must not be
-    // caught by the assertion below. "Still available" sits AFTER that image
-    // in source order, which is how the first version of this test slept
-    // through the very thing it checked for.
-    const appCard = library.slice(library.indexOf("Your apps"), library.indexOf("{standing.imageUrl && ("));
-    expect(appCard).toContain("object-cover transition-transform duration-500 group-hover:scale-[1.03]");
-    expect(appCard, "the hover lift needs the card to be a group").toMatch(/className="group flex flex-col overflow-hidden/);
-    expect(appCard, "no margin around a cover").not.toContain("object-contain");
-  });
-
-  it("uses one ground for both, not two that drift", () => {
-    expect(library.match(/style=\{WASH\}/g)!.length).toBe(2);
-  });
+  // The library no longer shows offer artwork. Its app cards were given the
+  // offer's banner on 10 Sep 2026; the owner approved a redesign on 5 Oct
+  // 2026 (direction A of the Library mockups) where each app is one card with
+  // its own tile, channel badges and an Open button, and "More from Greater
+  // Inside" uses the same tile. What the card draws is tested in
+  // app/(store)/library/page.test.tsx and lib/library-apps.test.ts.
 });
