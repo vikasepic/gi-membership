@@ -111,6 +111,14 @@ describe("a member who bought one app", () => {
   });
 });
 
+describe("the welcome", () => {
+  it("capitalises a first name typed in lower case", async () => {
+    state.fullName = "vikas bendha";
+    state.apps = [contentEngine()];
+    expect(await render()).toContain("Welcome back, Vikas");
+  });
+});
+
 describe("a member with several things", () => {
   it("gets a heading over their apps, and both cards", async () => {
     state.apps = [

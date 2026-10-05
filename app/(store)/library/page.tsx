@@ -142,7 +142,9 @@ export default async function LibraryPage({
     lastLessonFor(user.id, courses),
   ]);
 
-  const firstName = firstNameOf(profile?.fullName ?? null);
+  // As typed, but with a capital: "vikas" at checkout reads "Welcome back, Vikas".
+  const typed = firstNameOf(profile?.fullName ?? null);
+  const firstName = typed ? typed.charAt(0).toUpperCase() + typed.slice(1) : "";
   const several = apps.length + courses.length > 1;
   const intro =
     apps.length === 1 && courses.length === 0
@@ -157,7 +159,9 @@ export default async function LibraryPage({
     <div className="flex flex-col gap-12 py-4">
       <section className="flex flex-col gap-3">
         <span className="kicker text-muted">Your library</span>
-        <h1 className="text-balance text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-[44px]">
+        {/* `!` throughout: the store's heading settings (h1 60px, h2 45px)
+            are :root rules meant for sales pages, and they outrank utilities. */}
+        <h1 className="text-balance text-4xl! font-extrabold! leading-[1.05]! tracking-tight sm:text-[44px]!">
           Welcome back{firstName ? `, ${firstName}` : ""}
         </h1>
         {intro && <p className="max-w-[58ch] text-pretty text-[17px] text-muted">{intro}</p>}
@@ -184,11 +188,11 @@ export default async function LibraryPage({
         <section className="flex flex-col gap-5">
           {several && (
             <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-4">
-              <h2 className="text-xl">Your apps</h2>
+              <h2 className="text-2xl! font-bold! leading-tight!">Your apps</h2>
               <span className="kicker text-muted">Press Open and you&rsquo;re in</span>
             </div>
           )}
-          <div className="flex flex-wrap gap-6">
+          <div className="flex flex-col gap-5">
             {apps.map((a) => (
               <AppCard key={a.id} app={a} />
             ))}
@@ -199,7 +203,7 @@ export default async function LibraryPage({
       {courses.length > 0 && (
         <section className="flex flex-col gap-5">
           <div className="flex items-baseline justify-between border-b border-border pb-4">
-            <h2 className="text-xl">{courses.length === 1 ? "Your course" : "Your courses"}</h2>
+            <h2 className="text-2xl! font-bold! leading-tight!">{courses.length === 1 ? "Your course" : "Your courses"}</h2>
             {courses.length > 1 && <span className="kicker text-muted">{courses.length} in your library</span>}
           </div>
           {/* auto-FILL, not auto-fit. auto-fit collapses the empty tracks, so a
@@ -250,7 +254,7 @@ export default async function LibraryPage({
       {standing && (
         <section className="flex flex-col gap-4">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-border pb-4">
-            <h2 className="text-xl">More from Greater Inside</h2>
+            <h2 className="text-2xl! font-bold! leading-tight!">More from Greater Inside</h2>
             <span className="kicker text-muted">Not in your plan</span>
           </div>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-4 rounded-[20px] border border-border px-5 py-5 sm:px-6">

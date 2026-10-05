@@ -40,8 +40,11 @@ export function AppCard({ app }: { app: LibraryApp }) {
   const adds = app.badges.filter((b) => !b.included && b.addHref);
 
   return (
-    <article className="flex min-w-0 flex-wrap gap-7 rounded-3xl border border-border bg-surface p-6 shadow-[0_1px_2px_rgba(70,50,30,0.04),0_16px_40px_-18px_rgba(70,50,30,0.16)] [flex:1_1_28rem] sm:p-8">
-      <div className="flex min-w-0 flex-col gap-5 [flex:999_1_24rem]">
+    // Sized by its own width (a container query), not the window's: the same
+    // card sits full width on a desktop and alone on a phone.
+    <article className="@container rounded-3xl border border-border bg-surface p-6 shadow-[0_1px_2px_rgba(70,50,30,0.04),0_16px_40px_-18px_rgba(70,50,30,0.16)] sm:p-8">
+     <div className="flex flex-col gap-6 @2xl:flex-row @2xl:gap-8">
+      <div className="flex min-w-0 flex-1 flex-col gap-5">
         <div className="flex items-center gap-4">
           <span
             aria-hidden
@@ -51,7 +54,10 @@ export function AppCard({ app }: { app: LibraryApp }) {
             {app.initials}
           </span>
           <div className="flex min-w-0 flex-col items-start gap-1.5">
-            <h2 className="text-[28px] font-bold leading-tight tracking-tight">{app.name}</h2>
+            {/* `!` because the store's own heading settings (h3 at 28px, and
+                bigger on h1/h2) are written as :root rules that outrank a
+                utility class; the library's type is the library's. */}
+            <h3 className="text-2xl! font-bold! leading-tight! tracking-tight @2xl:text-[28px]!">{app.name}</h3>
             <span className={`inline-flex items-center gap-2 rounded-full py-0.5 pl-2.5 pr-3 text-[13px] ${TONE[app.statusLine.tone]}`}>
               <span aria-hidden className="size-[7px] rounded-full bg-current" />
               {app.statusLine.text}
@@ -84,7 +90,7 @@ export function AppCard({ app }: { app: LibraryApp }) {
         )}
       </div>
 
-      <div className="flex min-w-0 flex-col justify-center gap-3 rounded-[18px] bg-surface-2 p-5 [flex:1_1_20rem]">
+      <div className="flex flex-col justify-center gap-3 rounded-[18px] bg-surface-2 p-5 @2xl:w-80 @2xl:shrink-0">
         {/* An internal app is a page on this site: a link, and the session
             cookie does the rest. External apps go through the signed handoff. */}
         {app.kind === "internal" ? (
@@ -115,6 +121,7 @@ export function AppCard({ app }: { app: LibraryApp }) {
           {pastDue ? "Update your card" : "Billing and invoices"}
         </Link>
       </div>
+     </div>
     </article>
   );
 }
