@@ -778,3 +778,14 @@ Built the same day from the lessons above:
 - `lib/saved-card-charges.test.ts` lists every function that can charge a
   card. A new one fails the suite until it is added to that list, which is
   where the owner's yes is written down.
+
+## The store's heading settings outrank a page's own classes (5 Oct 2026)
+
+Settings → Typography writes `:root h1{font-size:60px}` and the like into
+every store page, unlayered and at 0-1-1, so a utility such as `text-xl`
+on an `h2` loses (utilities sit in a layer, and lose to any unlayered rule).
+The redesigned library looked right locally, where those settings are
+empty, and came out with 45px section headings and wrapping app names on
+production. App screens that must keep their own type mark their heading
+sizes with `!` (`text-2xl!`), and a screenshot is only proof once the
+store's real heading rules are on the page.
