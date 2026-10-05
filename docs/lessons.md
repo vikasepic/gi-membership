@@ -789,3 +789,20 @@ empty, and came out with 45px section headings and wrapping app names on
 production. App screens that must keep their own type mark their heading
 sizes with `!` (`text-2xl!`), and a screenshot is only proof once the
 store's real heading rules are on the page.
+
+## A cleanup that lists first, then deletes, leaks (5 Oct 2026)
+
+`product-recurring` cleaned up by selecting the store's orders and deleting
+each one's line for the fixture product. The select stopped at PostgREST's
+1000 rows, so once the shared local store held more orders the line was
+usually missed, it kept the fixture's price, and the product delete failed on
+`order_items_product_price_id_fkey`. Nothing checked the error, and 354
+`it-rec-` products piled up. The checkout suite leaked 173 more because a
+describe's `afterAll` (deleting the product) runs before the file's (deleting
+the orders that point at it). Delete fixtures by their own key
+(`order_items.product_id = id`), in FK order, and log the error of the last
+delete so a leak is visible on the next run.
+
+A test that borrows "the oldest offer in the store" is borrowing whatever
+another suite inserted with an old `created_at` a moment ago. Make the
+fixture you need.

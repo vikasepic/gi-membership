@@ -35,7 +35,21 @@ describe.skipIf(!canRun)("which subscriptions are ours (integration)", () => {
   it("only those with a Grow offer or product: the table also holds other apps' (1 Oct 2026 dry run flagged 31 of their invoices)", async () => {
     const db = createServiceClient();
     const storeId = await getStoreId();
-    const { data: offer } = await db.from("offers").select("id").eq("store_id", storeId).order("created_at").limit(1).single();
+    // Its own offer, not the store's oldest: standing-offer-order inserts
+    // offers dated 2000-2002 and deletes them after each test, so in a parallel
+    // run "the oldest" was often one of those, gone (offer_id SET NULL) before
+    // ourSubscriptionIds read it back.
+    const { data: offer, error: offerErr } = await db
+      .from("offers")
+      .insert({
+        store_id: storeId, key: `zz-reconcile-${Date.now()}`, name: "zz reconcile fixture", grant_type: "subscription",
+        grant_app_id: "00000000-0000-0000-0000-0000000000a1", grant_entitlement_key: "content-engine", grant_channels: [],
+        billing_type: "recurring", interval: "month", interval_count: 1, price_cents: 12000, currency: "usd",
+        headline: "fixture", description: "fixture", active: false,
+      })
+      .select("id")
+      .single();
+    if (offerErr || !offer) throw new Error(`fixture offer: ${offerErr?.message}`);
     const row = (sub: string, offerId: string | null) => ({
       store_id: storeId, stripe_subscription_id: sub, offer_id: offerId, status: "active", amount_cents: 12000, currency: "usd",
       cancel_at_period_end: false, paid_invoices: 1, paid_total_cents: 12000, livemode: false, started_at: new Date().toISOString(),
@@ -49,6 +63,7 @@ describe.skipIf(!canRun)("which subscriptions are ours (integration)", () => {
       expect(ids.has(other)).toBe(false);
     } finally {
       await db.from("subscriptions").delete().in("stripe_subscription_id", [grow, other]);
+      await db.from("offers").delete().eq("id", offer.id);
     }
   });
 });

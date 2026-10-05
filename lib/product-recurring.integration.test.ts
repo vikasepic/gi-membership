@@ -350,6 +350,9 @@ afterAll(async () => {
     await stripe().subscriptions.cancel(id).catch(() => {});
   }
   for (const email of createdEmails) {
+    // The orders too: a pending order left behind keeps its line, and the line
+    // keeps the product's price, so the product could never be deleted.
+    await db.from("orders").delete().eq("email", email); // cascades order_items
     const { data: user } = await db.from("users").select("id").eq("email", email).maybeSingle();
     if (!user) continue;
     await db.from("ownership").delete().eq("user_id", user.id);
@@ -366,11 +369,14 @@ afterAll(async () => {
     if (error) console.error(`[product-recurring cleanup] offer ${id}: ${error.message}`);
   }
   for (const id of createdProductIds) {
-    const { data: orders } = await db.from("orders").select("id").eq("store_id", await getStoreId());
-    for (const o of orders ?? []) {
-      await db.from("order_items").delete().eq("order_id", o.id).eq("product_id", id);
-    }
+    // By product, not by listing the store's orders first: that select stopped
+    // at PostgREST's 1000 rows, so once the shared store held more orders the
+    // line pinning this product's price was usually not in the list, the price
+    // delete failed on order_items_product_price_id_fkey, and the product
+    // leaked. 354 `it-rec-` products had piled up that way by 5 Oct 2026.
+    await db.from("order_items").delete().eq("product_id", id);
     await db.from("product_prices").delete().eq("product_id", id);
-    await db.from("products").delete().eq("id", id);
+    const { error } = await db.from("products").delete().eq("id", id);
+    if (error) console.error(`[product-recurring cleanup] product ${id}: ${error.message}`);
   }
 });

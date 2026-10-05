@@ -788,8 +788,14 @@ describe.skipIf(!canRun)("orders.visit_id (integration)", () => {
     if (!canRun) return;
     const db = createServiceClient();
     if (recurringProductId) {
+      // This runs before the file's own afterAll deletes these tests' orders,
+      // so the order's line still points at the product and its price. Delete
+      // the line here, or the product delete fails and the fixture leaks (173
+      // `zz-visitid-rec-` products had by 5 Oct 2026).
+      await db.from("order_items").delete().eq("product_id", recurringProductId);
       await db.from("product_prices").delete().eq("product_id", recurringProductId);
-      await db.from("products").delete().eq("id", recurringProductId);
+      const { error } = await db.from("products").delete().eq("id", recurringProductId);
+      if (error) console.error(`[checkout visit_id cleanup] product ${recurringProductId}: ${error.message}`);
     }
     // visit_steps cascades off visits (0080); orders.visit_id is ON DELETE
     // SET NULL, so this is safe regardless of whether the file's own
