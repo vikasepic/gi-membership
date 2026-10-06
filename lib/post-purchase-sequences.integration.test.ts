@@ -87,9 +87,17 @@ describe.skipIf(!canRun)("post-purchase flows (integration)", () => {
     return { userId, email };
   }
 
-  async function buy(b: Buyer, offerId: string, opts: { kind?: string; email?: string } = {}): Promise<Bought> {
+  // `at`: when the purchase happened. A purchase that comes after a stop must
+  // say so: the stop is stamped by this process's clock and the order by the
+  // database's, and on a Mac the Docker VM's clock can sit tens of
+  // milliseconds behind, which made an order placed right after the stop look
+  // older than it (6 Oct 2026).
+  async function buy(b: Buyer, offerId: string, opts: { kind?: string; email?: string; at?: Date } = {}): Promise<Bought> {
     const { data: order, error } = await db().from("orders")
-      .insert({ store_id: storeId, user_id: b.userId, email: opts.email ?? b.email, status: "paid", total_cents: 2900, subtotal_cents: 2900, currency: "usd" })
+      .insert({
+        store_id: storeId, user_id: b.userId, email: opts.email ?? b.email, status: "paid", total_cents: 2900, subtotal_cents: 2900, currency: "usd",
+        ...(opts.at ? { created_at: opts.at.toISOString() } : {}),
+      })
       .select("id").single();
     if (error || !order) throw new Error(`fixture order: ${error?.message}`);
     const { data: item } = await db().from("order_items")
@@ -415,7 +423,8 @@ describe.skipIf(!canRun)("post-purchase flows (integration)", () => {
       for (const s of [seqA, seqC]) expect((await flowOf(s.id!, b.email))!.status).toBe("paused");
       const flowC = (await flowOf(seqC.id!, b.email))!;
       expect((await sendsOf(flowC.id)).map((r) => [r.position, r.status, r.reason])).toEqual([[1, "sent", null], [2, "skipped", "charged back"]]);
-      await startFlowsForOrder((await buy(b, await makeOffer())).orderId, new Date(t0.getTime() + 6 * DAY));
+      const again = new Date(t0.getTime() + 6 * DAY);
+      await startFlowsForOrder((await buy(b, await makeOffer(), { at: again })).orderId, again);
       for (const s of [seqA, seqC]) expect((await flowOf(s.id!, b.email))!.status).toBe("running");
     });
 
@@ -472,7 +481,7 @@ describe.skipIf(!canRun)("post-purchase flows (integration)", () => {
 
       // Buying anything resumes both, each after its own delay from that purchase, once.
       const t1 = new Date(t0.getTime() + 6 * DAY);
-      await startFlowsForOrder((await buy(b, await makeOffer())).orderId, t1);
+      await startFlowsForOrder((await buy(b, await makeOffer(), { at: t1 })).orderId, t1);
       await sendDueSequenceEmails({ now: new Date(t1.getTime() + 2 * DAY + 1000) });
       await sendDueSequenceEmails({ now: new Date(t1.getTime() + 30 * DAY) });
       expect(mine(b.email, t).sort()).toEqual(["A1", "A2", "C1", "C2"]);
