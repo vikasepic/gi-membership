@@ -7,7 +7,7 @@ import { livePrices, priceForChoice, shownPrices } from "@/lib/offer-prices";
 import { ownershipFor, fulfilOffer, fulfilBump, grantOfferOwnership, customerForUser, visitorFor, trackOfferSale } from "@/lib/checkout";
 import { orderForPaymentIntent } from "@/lib/orders";
 import { stripe, stripeMode } from "@/lib/stripe";
-import { normalizeCountry } from "@/lib/tax";
+import { countryOfPaymentMethod, normalizeCountry } from "@/lib/tax";
 import { ensureUserProfile } from "@/lib/users";
 import { MIN_CHARGE_CENTS, resolveCoupon, type AppliedCoupon } from "@/lib/coupons";
 import { offerAsSoldTo, hasHadTrial, withoutTrial } from "@/lib/trial-history";
@@ -459,9 +459,11 @@ export async function completeOfferCheckout(
   if (!paid && !intentId.startsWith("seti_")) {
     return { ok: false, error: "unknown_intent" };
   }
+  // The payment method expanded: its billing address is the only place the
+  // buyer's country exists, because Stripe's form asks for it, not ours.
   const si = paid
-    ? await stripe().paymentIntents.retrieve(intentId)
-    : await stripe().setupIntents.retrieve(intentId);
+    ? await stripe().paymentIntents.retrieve(intentId, { expand: ["payment_method"] })
+    : await stripe().setupIntents.retrieve(intentId, { expand: ["payment_method"] });
   if (si.status !== "succeeded") return { ok: false, error: "card_not_saved" };
 
   const userId = si.metadata?.userId;
@@ -663,7 +665,9 @@ export async function completeOfferCheckout(
       // many people bought this offer from its own checkout — which is the
       // fourth step of its funnel on /admin/traffic.
       host_offer_id: offer.id,
-      buyer_country: normalizeCountry(country) ?? null,
+      // Neither caller passes a country (Stripe's form collects it), so it is
+      // read off the card; before 6 Oct 2026 these orders had none.
+      buyer_country: normalizeCountry(country) ?? countryOfPaymentMethod(si.payment_method),
       // From the metadata WE wrote at start, never from a request: the
       // webhook has no cookie, and the return route's cookie could have moved
       // on to a later ad by the time Stripe sends the buyer back.

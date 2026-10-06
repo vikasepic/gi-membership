@@ -17,6 +17,21 @@ export function normalizeCountry(raw: string | undefined | null): string | null 
   return /^[A-Z]{2}$/.test(v) ? v : null;
 }
 
+/**
+ * The buyer's country, read off the card they paid with: the billing address
+ * Stripe's own form asks for, else the country the card was issued in.
+ *
+ * The offer checkout leaves the country to Stripe's form and never sent one of
+ * its own, so from mid-September most orders had no buyer_country at all (the
+ * ads team asked for buyers by country on 6 Oct 2026 and got 39 of 164).
+ * Takes the expanded payment method; an id or nothing gives null.
+ */
+export function countryOfPaymentMethod(pm: unknown): string | null {
+  if (!pm || typeof pm !== "object") return null;
+  const m = pm as { billing_details?: { address?: { country?: string | null } | null } | null; card?: { country?: string | null } | null };
+  return normalizeCountry(m.billing_details?.address?.country) ?? normalizeCountry(m.card?.country);
+}
+
 // Stripe cannot compute VAT without a buyer location, so when tax is on we must
 // have a country before creating the PaymentIntent.
 export function needsTaxLocation(taxEnabled: boolean, country: string | null): boolean {

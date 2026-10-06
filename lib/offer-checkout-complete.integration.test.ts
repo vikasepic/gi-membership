@@ -186,6 +186,29 @@ describe.skipIf(!canRun)("completeOfferCheckout's claim on a race (0070)", () =>
     expect(order?.referrer).toBe("https://l.facebook.com/l.php");
   });
 
+  it("records the buyer's country from the card when the checkout sent none, as Stripe's own form collected it", async () => {
+    // Neither caller passes a country: the offer checkout lets Stripe's form
+    // ask. Before 6 Oct 2026 every such order was saved with none.
+    const db = createServiceClient();
+    const { userId } = await buyer("country");
+    const storeId = await getStoreId();
+    const piId = `pi_country_${crypto.randomUUID()}`;
+    PI_RESPONSES.set(piId, {
+      id: piId,
+      object: "payment_intent",
+      status: "succeeded",
+      amount: PRICE_CENTS,
+      customer: `cus_country_${crypto.randomUUID()}`,
+      payment_method: { id: `pm_country_${crypto.randomUUID()}`, billing_details: { address: { country: "AE" } }, card: { country: "AE" } },
+      metadata: { userId, offerId: fixtureOfferId, storeId, offerPriceId: "", couponCode: "", newAccount: "false" },
+    });
+    const res = await completeOfferCheckout(piId);
+    expect(res.ok).toBe(true);
+    const { data: order } = await db.from("orders").select("id, buyer_country").eq("stripe_payment_intent_id", piId).single();
+    orderIds.push(order!.id as string);
+    expect(order?.buyer_country).toBe("AE");
+  });
+
   it("two concurrent completions for the same PaymentIntent book exactly one order, one order_items row, and one ownership row", async () => {
     const db = createServiceClient();
     const { userId } = await buyer("race");

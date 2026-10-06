@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { needsTaxLocation, normalizeCountry, orderTotalCents } from "@/lib/tax";
+import { countryOfPaymentMethod, needsTaxLocation, normalizeCountry, orderTotalCents } from "@/lib/tax";
 
 describe("normalizeCountry", () => {
   it("uppercases a two-letter code", () => {
@@ -44,5 +44,21 @@ describe("orderTotalCents", () => {
 
   it("never returns less than the product price", () => {
     expect(orderTotalCents(2700, -100)).toBe(2700);
+  });
+});
+
+describe("countryOfPaymentMethod", () => {
+  it("takes the billing address's country, which Stripe's own form asks for", () => {
+    expect(countryOfPaymentMethod({ billing_details: { address: { country: "AE" } }, card: { country: "US" } })).toBe("AE");
+  });
+
+  it("falls back to the country the card was issued in", () => {
+    expect(countryOfPaymentMethod({ billing_details: { address: { country: null } }, card: { country: "kw" } })).toBe("KW");
+  });
+
+  it("is null for an id, nothing, or a value that is not a country", () => {
+    expect(countryOfPaymentMethod("pm_123")).toBeNull();
+    expect(countryOfPaymentMethod(null)).toBeNull();
+    expect(countryOfPaymentMethod({ billing_details: { address: { country: "" } }, card: { country: "Somewhere" } })).toBeNull();
   });
 });

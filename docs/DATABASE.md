@@ -1437,6 +1437,20 @@ Step staircase blocks.
 | `offers` | `home_step` text, CHECK `^[a-z0-9-]{1,40}$` or null |
 | `products` | `home_step` text, same CHECK |
 
+### Buyer and member country
+
+`orders.buyer_country` is the buyer's country (ISO 3166-1 alpha-2). The product
+checkout's own form sends it; when a checkout sends none (the offer checkout,
+and the product checkout's redesign, both let Stripe's payment form ask), it is
+read off the card at payment: the billing address, else the card's issuing
+country (`countryOfPaymentMethod`, `lib/tax.ts`). Before 6 Oct 2026 those orders
+were saved with none, and were backfilled from Stripe.
+
+`users.country` (migration 0094) is the country of the member's latest order
+that has one, kept by the `orders_set_user_country` trigger on every insert or
+change of `buyer_country`. An older order filled in later never overwrites a
+newer one's country.
+
 ---
 
 ## Appendix: the raw DDL

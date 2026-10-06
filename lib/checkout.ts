@@ -15,7 +15,7 @@ import { eventIdFor } from "@/lib/analytics/events";
 import { trialWorthFor, adEventForOrder } from "@/lib/tracking-receipt";
 import { sendEmail, buildWelcomeEmail, buildReceiptEmail } from "@/lib/email";
 import { getSettingsOrDefaults } from "@/lib/settings";
-import {
+import { countryOfPaymentMethod,
   TAX_ENABLED,
   calculateTax,
   needsTaxLocation,
@@ -1079,9 +1079,10 @@ export async function finalizeOrder(intentId: string): Promise<void> {
   // The metadata WE wrote, read back off whichever object this is. Nothing
   // below cares which kind it was except the part that has to create the
   // subscription.
+  // The payment method expanded, for the buyer's country below.
   const intent = isSetup
-    ? await stripe().setupIntents.retrieve(intentId)
-    : await stripe().paymentIntents.retrieve(intentId);
+    ? await stripe().setupIntents.retrieve(intentId, { expand: ["payment_method"] })
+    : await stripe().paymentIntents.retrieve(intentId, { expand: ["payment_method"] });
   if (intent.status !== "succeeded") return;
   const pi = intent as unknown as {
     id: string;
@@ -1108,9 +1109,12 @@ export async function finalizeOrder(intentId: string): Promise<void> {
   //
   // Scoped to 'pending' rather than "not paid": a refunded order must never be
   // re-finalised back into existence.
+  // The country rides on the claim when the checkout had none: the redesign
+  // lets Stripe's form ask for it, so the card is the only place it is.
+  const cardCountry = order.buyer_country ? null : countryOfPaymentMethod(intent.payment_method);
   const { data: claimed } = await db
     .from("orders")
-    .update({ status: "paid" })
+    .update({ status: "paid", ...(cardCountry ? { buyer_country: cardCountry } : {}) })
     .eq("id", order.id)
     .eq("status", "pending")
     .select("id");

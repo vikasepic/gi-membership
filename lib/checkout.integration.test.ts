@@ -66,6 +66,15 @@ describe.skipIf(!canRun)("checkout money path (integration)", () => {
   // read status 'pending', and both fulfil the bump. The existing test called
   // finalizeOrder twice in a row, which the old guard survived — so it passed
   // while production produced two bump lines on one order.
+  it("records the buyer's country from the card when the checkout sent none", async () => {
+    // The redesign lets Stripe's form ask for the country; buy() sends none.
+    // pm_card_visa is a US card.
+    const { piId } = await buy(false);
+    await finalizeOrder(piId);
+    const { data: order } = await createServiceClient().from("orders").select("buyer_country").eq("stripe_payment_intent_id", piId).single();
+    expect(order?.buyer_country).toBe("US");
+  });
+
   it("fulfils the bump once when the page and the webhook finalize at the same instant", async () => {
     const { email, piId } = await buy(true);
     await Promise.all([finalizeOrder(piId), finalizeOrder(piId), finalizeOrder(piId)]);
