@@ -61,7 +61,9 @@ export function aiClaimSeat(links: ClaimLinks, o: { top?: number; bottom?: numbe
   const box_ = [
     centred("Total value:", [[20, 34], [19, 32], [18, 30]], 0),
     centred("$30,000", [[35, 42], [32, 40], [30, 38]], 28),
-    { ...make("divider", { thickness: 1, width: 100 }, { color: AI.white, margin: box(0, 0, 24, 0), width: "custom", maxWidthValue: 263, maxWidthUnit: "px", blockAlign: "center" }) },
+    // 263 wide in a 323 column, by its margins: a centred box with a measure
+    // collapses to nothing in the column's flex stack, and so did this line.
+    make("divider", { thickness: 1, width: 100 }, { color: AI.white, margin: box(0, 30, 24, 30) }),
     centred("YOUR INVESTMENT TODAY", [[20, 34], [19, 32], [18, 30]], 0),
     centred("$4,500", [[60, 70], [54, 64], [48, 58]], 13),
     centred("paid in full, <br />or three monthly payments of", [[15, 28], [15, 26], [14, 24]], 17, { italic: true }),
@@ -124,6 +126,9 @@ export function aiClaimSeat(links: ClaimLinks, o: { top?: number; bottom?: numbe
               maxWidthUnit: "px",
               blockAlign: "left",
               margin: box(0, 0, 4, 30),
+              // The store's own paragraph spacing would hang under the word
+              // and stretch the tab.
+              customCss: "selector p{margin:0}",
             }),
             ticks([BONUS], 0),
           ],

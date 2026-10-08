@@ -109,8 +109,11 @@ function textBlock(type: "heading" | "text", props: Record<string, unknown>, o: 
       ? { width: "custom" as const, maxWidthValue: o.max, maxWidthUnit: "px" as const }
       : { width: "auto" as const, maxWidthValue: null }),
     blockAlign: o.align === "center" ? ("center" as const) : ("left" as const),
-    customCss: textCss(type === "text" ? lh(size, line * (o.gap ?? 1)) : null, o.css),
     ...o.style,
+    // After the spread, so a block's own CSS adds to the paragraph reset
+    // rather than replacing it. The store's `:root p{margin-bottom}` would
+    // otherwise put 16-20px under the block's last line.
+    customCss: textCss(type === "text" ? lh(size, line * (o.gap ?? 1)) : null, `${o.css ?? ""}${o.style?.customCss ?? ""}`),
   };
   // The store's own heading tracking is -0.02em, tighter than the PSD's Inter:
   // a heading that should end at "Inside" pulled the next word up. The

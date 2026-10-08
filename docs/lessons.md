@@ -830,6 +830,13 @@ those pages on deploy. Making "full width, no top air" drop the band's 28px
 gap would have moved eight live bands on three sales pages; the gap is now
 dropped only for a band that sets `layout.flush`.
 
+The store's Settings → Typography writes `:root p{margin-bottom:1rem}` into
+every page. A text block that does not reset its own paragraphs gets that space
+under its last line: the 90-Day AI "Bonus:" tab rendered 46px tall instead
+of 26 on production and looked right locally, where those settings were empty.
+Render with production's typography copied into the local store before
+calling a design matched.
+
 To match a PSD, read it rather than the JPG: `psd-tools` gives every text
 layer's exact size, line height and frame width, and the JPG export can be
 older than the PSD (here the hero photo had changed).
