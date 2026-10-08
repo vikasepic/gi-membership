@@ -40,16 +40,26 @@ export function aiFounderStory(art: FounderArt): Block {
     // window's edge and is cut there, as drawn.
     css:
       "selector{overflow:hidden}" +
-      "@media (min-width:1024px){selector{padding-left:max(24px,calc(50vw - 696px)) !important;padding-right:0 !important}}",
+      "@media (min-width:1024px){selector{padding-left:max(24px,calc(50vw - 696px)) !important;padding-right:0 !important}}" +
+      // Below the design's width the words would take 760px and leave the
+      // portrait a sliver; share the window instead, so the whole photo shows.
+      "@media (min-width:1024px) and (max-width:1499px){selector [data-row] [data-row]>:first-child{width:55% !important}}",
     blocks: [
       split(
         [
           words,
           [
             {
-              // Never narrower than drawn on a laptop: the column is what is
-              // left of the window, and the picture runs past it and is cut.
-              ...picture(art.portrait, "Ajit Nawalkha", { width: 757, radius: 20, css: "@media (min-width:1024px){selector{min-width:757px}}" }),
+              // The PSD frames this photo 38px in from the supplied slice's left
+              // edge, so the frame is 719 wide and the picture sits to its right.
+              // At the design's width it is never narrower than that and runs
+              // past the window's edge, cut there as drawn.
+              ...picture(art.portrait, "Ajit Nawalkha", {
+                width: 719,
+                ratio: "719/1017",
+                radius: 20,
+                css: "selector img{object-position:right center}@media (min-width:1500px){selector{min-width:719px}}",
+              }),
               responsive: at({
                 tablet: { style: { width: "auto", maxWidthValue: null } },
                 mobile: { style: { width: "auto", maxWidthValue: null, radius: 0 } },

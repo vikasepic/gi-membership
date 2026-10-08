@@ -40,7 +40,8 @@ const FAQ_CSS =
   "@media (max-width:1023px){selector .grid>div{padding:36px 0 34px}selector h3{font-size:17px !important;line-height:30px !important}selector p{margin-top:12px !important;font-size:17px !important;line-height:30px !important}}" +
   "@media (max-width:767px){selector .grid>div{padding:28px 0 26px}selector h3{font-size:16px !important;line-height:28px !important}selector p{font-size:16px !important;line-height:28px !important}}";
 
-const faqBlock = (items: Faq[]) => make("faq", { items, layout: "open" }, { margin: box(0, 0, 0, 0), customCss: FAQ_CSS });
+// The right column's first answer sits a blank line lower than the rest in the design.
+const faqBlock = (items: Faq[], extra = "") => make("faq", { items, layout: "open" }, { margin: box(0, 0, 0, 0), customCss: FAQ_CSS + extra });
 
 export function aiFaqColumns(left: Faq[] = LEFT, right: Faq[] = RIGHT): Block {
   return section({
@@ -51,7 +52,7 @@ export function aiFaqColumns(left: Faq[] = LEFT, right: Faq[] = RIGHT): Block {
     mobile: [44, 44],
     blocks: [
       heading("Questions Founders Ask <br class=\"d\" />Before Saving Their Seat.", { mb: [73, 40, 24], style: { margin: box(0, 0, 73, 2) } }),
-      split([[faqBlock(left)], [faqBlock(right)]], {
+      split([[faqBlock(left)], [faqBlock(right, "@media (min-width:1400px){selector .grid>div:first-child p{margin-top:38px !important}}")]], {
         widths: [49.04, 50.96],
         gap: 108,
         align: "flex-start",

@@ -55,7 +55,9 @@ const BUY_CSS =
   "selector [data-buy]>span{display:block}" +
   "selector [data-buy] a{display:block;width:100%;padding:9px 16px;border-radius:26px;background:#c8653d;color:#fff;" +
   "font:700 18px/36px var(--font-poppins),sans-serif;text-align:center}" +
-  "selector [data-buy] a:hover{background:#b3552f}";
+  "selector [data-buy] a:hover{background:#b3552f}" +
+  // One line on the smallest phones too.
+  "@media (max-width:400px){selector [data-buy] a{font-size:15px;padding-inline:8px}}";
 
 export function aiClaimSeat(links: ClaimLinks, o: { top?: number; bottom?: number } = {}): Block {
   const box_ = [
@@ -82,7 +84,7 @@ export function aiClaimSeat(links: ClaimLinks, o: { top?: number; bottom?: numbe
         lineHeight: 2,
         weight: 700,
         margin: box(0, 0, 0, 0),
-        customCss: `selector{flex:0 0 100%}selector a,selector span{border:1px solid ${AI.orange}}selector a:hover{background:#ffffff14 !important}`,
+        customCss: `selector{flex:0 0 100%}selector a,selector span{border:1px solid ${AI.orange}}selector a:hover{background:#ffffff14 !important}@media (max-width:400px){selector a,selector span{font-size:15px !important}}`,
       },
     ),
     // Under the box on a laptop, hung below it so the list beside it sets the

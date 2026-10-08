@@ -39,7 +39,7 @@ export function aiProblemCard(): Block {
           [
             copy(
               paras(
-                "There is a different way, and I run my own company on it. It starts with one shift in how you think about AI.",
+                "There is a different way, and I run my own company on it. It starts with one shift in how <br class=\"d\" />you think about AI.",
                 "If you joined the Million-Dollar Marketing System class, you saw marketing run as a system. The same kind of system can run almost every part of your business.",
               ),
               { color: AI.white },

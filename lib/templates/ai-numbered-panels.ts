@@ -58,7 +58,8 @@ const numbered = (n: number, title: string) =>
     css:
       "selector{position:relative;z-index:0}" +
       `selector::before{content:"${String(n).padStart(2, "0")}";position:absolute;z-index:-1;left:-48px;top:-37px;` +
-      `font:700 129.4px/1 var(--font-poppins),sans-serif;color:${AI.pink};pointer-events:none}` +
+      // #ead8e4 at the PSD's 30% layer opacity.
+      `font:700 129.4px/1 var(--font-poppins),sans-serif;color:${AI.pink}4d;pointer-events:none}` +
       "@media (max-width:767px){selector::before{font-size:96px;left:-18px;top:-30px}}",
   });
 
