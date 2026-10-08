@@ -19,14 +19,14 @@ export type Faq = { q: string; a: string };
 
 const LEFT: Faq[] = [
   { q: "I am not technical. Will I keep up?", a: "Yes. My team does the building. You bring what you know about your business." },
-  { q: "How much time do I need each week?", a: "About 1 hours for the live session. To answer questions. You will be working in group to get the details from your business on documents. Add a little time to try each AI team member on your work." },
+  { q: "How much time do I need each week?", a: "About 1 hour for the live session. To answer questions. You will be working in group to get the details from your business on documents. Add a little time to try each AI team member on your work." },
   { q: "Which tools will my AI team run on?", a: "We will use Claude and Grok Bot to build the entire architecture." },
   { q: "What happens after 90 days?", a: "Everything is built in your accounts. You own it, and it keeps running." },
 ];
 const RIGHT: Faq[] = [
   { q: "I have bought AI programs before and never finished them. <br class=\"d\" />Why is this different?", a: "Those programs taught you and left the building to you. Here, my team builds with you every week until all five AI team members are working." },
   { q: "AI tools change every month. Will this be out of date?", a: "We build around the jobs in your business. When a better tool shows up, the job stays the same and we update the build." },
-  { q: "What if I cannot attend both days live?", a: "Every session is recorded. It is highly recommended that you attend the live session so you can have clarity on what you are meaning to build. <strong>Live sessions are held on 31st October and 1st November.</strong>" },
+  { q: "What if I cannot attend both days live?", a: "Every session is recorded. It is highly recommended that you attend the live session so you can have clarity on what you mean to build. <strong>Live sessions are held on 31st October and 1st November.</strong>" },
 ];
 
 const FAQ_CSS =

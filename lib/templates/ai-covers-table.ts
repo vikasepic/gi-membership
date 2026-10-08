@@ -51,7 +51,7 @@ const tableRow = (cells: [Block, Block, Block], o: { pad: [number, number]; rule
     },
   );
 
-export function aiCoversTable(rows: CoverRow[] = ROWS, money = { total: "$30,000", paid: "Your investment: $4,500 paid in full.", plan: "Or three monthly payments of 1,667(5,000 total)." }): Block[] {
+export function aiCoversTable(rows: CoverRow[] = ROWS, money = { total: "$30,000", paid: "Your investment: $4,500 paid in full.", plan: "Or three monthly payments of $1,667 ($5,000 total)." }): Block[] {
   const head = section({
     bg: AI.pink,
     max: 1104,

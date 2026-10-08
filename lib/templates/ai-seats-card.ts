@@ -21,7 +21,7 @@ export function aiSeatsCard(): Block {
       copy(
         paras(
           "Every founder gets their AI team built with them. My team can only do that well for 25 businesses at a time.",
-          "The founding price is for this cohort only. The next cohort will cost more or will have lot more people.",
+          "The founding price is for this cohort only. The next cohort will cost more or will have a lot more people.",
           "Enrollment closes on 24th October or when 25 seats are filled.",
         ),
         { color: AI.text },
