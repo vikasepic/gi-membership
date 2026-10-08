@@ -806,3 +806,30 @@ delete so a leak is visible on the next run.
 A test that borrows "the oldest offer in the store" is borrowing whatever
 another suite inserted with an old `created_at` a moment ago. Make the
 fixture you need.
+
+## A container three deep is dropped without a word (8 Oct 2026)
+
+A row may hold one more row (`MAX_DEPTH = 2`). The 90-Day AI timeline put
+its pill grids inside a rail row inside the section's row, and normalize
+dropped the third level on save: the page rendered with the pills and cards
+simply missing, no error anywhere. Keep a module to two levels: draw a rail,
+a card edge or a connecting line with the block's own custom CSS rather than
+another container (see `lib/templates/ai-week-timeline.ts`). Three more that
+look like bugs and are not:
+
+- A new text block arrives as a centred 680px measure. A template that wants
+  the column states `width: "auto"` and `blockAlign: "left"`.
+- A row's `widths` must add up to 100. `[50, 50, 50, 50]` for a two-by-two
+  wrap renders the first column at `calc(-50%)`; switch that width to
+  `containerType: "grid"` with `gridColumns: "2"` instead.
+- Two buttons in a row are grouped into a flex line, so `fullWidth` alone
+  leaves each at its label's width; give the block `flex:0 0 100%`.
+
+A rendering change that keys off settings live pages already have changes
+those pages on deploy. Making "full width, no top air" drop the band's 28px
+gap would have moved eight live bands on three sales pages; the gap is now
+dropped only for a band that sets `layout.flush`.
+
+To match a PSD, read it rather than the JPG: `psd-tools` gives every text
+layer's exact size, line height and frame width, and the JPG export can be
+older than the PSD (here the hero photo had changed).

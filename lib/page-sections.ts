@@ -920,6 +920,13 @@ export type SectionLayout = {
   /** Typing one side sets all four. Off is how the four come apart. */
   padLink: boolean;
   /**
+   * The blocks start at the band's top edge instead of 28px below it. For a
+   * band whose modules paint their own ground edge to edge, where that gap
+   * shows as a strip of the band's colour. Absent until asked for: bands
+   * built full width with no top air before this existed keep their gap.
+   */
+  flush?: boolean;
+  /**
    * Per device. Inside `layout` rather than a column of its own, so no row
    * changed shape and a band nobody made responsive stores nothing here.
    */
@@ -999,6 +1006,7 @@ export function normalizeSectionLayout(value: unknown): SectionLayout {
       v.padLink === false
         ? false
         : pad.t === pad.r && pad.r === pad.b && pad.b === pad.l,
+    ...(v.flush === true ? { flush: true } : {}),
     ...(responsive ? { responsive } : {}),
   };
 }

@@ -226,6 +226,20 @@ export function SectionSettings({ section, device = "desktop" }: { section: Sect
               ? "Content reaches the screen edge. Padding still applies — set the sides to 0 for a true bleed."
               : "Capped at the measure below and centred."}
           </p>
+          {layout.width === "full" && !narrow && (
+            <label className="flex items-start gap-2 text-[0.68rem] leading-snug text-fg">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={layout.flush === true}
+                onChange={(e) => setLayout({ flush: e.target.checked || undefined })}
+              />
+              <span>
+                Start at the top edge
+                <span className="block text-muted">For blocks that paint their own background, so no strip of the band shows above them.</span>
+              </span>
+            </label>
+          )}
           {layout.width === "boxed" && (
             <div className="grid grid-cols-[92px_minmax(0,1fr)] items-center gap-2.5">
               <span className="text-xs text-fg">Measure</span>

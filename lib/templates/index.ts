@@ -53,6 +53,26 @@ import { template as signupBand } from "./signup-band";
 import { template as skillsList } from "./skills-list";
 import { template as everythingYouGet } from "./everything-you-get";
 import { template as tabbedPanels } from "./tabbed-panels";
+// The 90-Day AI Team Build page, one template per section of its design.
+import { template as aiHeroT } from "./ai-hero";
+import { template as aiProblemCardT } from "./ai-problem-card";
+import { template as aiFourStepsT } from "./ai-four-steps";
+import { template as aiWeekTimelineT } from "./ai-week-timeline";
+import { template as aiFounderStoryT } from "./ai-founder-story";
+import { template as aiMondayJobsT } from "./ai-monday-jobs";
+import { template as aiFounderProofT } from "./ai-founder-proof";
+import { template as aiNumberedPanelsT } from "./ai-numbered-panels";
+import { template as aiValueStackT } from "./ai-value-stack";
+import { template as aiBonusBoxT } from "./ai-bonus-box";
+import { template as aiCoversTableT } from "./ai-covers-table";
+import { template as aiTwoReasonsT } from "./ai-two-reasons";
+import { template as aiSeatsCardT } from "./ai-seats-card";
+import { template as aiClaimSeatT } from "./ai-claim-seat";
+import { template as aiTwoFuturesT } from "./ai-two-futures";
+import { template as aiMilestonesT } from "./ai-milestones";
+import { template as aiFaqColumnsT } from "./ai-faq-columns";
+import { template as aiClosingWordsT } from "./ai-closing-words";
+import { template as aiPageFooterT } from "./ai-page-footer";
 
 export { templateSource, type Template } from "./template";
 
@@ -107,6 +127,25 @@ const BUILT_INS: Template[] = [
   benefitColumns,
   faq,
   callToAction,
+  aiHeroT,
+  aiProblemCardT,
+  aiFourStepsT,
+  aiWeekTimelineT,
+  aiFounderStoryT,
+  aiMondayJobsT,
+  aiFounderProofT,
+  aiNumberedPanelsT,
+  aiValueStackT,
+  aiBonusBoxT,
+  aiCoversTableT,
+  aiTwoReasonsT,
+  aiSeatsCardT,
+  aiClaimSeatT,
+  aiTwoFuturesT,
+  aiMilestonesT,
+  aiFaqColumnsT,
+  aiClosingWordsT,
+  aiPageFooterT,
 ];
 
 export function listTemplates(): Template[] {

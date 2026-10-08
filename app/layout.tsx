@@ -13,7 +13,11 @@ const poppins = Poppins({
   variable: "--font-poppins",
   subsets: ["latin"],
   // 700 for the same reason — the control offers Bold, so Bold has to exist.
-  weight: ["400", "500", "600", "700"],
+  // 300 and the italics because sales pages set Poppins Light answers and
+  // italic lines; without the files the browser fakes both, and a slanted
+  // regular is visibly not Poppins Italic.
+  weight: ["300", "400", "500", "600", "700"],
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {

@@ -264,6 +264,7 @@ export function Blocks({
   cta,
   store,
   at,
+  flush,
 }: {
   blocks: Block[];
   theme: BandTheme;
@@ -283,10 +284,16 @@ export function Blocks({
    * queries would not fire. Unset on the live page, which has a real viewport.
    */
   at?: Device;
+  /**
+   * Start at the band's top edge. For a full-width band with no top air, whose
+   * modules paint their own ground: the usual 28px would show as a strip of the
+   * band's colour above the first one.
+   */
+  flush?: boolean;
 }) {
   const showing = blocks.filter((b) => !blockRendersNothing(b));
   if (showing.length === 0) return null;
-  return <div className="mt-7 flex flex-col">{flow(showing, theme, money, cta, store, at)}</div>;
+  return <div className={flush ? "flex flex-col" : "mt-7 flex flex-col"}>{flow(showing, theme, money, cta, store, at)}</div>;
 }
 
 /**

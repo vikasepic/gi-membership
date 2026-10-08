@@ -172,6 +172,7 @@ export function SectionBand({
   // An unwritten band is absent, not empty. The editor still shows it, because
   // that is where you go to fill it in.
   if (blocks.length === 0 && !preview) return null;
+  const l = normalizeSectionLayout(row.layout);
   return (
     <Band
       view={view}
@@ -182,7 +183,7 @@ export function SectionBand({
       layout={row.layout}
       at={at}
     >
-      <Blocks blocks={blocks} theme={view.theme} money={money} cta={cta} store={store} at={at} />
+      <Blocks blocks={blocks} theme={view.theme} money={money} cta={cta} store={store} at={at} flush={l.flush === true} />
     </Band>
   );
 }

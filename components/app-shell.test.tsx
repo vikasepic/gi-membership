@@ -69,16 +69,17 @@ const hasClass = (html: string, exact: string) => classes(html).includes(exact);
  */
 const TODAY = {
   mobileBar:
-    "sticky top-0 z-20 flex items-center justify-center border-b border-border bg-surface/85 px-5 py-3.5 backdrop-blur md:hidden",
-  desktopBar: "sticky top-0 z-20 hidden border-b border-border bg-surface/80 backdrop-blur md:block",
+    "sticky top-0 z-20 flex items-center justify-center border-b border-border bg-surface/85 px-5 py-3.5 backdrop-blur md:hidden group-has-[.no-store-chrome]/shell:hidden",
+  desktopBar: "sticky top-0 z-20 hidden border-b border-border bg-surface/80 backdrop-blur md:block group-has-[.no-store-chrome]/shell:hidden",
   // Since 5 Oct 2026 each of these also names the width a page marked
   // `store-wide` opts into (the member library). Nothing else changes: on a
-  // page without the marker the variant matches nothing.
+  // page without the marker the variant matches nothing. Since 8 Oct the bars,
+  // footer and tab row also step aside for a page marked `no-store-chrome`.
   desktopBarInner: "mx-auto flex max-w-5xl group-has-[.store-wide]/shell:max-w-[1240px] items-center justify-between px-6 py-4",
   main: "mx-auto w-full max-w-5xl group-has-[.store-wide]/shell:max-w-[1240px] flex-1 px-5 pt-6 md:px-6",
   footer:
-    "mx-auto w-full max-w-5xl group-has-[.store-wide]/shell:max-w-[1240px] px-5 pt-10 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-10",
-  tabBar: "fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/90 backdrop-blur md:hidden",
+    "mx-auto w-full max-w-5xl group-has-[.store-wide]/shell:max-w-[1240px] px-5 pt-10 pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-10 group-has-[.no-store-chrome]/shell:hidden",
+  tabBar: "fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/90 backdrop-blur md:hidden group-has-[.no-store-chrome]/shell:hidden",
   linkCurrent: "rounded-full px-4 py-2 text-sm transition-colors bg-surface-2 text-fg",
   linkIdle: "rounded-full px-4 py-2 text-sm transition-colors text-muted hover:text-fg",
   tabCurrent: "flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] text-primary",
@@ -354,5 +355,17 @@ describe("a page that asks for the wide layout", () => {
     expect(classes(html).some((c) => c.split(" ").includes("group/shell"))).toBe(true);
     const wide = classes(html).filter((c) => c.includes("group-has-[.store-wide]/shell:max-w-[1240px]"));
     expect(wide).toHaveLength(3);
+  });
+});
+
+describe("a page that draws its own header and footer", () => {
+  it("hides both store bars, the footer and the tab row, and keeps the page", () => {
+    // A sales page designed with its own logo and footer marks a band
+    // `no-store-chrome`; the store's would otherwise sit above and below it,
+    // two logos and two footers on one page.
+    const html = render();
+    const hidden = classes(html).filter((c) => c.split(" ").includes("group-has-[.no-store-chrome]/shell:hidden"));
+    expect(hidden).toHaveLength(4);
+    expect(hidden.some((c) => c.includes("flex-1"))).toBe(false);
   });
 });

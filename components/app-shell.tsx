@@ -145,6 +145,8 @@ export function AppShell({
   return (
     // `group/shell`: a page that marks itself `store-wide` (the member
     // library) widens the header, main and footer below to 1240px together.
+    // One that marks a band `no-store-chrome` draws its own logo and footer,
+    // so the store's bars, footer and tab row step aside.
     <div className="group/shell flex min-h-dvh flex-col">
       {/* After StoreBrand's, so what is set here beats the theme it sits on.
           Empty string until something is actually set, and an empty <style>
@@ -155,7 +157,7 @@ export function AppShell({
       {/* No `relative` for the menu and the CTA to hang off: `sticky` is
           already a positioned ancestor, so adding one only worked as long as
           Tailwind kept emitting `.sticky` after `.relative`. */}
-      <header className={`sticky top-0 z-20 flex items-center justify-center border-b border-border bg-surface/85 px-5 py-3.5 backdrop-blur md:hidden${
+      <header className={`sticky top-0 z-20 flex items-center justify-center border-b border-border bg-surface/85 px-5 py-3.5 backdrop-blur md:hidden group-has-[.no-store-chrome]/shell:hidden${
           hook(SHELL_CLASS.bar)}${hook(SHELL_CLASS.barMobile)}`}
         style={{ paddingTop: "calc(0.875rem + env(safe-area-inset-top))" }}>
         {menu && (
@@ -193,7 +195,7 @@ export function AppShell({
       </header>
 
       {/* Desktop top bar */}
-      <header className={`sticky top-0 z-20 hidden border-b border-border bg-surface/80 backdrop-blur md:block${hook(SHELL_CLASS.bar)}`}>
+      <header className={`sticky top-0 z-20 hidden border-b border-border bg-surface/80 backdrop-blur md:block group-has-[.no-store-chrome]/shell:hidden${hook(SHELL_CLASS.bar)}`}>
         <div className={`mx-auto flex max-w-5xl group-has-[.store-wide]/shell:max-w-[1240px] items-center justify-between px-6 py-4${hook(SHELL_CLASS.barInner)}`}>
           <Link href="/" aria-label={settings.name || "Home"}>
             <Mark className={`h-7 w-auto text-fg${hook(SHELL_CLASS.brandDesktop)}`} />
@@ -227,7 +229,7 @@ export function AppShell({
           page is what "just leave the padding" costs. */}
       <footer className={`mx-auto w-full max-w-5xl group-has-[.store-wide]/shell:max-w-[1240px] px-5 pt-10 ${
           hasTabs ? "pb-[calc(6rem+env(safe-area-inset-bottom))] md:px-6 md:pb-10" : "pb-10 md:px-6"
-        }`}>
+        } group-has-[.no-store-chrome]/shell:hidden`}>
         <div className="flex flex-col gap-4 border-t border-border pt-6 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
           <Mark className={`h-5 w-auto text-fg${hook(SHELL_CLASS.brandFooter)}`} />
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
@@ -272,7 +274,7 @@ export function AppShell({
       {/* Mobile bottom tab bar */}
       {hasTabs && (
         <nav
-          className={`fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/90 backdrop-blur md:hidden${hook(SHELL_CLASS.bar)}`}
+          className={`fixed inset-x-0 bottom-0 z-20 border-t border-border bg-surface/90 backdrop-blur md:hidden group-has-[.no-store-chrome]/shell:hidden${hook(SHELL_CLASS.bar)}`}
           // Sits above the home indicator instead of underneath it.
           style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
         >
