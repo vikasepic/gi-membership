@@ -75,7 +75,7 @@ describe("a sale charged to a card already on file", () => {
     // $0 today. Reporting it as a purchase says the sale was worthless;
     // reporting the price as revenue says money moved when none did.
     expect(fn).toContain('nowCents > 0 ? "Purchase" : "StartTrial"');
-    expect(fn).toContain("valueCents: nowCents > 0 ? nowCents : offer.priceCents");
+    expect(fn).toContain("result.valueCents ?? (nowCents > 0 ? nowCents : offer.priceCents)");
   });
 
   it("reports every offer sale, consent flag or not", () => {

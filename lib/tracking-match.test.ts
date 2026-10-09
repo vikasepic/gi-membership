@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { buildMetaEvent, type PurchaseEvent } from "@/lib/tracking";
-import { fbcFrom, nameParts, countryHash, hashed, matchIdentity } from "@/lib/tracking-fields";
+import { fbcFrom, nameParts, countryHash, hashed, matchIdentity, mergeClickIds } from "@/lib/tracking-fields";
 
 /**
  * Everything Meta matches a conversion on.
@@ -45,6 +45,51 @@ describe("the click identifiers", () => {
     // which looks identical to sending it correctly.
     const p = buildMetaEvent({ ...base, clickIds: { fbp: "fb.1.123.456" } });
     expect(p.data[0].user_data.fbp).toBe("fb.1.123.456");
+  });
+});
+
+describe("a later ad click", () => {
+  // Seen 7 Oct 2026: a buyer clicked the OCT26 ad and bought within minutes,
+  // but the visitor row still held their click from 20 Sep. Meta credits a
+  // click for 7 days, so the sale attributed to nothing.
+  const NOW = 1_759_843_500_000;
+  const old = { fbclid: "OLD", fbc: "fb.1.1758368220000.OLD", fbp: "fb.1.1.111", gclid: "G1" };
+
+  it("replaces the stored click, and the fbc Meta reads first", () => {
+    // The browser's _fbc can still be the old click when it reports: the pixel
+    // rewrites it after the page has already posted.
+    const merged = mergeClickIds(old, { fbclid: "NEW", fbc: old.fbc, fbp: old.fbp }, NOW);
+    expect(merged.fbclid).toBe("NEW");
+    expect(merged.fbc).toBe(`fb.1.${NOW}.NEW`);
+    expect(fbcFrom(merged)).toBe(`fb.1.${NOW}.NEW`);
+  });
+
+  it("keeps the pixel's own fbc when it already names the new click", () => {
+    const merged = mergeClickIds(old, { fbclid: "NEW", fbc: "fb.1.1759843400000.NEW" }, NOW);
+    expect(merged.fbc).toBe("fb.1.1759843400000.NEW");
+  });
+
+  it("leaves everything else as first touch", () => {
+    const merged = mergeClickIds(old, { fbclid: "NEW", gclid: "G2", fbp: "fb.1.1.222" }, NOW);
+    expect(merged.gclid).toBe("G1");
+    expect(merged.fbp).toBe("fb.1.1.111");
+  });
+
+  it("changes nothing on a pageview that carries no new click", () => {
+    expect(mergeClickIds(old, { fbclid: "OLD", fbc: "fb.1.1759843400000.OLD" }, NOW)).toEqual(old);
+    expect(mergeClickIds(old, { fbp: "fb.1.1.222" }, NOW)).toEqual(old);
+  });
+
+  it("never stores a first visit's fbclid beside an older click's _fbc", () => {
+    expect(mergeClickIds({}, { fbclid: "NEW", fbc: "fb.1.1758368220000.OLD" }, NOW).fbc).toBe(`fb.1.${NOW}.NEW`);
+  });
+
+  it("still fills in Meta's cookies that arrived after the landing", () => {
+    expect(mergeClickIds({ fbclid: "A" }, { fbp: "fb.1.1.333", fbc: "fb.1.5.A" }, NOW)).toEqual({
+      fbclid: "A",
+      fbp: "fb.1.1.333",
+      fbc: "fb.1.5.A",
+    });
   });
 });
 

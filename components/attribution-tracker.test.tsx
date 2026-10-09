@@ -108,3 +108,21 @@ describe("capturing click ids the pixel has not written yet", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("a second ad click in a tab that already reported", () => {
+  it("reports the new fbclid, and a plain pageview still does not", async () => {
+    sessionStorage.setItem("gi_tracked", "1");
+    window.history.replaceState(null, "", "/?fbclid=NEWCLICK");
+    act(() => root.render(<AttributionTracker />));
+    await settle();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(bodies()[0].clickIds.fbclid).toBe("NEWCLICK");
+
+    act(() => root.unmount());
+    root = createRoot(host);
+    window.history.replaceState(null, "", "/");
+    act(() => root.render(<AttributionTracker />));
+    await settle();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

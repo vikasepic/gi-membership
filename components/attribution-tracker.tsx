@@ -14,8 +14,10 @@ function cookie(name: string): string | undefined {
 }
 
 function capture() {
-  if (sessionStorage.getItem("gi_tracked")) return;
   const params = new URLSearchParams(window.location.search);
+  // An ad click always reports, even in a tab that already has: it may be a
+  // newer click than the one stored, and Meta credits the newest.
+  if (sessionStorage.getItem("gi_tracked") && !params.get("fbclid")) return;
   const pick = (keys: string[]) =>
     Object.fromEntries(keys.map((k) => [k, params.get(k)]).filter(([, v]) => v)) as Record<
       string,

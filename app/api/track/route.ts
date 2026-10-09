@@ -2,9 +2,11 @@ import { cookies } from "next/headers";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { CONSENT_COOKIE, parseConsent, mayTrack } from "@/lib/consent";
+import { mergeClickIds } from "@/lib/tracking-fields";
 
 // Records a visitor for attribution. First-touch wins (ignoreDuplicates), so a
-// later pageview never overwrites the landing UTMs / click ids.
+// later pageview never overwrites the landing UTMs or click ids, except a
+// newer Meta ad click (mergeClickIds).
 //
 // Click ids, UTMs and user-agent are personal data under GDPR and this store
 // takes EU/UK traffic, so nothing is stored without explicit consent.
@@ -35,24 +37,17 @@ export async function POST(req: Request) {
       landing_url: body.landingUrl ?? null,
       referrer: body.referrer || null,
       utm: body.utm ?? {},
-      click_ids: clickIds,
+      // Through the same merge, so a stale _fbc from an earlier click never
+      // lands beside the fbclid of this one.
+      click_ids: mergeClickIds({}, clickIds, Date.now()),
       user_agent: req.headers.get("user-agent"),
     },
     { onConflict: "store_id,anon_id", ignoreDuplicates: true },
   );
 
-  // Fill in click ids that arrived later, without disturbing first touch.
-  //
-  // `_fbp` and `_fbc` are written by Meta's pixel, and the pixel does not load
-  // until consent is granted — so on the landing request they do not exist yet.
-  // First-touch-wins is right for the campaign that brought somebody here and
-  // wrong for an identifier that simply had not been issued: under
-  // ignoreDuplicates alone, the strongest match signal Meta offers could never
-  // be stored at all.
-  //
-  // Merged rather than replaced, and only for keys with nothing in them, so a
-  // later pageview still cannot overwrite the fbclid of the ad that converted.
-  if (clickIds.fbp || clickIds.fbc) {
+  // Click ids that arrived later, and a newer Meta ad click. See
+  // mergeClickIds: first touch still wins for everything else.
+  if (clickIds.fbp || clickIds.fbc || clickIds.fbclid) {
     const { data: existing } = await db
       .from("visitors")
       .select("click_ids")
@@ -60,11 +55,8 @@ export async function POST(req: Request) {
       .eq("anon_id", anon)
       .maybeSingle();
     const stored = (existing?.click_ids as Record<string, string> | null) ?? {};
-    const merged = { ...stored };
-    for (const k of ["fbp", "fbc"] as const) {
-      if (clickIds[k] && !stored[k]) merged[k] = clickIds[k];
-    }
-    if (Object.keys(merged).length !== Object.keys(stored).length) {
+    const merged = mergeClickIds(stored, clickIds, Date.now());
+    if (JSON.stringify(merged) !== JSON.stringify(stored)) {
       await db
         .from("visitors")
         .update({ click_ids: merged })

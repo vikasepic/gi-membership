@@ -840,3 +840,19 @@ calling a design matched.
 To match a PSD, read it rather than the JPG: `psd-tools` gives every text
 layer's exact size, line height and frame width, and the JPG export can be
 older than the PSD (here the hero photo had changed).
+
+## An order written already paid reports nothing (9 Oct 2026)
+
+The offer checkout inserts its order with `status: "paid"`. `finalizeOrder`
+returns at `if (order.status !== "pending")`, so a comment saying "a paid
+offer is reported by finalizeOrder" was false from 9 Sep, and the offer
+checkout reported only trials. Twelve paid offer sales (ten Micro-Product
+Builder, two Book Writer) never reached Meta. AddToCart still fired, so the
+campaigns showed carts and no purchases, and the ads team found it before we
+did. When code says "the other path reports this", follow the other path to
+its first `return`. Meta accepts a server event up to 7 days old, so the
+window for resending a missed sale is a week.
+
+A visitor's stored click ids were first touch only. A returning buyer who
+clicked a second ad was matched to the first click, outside Meta's 7-day
+window. `mergeClickIds` now lets a newer fbclid replace the stored one.

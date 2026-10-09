@@ -30,8 +30,11 @@ vi.mock("@/lib/stripe", async (orig) => ({
 // grantOfferOwnership, runs the real implementation; the flag is consumed
 // (deleted) on use so the very next call — the retry the test makes itself —
 // goes through untouched.
-const { grantOfferOwnershipShouldThrow } = vi.hoisted(() => ({
+const { grantOfferOwnershipShouldThrow, offerSalesReported } = vi.hoisted(() => ({
   grantOfferOwnershipShouldThrow: new Set<string>(),
+  // Every sale completeOfferCheckout hands to the ad platforms, in place of
+  // sending it: what is checked is what this checkout reports, not Meta.
+  offerSalesReported: [] as { orderId: string; offerId: string; result: Record<string, unknown> }[],
 }));
 vi.mock("@/lib/checkout", async (orig) => {
   const real = await orig<typeof import("@/lib/checkout")>();
@@ -44,6 +47,10 @@ vi.mock("@/lib/checkout", async (orig) => {
         throw new Error("simulated grantOfferOwnership failure");
       }
       return real.grantOfferOwnership(...args);
+    },
+    trackOfferSale: async (...args: Parameters<typeof real.trackOfferSale>) => {
+      const [orderId, offer, result] = args;
+      offerSalesReported.push({ orderId, offerId: offer.id, result });
     },
   };
 });
@@ -184,6 +191,37 @@ describe.skipIf(!canRun)("completeOfferCheckout's claim on a race (0070)", () =>
     expect(order?.utm_last).toEqual({ utm_source: "meta", utm_medium: "paid_social", utm_campaign: "AJ | LAL" });
     expect(order?.utm_first).toEqual({ utm_source: "ig" });
     expect(order?.referrer).toBe("https://l.facebook.com/l.php");
+  });
+
+  it("reports a paid sale to the ad platforms, at what was charged", async () => {
+    // Before 9 Oct 2026 only a trial reported from here: the paid path was
+    // left to finalizeOrder, which skips any order not still pending, and this
+    // checkout writes its order already paid. Every Micro-Product Builder sale
+    // since 9 Sep reached Meta as nothing, so no campaign could be credited.
+    const db = createServiceClient();
+    const { userId } = await buyer("report");
+    const storeId = await getStoreId();
+    const piId = `pi_report_${crypto.randomUUID()}`;
+    PI_RESPONSES.set(piId, {
+      id: piId,
+      object: "payment_intent",
+      status: "succeeded",
+      // Less than the list price, as a coupon would leave it: the event must
+      // carry the money that moved, not the headline.
+      amount: PRICE_CENTS - 700,
+      customer: `cus_report_${crypto.randomUUID()}`,
+      payment_method: `pm_report_${crypto.randomUUID()}`,
+      metadata: { userId, offerId: fixtureOfferId, storeId, offerPriceId: "", couponCode: "", newAccount: "false" },
+    });
+    const res = await completeOfferCheckout(piId);
+    expect(res.ok).toBe(true);
+    const { data: order } = await db.from("orders").select("id").eq("stripe_payment_intent_id", piId).single();
+    orderIds.push(order!.id as string);
+    const reported = offerSalesReported.filter((r) => r.orderId === order!.id);
+    expect(reported).toHaveLength(1);
+    expect(reported[0].offerId).toBe(fixtureOfferId);
+    expect(reported[0].result.key).toBe(`offer:${fixtureOfferId}:${piId}`);
+    expect(reported[0].result.valueCents).toBe(PRICE_CENTS - 700);
   });
 
   it("records the buyer's country from the card when the checkout sent none, as Stripe's own form collected it", async () => {

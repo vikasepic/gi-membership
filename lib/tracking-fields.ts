@@ -100,3 +100,33 @@ export function matchIdentity(
   if (!user) return { userId: anon, email: bodyEmail ?? "" };
   return { userId: user.id, email: bodyEmail || user.email || "" };
 }
+
+/**
+ * A visitor's stored click ids, updated by what one pageview reported.
+ *
+ * First touch wins for everything except Meta's click. A newer fbclid is a
+ * newer ad click, and Meta credits a click for 7 days: keeping the first one
+ * meant a returning visitor who clicked a second ad and bought was matched to
+ * a click weeks old, and the sale attributed to nothing (7 Oct 2026). The fbc
+ * goes with it, because it is what Meta reads first; the browser's own `_fbc`
+ * is used only when it already names the new click, since the pixel rewrites
+ * the cookie after the page has posted.
+ *
+ * Keys with nothing stored are filled in either way: Meta's cookies are not
+ * written until its pixel loads, after the landing has been recorded.
+ */
+export function mergeClickIds(
+  stored: Record<string, string>,
+  incoming: Record<string, string>,
+  nowMs: number,
+): Record<string, string> {
+  const merged = { ...stored };
+  for (const [k, v] of Object.entries(incoming)) if (v && !merged[k]) merged[k] = v;
+  const fbclid = incoming.fbclid?.trim();
+  if (fbclid && fbclid !== stored.fbclid) {
+    merged.fbclid = fbclid;
+    const fbc = incoming.fbc?.trim();
+    merged.fbc = fbc?.endsWith(`.${fbclid}`) ? fbc : `fb.1.${nowMs}.${fbclid}`;
+  }
+  return merged;
+}

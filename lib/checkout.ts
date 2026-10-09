@@ -1945,6 +1945,8 @@ export async function trackOfferSale(
      * Purchase and be thrown away as a duplicate.
      */
     key?: string;
+    /** What was actually charged, where a coupon made it less than the offer's price. */
+    valueCents?: number;
   },
 ): Promise<void> {
   try {
@@ -1964,6 +1966,7 @@ export async function trackOfferSale(
     // A trial takes nothing today. Reporting $0 as a purchase says the sale was
     // worthless; reporting the price as revenue says money moved when none did.
     const nowCents = immediateChargeCents(offer);
+    const valueCents = result.valueCents ?? (nowCents > 0 ? nowCents : offer.priceCents);
     const key = result.key ?? result.paymentIntentId ?? result.subscriptionId ?? orderId;
     // The OFFER's identity, not the order's.
     //
@@ -1984,7 +1987,7 @@ export async function trackOfferSale(
       ...identity,
       eventId: eventIdFor(nowCents > 0 ? "Purchase" : "StartTrial", key),
       eventName: nowCents > 0 ? "Purchase" : "StartTrial",
-      valueCents: nowCents > 0 ? nowCents : offer.priceCents,
+      valueCents,
       currency: (order.currency as string) ?? offer.currency,
       orderId,
       occurredAt: Math.floor(Date.now() / 1000),
@@ -2002,7 +2005,7 @@ export async function trackOfferSale(
           eventId: customEventIdFor(adName, key),
           eventName: nowCents > 0 ? "Purchase" : "StartTrial",
           customName: adName,
-          valueCents: nowCents > 0 ? nowCents : offer.priceCents,
+          valueCents,
           currency: (order.currency as string) ?? offer.currency,
           orderId,
           occurredAt: Math.floor(Date.now() / 1000),

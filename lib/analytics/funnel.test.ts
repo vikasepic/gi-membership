@@ -197,7 +197,8 @@ describe("an offer reports as itself", () => {
     // price. Anything that takes money — a one-time upsell, or a subscription
     // with no trial — is a Purchase for the amount charged.
     expect(sale).toContain('eventName: nowCents > 0 ? "Purchase" : "StartTrial"');
-    expect(sale).toContain("valueCents: nowCents > 0 ? nowCents : offer.priceCents");
+    // Or what the card was actually charged, where the caller knows it.
+    expect(sale).toContain("result.valueCents ?? (nowCents > 0 ? nowCents : offer.priceCents)");
   });
 
   it("sends the offer's own named event beside the standard one", () => {

@@ -815,19 +815,20 @@ export async function completeOfferCheckout(
       stripe_subscription_id: result.subscriptionId ?? null,
       stripe_payment_intent_id: result.paymentIntentId ?? null,
     });
-    // A trial started here reports from here. A PAID offer is reported by
-    // finalizeOrder when Stripe confirms the PaymentIntent; a trial saves a
-    // card and charges nothing, so no PaymentIntent ever succeeds and no
-    // webhook ever reaches finalizeOrder. Three Content Engine trials on 18
-    // Sep 2026 started, granted and reached Meta as nothing at all. Keyed on
-    // the subscription, so the webhook and the return route — both of which
-    // run this — collapse into one event.
-    if (!paid) {
-      await trackOfferSale(orderId, sold, {
-        subscriptionId: result.subscriptionId,
-        key: `offer:${sold.id}:${result.subscriptionId ?? intentId}`,
-      });
-    }
+    // Every sale made here reports from here, paid or trial. finalizeOrder
+    // never sees these orders: it only reports one still pending, and this
+    // checkout writes its order already paid. A trial reported nowhere until
+    // 18 Sep 2026; a paid sale reported nowhere until 9 Oct 2026, so no
+    // Micro-Product Builder sale since 9 Sep ever reached Meta. Keyed on the
+    // subscription or the intent, so the webhook and the return route (both
+    // of which run this) collapse into one event.
+    await trackOfferSale(orderId, sold, {
+      subscriptionId: result.subscriptionId,
+      key: `offer:${sold.id}:${result.subscriptionId ?? intentId}`,
+      // What the card was charged for this offer, after any coupon; the bump
+      // reports its own share.
+      ...(paid ? { valueCents: totalCents - bumpNowCents } : {}),
+    });
   } catch (e) {
     // The card saved (and may already be charged or subscribed) but
     // fulfilment did not finish — granting access or recording the line can
