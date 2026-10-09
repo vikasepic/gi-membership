@@ -114,12 +114,32 @@ export async function adEventForOrder(
   }
 }
 
+/**
+ * The part of an order's own charge that a bump paid for.
+ *
+ * A one-time bump rides the order's PaymentIntent and then reports itself as
+ * its own Purchase (fulfilBump). Left in the order's Purchase as well, Meta
+ * counted the bump's money twice: a $29 sale with an $11 bump arrived as $40
+ * plus $11 (9 Oct 2026). A bump on its own subscription was never in the
+ * order's charge, so only lines on this intent count.
+ */
+export async function prepaidBumpCents(orderId: string, intentId: string | null): Promise<number> {
+  if (!intentId) return 0;
+  const { data } = await createServiceClient()
+    .from("order_items")
+    .select("amount_cents")
+    .eq("order_id", orderId)
+    .eq("kind", "bump")
+    .eq("stripe_payment_intent_id", intentId);
+  return (data ?? []).reduce((sum, l) => sum + ((l.amount_cents as number) ?? 0), 0);
+}
+
 async function receiptFor(column: string, value: string): Promise<TrackingReceipt | null> {
   try {
     const db = createServiceClient();
     const { data: order } = await db
       .from("orders")
-      .select("id, total_cents, currency, email, status, utm_first, utm_last, referrer")
+      .select("id, total_cents, currency, email, status, utm_first, utm_last, referrer, stripe_payment_intent_id")
       .eq(column, value)
       .maybeSingle();
     if (!order || order.status === "refunded") return null;
@@ -149,7 +169,11 @@ async function receiptFor(column: string, value: string): Promise<TrackingReceip
 
     return {
       orderId: order.id as string,
-      valueCents: order.total_cents as number,
+      // The same figure the server copy sends: Meta keeps whichever arrives
+      // first, so the two must agree.
+      valueCents:
+        (order.total_cents as number) -
+        (await prepaidBumpCents(order.id as string, (order.stripe_payment_intent_id as string | null) ?? null)),
       currency: (order.currency as string) ?? "usd",
       trialCents,
       email: (order.email as string) ?? null,

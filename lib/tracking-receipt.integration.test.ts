@@ -28,7 +28,7 @@ vi.mock("@/lib/tracking", async (orig) => ({
 
 const { createServiceClient } = await import("@/lib/supabase/server");
 const { getStoreId } = await import("@/lib/store");
-const { reportTrialConverted, purchaseForOrder, adEventForOrder } = await import("@/lib/tracking-receipt");
+const { reportTrialConverted, purchaseForOrder, adEventForOrder, prepaidBumpCents } = await import("@/lib/tracking-receipt");
 
 const APP = "00000000-0000-0000-0000-0000000000a1"; // seeded fixture app, reused by other suites
 
@@ -198,6 +198,35 @@ describe.skipIf(!canRun)("an offer's order, for the browser's copy (integration)
 
     expect((await purchaseForOrder(order.id as string))?.contentName).toBe("Content Engine - IG");
     expect(await adEventForOrder(order.id as string)).toEqual({ name: "Content Engine IG Sale", contentName: "Content Engine - IG" });
+  });
+});
+
+describe.skipIf(!canRun)("a bump paid inside the order's own charge (integration)", () => {
+  it("is left out of the order's Purchase, because the bump reports itself", async () => {
+    // Seen 9 Oct 2026: a $29 validator with an $11 bump reached Meta as a $40
+    // Purchase and an $11 Purchase, $51 for $40 taken, while the ads team was
+    // being held to a ROAS target.
+    const db = createServiceClient();
+    const { userId } = await buyer();
+    const offerId = await makeOffer();
+    const pi = `pi_zz_bump_${Date.now()}`;
+    const { data: order, error } = await db
+      .from("orders")
+      .insert({ store_id: await getStoreId(), user_id: userId, email: "zz@example.com", status: "paid", total_cents: 4000, currency: "usd", stripe_payment_intent_id: pi })
+      .select("id")
+      .single();
+    if (error || !order) throw new Error(`test fixture: order: ${error?.message}`);
+    createdOrderIds.push(order.id as string);
+    const line = { store_id: await getStoreId(), order_id: order.id, offer_id: offerId, description: "zz bump" };
+    const { error: itemErr } = await db.from("order_items").insert([
+      { ...line, kind: "bump", amount_cents: 1100, stripe_payment_intent_id: pi },
+      // Charged on its own subscription, not in this intent: not part of it.
+      { ...line, kind: "bump", amount_cents: 1900, stripe_subscription_id: SUB_ID },
+    ]);
+    if (itemErr) throw new Error(`test fixture: order_items: ${itemErr.message}`);
+
+    expect(await prepaidBumpCents(order.id as string, pi)).toBe(1100);
+    expect((await purchaseForOrder(order.id as string))?.valueCents).toBe(2900);
   });
 });
 

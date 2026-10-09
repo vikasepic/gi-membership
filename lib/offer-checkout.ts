@@ -820,11 +820,11 @@ export async function completeOfferCheckout(
     // checkout writes its order already paid. A trial reported nowhere until
     // 18 Sep 2026; a paid sale reported nowhere until 9 Oct 2026, so no
     // Micro-Product Builder sale since 9 Sep ever reached Meta. Keyed on the
-    // subscription or the intent, so the webhook and the return route (both
-    // of which run this) collapse into one event.
+    // order, like a product sale and like the browser's copy on an upsell
+    // page, so the webhook, the return route and that page are one event.
     await trackOfferSale(orderId, sold, {
       subscriptionId: result.subscriptionId,
-      key: `offer:${sold.id}:${result.subscriptionId ?? intentId}`,
+      key: orderId,
       // What the card was charged for this offer, after any coupon; the bump
       // reports its own share.
       ...(paid ? { valueCents: totalCents - bumpNowCents } : {}),

@@ -856,3 +856,10 @@ window for resending a missed sale is a week.
 A visitor's stored click ids were first touch only. A returning buyer who
 clicked a second ad was matched to the first click, outside Meta's 7-day
 window. `mergeClickIds` now lets a newer fbclid replace the stored one.
+
+A bump paid inside the order's own charge also reports itself as a Purchase,
+so the order's Purchase (server and browser) has to leave it out
+(`prepaidBumpCents`). Before 9 Oct a $29 sale with an $11 bump reached Meta as
+$40 plus $11. Every server event for one sale is keyed on the order id, the
+id the browser's copy uses, or a page that adds the browser copy later turns
+one sale into two.

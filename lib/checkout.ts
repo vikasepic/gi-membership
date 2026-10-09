@@ -12,7 +12,7 @@ import { signOtoToken, verifyOtoToken } from "@/lib/oto-token";
 import { trackPurchase, trackServerEvent } from "@/lib/tracking";
 import { contentNameOr, customEventIdFor } from "@/lib/analytics/events";
 import { eventIdFor } from "@/lib/analytics/events";
-import { trialWorthFor, adEventForOrder } from "@/lib/tracking-receipt";
+import { trialWorthFor, adEventForOrder, prepaidBumpCents } from "@/lib/tracking-receipt";
 import { sendEmail, buildWelcomeEmail, buildReceiptEmail } from "@/lib/email";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import { countryOfPaymentMethod,
@@ -1485,12 +1485,14 @@ export async function finalizeOrder(intentId: string): Promise<void> {
   try {
     const who = await buyerContextFor(order.id as string);
     if (!who) return;
+    // Without the bump, which reports itself (prepaidBumpCents).
+    const valueCents = pi.amount - (await prepaidBumpCents(order.id as string, pi.id));
 
     await trackPurchase({
       ...who,
       eventId: eventIdFor("Purchase", order.id as string),
       eventName: "Purchase",
-      valueCents: pi.amount,
+      valueCents,
       currency: pi.currency,
       orderId: order.id as string,
       occurredAt: Math.floor(Date.now() / 1000),
@@ -1532,7 +1534,7 @@ export async function finalizeOrder(intentId: string): Promise<void> {
           eventName: "Purchase",
           customName: adEvent.name,
           contentName: adEvent.contentName,
-          valueCents: pi.amount,
+          valueCents,
           currency: pi.currency,
           orderId: order.id as string,
           occurredAt: Math.floor(Date.now() / 1000),

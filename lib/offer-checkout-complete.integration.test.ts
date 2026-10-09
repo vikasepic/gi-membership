@@ -220,7 +220,10 @@ describe.skipIf(!canRun)("completeOfferCheckout's claim on a race (0070)", () =>
     const reported = offerSalesReported.filter((r) => r.orderId === order!.id);
     expect(reported).toHaveLength(1);
     expect(reported[0].offerId).toBe(fixtureOfferId);
-    expect(reported[0].result.key).toBe(`offer:${fixtureOfferId}:${piId}`);
+    // The order's own id, as a product sale and the browser's copy both use:
+    // anything else would be a second sale the moment this offer has an upsell
+    // page, which reports the order's Purchase from the browser.
+    expect(reported[0].result.key).toBe(order!.id);
     expect(reported[0].result.valueCents).toBe(PRICE_CENTS - 700);
   });
 
