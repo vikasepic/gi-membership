@@ -75,6 +75,9 @@ same PR — that is how the next person's Claude avoids your mistake.
   only; every other buy goes through the sales page and checkout (owner, 1 Oct).
 - **Behind the proxy, `req.url` is the container.** Redirect with a relative
   `Location`, never `new URL(path, req.url)`.
+- **Editor JSON is not plain data.** ProseMirror `attrs` have a null
+  prototype; React sends them to a server action as placeholders and the
+  server throws. Round-trip through JSON first (`docOf`).
 - **A grant records its target at that moment.** Fix an offer's grant before
   granting anyone; a wrong one means revoke, then re-grant.
 - **After any deploy, a tab left open breaks on its next navigation** (404 or

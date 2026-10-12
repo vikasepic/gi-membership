@@ -10,6 +10,20 @@ import { publicCoverUrl } from "@/lib/media-url";
 type Pop = null | "link" | "image" | "button";
 
 /**
+ * The editor's document as plain data.
+ *
+ * ProseMirror builds every `attrs` object with a null prototype and getJSON
+ * hands those objects back as they are. React will not send a null-prototype
+ * object to a server action: it sends a placeholder, and the server's first
+ * read of `attrs.href` throws. Any email with a link, button, font or
+ * alignment failed to save with a 500 (12 Oct 2026). The round trip makes
+ * every object an ordinary one.
+ */
+export function docOf(editor: Pick<Editor, "getJSON">): DocNode {
+  return JSON.parse(JSON.stringify(editor.getJSON())) as DocNode;
+}
+
+/**
  * One post-purchase email, edited where it will be read: the canvas has the
  * email's own width, padding, colours and font, so what the owner arranges is
  * what arrives. The toolbar offers what an email client can show, and no more.
@@ -32,7 +46,7 @@ export function EmailEditor({
     immediatelyRender: false,
     extensions: emailExtensions(),
     content: doc,
-    onUpdate: ({ editor }) => onChange(editor.getJSON() as DocNode),
+    onUpdate: ({ editor }) => onChange(docOf(editor)),
     editorProps: { attributes: { class: "email-canvas-body", "aria-label": "Email content" } },
   });
   const [, rerender] = useState(0);

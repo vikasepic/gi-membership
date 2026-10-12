@@ -863,3 +863,15 @@ so the order's Purchase (server and browser) has to leave it out
 $40 plus $11. Every server event for one sale is keyed on the order id, the
 id the browser's copy uses, or a page that adds the browser copy later turns
 one sale into two.
+
+## Editor JSON is not plain data (12 Oct 2026)
+
+ProseMirror builds every node's and mark's `attrs` with a null prototype, and
+TipTap's `getJSON()` passes them through. React sends a null-prototype object
+to a server action as a `$T` placeholder, not data, and the server's first
+read of it throws "Cannot access href on the server ... temporary client
+reference". Every paragraph carries `attrs.textAlign`, so any edited
+post-purchase email failed to save with a 500, which the page reported as
+"Could not reach the server". Tests passed because they built documents by
+hand. `docOf` in `components/admin/email-editor.tsx` round-trips through JSON;
+anything else that sends editor JSON to a server action needs the same.
