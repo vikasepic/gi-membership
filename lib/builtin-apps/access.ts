@@ -1,6 +1,7 @@
 import "server-only";
 import { redirect, notFound } from "next/navigation";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
+import { viewer } from "@/lib/view-as";
 import { getStoreId, offerSellingApp } from "@/lib/store";
 import { APP_COLUMNS, type AppRow } from "@/lib/apps";
 import { camelize } from "@/lib/case";
@@ -45,10 +46,9 @@ export async function getInternalApp(key: BuiltinAppKey): Promise<AppRow | null>
  * than a redirect. A streaming route has no page to bounce to.
  */
 export async function internalAppAccess(key: BuiltinAppKey): Promise<InternalAppAccess> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // The store's answer to "who is looking", so an admin viewing as a member
+  // opens the member's app, sessions and all, exactly as the library does.
+  const user = await viewer();
   const app = await getInternalApp(key);
   if (!app || !app.active) return { ok: false, reason: "no_app", app: null };
   if (!user?.email) return { ok: false, reason: "signed_out", app };

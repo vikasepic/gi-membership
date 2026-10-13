@@ -30,7 +30,13 @@ class Redirected extends Error {
   }
 }
 
-function arrange(opts: { user: { id: string; email: string } | null; owned: boolean; offerKey: string | null }) {
+function arrange(opts: {
+  user: { id: string; email: string } | null;
+  owned: boolean | ((userId: string) => boolean);
+  offerKey: string | null;
+  /** The member an admin is viewing as, if any. */
+  viewingAs?: { id: string; email: string };
+}) {
   vi.resetModules();
   vi.doMock("next/navigation", () => ({
     redirect: (to: string) => {
@@ -48,7 +54,17 @@ function arrange(opts: { user: { id: string; email: string } | null; owned: bool
       }),
     }),
   }));
-  vi.doMock("@/lib/library", () => ({ subscribedToApp: async () => opts.owned }));
+  vi.doMock("@/lib/view-as", () => ({
+    viewer: async () =>
+      opts.viewingAs
+        ? { id: opts.viewingAs.id, email: opts.viewingAs.email, actingAdminId: opts.user?.id ?? null, viewingAs: true, name: null }
+        : opts.user
+          ? { id: opts.user.id, email: opts.user.email, actingAdminId: null, viewingAs: false, name: null }
+          : null,
+  }));
+  vi.doMock("@/lib/library", () => ({
+    subscribedToApp: async (userId: string) => (typeof opts.owned === "function" ? opts.owned(userId) : opts.owned),
+  }));
   vi.doMock("@/lib/store", () => ({
     getStoreId: async () => "store-1",
     offerSellingApp: async (appId: string) =>
@@ -61,6 +77,7 @@ afterEach(() => {
   vi.doUnmock("next/navigation");
   vi.doUnmock("@/lib/supabase/server");
   vi.doUnmock("@/lib/library");
+  vi.doUnmock("@/lib/view-as");
   vi.doUnmock("@/lib/store");
 });
 
@@ -95,5 +112,27 @@ describe("requireInternalApp for someone who does not own the app", () => {
     await expect(requireInternalApp("micro-product-builder")).rejects.toMatchObject({
       to: "/login?next=%2Fapps%2Fmicro-product-builder",
     });
+  });
+});
+
+describe("an admin viewing the store as a member", () => {
+  // Asked 13 Oct 2026: support opened a buyer's Micro-Product Builder from
+  // "View as" and landed in their own account in the app, so the buyer's
+  // sessions could not be seen. The store pages followed "View as"; the apps
+  // read the login directly.
+  const member = { id: "member-1", email: "buyer@example.com" };
+
+  it("opens the app as the member, on the member's ownership", async () => {
+    arrange({ user: me, viewingAs: member, owned: (id) => id === member.id, offerKey: null });
+    const { requireInternalApp } = await import("@/lib/builtin-apps/access");
+    const viewer = await requireInternalApp("micro-product-builder");
+    expect(viewer.user).toEqual(member);
+  });
+
+  it("does the same for the app's API routes", async () => {
+    arrange({ user: me, viewingAs: member, owned: (id) => id === member.id, offerKey: null });
+    const { internalAppAccess } = await import("@/lib/builtin-apps/access");
+    const access = await internalAppAccess("micro-product-builder");
+    expect(access.ok && access.user.id).toBe(member.id);
   });
 });
