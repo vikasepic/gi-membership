@@ -90,6 +90,8 @@ export type CheckoutSlotValue = {
      * behaves exactly as before this existed.
      */
     trialDays?: number | null;
+    /** Whether the money off repeats on renewals, as Stripe will apply it. */
+    recurringDiscount?: boolean;
   } | null;
   couponInput: string;
   setCouponInput: (v: string) => void;
@@ -622,6 +624,42 @@ export function OrderSummarySlot(p: {
   );
 }
 
+/**
+ * What an applied code actually does, in words, at the code.
+ *
+ * "SMS — 100% off applied" said nothing about the 30 days the code also
+ * grants, or about when the money comes off, so the owner could not tell it
+ * had worked (14 Oct 2026). On a subscription the discount lands on the first
+ * real invoice, after any trial, which is the line a buyer most needs.
+ */
+export function couponEffects(c: CheckoutSlotValue): string[] {
+  const code = c.coupon;
+  if (!code) return [];
+  const chosen = c.pricePick === null ? null : (c.prices[c.pricePick] ?? null);
+  const out: string[] = [];
+  const base = chosen?.trialDays ?? 0;
+  const days = code.trialDays;
+  if (days != null && days !== base) {
+    out.push(
+      days === 0
+        ? "No free trial with this code."
+        : base > 0
+          ? `${days}-day free trial instead of ${base} days.`
+          : `${days}-day free trial.`,
+    );
+  }
+  const trial = (days ?? base) > 0;
+  if (chosen?.billingType === "recurring" && !isPlan(chosen) && code.discountCents > 0) {
+    const off = money(code.discountCents, c.product.currency);
+    out.push(
+      code.recurringDiscount
+        ? `${off} off ${trial ? "every payment after the trial" : "this payment and the renewals after it"}.`
+        : `${off} off your first payment${trial ? " after the trial" : ""}. Renewals are at the full price.`,
+    );
+  }
+  return out;
+}
+
 export function CouponSlot(p: {
   label?: string;
   placeholder?: string;
@@ -732,6 +770,12 @@ export function CouponSlot(p: {
           {c.coupon!.label} applied
         </p>
       )}
+      {applied &&
+        couponEffects(c).map((line) => (
+          <p key={line} className="text-xs text-muted" style={FINE}>
+            {line}
+          </p>
+        ))}
       {c.couponError && (
         <p className="text-xs text-primary" style={FINE}>
           {c.couponError}

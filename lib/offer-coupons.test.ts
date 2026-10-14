@@ -165,8 +165,12 @@ describe("the cases that make a coupon useless if missed", () => {
   it("says whether a subscription discount is once or forever", () => {
     // "20% off" on a subscription means either one bill or every bill, and the
     // buyer otherwise finds out on the second one.
-    expect(form).toContain("recurringDiscount");
-    expect(form).toContain("Renewals are at the full price.");
+    // Worded once, in couponEffects (slots.tsx), for both layouts; what it
+    // renders is proved in components/checkout/offer-coupon-explain.test.tsx.
+    const slots = readFileSync("components/checkout/slots.tsx", "utf8");
+    expect(form).toContain("couponEffects(slots)");
+    expect(slots).toContain("code.recurringDiscount");
+    expect(slots).toContain("Renewals are at the full price.");
   });
 });
 

@@ -126,9 +126,9 @@ describe.each(["v2", "v1"] as const)("a coupon that changes the trial (%s)", (sk
     expect(host.textContent).toContain("30 days free, then $29 every month");
     // The line the buyer would otherwise have read against a 30-day trial.
     expect(host.textContent).not.toContain("7 days free");
-    // And nothing repeating it. Once the sentence is right, "30 days free
-    // instead of 7" is the same fact told twice.
-    expect(host.textContent).not.toContain("instead of 7");
+    // And said at the code too, which the owner asked for on 14 Oct 2026:
+    // the terms line alone left them unsure the code had done anything.
+    expect(host.textContent).toContain("30-day free trial instead of 7 days.");
   });
 
   it("says the trial is gone when the code takes it away", async () => {

@@ -211,7 +211,10 @@ describe("the renewal note, with no price picked yet", () => {
     preview.mockResolvedValue(CE1M26);
     // Two ways to pay and neither chosen — the one case where the form falls
     // back to the offer's own sentence instead of the picked price's terms.
-    const host = mount({ prices: [MONTHLY, YEARLY], chosen: -1 });
+    // A one-off beside the subscription, since two subscriptions now start
+    // on the headline price (startingPick).
+    const ONCE: OfferPrice = { ...MONTHLY, id: "p-once", billingType: "one_time", interval: null, trialDays: null, priceCents: 9900 };
+    const host = mount({ prices: [ONCE, MONTHLY], chosen: -1 });
     expect(host.textContent).toContain("Then $29/month after your 7-day trial. Cancel anytime.");
 
     await applyCode(host, "CE1M26");

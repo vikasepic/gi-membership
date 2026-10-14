@@ -43,12 +43,29 @@ import { suggestEmail } from "@/lib/email-hint";
 import { priceLabel, priceTerms, chargeNowCents, type OfferPrice } from "@/lib/offer-prices";
 import { MIN_CHARGE_CENTS_CLIENT, type BumpSummary } from "@/components/checkout/checkout-types";
 import { previewOfferCouponAction } from "@/app/(store)/checkout/offer/actions";
-import { CheckoutSlots, type CheckoutSlotValue } from "@/components/checkout/slots";
+import { CheckoutSlots, couponEffects, type CheckoutSlotValue } from "@/components/checkout/slots";
 import { usePublishTrialDays } from "@/components/checkout/trial";
 import { CheckoutV2Layout } from "@/components/checkout/v2/layout";
 import { stripeAppearance } from "@/components/checkout/v2/appearance";
 import type { CheckoutSkin } from "@/lib/checkout-skin";
 import type { CheckoutDesign } from "@/lib/checkout-design";
+
+/**
+ * Which way to pay starts ticked.
+ *
+ * The one chosen on the sales page, or the only one. Otherwise the headline
+ * price (the first live one) when every way to pay is the same kind: a sales
+ * page's buy button names no price, the server then charges the headline
+ * anyway, and a page that ticked nothing showed "$0" with no terms, so a code
+ * that changed the trial seemed to do nothing (14 Oct 2026). A one-off beside
+ * a subscription still starts unticked: choosing for somebody there is how a
+ * person ends up subscribed when they meant to pay once.
+ */
+export function startingPick(prices: OfferPrice[], chosen: number): number {
+  if (chosen >= 0) return chosen;
+  if (prices.length === 0) return -1;
+  return prices.every((p) => p.billingType === prices[0].billingType) ? 0 : -1;
+}
 
 export function OfferCheckoutForm({
   offer,
@@ -91,7 +108,7 @@ export function OfferCheckoutForm({
   // when the amount is knowable up front — one price, or a preselected one,
   // that does not renew; nothing else can be ticked or applied before the
   // first render. Everything Inner does afterwards is unchanged.
-  const firstPick = chosen >= 0 ? chosen : prices.length === 1 ? 0 : -1;
+  const firstPick = startingPick(prices, chosen);
   const firstPrice = firstPick >= 0 ? (prices[firstPick] ?? null) : null;
   const startsRecurring = firstPrice ? firstPrice.billingType === "recurring" : Boolean(offer.recurring);
   const firstAmount = firstPrice ? chargeNowCents(firstPrice) : offer.chargeNowCents;
@@ -148,7 +165,7 @@ function Inner({
   // Preselected from the sales page, and still changeable — somebody who
   // picked the yearly two pages ago should not have to pick it again, and
   // should not be stuck with it either.
-  const [pick, setPick] = useState<number>(chosen >= 0 ? chosen : prices.length === 1 ? 0 : -1);
+  const [pick, setPick] = useState<number>(startingPick(prices, chosen));
   const picked = pick >= 0 ? (prices[pick] ?? null) : null;
   // "none" until they tick it. An index once they have — the same shape the
   // price switch posts, because the server reads both as positions in a list
@@ -689,16 +706,14 @@ function Inner({
                 {couponError}
               </p>
             )}
-            {/* Said out loud, because a subscription is the one place where "20%
-                off" can mean either one bill or every bill, and the buyer finds
-                out on the second one. */}
-            {coupon && isRecurring && (
-              <p className="text-xs text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
-                {coupon.recurringDiscount
-                  ? "Applies to this payment and the renewals after it."
-                  : "Applies to your first payment. Renewals are at the full price."}
+            {/* Said out loud: what the code did to the trial, and whether the
+                money comes off one bill or every bill. The same sentences the
+                redesign's coupon slot gives (couponEffects). */}
+            {couponEffects(slots).map((line) => (
+              <p key={line} className="text-xs text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
+                {line}
               </p>
-            )}
+            ))}
             {coupon?.clamped && (
               <p className="text-xs text-muted" style={{ fontSize: "0.75rem", lineHeight: 1.5 }}>
                 Discount capped — {money(MIN_CHARGE_CENTS_CLIENT, offer.currency)} is the smallest

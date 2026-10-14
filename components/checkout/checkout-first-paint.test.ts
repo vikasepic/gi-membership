@@ -57,9 +57,9 @@ describe("the payment element is born in the right mode", () => {
   });
 
   it("works the first price out the way Inner will, so the two cannot disagree", () => {
-    // Same expression as Inner's own useState initialiser.
-    expect(offerForm).toContain("const firstPick = chosen >= 0 ? chosen : prices.length === 1 ? 0 : -1");
-    expect(offerForm).toContain("useState<number>(chosen >= 0 ? chosen : prices.length === 1 ? 0 : -1)");
+    // One function for both, since 14 Oct 2026 (startingPick).
+    expect(offerForm).toContain("const firstPick = startingPick(prices, chosen)");
+    expect(offerForm).toContain("useState<number>(startingPick(prices, chosen))");
   });
 
   it("leaves Inner's mode switch exactly as it was", () => {
