@@ -83,6 +83,8 @@ export async function previewOfferCoupon(args: {
       discountCents: number;
       clamped: boolean;
       recurringDiscount: boolean;
+      /** Months a "repeating" code lasts, from today. Null when once or forever. */
+      discountMonths: number | null;
       /**
        * The trial this code grants, replacing the price's own. Null when it
        * says nothing about one; zero when it takes the trial away.
@@ -124,6 +126,7 @@ export async function previewOfferCoupon(args: {
     discountCents: res.coupon.discountCents,
     clamped: res.coupon.clamped,
     recurringDiscount: res.coupon.recurringDiscount,
+    discountMonths: res.coupon.discountMonths,
     trialDays: res.coupon.trialDays,
   };
 }

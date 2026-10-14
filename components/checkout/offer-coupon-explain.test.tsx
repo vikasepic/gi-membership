@@ -107,6 +107,29 @@ describe("arriving from a buy button with no price named", () => {
 });
 
 describe("a code that changes the trial", () => {
+  it("states a discount limited to some months as exactly that, counted from today", async () => {
+    // SMS as it is in Stripe: 100% off, "repeating" for 1 month, 30 days free.
+    // Stripe counts the month from the day the subscription starts, trial
+    // included, so "every payment" or "your first payment" would both promise
+    // more than Stripe will give.
+    preview.mockResolvedValue({
+      ok: true,
+      label: "SMS — 100% off",
+      discountCents: 2900,
+      clamped: false,
+      recurringDiscount: true,
+      discountMonths: 1,
+      trialDays: 30,
+      installments: null,
+    });
+    const el = render([monthly, yearly]);
+    await applyCode(el, "SMS");
+    const text = el.textContent ?? "";
+    expect(text).toContain("30-day free trial instead of 7 days.");
+    expect(text).toContain("$29 off for 1 month from today.");
+    expect(text).not.toContain("every payment");
+  });
+
   it("says at the code what it did to the trial and to the price", async () => {
     preview.mockResolvedValue({
       ok: true,

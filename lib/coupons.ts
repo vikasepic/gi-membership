@@ -159,6 +159,12 @@ export type AppliedCoupon = {
   discountCents: number;
   /** True when this coupon renews with the subscription rather than applying once. */
   recurringDiscount: boolean;
+  /**
+   * How many months a "repeating" coupon lasts, counted by Stripe from the day
+   * the subscription starts (a trial uses part of it). Null when it is once or
+   * forever.
+   */
+  discountMonths: number | null;
   /** Human label for the order summary, e.g. "SAVE20 — 20% off". */
   label: string;
   /**
@@ -326,6 +332,7 @@ export async function resolveCoupon(
       // Anything else keeps discounting later invoices, which the buyer should
       // be told about rather than discovering on their second bill.
       recurringDiscount: c.duration !== "once",
+      discountMonths: c.duration === "repeating" ? (c.duration_in_months ?? null) : null,
       label,
       clamped,
       trialDays,

@@ -189,6 +189,8 @@ function Inner({
         discountCents: number;
         clamped: boolean;
         recurringDiscount: boolean;
+        /** Months a "repeating" code lasts, from today. Null when once or forever. */
+        discountMonths?: number | null;
         /** Replaces the price's own trial. Null when the code says nothing. */
         trialDays: number | null;
       }

@@ -134,6 +134,7 @@ export async function previewOfferCouponAction(
       discountCents: number;
       clamped: boolean;
       recurringDiscount: boolean;
+      discountMonths: number | null;
       trialDays: number | null;
     }
   | { ok: false; error: string }

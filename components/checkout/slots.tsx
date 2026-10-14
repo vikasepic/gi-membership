@@ -92,6 +92,8 @@ export type CheckoutSlotValue = {
     trialDays?: number | null;
     /** Whether the money off repeats on renewals, as Stripe will apply it. */
     recurringDiscount?: boolean;
+    /** Months a "repeating" code lasts, counted by Stripe from today. */
+    discountMonths?: number | null;
   } | null;
   couponInput: string;
   setCouponInput: (v: string) => void;
@@ -651,10 +653,16 @@ export function couponEffects(c: CheckoutSlotValue): string[] {
   const trial = (days ?? base) > 0;
   if (chosen?.billingType === "recurring" && !isPlan(chosen) && code.discountCents > 0) {
     const off = money(code.discountCents, c.product.currency);
+    const months = code.discountMonths;
     out.push(
-      code.recurringDiscount
-        ? `${off} off ${trial ? "every payment after the trial" : "this payment and the renewals after it"}.`
-        : `${off} off your first payment${trial ? " after the trial" : ""}. Renewals are at the full price.`,
+      // A "repeating" code runs for its months from the day the subscription
+      // starts, trial included, so it is stated that way and promises no
+      // particular payment.
+      months
+        ? `${off} off for ${months} month${months === 1 ? "" : "s"} from today.`
+        : code.recurringDiscount
+          ? `${off} off ${trial ? "every payment after the trial" : "this payment and the renewals after it"}.`
+          : `${off} off your first payment${trial ? " after the trial" : ""}. Renewals are at the full price.`,
     );
   }
   return out;
