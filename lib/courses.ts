@@ -169,25 +169,68 @@ export async function setProductCourses(productId: string, courseIds: string[]):
   if (error) throw new Error(`setProductCourses: ${error.message}`);
 }
 
-// Every course a user can reach, via every product they own. A course granted
-// by two owned products appears once.
+export async function coursesForOffer(offerId: string): Promise<Course[]> {
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("offer_courses")
+    .select(`course_id, courses (${COURSE_COLUMNS})`)
+    .eq("offer_id", offerId)
+    .order("sort_order");
+  if (error) throw new Error(`coursesForOffer: ${error.message}`);
+  const rows = (data ?? []) as unknown as { courses: Record<string, unknown> | null }[];
+  return rows.filter((r) => r.courses).map((r) => camelize<Course>(r.courses!));
+}
+
+export async function setOfferCourses(offerId: string, courseIds: string[]): Promise<void> {
+  const db = createServiceClient();
+  const { error: delErr } = await db.from("offer_courses").delete().eq("offer_id", offerId);
+  if (delErr) throw new Error(`setOfferCourses clear: ${delErr.message}`);
+  if (courseIds.length === 0) return;
+  const { error } = await db
+    .from("offer_courses")
+    .insert(courseIds.map((course_id, i) => ({ offer_id: offerId, course_id, sort_order: i })));
+  if (error) throw new Error(`setOfferCourses: ${error.message}`);
+}
+
+/** Ownership statuses under which an offer's courses are open. */
+const LIVE = ["active", "trialing", "past_due"];
+
+// Every course a user can reach: through every product they own, and through
+// every offer they hold live (offer_courses, 0095). A course reached twice
+// appears once.
+//
+// The product path ignores the row's status, as it always has. The offer path
+// does not: refunds and cancellations mark the offer's rows, and its courses
+// go with them.
 export async function coursesForUser(userId: string): Promise<Course[]> {
   const db = createServiceClient();
-  const { data: owns } = await db
+  const { data: owns, error: ownErr } = await db
     .from("ownership")
-    .select("product_id")
-    .eq("user_id", userId)
-    .not("product_id", "is", null);
-  const productIds = (owns ?? []).map((o) => o.product_id as string);
-  if (productIds.length === 0) return [];
+    .select("product_id, offer_id, status")
+    .eq("user_id", userId);
+  if (ownErr) throw new Error(`coursesForUser (ownership): ${ownErr.message}`);
+  const productIds = [...new Set((owns ?? []).filter((o) => o.product_id).map((o) => o.product_id as string))];
+  const offerIds = [
+    ...new Set(
+      (owns ?? []).filter((o) => o.offer_id && LIVE.includes(o.status as string)).map((o) => o.offer_id as string),
+    ),
+  ];
+  if (productIds.length === 0 && offerIds.length === 0) return [];
 
-  const { data, error } = await db
-    .from("product_courses")
-    .select(`course_id, courses (${COURSE_COLUMNS})`)
-    .in("product_id", productIds);
-  if (error) throw new Error(`coursesForUser: ${error.message}`);
+  const [byProduct, byOffer] = await Promise.all([
+    productIds.length
+      ? db.from("product_courses").select(`course_id, courses (${COURSE_COLUMNS})`).in("product_id", productIds)
+      : Promise.resolve({ data: [], error: null }),
+    offerIds.length
+      ? db.from("offer_courses").select(`course_id, courses (${COURSE_COLUMNS})`).in("offer_id", offerIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (byProduct.error) throw new Error(`coursesForUser: ${byProduct.error.message}`);
+  if (byOffer.error) throw new Error(`coursesForUser (offers): ${byOffer.error.message}`);
 
-  const rows = (data ?? []) as unknown as { courses: Record<string, unknown> | null }[];
+  const rows = [...(byProduct.data ?? []), ...(byOffer.data ?? [])] as unknown as {
+    courses: Record<string, unknown> | null;
+  }[];
   const byId = new Map<string, Course>();
   for (const r of rows) {
     if (!r.courses) continue;

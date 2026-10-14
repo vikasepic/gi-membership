@@ -1,4 +1,5 @@
 import "server-only";
+import { setOfferCourses } from "@/lib/courses";
 import { createServiceClient } from "@/lib/supabase/server";
 import { camelize } from "@/lib/case";
 import { getStoreId, hydrateOffer, hydrateProduct, OFFER_COLUMNS, PRODUCT_COLUMNS } from "@/lib/store";
@@ -25,7 +26,7 @@ import type {
 export type OfferOption = {
   id: string;
   name: string;
-  grantType: "product" | "subscription";
+  grantType: GrantType;
   grantAppId: string | null;
   grantEntitlementKey: string | null;
   priceCents: number;
@@ -238,6 +239,8 @@ export type OfferInput = {
   grantEntitlementKey: string | null;
   /** Which channels inside the granted app. See lib/app-channels. */
   grantChannels?: string[];
+  /** Courses this offer gives, in order (offer_courses). Absent leaves them as they are. */
+  courseIds?: string[];
   /** The ways to pay. Never empty — an offer with no price cannot be bought. */
   prices: OfferPrice[];
   currency: string;
@@ -387,6 +390,7 @@ export async function createOffer(input: OfferInput): Promise<string> {
     .single();
   if (error) throw new Error(`createOffer: ${error.message}`);
   await savePrices(data.id as string, input.prices);
+  if (input.courseIds) await setOfferCourses(data.id as string, input.courseIds);
   return data.id as string;
 }
 
@@ -395,6 +399,7 @@ export async function updateOffer(id: string, input: OfferInput): Promise<void> 
   const { error } = await db.from("offers").update(toOfferRow(input, await getStoreId())).eq("id", id);
   if (error) throw new Error(`updateOffer: ${error.message}`);
   await savePrices(id, input.prices);
+  if (input.courseIds) await setOfferCourses(id, input.courseIds);
 }
 
 /** How many people are on each price of this offer, and still paying. */

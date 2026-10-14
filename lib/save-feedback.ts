@@ -45,6 +45,7 @@ export const OFFER_FIELD_TABS: FieldTabs = {
   grantProductId: "grants",
   grantAppId: "grants",
   grantEntitlementKey: "grants",
+  courseIds: "grants",
   billingType: "pricing",
   interval: "pricing",
   trialDays: "pricing",

@@ -181,7 +181,7 @@ type MoreOffer = {
   headline: string | null;
   description: string | null;
   imageUrl: string | null;
-  grantType: "product" | "subscription";
+  grantType: "product" | "subscription" | "course";
   grantAppId: string | null;
   grantProductId: string | null;
   grantChannels: string[] | null;
@@ -238,7 +238,7 @@ export function moreItems(input: {
   const soldByOffer = new Set(offers.map((o) => o.grantProductId).filter(Boolean));
   const fromOffers: MoreItem[] = offers.map((o) => ({
     id: o.id,
-    kind: o.grantType === "product" ? "course" : "app",
+    kind: o.grantType === "subscription" ? "app" : "course",
     name: o.name,
     imageUrl: o.imageUrl,
     priceLine: offerPriceLine(o),

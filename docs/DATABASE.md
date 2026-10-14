@@ -1451,6 +1451,25 @@ that has one, kept by the `orders_set_user_country` trigger on every insert or
 change of `buyer_country`. An older order filled in later never overwrites a
 newer one's country.
 
+### Offers grant courses
+
+Migration 0095 (14 Oct 2026) lets an offer give courses directly, without a
+product in between. `offer_courses` names them, in order. Any offer may carry
+courses; `offers.grant_type = 'course'` is an offer that gives nothing else.
+Such an offer's `ownership` row names only the offer (`ownership_check` now
+accepts `offer_id` alone, one row per member and offer).
+
+`coursesForUser` (`lib/courses.ts`) opens a course through a product the member
+owns (any status, as before) or through an offer they hold live (`active`,
+`trialing`, `past_due`). Refunds and cancellations mark the offer's rows, so its
+courses go with them. Spec: `docs/superpowers/specs/2026-10-14-offer-courses-design.md`.
+
+| Table | Column |
+|---|---|
+| `offer_courses` | `offer_id`, `course_id` (both `ON DELETE CASCADE`), `sort_order`; PK `(offer_id, course_id)` |
+| `offers` | `grant_type` CHECK now `product`, `subscription` or `course` |
+| `ownership` | CHECK `product_id`, `app_id` or `offer_id` not null; unique `(store_id, user_id, offer_id)` where no product and no app |
+
 ---
 
 ## Appendix: the raw DDL

@@ -70,7 +70,7 @@ export default async function AdminOffersPage() {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-muted">
-                  {o.grantType === "subscription" ? "App subscription" : "Product"}
+                  {o.grantType === "subscription" ? "App subscription" : o.grantType === "course" ? "Courses" : "Product"}
                 </td>
                 {/* Every way to pay, not just the headline one. An offer sold
                     monthly AND yearly read here as if it had one price, which

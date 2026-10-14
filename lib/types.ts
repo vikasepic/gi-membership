@@ -85,7 +85,8 @@ export type Product = {
   checkoutBullets: string[];
 };
 
-export type GrantType = "product" | "subscription";
+/** What an offer gives: a product, an app, or courses alone (offer_courses, 0095). */
+export type GrantType = "product" | "subscription" | "course";
 export type BillingType = "one_time" | "recurring";
 export type Interval = "day" | "week" | "month" | "year";
 

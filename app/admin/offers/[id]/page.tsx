@@ -3,6 +3,7 @@ import { signPreviewToken } from "@/lib/preview-token";
 import { notFound } from "next/navigation";
 import { OfferForm } from "@/components/admin/offer-form";
 import { getOfferById, listProductOptions, listAppOptions, listOfferOptions, priceUsage } from "@/lib/admin";
+import { listCourses, coursesForOffer } from "@/lib/courses";
 import { hasCustomOtoPage } from "@/components/oto/registry";
 import { hasPageSections } from "@/lib/pages";
 import { ViewLive } from "@/components/admin/view-live";
@@ -21,7 +22,7 @@ export default async function EditOfferPage({
   const { id } = await params;
   const { warning } = await searchParams;
   const warnings = warning ? (Array.isArray(warning) ? warning : [warning]) : [];
-  const [offer, products, apps, offers, usage] = await Promise.all([
+  const [offer, products, apps, offers, usage, courses, given] = await Promise.all([
     getOfferById(id),
     listProductOptions(),
     listAppOptions(),
@@ -31,6 +32,8 @@ export default async function EditOfferPage({
     // never repriced or removed — their subscription holds its own price, so
     // changing it here would only mislead whoever changed it.
     priceUsage(id),
+    listCourses(),
+    coursesForOffer(id),
   ]);
   if (!offer) notFound();
   // The real sender and access link, so the post-purchase preview shows what buyers get.
@@ -143,6 +146,8 @@ export default async function EditOfferPage({
         offers={offers}
         usage={usage}
         homeSteps={storeSettings.homeSteps}
+        courses={courses}
+        courseIds={given.map((c) => c.id)}
       />
 
       {/* Beside the destructive control at the foot of the form above, not

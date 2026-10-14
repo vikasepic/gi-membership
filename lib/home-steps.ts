@@ -18,7 +18,7 @@ type StepOffer = {
   headline: string | null;
   description: string | null;
   imageUrl: string | null;
-  grantType: "product" | "subscription";
+  grantType: "product" | "subscription" | "course";
   grantProductId: string | null;
   billingType: "one_time" | "recurring";
   interval: string | null;
@@ -87,7 +87,7 @@ export function buildHomeSteps(input: {
     o.homeStep,
     {
       key: `offer:${o.id}`,
-      kind: o.grantType === "product" ? "Guide" : "App",
+      kind: o.grantType === "subscription" ? "App" : o.grantType === "course" ? "Course" : "Guide",
       name: o.name,
       line: offerBlurb(o),
       imageUrl: o.imageUrl,

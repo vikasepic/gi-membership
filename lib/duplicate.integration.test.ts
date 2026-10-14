@@ -239,6 +239,34 @@ describe.skipIf(!canRun)("duplicating an offer (integration)", () => {
     expect(warnings[0]).toMatch(/Custom/);
   });
 
+  it("gives the copy the same courses, so it delivers what the original does", async () => {
+    // offer_courses (0095) is a join table, like a product's, so nothing that
+    // copies columns finds it.
+    const db = createServiceClient();
+    const src = await original();
+    const courseId = crypto.randomUUID();
+    const { error: ce } = await db.from("courses").insert({
+      id: courseId,
+      store_id: await getStoreId(),
+      slug: `zz-dup-offer-course-${courseId}`,
+      title: "zz course",
+      status: "published",
+    });
+    if (ce) throw new Error(`fixture course: ${ce.message}`);
+    try {
+      const { error: le } = await db.from("offer_courses").insert({ offer_id: src.id, course_id: courseId, sort_order: 2 });
+      if (le) throw new Error(`fixture link: ${le.message}`);
+      const { id: copyId, warnings } = await duplicateOffer(src.id, `zz-dup-copy-${crypto.randomUUID()}`);
+      made.push(copyId);
+      expect(warnings).toEqual([]);
+      const { data: links } = await db.from("offer_courses").select("course_id, sort_order").eq("offer_id", copyId);
+      expect(links).toEqual([{ course_id: courseId, sort_order: 2 }]);
+    } finally {
+      await db.from("offer_courses").delete().eq("course_id", courseId);
+      await db.from("courses").delete().eq("id", courseId);
+    }
+  });
+
   it("refuses a key already in use, before writing anything", async () => {
     const src = await original();
     const db = createServiceClient();

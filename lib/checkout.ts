@@ -175,9 +175,11 @@ export async function ownershipFor(userId: string): Promise<Ownership> {
   if (error) throw new Error(`ownershipFor: ${error.message}`);
   const productIds = new Set<string>();
   const appIds = new Set<string>();
+  const heldOfferIds = new Set<string>();
   for (const row of data ?? []) {
     if (row.product_id) productIds.add(row.product_id as string);
     if (row.app_id) appIds.add(row.app_id as string);
+    if (row.offer_id) heldOfferIds.add(row.offer_id as string);
   }
 
   // Which CHANNELS of each app they hold, resolved through the offer that
@@ -206,7 +208,7 @@ export async function ownershipFor(userId: string): Promise<Ownership> {
       appChannels.set(row.app_id as string, held);
     }
   }
-  return { productIds, appIds, appChannels };
+  return { productIds, appIds, appChannels, offerIds: heldOfferIds };
 }
 
 /** The attribution visitor captured on landing, if there is one. */
@@ -1725,6 +1727,33 @@ export async function grantOfferOwnership(
     // carries its own buyer tag, and buying them on an offer page used to
     // apply neither.
     await tagAccessGranted({ userId, offerId: offer.id, productId: offer.grantProductId, status: "active" });
+  } else if (offer.grantType === "course") {
+    // Courses alone (0095): the row names the offer and nothing else, and the
+    // courses are read through offer_courses. A trial or a subscription keeps
+    // its status and id here, so subscription sync and refunds move it.
+    const status = trialing ? "trialing" : "active";
+    const { error } = await db.from("ownership").insert({
+      store_id: storeId,
+      user_id: userId,
+      offer_id: offer.id,
+      source,
+      stripe_subscription_id: subscriptionId,
+      status,
+    });
+    if (error?.code === "23505") {
+      const { error: reviveErr } = await db
+        .from("ownership")
+        .update({ source, stripe_subscription_id: subscriptionId, status, updated_at: new Date().toISOString() })
+        .eq("store_id", storeId)
+        .eq("user_id", userId)
+        .eq("offer_id", offer.id)
+        .is("product_id", null)
+        .is("app_id", null);
+      if (reviveErr) throw new Error(`grant offer (courses revive): ${reviveErr.message}`);
+    } else if (error) {
+      throw new Error(`grant offer (courses): ${error.message}`);
+    }
+    await tagAccessGranted({ userId, offerId: offer.id, status });
   }
 }
 

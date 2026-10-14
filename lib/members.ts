@@ -432,19 +432,25 @@ export async function accessForMember(userId: string): Promise<AccessRow[]> {
 
   const productIds = rows.map((r) => r.product_id).filter(Boolean) as string[];
   const appIds = rows.map((r) => r.app_id).filter(Boolean) as string[];
-  const [{ data: products }, { data: apps }] = await Promise.all([
+  // A courses-only offer's row names the offer and nothing else (0095).
+  const courseOfferIds = rows.filter((r) => !r.product_id && !r.app_id && r.offer_id).map((r) => r.offer_id as string);
+  const [{ data: products }, { data: apps }, { data: offers }] = await Promise.all([
     productIds.length ? db.from("products").select("id, title").in("id", productIds) : { data: [] },
     appIds.length ? db.from("apps").select("id, name").in("id", appIds) : { data: [] },
+    courseOfferIds.length ? db.from("offers").select("id, name").in("id", courseOfferIds) : { data: [] },
   ]);
   const pName = new Map((products ?? []).map((p) => [p.id as string, p.title as string]));
   const aName = new Map((apps ?? []).map((a) => [a.id as string, a.name as string]));
+  const oName = new Map((offers ?? []).map((o) => [o.id as string, o.name as string]));
 
   return rows.map((r) => ({
     id: r.id as string,
     kind: r.app_id ? "app" : "product",
     label: r.app_id
       ? (aName.get(r.app_id as string) ?? "App")
-      : (pName.get(r.product_id as string) ?? "Product"),
+      : r.product_id
+        ? (pName.get(r.product_id as string) ?? "Product")
+        : `${oName.get(r.offer_id as string) ?? "Offer"} (courses)`,
     status: r.status as string,
     granted: r.source === "grant",
     // An offer grant is recorded with the offer that granted it (0069); a bare

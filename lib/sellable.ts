@@ -31,7 +31,8 @@ export type Sellable = {
   /** What owning it grants. A product grants itself; an offer says. */
   grant:
     | { type: "product"; productId: string }
-    | { type: "app"; appId: string; entitlementKey: string | null };
+    | { type: "app"; appId: string; entitlementKey: string | null }
+    | { type: "courses"; offerId: string };
   /** The Stripe Product recurring prices bill against, once resolved. */
   stripeProductIdTest: string | null;
   stripeProductIdLive: string | null;
@@ -56,7 +57,9 @@ export function sellableFromOffer(offer: Offer): Sellable {
     grant:
       offer.grantType === "subscription" && offer.grantAppId
         ? { type: "app", appId: offer.grantAppId, entitlementKey: offer.grantEntitlementKey ?? null }
-        : { type: "product", productId: offer.grantProductId as string },
+        : offer.grantType === "course"
+          ? { type: "courses", offerId: offer.id }
+          : { type: "product", productId: offer.grantProductId as string },
     stripeProductIdTest: offer.stripeProductIdTest ?? null,
     stripeProductIdLive: offer.stripeProductIdLive ?? null,
     headline: offer.headline,

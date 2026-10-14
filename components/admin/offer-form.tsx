@@ -12,6 +12,7 @@ import { OFFER_FIELD_TABS, summarise, tabToShow, tabsWithErrors } from "@/lib/sa
 import type { Offer } from "@/lib/types";
 import type { OfferPrice } from "@/lib/offer-prices";
 import type { ProductOption, AppOption, OfferOption } from "@/lib/admin";
+import type { Course } from "@/lib/courses";
 import { money } from "@/lib/money";
 import { channelLabel } from "@/lib/app-channels";
 import { ImageField } from "@/components/admin/image-field";
@@ -28,6 +29,8 @@ export function OfferForm({
   defaultCurrency = "usd",
   usage = {},
   homeSteps = [],
+  courses = [],
+  courseIds: savedCourseIds = [],
 }: {
   offer?: Offer;
   products: ProductOption[];
@@ -40,6 +43,10 @@ export function OfferForm({
   usage?: PriceUsage;
   /** The home page steps (Settings › Home steps), for the step this offer sits under. */
   homeSteps?: HomeStep[];
+  /** Every course, for the Courses checklist. */
+  courses?: Pick<Course, "id" | "title" | "status">[];
+  /** The courses this offer gives now (offer_courses), in order. */
+  courseIds?: string[];
 }) {
   const [state, action, pending] = useActionState<SaveState, FormData>(saveOffer, {});
   const sections = sectionsToForm(offer?.otoSections as never);
@@ -61,6 +68,11 @@ export function OfferForm({
   const appChannels = grantedApp?.channels ?? [];
   const [clientErr, setClientErr] = useState<Record<string, string>>({});
   const [attempt, setAttempt] = useState(0);
+  const [courseIds, setCourseIds] = useState<string[]>(savedCourseIds);
+  const toggleCourse = (id: string) => {
+    setCourseIds((cur) => (cur.includes(id) ? cur.filter((c) => c !== id) : [...cur, id]));
+    setDirty(true);
+  };
 
   // Every required field, checked here rather than by the browser.
   //
@@ -223,12 +235,13 @@ export function OfferForm({
       </TabPanel>
 
       <TabPanel tab="grants">
-      <Section title="What the buyer gets" hint="Either a product they own outright, or access to a connected app.">
+      <Section title="What the buyer gets" hint="A product they own outright, access to a connected app, or courses on their own. Any of them can include courses too.">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
           <Field label="Grant type" required>
             <select name="grantType" defaultValue={offer?.grantType ?? "product"} className={input}>
               <option value="product">Product (one-off)</option>
               <option value="subscription">App subscription</option>
+              <option value="course">Courses only</option>
             </select>
           </Field>
           <Field label="Product" hint="if grant = product">
@@ -299,6 +312,42 @@ export function OfferForm({
               ))}
             </div>
           </Field>
+        )}
+      </Section>
+
+      {/* Courses, on any grant type (offer_courses, 0095). Held in state and
+          posted as hidden inputs, the same as a product's: a checkbox posts
+          nothing when unticked, so clearing the last one would never save. */}
+      <Section
+        title="Courses"
+        hint="Courses the buyer can open in their library. Tick several to give several. Needed for Courses only; optional alongside a product or an app."
+      >
+        {courseIds.map((id) => (
+          <input key={id} type="hidden" name="courseIds" value={id} />
+        ))}
+        {courses.length === 0 ? (
+          <p className="text-sm text-muted">No courses yet. Create one under Courses, then come back to add it.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {courses.map((c) => (
+              <div key={c.id} className="flex items-center gap-3 rounded-xl border border-border px-4 py-3 text-sm">
+                <label className="flex flex-1 cursor-pointer items-center gap-3">
+                  <input
+                    type="checkbox"
+                    data-course={c.id}
+                    checked={courseIds.includes(c.id)}
+                    onChange={() => toggleCourse(c.id)}
+                    className="size-4 accent-[var(--primary)]"
+                  />
+                  <span className="flex-1">{c.title}</span>
+                </label>
+                <span className="text-xs text-muted">{c.status === "published" ? "Published" : "Draft, hidden from buyers"}</span>
+                <a href={`/admin/courses/${c.id}`} className="text-xs text-primary hover:underline">
+                  Edit
+                </a>
+              </div>
+            ))}
+          </div>
         )}
       </Section>
 

@@ -28,7 +28,10 @@ const schema = z
     // contain, and the looser one would win wherever it was used.
     key: z.string().trim().min(1, "Key required").regex(OFFER_KEY, "lowercase, numbers, hyphens only"),
     name: z.string().trim().min(1, "Name required"),
-    grantType: z.enum(["product", "subscription"]),
+    grantType: z.enum(["product", "subscription", "course"]),
+    // The courses this offer gives (offer_courses, 0095). Any grant type may
+    // carry them; a courses-only offer must have at least one.
+    courseIds: z.array(uuidish).default([]),
     grantProductId: z.preprocess(emptyToNull, uuidish.nullable()),
     grantAppId: z.preprocess(emptyToNull, uuidish.nullable()),
     grantEntitlementKey: z.preprocess(emptyToNull, z.string().nullable()),
@@ -140,6 +143,10 @@ const schema = z
   .refine((v) => v.grantType !== "subscription" || v.grantAppId, {
     message: "Pick the app this subscription grants",
     path: ["grantAppId"],
+  })
+  .refine((v) => v.grantType !== "course" || v.courseIds.length > 0, {
+    message: "Tick at least one course, or the buyer gets nothing",
+    path: ["courseIds"],
   });
 // The recurring-needs-an-interval rule moved onto each price, where the
 // billing type now lives — see the `prices` schema above.
@@ -158,6 +165,8 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
   const parsed = schema.safeParse({
     ...Object.fromEntries(formData),
     grantChannels: formData.getAll("grantChannels"),
+    // A checkbox list too: every ticked course posts its own entry.
+    courseIds: formData.getAll("courseIds"),
   });
   if (!parsed.success) {
     // Prefix each problem with the field it came from. A bare "Invalid input"
@@ -232,6 +241,7 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     grantAppId: v.grantAppId,
     grantEntitlementKey: v.grantEntitlementKey,
     grantChannels: v.grantChannels,
+    courseIds: [...new Set(v.courseIds)],
     prices: v.prices,
     currency: v.currency,
     headline: v.headline,

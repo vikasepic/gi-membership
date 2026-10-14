@@ -191,17 +191,20 @@ async function duplicate(kind: Kind, id: string, key: string): Promise<Duplicate
   // not on the row, so nothing above copies it and the copy would grant an
   // empty library: the buyer pays and receives nothing. Shared, not deep
   // copied — the copy names the same courses.
-  if (kind.table === "products") {
+  // An offer names courses the same way since 0095 (offer_courses).
+  {
+    const [joinTable, ownerColumn] =
+      kind.table === "products" ? ["product_courses", "product_id"] : ["offer_courses", "offer_id"];
     await attempt("The courses were not attached to the copy", async () => {
       const { data: links, error } = await db
-        .from("product_courses")
+        .from(joinTable)
         .select("course_id, sort_order")
-        .eq("product_id", id);
+        .eq(ownerColumn, id);
       if (error) throw new Error(error.message);
       if (!links || links.length === 0) return;
       const { error: insErr } = await db
-        .from("product_courses")
-        .insert(links.map((l) => ({ ...l, product_id: newId })));
+        .from(joinTable)
+        .insert(links.map((l) => ({ ...l, [ownerColumn]: newId })));
       if (insErr) throw new Error(insErr.message);
     });
   }

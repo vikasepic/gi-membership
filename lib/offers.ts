@@ -16,10 +16,13 @@ export type Ownership = {
    * app-id rule still answers.
    */
   appChannels: Map<string, Set<string>>;
+  /** Offers held live. Decides a courses-only offer, which has no product or app to compare. */
+  offerIds?: Set<string>;
 };
 
 type GrantTarget = {
-  grantType: "product" | "subscription";
+  id?: string;
+  grantType: "product" | "subscription" | "course";
   grantProductId: string | null;
   grantAppId: string | null;
   /** What this offer unlocks inside the app. Absent/empty = the whole app. */
@@ -43,6 +46,8 @@ type GrantTarget = {
  *   to sell them the parts again.
  */
 export function isOfferEligible(offer: GrantTarget, owned: Ownership): boolean {
+  // Courses alone: sold unless this very offer is already held.
+  if (offer.grantType === "course") return !!offer.id && !owned.offerIds?.has(offer.id);
   if (offer.grantType === "product") {
     if (!offer.grantProductId) return false; // misconfigured — skip
     return !owned.productIds.has(offer.grantProductId);
