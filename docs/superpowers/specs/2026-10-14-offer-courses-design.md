@@ -22,7 +22,7 @@ An offer can give any number of courses directly, without a product in between.
 
 ## Access
 
-A member reaches a course when they own a product that includes it (unchanged)
+A member reaches a course when they own a product that includes it
 **or** hold a live (`active`, `trialing`, `past_due`) ownership row for an offer
 that includes it. `coursesForUser` answers both; the library, course and lesson
 pages, media, progress and the admin member page all read it.
@@ -30,7 +30,9 @@ pages, media, progress and the admin member page all read it.
 Refunds and cancellations already mark rows by `offer_id` or subscription, so
 an offer's courses go when the offer does.
 
-Not changed: product-granted courses still ignore the row's status.
+Product-granted courses follow the same rule since 14 Oct 2026 (the owner
+asked): a refunded or cancelled product row no longer opens its courses. A
+paid-off payment plan is set back to `active`, so it keeps them.
 
 ## Buying
 

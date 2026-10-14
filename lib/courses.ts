@@ -192,29 +192,25 @@ export async function setOfferCourses(offerId: string, courseIds: string[]): Pro
   if (error) throw new Error(`setOfferCourses: ${error.message}`);
 }
 
-/** Ownership statuses under which an offer's courses are open. */
-const LIVE = ["active", "trialing", "past_due"];
-
 // Every course a user can reach: through every product they own, and through
-// every offer they hold live (offer_courses, 0095). A course reached twice
-// appears once.
+// every offer they hold (offer_courses, 0095). A course reached twice appears
+// once.
 //
-// The product path ignores the row's status, as it always has. The offer path
-// does not: refunds and cancellations mark the offer's rows, and its courses
-// go with them.
+// Only rows that still give access, the store's one rule (hasAccess): a
+// refund or a cancellation marks the row `canceled` and the courses go with
+// it. Before 14 Oct 2026 the product path ignored the status, so a refunded
+// buyer kept every course. A paid-off payment plan is set back to `active`
+// (markPlanPaidOff), so finishing a plan never reads as cancelling it.
 export async function coursesForUser(userId: string): Promise<Course[]> {
   const db = createServiceClient();
   const { data: owns, error: ownErr } = await db
     .from("ownership")
-    .select("product_id, offer_id, status")
-    .eq("user_id", userId);
+    .select("product_id, offer_id")
+    .eq("user_id", userId)
+    .neq("status", "canceled");
   if (ownErr) throw new Error(`coursesForUser (ownership): ${ownErr.message}`);
   const productIds = [...new Set((owns ?? []).filter((o) => o.product_id).map((o) => o.product_id as string))];
-  const offerIds = [
-    ...new Set(
-      (owns ?? []).filter((o) => o.offer_id && LIVE.includes(o.status as string)).map((o) => o.offer_id as string),
-    ),
-  ];
+  const offerIds = [...new Set((owns ?? []).filter((o) => o.offer_id).map((o) => o.offer_id as string))];
   if (productIds.length === 0 && offerIds.length === 0) return [];
 
   const [byProduct, byOffer] = await Promise.all([

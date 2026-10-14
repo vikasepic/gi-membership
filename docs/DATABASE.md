@@ -1460,9 +1460,9 @@ Such an offer's `ownership` row names only the offer (`ownership_check` now
 accepts `offer_id` alone, one row per member and offer).
 
 `coursesForUser` (`lib/courses.ts`) opens a course through a product the member
-owns (any status, as before) or through an offer they hold live (`active`,
-`trialing`, `past_due`). Refunds and cancellations mark the offer's rows, so its
-courses go with them. Spec: `docs/superpowers/specs/2026-10-14-offer-courses-design.md`.
+owns or an offer they hold, counting only rows that are not `canceled` (the
+store's `hasAccess` rule). Refunds and cancellations mark the rows, so the
+courses go with them. Until 14 Oct 2026 the product path ignored the status. Spec: `docs/superpowers/specs/2026-10-14-offer-courses-design.md`.
 
 | Table | Column |
 |---|---|

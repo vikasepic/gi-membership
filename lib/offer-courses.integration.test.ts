@@ -131,6 +131,35 @@ describe.skipIf(!canRun)("courses granted by an offer (integration)", () => {
     const { data: rows } = await db.from("ownership").select("id").eq("user_id", userId);
     expect(rows).toHaveLength(1);
   });
+  it("takes a product's courses away once the product is refunded", async () => {
+    // Until 14 Oct 2026 the product path ignored the row's status, so a
+    // refunded buyer kept every course the product gave.
+    const c = await course();
+    const db = createServiceClient();
+    const productId = crypto.randomUUID();
+    const { error: pe } = await db
+      .from("products")
+      .insert({ id: productId, store_id: storeId, slug: tag(), title: "zz product", price_cents: 2900, currency: "usd", status: "published" });
+    if (pe) throw new Error(`fixture product: ${pe.message}`);
+    try {
+      await db.from("product_courses").insert({ product_id: productId, course_id: c });
+      const { data: row } = await db
+        .from("ownership")
+        .insert({ store_id: storeId, user_id: userId, product_id: productId, source: "purchase", status: "active" })
+        .select("id")
+        .single();
+      expect(await userOwnsCourse(userId, c)).toBe(true);
+      await db.from("ownership").update({ status: "past_due" }).eq("id", row!.id);
+      expect(await userOwnsCourse(userId, c)).toBe(true);
+      await db.from("ownership").update({ status: "canceled" }).eq("id", row!.id);
+      expect(await userOwnsCourse(userId, c)).toBe(false);
+    } finally {
+      await db.from("ownership").delete().eq("user_id", userId);
+      await db.from("product_courses").delete().eq("product_id", productId);
+      await db.from("products").delete().eq("id", productId);
+    }
+  });
+
   it("shows on the member's admin page under the offer's name", async () => {
     const o = await offer("course");
     const db = createServiceClient();
