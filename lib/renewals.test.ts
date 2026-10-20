@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { subscriptionIdOf } from "@/lib/renewals";
+import type Stripe from "stripe";
+import { subscriptionIdOf, paidAtSecondsOf } from "@/lib/renewals";
 
 /**
  * The money that arrives after the checkout.
@@ -104,8 +105,10 @@ describe("what it reports", () => {
   });
 
   it("is dated when the money moved, not when the webhook arrived", () => {
-    // A redelivery days later would otherwise report an old sale as today's.
-    expect(renewals).toContain("occurredAt: invoice.created");
+    // A redelivery days later would otherwise report an old sale as today's,
+    // so this may never become Date.now(). It may not be `created` either:
+    // that is the day the invoice was raised. See "when the money moved".
+    expect(renewals).toContain("occurredAt: paidAtSecondsOf(invoice)");
   });
 
   it("does not gate on the originating order's consent flag", () => {
@@ -221,9 +224,40 @@ describe("an origin without a consent answer", () => {
   });
 });
 
+describe("when the money moved", () => {
+  const SEVEN_DAYS = 7 * 86_400;
+  const now = () => Math.floor(Date.now() / 1000);
+  const invoice = (created: number, paidAt?: number) =>
+    ({ created, ...(paidAt ? { status_transitions: { paid_at: paidAt } } : {}) }) as Stripe.Invoice;
+
+  it("is the payment, not the day the invoice was raised", () => {
+    const raised = 1_759_190_400;
+    const collected = raised + 13 * 86_400;
+    expect(paidAtSecondsOf(invoice(raised, collected))).toBe(collected);
+  });
+
+  it("falls back to the raise date when nothing recorded a payment", () => {
+    expect(paidAtSecondsOf(invoice(1_759_190_400))).toBe(1_759_190_400);
+  });
+
+  /**
+   * The one that cost a sale. Mabelle's Content Engine invoice was raised on
+   * 30 Sep, declined, and was collected on 13 Oct after Stripe's retries.
+   * Reported as a 30 Sep sale it was thirteen days old, and Meta refuses
+   * anything past seven with is_transient false, so it was never retried.
+   */
+  it("keeps a renewal dunned for thirteen days inside Meta's seven-day window", () => {
+    const raised = now() - 13 * 86_400;
+    const collected = now();
+    expect(now() - paidAtSecondsOf(invoice(raised, collected))).toBeLessThan(SEVEN_DAYS);
+    // The value this used to send would have been refused outright.
+    expect(now() - raised).toBeGreaterThan(SEVEN_DAYS);
+  });
+});
+
 describe("a renewal order is dated by the invoice", () => {
   it("uses the paid_at transition, not the time the record was written", () => {
-    expect(renewals).toContain("const paidAt = new Date(((invoice.status_transitions?.paid_at ?? invoice.created)");
+    expect(renewals).toContain("const paidAt = new Date(paidAtSecondsOf(invoice) * 1000).toISOString();");
     expect(renewals).toContain("created_at: paidAt,");
   });
 

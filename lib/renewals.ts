@@ -29,6 +29,26 @@ import { buildRenewalEmail, planNameOf } from "@/lib/renewal-email";
 /** Invoices that are NOT the checkout that has already been reported. */
 const RENEWAL_REASONS = new Set(["subscription_cycle", "subscription_update", "subscription_threshold"]);
 
+/**
+ * When the money actually moved, in unix seconds.
+ *
+ * `created` is when Stripe RAISED the invoice, which is not the same day it
+ * was paid: a card that declines is retried for up to about two weeks, and the
+ * charge lands whenever one of those attempts finally works.
+ *
+ * Both the order's date and the conversion event's timestamp read this, and
+ * they must agree. They did not until 19 Oct 2026: the order used `paid_at`
+ * while the Meta event used `created`, four lines apart. A Content Engine
+ * invoice raised 30 Sep and collected 13 Oct was therefore reported to Meta as
+ * a 30 Sep sale, thirteen days old, and Meta refuses anything over seven days
+ * (`error_subcode` 2804003, `is_transient: false`). Not transient means no
+ * retry, so the sale was never reported at all and nothing failed loudly
+ * enough to notice. Every dunned renewal would have been lost the same way.
+ */
+export function paidAtSecondsOf(invoice: Stripe.Invoice): number {
+  return (invoice.status_transitions?.paid_at ?? invoice.created) || Math.floor(Date.now() / 1000);
+}
+
 export type RenewalResult =
   | { recorded: false; reason: string }
   | { recorded: true; orderId: string; amountCents: number };
@@ -73,7 +93,7 @@ export async function recordRenewal(
 
   // Dated when Stripe took the money, not when this ran. A backfill months
   // later that stamps today puts every renewal on one day.
-  const paidAt = new Date(((invoice.status_transitions?.paid_at ?? invoice.created) || Math.floor(Date.now() / 1000)) * 1000).toISOString();
+  const paidAt = new Date(paidAtSecondsOf(invoice) * 1000).toISOString();
 
   // Who this is, found through the subscription rather than the customer: one
   // Stripe customer can hold several subscriptions, and the renewal belongs to
@@ -221,7 +241,9 @@ export async function recordRenewal(
         valueCents: amountCents,
         currency: (invoice.currency ?? origin.currency) || "usd",
         orderId,
-        occurredAt: invoice.created ?? Math.floor(Date.now() / 1000),
+        // The same instant the order is dated by. Not `created`: see
+        // paidAtSecondsOf for the seven-day refusal that cost.
+        occurredAt: paidAtSecondsOf(invoice),
       });
     }
   } catch (e) {
