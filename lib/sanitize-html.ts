@@ -28,7 +28,16 @@ const INLINE_TAGS = [
 ];
 
 const ATTRIBUTES: sanitize.IOptions["allowedAttributes"] = {
-  "*": ["class", "id", "style", "title", "dir", "lang"],
+  // The four accessibility attributes are here because the markup that needs
+  // them has nowhere else to put it, and page content is re-sanitised on READ
+  // (lib/pages.ts), so anything missing from this list never reaches a reader.
+  // `aria-hidden` for decoration that repeats its neighbour: the Foundations
+  // Weekend hero draws SAT 14 / SUN 15 tiles beside a sentence already giving
+  // the date. `aria-disabled` and `role` because a carousel control that
+  // cannot be a <button> here has to say what it is and when it is spent.
+  // `aria-label` because those controls have an icon and no text. None of them
+  // fetches or runs anything, so none widens what this list guards against.
+  "*": ["class", "id", "style", "title", "dir", "lang", "aria-hidden", "aria-disabled", "aria-label", "role"],
   a: ["href", "target", "rel"],
   img: ["src", "alt", "width", "height", "loading", "title"],
   source: ["srcset", "media", "type"],
