@@ -74,6 +74,19 @@ const fillTokens = (text: string, money?: BlockMoney): string =>
   text.includes("{trial}")
     ? text.replace(/\{trial\}/g, money?.trialLabel ?? "").replace(/\s{2,}/g, " ").trim()
     : text;
+/**
+ * The initials a name is known by, for the circle a slide draws when it has no
+ * photograph. First and last, so a middle name does not earn a third letter and
+ * a one-word name still gets one.
+ */
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "";
+  const first = parts[0]![0] ?? "";
+  const last = parts.length > 1 ? (parts[parts.length - 1]![0] ?? "") : "";
+  return (first + last).toUpperCase();
+}
+
 const num = (v: unknown, fallback: number): number =>
   typeof v === "number" && Number.isFinite(v) ? v : fallback;
 
@@ -1146,6 +1159,7 @@ function Inner({
           // component and the media path is the server's business.
           arrowPrevImage={imageSrc(str(p.arrowPrevImage)) ?? ""}
           arrowNextImage={imageSrc(str(p.arrowNextImage)) ?? ""}
+          arrowPlacement={oneOf(p.arrowPlacement, ["overlay", "below"] as const, "overlay")}
         >
           {list}
         </SlideRail>
@@ -1254,6 +1268,18 @@ function Inner({
                 border: str(p.skin) === "bordered" ? `1px solid ${c.rule}` : undefined,
               }}
             >
+              {/* The result the quote is evidence for, above it and outside
+                  the marks. Drawn only when a slide carries one, so every
+                  slider saved before this field existed renders byte for byte
+                  the markup it rendered then. */}
+              {str(item.result) && (
+                <p
+                  className="m-0 mb-3 text-[0.78rem] font-semibold uppercase tracking-[0.16em]"
+                  style={{ color: c.accent }}
+                >
+                  {str(item.result)}
+                </p>
+              )}
               <p className="m-0" style={type}>
                 <span style={{ whiteSpace: "pre-line" }}>
                   &ldquo;{withLineBreaks(str(item.quote))}&rdquo;
@@ -1267,7 +1293,30 @@ function Inner({
                   picture it never drew. A slide with no photograph falls back
                   to the one-line form, so a half-filled set still reads. */}
               {(str(item.name) || str(item.role)) &&
-                (p.avatars === true && imageSrc(str(item.image)) ? (
+                (p.initials === true && !imageSrc(str(item.image)) && initialsOf(str(item.name)) ? (
+                  <span className="mt-4 flex items-center gap-3">
+                    <span
+                      className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-[0.8rem] font-semibold"
+                      style={{ background: c.accent, color: readableOn(c.accent) }}
+                      aria-hidden="true"
+                    >
+                      {initialsOf(str(item.name))}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[0.85rem] font-semibold" style={nameCss ?? undefined}>
+                        {str(item.name)}
+                      </span>
+                      {str(item.role) && (
+                        <span
+                          className={mute("block text-[0.8rem] opacity-70", roleCss)}
+                          style={roleCss ?? undefined}
+                        >
+                          {str(item.role)}
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                ) : p.avatars === true && imageSrc(str(item.image)) ? (
                   <span className="mt-4 flex items-center gap-3">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img

@@ -390,3 +390,130 @@ describe("the name and the role, once somebody sets them", () => {
     }
   });
 });
+
+/**
+ * The line above the quote.
+ *
+ * A testimonial usually earns its place through the result, not the sentence:
+ * "8 new clients in a few months" is what a skimmer reads, and the quote is
+ * what makes it believable. The block carried the quote, the name and the role
+ * and had nowhere to put that line, so a page needing one had to fold it into
+ * the quote — where it lands inside the quotation marks and reads as something
+ * the person said.
+ *
+ * Absent unless asked for, so every slider already saved renders exactly the
+ * markup it rendered before.
+ */
+describe("the result line", () => {
+  const withResult = { ...slide("I doubled my revenue."), result: "Doubled revenue in 12 months" };
+
+  it("renders the result for a slide that has one", () => {
+    const host = mount({ items: [withResult] });
+    expect(host.textContent).toContain("Doubled revenue in 12 months");
+  });
+
+  it("keeps it outside the quotation marks", () => {
+    const host = mount({ items: [withResult] });
+    // The quote element is the one carrying the marks; the result must not be
+    // inside it, or it reads as part of what the person said.
+    const quote = [...host.querySelectorAll("p")].find((p) => p.textContent?.includes("“"));
+    expect(quote).toBeDefined();
+    expect(quote!.textContent).not.toContain("Doubled revenue in 12 months");
+  });
+
+  it("adds nothing for a slide without one", () => {
+    const plain = renderToStaticMarkup(
+      <Blocks blocks={normalizeBlocks([{ id: "b1", type: "slides", props: { items: [slide("Just a quote.")] } }])} theme={theme} />,
+    );
+    const empty = renderToStaticMarkup(
+      <Blocks blocks={normalizeBlocks([{ id: "b1", type: "slides", props: { items: [{ ...slide("Just a quote."), result: "" }] } }])} theme={theme} />,
+    );
+    expect(empty).toBe(plain);
+  });
+
+  it("is offered as a field on the block", () => {
+    const b = newBlock("slides") as Block;
+    const items = controlsFor(b).content.find((c) => (c as { key?: string }).key === "items") as
+      | { item?: { key: string }[] }
+      | undefined;
+    expect(items?.item?.map((f) => f.key)).toContain("result");
+  });
+});
+
+/**
+ * The circle beside the name when there is no photograph.
+ *
+ * Avatars drew a picture or nothing, so a set with no photographs had to fall
+ * back to the bare line — and a page wanting the initials had to write them in
+ * by hand, keyed by position, which goes wrong the moment a slide is reordered.
+ * They are derived from the name instead, so there is nothing extra to keep in
+ * step.
+ */
+describe("initials", () => {
+  const who = (name: string) => ({ quote: "A quote.", name, role: "A role", image: "" });
+
+  it("stands in for a missing photograph", () => {
+    const host = mount({ items: [who("Patrizia Tammaro-Silva")], initials: true });
+    expect(host.textContent).toContain("PT");
+  });
+
+  it("takes the first and last name, however many there are", () => {
+    const host = mount({ items: [who("Lisa Nichols"), who("Ajit"), who("Mary Jane Watson")], initials: true });
+    const found = [...host.querySelectorAll("span")].map((e) => e.textContent);
+    expect(found).toContain("LN");
+    expect(found).toContain("A");
+    expect(found).toContain("MW");
+  });
+
+  it("draws nothing unless asked for", () => {
+    const host = mount({ items: [who("Lisa Nichols")], avatars: true });
+    expect([...host.querySelectorAll("span")].map((e) => e.textContent)).not.toContain("LN");
+  });
+
+  it("still prefers a real photograph", () => {
+    const host = mount({ items: [{ ...who("Lisa Nichols"), image: "library/x.webp" }], avatars: true, initials: true });
+    expect(host.querySelector("img")).not.toBeNull();
+    expect([...host.querySelectorAll("span")].map((e) => e.textContent)).not.toContain("LN");
+  });
+});
+
+/**
+ * Where the arrows sit.
+ *
+ * They have always been laid over the rail's two edges, which is right for a
+ * strip of cards. A single quote at a time reads better with the controls
+ * gathered under it — arrow, dots, arrow on one row — and that is a placement,
+ * not a redraw: the same two buttons and the same dots.
+ *
+ * "Overlay" stays the default so every slider already saved keeps the markup
+ * it has.
+ */
+describe("arrow placement", () => {
+  const four = [slide("a"), slide("b"), slide("c"), slide("d")];
+
+  it("lays them over the rail by default", () => {
+    const host = mount({ items: four, perView: 1 });
+    const prev = host.querySelector('[aria-label="Previous slides"]')!;
+    expect(prev.className).toContain("absolute");
+  });
+
+  it("sets them on a row with the dots when asked", () => {
+    const host = mount({ items: four, perView: 1, arrowPlacement: "below" });
+    const prev = host.querySelector('[aria-label="Previous slides"]')!;
+    const next = host.querySelector('[aria-label="Next slides"]')!;
+    const dot = host.querySelector('[aria-label^="Go to slide"]')!;
+    expect(prev.className).not.toContain("absolute");
+    // One row: the two arrows and the dots share a parent, and the arrows sit
+    // on either side of them.
+    expect(prev.parentElement).toBe(next.parentElement);
+    expect(dot.parentElement!.parentElement).toBe(prev.parentElement);
+    const kids = [...prev.parentElement!.children];
+    expect(kids.indexOf(prev)).toBeLessThan(kids.indexOf(dot.parentElement!));
+    expect(kids.indexOf(dot.parentElement!)).toBeLessThan(kids.indexOf(next));
+  });
+
+  it("is offered as a control", () => {
+    const b = newBlock("slides") as Block;
+    expect(controlsFor(b).content.some((c) => (c as { key?: string }).key === "arrowPlacement")).toBe(true);
+  });
+});

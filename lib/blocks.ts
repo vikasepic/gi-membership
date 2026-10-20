@@ -579,7 +579,13 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     perView: 1,
     arrows: true,
     dots: true,
+    // Over the rail's edges, which is where they have always been.
+    arrowPlacement: "overlay",
     avatars: false,
+    // Initials start off for the same reason as avatars: a stored slider with
+    // no photographs draws the plain line today, and switching that to a
+    // circle of letters is a change nobody asked for.
+    initials: false,
     // The speaker's name and what they do, and how either one looks. Same
     // shape as the cards block's own spacing settings: null size, empty
     // weight, null colour, and every one meaning "whatever the skin already

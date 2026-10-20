@@ -782,6 +782,11 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         label: "Slides",
         hint: "Only quotes you have permission to publish. Never invented names or results.",
         item: [
+          // The result above the quote. A testimonial usually earns its place
+          // through this line rather than the sentence, and without a slot of
+          // its own it had to be folded into the quote, where it lands inside
+          // the quotation marks and reads as something the person said.
+          { key: "result", label: "Result line", kind: "text" },
           { key: "quote", label: "Quote", kind: "textarea" },
           { key: "name", label: "Name", kind: "text" },
           { key: "role", label: "Role", kind: "text" },
@@ -844,7 +849,21 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         hint: "Replaces the drawn chevron on that side only.",
         when: (b) => b.props.arrows !== false,
       },
+      {
+        kind: "select",
+        key: "arrowPlacement",
+        label: "Arrow position",
+        options: [["overlay", "Over the rail"], ["below", "Under it, beside the dots"]],
+        hint: "Over the rail is where they have always been, and suits a strip of cards. Under it reads better for one quote at a time.",
+        when: (b) => b.props.arrows !== false,
+      },
       { kind: "toggle", key: "dots", label: "Dots" },
+      {
+        kind: "toggle",
+        key: "initials",
+        label: "Initials when there is no photograph",
+        hint: "Draws the speaker's initials in a circle instead. Off leaves a slide with no picture as the plain line it has always been.",
+      },
       {
         kind: "toggle",
         key: "avatars",

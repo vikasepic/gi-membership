@@ -36,6 +36,7 @@ export function SlideRail({
   arrowSize = null,
   arrowPrevImage = "",
   arrowNextImage = "",
+  arrowPlacement = "overlay",
 }: {
   children: React.ReactNode;
   arrows: boolean;
@@ -48,6 +49,11 @@ export function SlideRail({
   ink: string;
   /** The shape of the two arrows. "solid" is the circle they have always been. */
   arrowStyle?: ArrowStyle;
+  /**
+   * Over the rail's edges, or gathered under it beside the dots. "overlay" is
+   * where they have always been and stays the default.
+   */
+  arrowPlacement?: "overlay" | "below";
   /** Empty is the band's accent, which is what they have always been painted in. */
   arrowColor?: string;
   /** Null is the `size-9` they have always carried. */
@@ -121,7 +127,7 @@ export function SlideRail({
     <div className="relative">
       <div ref={wrap}>{children}</div>
 
-      {scrollable && arrows && (
+      {scrollable && arrows && arrowPlacement === "overlay" && (
         <>
           <RailButton
             side="left"
@@ -148,23 +154,50 @@ export function SlideRail({
         </>
       )}
 
-      {scrollable && dots && (
-        <div className="mt-3 flex justify-center gap-1.5">
-          {Array.from({ length: pages }, (_, i) => (
-            <button
-              key={i}
-              type="button"
-              aria-label={`Go to slide ${i + 1} of ${pages}`}
-              aria-current={i === page ? "true" : undefined}
-              onClick={() => toPage(i)}
-              className="h-1.5 rounded-full transition-all"
-              style={{
-                width: i === page ? 20 : 6,
-                background: accent,
-                opacity: i === page ? 1 : 0.3,
-              }}
+      {/* Arrow, dots, arrow on one row under the rail. The dots keep the
+          markup they have; only the row around them is new, and it is only
+          built when something asked for this placement. */}
+      {scrollable && arrowPlacement === "below" && (arrows || dots) && (
+        <div className="mt-3 flex items-center justify-center gap-[18px]">
+          {arrows && (
+            <RailButton
+              side="left"
+              inFlow
+              disabled={ends.start}
+              accent={accent}
+              ink={ink}
+              shape={arrowStyle}
+              color={arrowColor}
+              size={arrowSize}
+              image={arrowPrevImage}
+              onClick={() => go(-1)}
             />
-          ))}
+          )}
+          {dots && (
+            <div className="flex justify-center gap-1.5">
+              <Dots pages={pages} page={page} accent={accent} toPage={toPage} />
+            </div>
+          )}
+          {arrows && (
+            <RailButton
+              side="right"
+              inFlow
+              disabled={ends.end}
+              accent={accent}
+              ink={ink}
+              shape={arrowStyle}
+              color={arrowColor}
+              size={arrowSize}
+              image={arrowNextImage}
+              onClick={() => go(1)}
+            />
+          )}
+        </div>
+      )}
+
+      {scrollable && dots && arrowPlacement === "overlay" && (
+        <div className="mt-3 flex justify-center gap-1.5">
+          <Dots pages={pages} page={page} accent={accent} toPage={toPage} />
         </div>
       )}
     </div>
@@ -178,6 +211,39 @@ const ARROW_BOX = 36;
 /** The chevron inside that box when nobody has said otherwise — `size-4`. */
 const ARROW_GLYPH = 16;
 
+/** The page dots. Markup unchanged from when they lived inline. */
+function Dots({
+  pages,
+  page,
+  accent,
+  toPage,
+}: {
+  pages: number;
+  page: number;
+  accent: string;
+  toPage: (i: number) => void;
+}) {
+  return (
+    <>
+      {Array.from({ length: pages }, (_, i) => (
+        <button
+          key={i}
+          type="button"
+          aria-label={`Go to slide ${i + 1} of ${pages}`}
+          aria-current={i === page ? "true" : undefined}
+          onClick={() => toPage(i)}
+          className="h-1.5 rounded-full transition-all"
+          style={{
+            width: i === page ? 20 : 6,
+            background: accent,
+            opacity: i === page ? 1 : 0.3,
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
 function RailButton({
   side,
   disabled,
@@ -188,6 +254,7 @@ function RailButton({
   size,
   image,
   onClick,
+  inFlow = false,
 }: {
   side: "left" | "right";
   disabled: boolean;
@@ -197,6 +264,8 @@ function RailButton({
   color: string;
   size: number | null;
   image: string;
+  /** In the nav row rather than laid over the rail's edge. */
+  inFlow?: boolean;
   onClick: () => void;
 }) {
   // Painted from the band, so it reads on paper and on navy without a second
@@ -222,9 +291,17 @@ function RailButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={side === "left" ? "Previous slides" : "Next slides"}
-      className={`absolute top-1/2 z-10 grid ${box}-translate-y-1/2 place-items-center ${
-        bare ? "" : "rounded-full shadow-md "
-      }transition-opacity disabled:opacity-0 ${side === "left" ? "-left-2 md:-left-4" : "-right-2 md:-right-4"}`}
+      className={
+        inFlow
+          ? `grid shrink-0 ${box}place-items-center ${
+              bare ? "" : "rounded-full shadow-md "
+            }transition-opacity disabled:opacity-0`
+          : `absolute top-1/2 z-10 grid ${box}-translate-y-1/2 place-items-center ${
+              bare ? "" : "rounded-full shadow-md "
+            }transition-opacity disabled:opacity-0 ${
+              side === "left" ? "-left-2 md:-left-4" : "-right-2 md:-right-4"
+            }`
+      }
       style={{
         ...(bare
           ? { color: tint }
