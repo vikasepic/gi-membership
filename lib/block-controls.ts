@@ -1201,6 +1201,29 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         label: "Scrolling shelf",
         hint: "Side by side in a strip you can swipe, instead of a grid that wraps. Across becomes how many are visible at once.",
       },
+      // Only on a shelf: a grid has nothing to scroll, so an arrow on one
+      // would point at nothing.
+      {
+        kind: "toggle",
+        key: "arrows",
+        label: "Arrows",
+        hint: "A shelf that scrolls has no other way of saying so on a desktop, where the scrollbar is hidden.",
+        when: (b) => b.props.carousel === true,
+      },
+      {
+        kind: "select",
+        key: "arrowStyle",
+        label: "Arrow shape",
+        options: [["solid", "Filled circle"], ["bare", "Chevron only"], ["outline", "Outlined circle"]],
+        when: (b) => b.props.carousel === true && b.props.arrows === true,
+      },
+      {
+        kind: "select",
+        key: "arrowPlacement",
+        label: "Arrow position",
+        options: [["overlay", "Over the shelf"], ["below", "Under it"]],
+        when: (b) => b.props.carousel === true && b.props.arrows === true,
+      },
       {
         kind: "toggle",
         key: "numbered",

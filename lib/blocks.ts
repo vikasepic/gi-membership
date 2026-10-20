@@ -967,6 +967,11 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     // A shelf that scrolls sideways rather than a grid that wraps. False is
     // what every cards block has always been.
     carousel: false,
+    // A shelf draws no arrows until asked, and draws them where the slider
+    // has always drawn its own.
+    arrows: false,
+    arrowStyle: "solid",
+    arrowPlacement: "overlay",
     skin: "boxed",
     numberStyle: "eyebrow",
     title: "",

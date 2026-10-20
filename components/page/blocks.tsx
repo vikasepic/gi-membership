@@ -1586,11 +1586,40 @@ function Inner({
       // here would move every card block on the site.
       const textGap = p.cardTextGap != null ? num(p.cardTextGap, 6) : null;
 
+      /**
+       * A shelf that scrolls says it scrolls.
+       *
+       * The strip could always be swiped and drew nothing to say so, which on a
+       * desktop with no touch and a hidden scrollbar makes the cards past the
+       * third a secret — the same reason the quote slider grew arrows. It is
+       * the same rail, and it is off until a block asks, so every shelf already
+       * saved renders the markup it has.
+       */
+      const shelf = (strip: React.ReactNode) =>
+        carousel && p.arrows === true ? (
+          <SlideRail
+            arrows
+            // A shelf counts its cards, not pages of quotes, so there is
+            // nothing for dots to number that the cards do not already show.
+            dots={false}
+            count={items.length}
+            perView={Math.min(Math.max(num(p.columns, 3), 1), 6)}
+            accent={c.accent}
+            ink={readableOn(c.accent)}
+            arrowStyle={oneOf(p.arrowStyle, ["solid", "bare", "outline"] as const, "solid")}
+            arrowPlacement={oneOf(p.arrowPlacement, ["overlay", "below"] as const, "overlay")}
+          >
+            {strip}
+          </SlideRail>
+        ) : (
+          strip
+        );
+
       // Number before the title, body hanging under the title rather than
       // under the number. That indent is what makes the number read as a label
       // on the card instead of part of the sentence.
       if (inline) {
-        return (
+        return shelf(
           <div className={gridClass} style={grid}>
             {items.map((it, i) => (
               <Card key={i} style={cellAt(i)} beside={beside} className={carousel ? "snap-start" : ""} tile={<IconTile item={it} p={p} colors={c} />}>
@@ -1648,7 +1677,8 @@ function Inner({
             />
           )}
           {subheading}
-        <div className={gridClass} style={grid}>
+        {shelf(
+          <div className={gridClass} style={grid}>
           {items.map((it, i) => (
             <Card key={i} style={cellAt(i)} beside={beside} className={carousel ? "snap-start" : ""} tile={<IconTile item={it} p={p} colors={c} />}>
               {numbered &&
@@ -1701,7 +1731,8 @@ function Inner({
               )}
             </Card>
           ))}
-        </div>
+          </div>
+        )}
         </>
       );
     }
