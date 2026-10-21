@@ -889,11 +889,16 @@ and puts the reason in `messages`:
      session for this dataset. These events were received and processed
      normally, but will not appear in Test Events."
 
-"Processed normally" means live: into reporting, into optimisation, and into
-every custom conversion whose rule the payload matches. Three $4,500 "test"
-purchases entered the live CoachAjit pixel this way, $13,500 of revenue that
-does not exist, on a dataset the ad campaigns optimise against. Pixel events
-cannot be deleted.
+What "processed normally" covers is narrower than it sounds, and worth stating
+exactly, because the first version of this lesson overclaimed. What IS proven:
+the dataset counts them. Three $4,500 "test" purchases went into the live
+CoachAjit pixel this way and `ads_get_dataset_stats` shows all three in their
+hour. Pixel events cannot be deleted, so assume they are real and tell whoever
+reads the numbers.
+
+What is NOT proven is that they reach reporting or optimisation. Do not infer
+it from a custom conversion either way — see the next lesson, where six events
+with no test code at all failed to move one.
 
 `scripts/send-test-purchase.ts` now reads `messages`, says so loudly and stops
 the run. Open the Test Events tab, copy the code it shows *now*, and keep the
@@ -902,6 +907,41 @@ tab open for the whole run.
 Also, on that script: this package has no `"type": "module"`, so tsx compiles
 it as CJS, where a top-level `await` is a transform error before any line
 runs. Any script under `scripts/` that awaits must wrap it in a function.
+
+## A new custom conversion is not proof that an event arrived (21 Oct 2026)
+
+The ads team created "90 Day AI Team Build Sale" on 20 Oct — rule
+`event = Purchase AND content_name contains "90 Day AI Team Build"` — and it
+read Inactive. Chasing that number cost most of a day and sent nine events
+into a live pixel for nothing.
+
+What the rule could never do was show the SEVEN real sales of 18 Oct. Meta
+custom conversions are not retroactive; a rule created two days later starts
+from zero whatever is already in the dataset. Those sales were visible the
+whole time under the custom EVENT `90 Day AI Team Build Sale`, with their real
+dates, because `trackOfferSale` sends the funnel's named event beside
+Purchase. Point an ads team at the custom event for history; a custom
+conversion only ever answers "from now on".
+
+Then the conversion stayed Inactive through events that should have matched:
+three Purchases with a stale test code (20 Oct), and six more with no test
+code at all (21 Oct) — three `Purchase` carrying
+`custom_data.content_name: "90 Day AI Team Build"` plus three of the named
+custom event. All six returned `events_received: 1` with an empty `messages`,
+and `ads_get_dataset_stats` lists them in their hour. The payload was dumped
+through `buildMetaEvent` and compared field by field against
+`Micro-Product Sale V2`, whose rule has the identical shape and fires
+normally. Our side is correct; `last_fired_time` stayed null regardless.
+
+Rules, both learned the expensive way:
+
+- An event's arrival is proven by `ads_get_dataset_stats` for its hour, never
+  by a custom conversion's `last_fired_time`. The dataset is the receipt; the
+  conversion is a view over it that can lag, or not populate for a rule that
+  has never matched.
+- Never send a second round of events to test the same hypothesis. The first
+  round already proved delivery. Everything after that is phantom conversions
+  on a dataset the campaigns optimise against, and none of it can be undone.
 
 ## A rail scrolled nothing because it asked for the wrong tag (21 Oct 2026)
 
