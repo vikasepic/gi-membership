@@ -63,9 +63,21 @@ export function SlideRail({
   arrowNextImage?: string;
 }) {
   const wrap = useRef<HTMLDivElement>(null);
-  // The scrolling element is the list passed in as children, not this wrapper.
+  // The scrolling element is the strip passed in as children, not this wrapper.
   // Holding a ref to the wrapper and scrolling THAT moves nothing, silently.
-  const scroller = () => wrap.current?.querySelector<HTMLElement>("ul") ?? null;
+  //
+  // It is asked for by the class that makes it scroll, not by tag name. The
+  // quote slider passes a <ul>; a cards shelf passes a <div>, so asking for
+  // "ul" found nothing there — `go()` returned early on every arrow press and
+  // `measure()` never ran, which is also why Previous stayed disabled for
+  // good. Both strips carry `overflow-x-auto`, and both are the first child.
+  const scroller = useCallback((): HTMLElement | null => {
+    const w = wrap.current;
+    if (!w) return null;
+    const first = w.firstElementChild as HTMLElement | null;
+    if (first && String(first.className).includes("overflow-x-auto")) return first;
+    return w.querySelector<HTMLElement>(".overflow-x-auto") ?? w.querySelector<HTMLElement>("ul");
+  }, []);
   const [page, setPage] = useState(0);
   const [ends, setEnds] = useState({ start: true, end: false });
   // Nothing is drawn until this mounts, so a page with JavaScript off looks
@@ -75,19 +87,19 @@ export function SlideRail({
   const pages = Math.max(1, Math.ceil(count / Math.max(1, perView)));
 
   const measure = useCallback(() => {
-    const el = wrap.current?.querySelector<HTMLElement>("ul");
+    const el = scroller();
     if (!el) return;
     const max = el.scrollWidth - el.clientWidth;
     setEnds({ start: el.scrollLeft <= 2, end: el.scrollLeft >= max - 2 });
     // Which page is showing, from position rather than from a counter — a
     // counter goes wrong the moment somebody swipes instead of pressing.
     setPage(max <= 0 ? 0 : Math.round((el.scrollLeft / max) * (pages - 1)));
-  }, [pages]);
+  }, [pages, scroller]);
 
   useEffect(() => {
     setReady(true);
     measure();
-    const el = wrap.current?.querySelector<HTMLElement>("ul");
+    const el = scroller();
     if (!el) return;
     el.addEventListener("scroll", measure, { passive: true });
     // Guarded, not assumed. A runtime without ResizeObserver would throw here
@@ -102,7 +114,90 @@ export function SlideRail({
       ro?.disconnect();
       if (!ro) window.removeEventListener("resize", measure);
     };
-  }, [measure]);
+  }, [measure, scroller]);
+
+  /**
+   * Dragging the strip with a mouse or a pen.
+   *
+   * The strip has always been swipeable, but a swipe is a touch gesture: on a
+   * desktop the only way to move it was the arrows, and a shelf that looks
+   * like a carousel is one people grab. Touch is deliberately left alone —
+   * the browser already scrolls this strip natively, with momentum and
+   * snapping no handler here would match, and taking it over makes it worse.
+   *
+   * Snapping is switched off for the length of the drag so the strip follows
+   * the pointer instead of fighting it, and switched back on at the end so it
+   * settles on a slide. The click that follows a real drag is swallowed once,
+   * or letting go over a card would open it.
+   */
+  useEffect(() => {
+    const el = scroller();
+    if (!el) return;
+    let startX = 0;
+    let startLeft = 0;
+    let dragging = false;
+    let moved = false;
+    let snap = "";
+
+    const down = (e: PointerEvent) => {
+      if (e.pointerType === "touch") return;
+      // A button or a link inside a slide is still a control, not a handle.
+      if ((e.target as HTMLElement | null)?.closest("a,button,input,textarea,select")) return;
+      dragging = true;
+      moved = false;
+      startX = e.clientX;
+      startLeft = el.scrollLeft;
+      snap = el.style.scrollSnapType;
+      el.style.scrollSnapType = "none";
+      el.style.cursor = "grabbing";
+      el.style.userSelect = "none";
+      el.setPointerCapture?.(e.pointerId);
+    };
+
+    const move = (e: PointerEvent) => {
+      if (!dragging) return;
+      const dx = e.clientX - startX;
+      // Four pixels of slop, so a click with a shaky hand is still a click.
+      if (!moved && Math.abs(dx) < 4) return;
+      moved = true;
+      e.preventDefault();
+      el.scrollLeft = startLeft - dx;
+    };
+
+    const up = (e: PointerEvent) => {
+      if (!dragging) return;
+      dragging = false;
+      el.style.scrollSnapType = snap;
+      // Back to the handle, not to nothing: clearing it outright dropped the
+      // grab cursor after the first drag and the strip stopped looking draggable.
+      el.style.cursor = "grab";
+      el.style.userSelect = "";
+      el.releasePointerCapture?.(e.pointerId);
+    };
+
+    // Capture, so it is swallowed before the card beneath ever sees it.
+    const click = (e: MouseEvent) => {
+      if (!moved) return;
+      moved = false;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    el.style.cursor = "grab";
+    el.addEventListener("pointerdown", down as EventListener);
+    el.addEventListener("pointermove", move as EventListener);
+    el.addEventListener("pointerup", up as EventListener);
+    el.addEventListener("pointercancel", up as EventListener);
+    el.addEventListener("click", click as EventListener, true);
+    return () => {
+      el.style.cursor = "";
+      el.removeEventListener("pointerdown", down as EventListener);
+      el.removeEventListener("pointermove", move as EventListener);
+      el.removeEventListener("pointerup", up as EventListener);
+      el.removeEventListener("pointercancel", up as EventListener);
+      el.removeEventListener("click", click as EventListener, true);
+    };
+  }, [scroller]);
 
   const go = (dir: -1 | 1) => {
     const el = scroller();
