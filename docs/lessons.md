@@ -875,3 +875,30 @@ post-purchase email failed to save with a 500, which the page reported as
 "Could not reach the server". Tests passed because they built documents by
 hand. `docOf` in `components/admin/email-editor.tsx` round-trips through JSON;
 anything else that sends editor JSON to a server action needs the same.
+
+## A stale Meta test code sends LIVE events (20 Oct 2026)
+
+`test_event_code` only makes an event a test while that exact code has an OPEN
+Test Events session in Events Manager. The code is per-session, not per-pixel,
+so a value copied from a tab somebody closed days ago is already stale.
+
+Meta does not refuse a stale code. It answers HTTP 200, `events_received: 1`,
+and puts the reason in `messages`:
+
+    "test_event_code \"TEST29461\" does not match an active Test Events
+     session for this dataset. These events were received and processed
+     normally, but will not appear in Test Events."
+
+"Processed normally" means live: into reporting, into optimisation, and into
+every custom conversion whose rule the payload matches. Three $4,500 "test"
+purchases entered the live CoachAjit pixel this way, $13,500 of revenue that
+does not exist, on a dataset the ad campaigns optimise against. Pixel events
+cannot be deleted.
+
+`scripts/send-test-purchase.ts` now reads `messages`, says so loudly and stops
+the run. Open the Test Events tab, copy the code it shows *now*, and keep the
+tab open for the whole run.
+
+Also, on that script: this package has no `"type": "module"`, so tsx compiles
+it as CJS, where a top-level `await` is a transform error before any line
+runs. Any script under `scripts/` that awaits must wrap it in a function.
