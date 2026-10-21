@@ -82,7 +82,13 @@ editing screen here, and took several rounds to undo.
 - **Don't rely on margin collapsing.** Components are laid out as flex items,
   so adjacent margins **add** instead of collapsing. A 40px gap between two
   blocks whose paragraph already carries `1.05em` comes out at 58px. Put the
-  gap on one side only.
+  gap on the container rather than on its children, which also ports straight
+  onto the builder's own spacing instead of becoming hand-written CSS.
+- **`:first-child` and `:last-child` do not mean what they mean in your file.**
+  Each paragraph becomes its own component, so every `<p>` is an only child and
+  matches both. A `p:last-child { margin-bottom: 0 }` in a base sheet therefore
+  zeroes the gap under *every* paragraph on the page — it did exactly that to
+  one of ours, and took a round to find.
 - **State grid columns explicitly.** Component grids resolve against their
   container, not the viewport, so a grid sitting in a narrow column collapses
   to one column at any screen width. `repeat(3, minmax(0,1fr))` ports;
@@ -109,6 +115,10 @@ that usually means a built-in component was available and wasn't used.
   that hides elements and depends on itself to bring them back, which is a
   decision to take deliberately on a page that takes money, not to discover
   halfway through a port.
+- **A reveal that hides with CSS must un-hide from the same place.** If a class
+  on `<html>` sets `opacity: 0` but the observer that clears it lives in a
+  separate file, then that file failing to load leaves the page blank rather
+  than unanimated. Add the class only once the observer is attached.
 - Always include the `prefers-reduced-motion` fallback.
 
 ## 5. JavaScript and anything that behaves
