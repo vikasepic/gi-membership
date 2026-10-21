@@ -902,3 +902,50 @@ tab open for the whole run.
 Also, on that script: this package has no `"type": "module"`, so tsx compiles
 it as CJS, where a top-level `await` is a transform error before any line
 runs. Any script under `scripts/` that awaits must wrap it in a function.
+
+## A rail scrolled nothing because it asked for the wrong tag (21 Oct 2026)
+
+`SlideRail` found the strip it scrolls with `querySelector("ul")`. That is
+what the quote slider passes it. A cards shelf passes a `div`, so `scroller()`
+came back null on every shelf: `go()` returned early, no arrow moved anything,
+and `measure()` bailed the same way, which left Previous disabled at both ends
+of the rail. It shipped looking finished — the arrows drew, labelled and
+disabled themselves correctly — and the sessions gallery on the Foundations
+Weekend page sat broken in production until somebody pressed one.
+
+A shared component reached by two callers has to be tested through both. The
+shelf's tests asserted the arrows *rendered*; none pressed one. Rule: when a
+control's whole job is to cause an effect, assert the effect, not the markup.
+`scroller()` now asks for the `overflow-x-auto` class both callers carry.
+
+Dragging was never there at all. The strip was swipeable, and a swipe is a
+touch gesture — on a desktop the arrows were the only way to move something
+that looks exactly like you grab it. Pointer drag is mouse and pen only; touch
+keeps the browser's native momentum and snapping, which no handler here would
+match.
+
+## An `entry` animation range is as long as the element (21 Oct 2026)
+
+Every reveal on the Foundations Weekend page used
+`animation-timeline: view(); animation-range: entry 8% entry 60%`, and the
+page read as having no animation at all. The ranges were correct CSS and
+measurably useless: an `entry` range spans only the ELEMENT's own height, so a
+46px heading revealed over 24px of scroll and a 34px line over 4px. Across 109
+animated elements the median was 52px — less than one wheel notch, so every
+reveal finished before it could be seen.
+
+`cover` spans the viewport PLUS the element, which buys a real distance that
+barely changes with the element's height: at `cover 8% cover 45%` a 46px
+heading takes 354px and a 600px block 559px. The same page then measured a
+median of 365px.
+
+Rule: `entry` is for something that must finish the moment the element is
+fully on screen. Anything meant to be *watched* uses `cover`. And a reveal is
+not verified by reading the CSS — sample the computed opacity at several
+scroll positions and confirm it actually passes through the middle.
+
+Note what this is not: scroll-driven CSS ties progress to the scrollbar, so
+motion stops when scrolling stops. The design it came from used an
+IntersectionObserver and a 0.9s transition on a clock. Matching that needs
+JavaScript that hides elements and depends on itself to bring them back, which
+on a streamed page that takes money is a worse failure than imperfect motion.

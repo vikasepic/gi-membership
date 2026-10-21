@@ -88,6 +88,7 @@ same PR — that is how the next person's Claude avoids your mistake.
 
 | Read this when | File |
 |---|---|
+| Handing a page design to this repo, or porting one | `docs/design-handoff.md` |
 | Adding or changing a built-in app (runs in this codebase) | `docs/builtin-apps.md` |
 | Connecting an external app over the bridge | `docs/connecting-a-new-app.md`, `docs/app-bridge-contract.md` |
 | Products, offers, bumps, upsells, prices | `docs/products-and-offers.md`, `docs/upsell-pages.md` |
