@@ -136,6 +136,14 @@ export async function recordRenewal(
       utm_first: origin.utmFirst,
       utm_last: origin.utmLast,
       referrer: origin.referrer,
+      // The request that bought the subscription. A webhook has none of its
+      // own, and `buyerContextFor` reads these off the row it is handed — so
+      // without them every renewal reached Meta with no client_ip_address and
+      // no client_user_agent, which is most of why Purchase match quality sat
+      // at 6.7 with both keys at 16.7% on 20 Oct 2026.
+      client_ip: origin.clientIp,
+      client_user_agent: origin.userAgent,
+      source_url: origin.sourceUrl,
     })
     .select("id")
     .single();
@@ -322,6 +330,17 @@ type Origin = {
   utmFirst: Record<string, string>;
   utmLast: Record<string, string>;
   referrer: string | null;
+  /**
+   * The request the sale was made from.
+   *
+   * A renewal is written from a webhook, so there is no request of its own and
+   * these are the only true ones its conversion event can carry. Same reason
+   * the day-7 Subscribe in lib/tracking-receipt.ts reads them off the order
+   * that bought the trial.
+   */
+  clientIp: string | null;
+  userAgent: string | null;
+  sourceUrl: string | null;
   productId: string | null;
   offerId: string | null;
   description: string | null;
@@ -356,7 +375,7 @@ async function originOrderFor(subscriptionId: string): Promise<Origin | null> {
   const { data: order } = await db
     .from("orders")
     .select(
-      "store_id, user_id, email, currency, stripe_customer_id, visitor_id, tracking_consent, buyer_country, utm_first, utm_last, referrer",
+      "store_id, user_id, email, currency, stripe_customer_id, visitor_id, tracking_consent, buyer_country, utm_first, utm_last, referrer, client_ip, client_user_agent, source_url",
     )
     .eq("id", item.order_id as string)
     .maybeSingle();
@@ -374,6 +393,9 @@ async function originOrderFor(subscriptionId: string): Promise<Origin | null> {
     utmFirst: (order.utm_first as Record<string, string> | null) ?? {},
     utmLast: (order.utm_last as Record<string, string> | null) ?? {},
     referrer: (order.referrer as string | null) ?? null,
+    clientIp: (order.client_ip as string | null) ?? null,
+    userAgent: (order.client_user_agent as string | null) ?? null,
+    sourceUrl: (order.source_url as string | null) ?? null,
     productId: (item.product_id as string | null) ?? null,
     offerId: (item.offer_id as string | null) ?? null,
     description: (item.description as string | null) ?? null,
@@ -424,6 +446,12 @@ async function originFromOwnership(
     utmFirst: {},
     utmLast: {},
     referrer: null,
+    // An app's own signup never passed through a checkout of ours, so there is
+    // no request to carry. Inventing one is worse than sending none: Meta
+    // matches on the address.
+    clientIp: null,
+    userAgent: null,
+    sourceUrl: null,
     productId: (own.product_id as string | null) ?? null,
     offerId: (own.offer_id as string | null) ?? null,
     description,
