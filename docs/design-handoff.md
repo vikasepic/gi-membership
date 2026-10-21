@@ -2,177 +2,152 @@
 
 For whoever designs a sales or offer page, and for whoever ports it.
 
-Nothing here is about how a page should look. Type, colour, spacing, layout
-and motion are the designer's. This is only about the **technical shape** of
-the files, so that porting a design is mechanical instead of a week of
-translation. Every rule below exists because breaking it cost us real rework
-on the Foundations Weekend page.
+Nothing here is about how a page should look, or about what goes on it in what
+order. Design from the copy, freely. This is only about the **technical shape**
+of the files — the classes, the CSS, the markup, the scripts — so that porting
+a design is mechanical instead of a week of translation.
 
-The short version: a page here is **a fixed list of bands, each holding
-modules**. A design that is already cut that way ports in an afternoon. A
-design built as one standalone HTML document does not — it has to be taken
+Every rule below exists because breaking it cost us real rework.
+
+The one thing worth knowing up front: a page here is assembled in a builder out
+of components, and the people who later edit it do so component by component.
+A design whose HTML is already cut that way ports in an afternoon. A design
+built as one continuous standalone document does not — it has to be taken
 apart first, and that is where the time goes.
 
 ---
 
-## 1. A page is bands, and the bands have fixed names
+## 1. Markup
 
-A sales page is always these twelve, in this order:
-
-    hero · problem · solution · benefits · offer · authority
-    proof · value · guarantee · faq · cta · footer
-
-Three things follow, and they are not negotiable:
-
-- **The order comes from that list, not from the file.** `lib/pages.ts` merges
-  stored rows onto the canonical list. Moving a section in the HTML moves
-  nothing; the position column does not decide either.
-- **A band with any other name is silently dropped.** Not an error — it just
-  never renders.
-- **A band is one background.** If the design changes ground colour, that is a
-  band boundary.
-
-So: split the design into bands and name each one. Where a visual section has
-no obvious name, group by continuous background runs and tell us which band
-you meant. Fewer, larger bands are fine; a band may hold several visual
-sections. Unused bands are left empty.
-
-## 2. Inside a band, everything is a module
-
-The builder has a fixed vocabulary. Design whatever you like, but build
-repeating structures out of these, because these are what an editor can later
-change:
-
-| The thing in the design | The module |
-|---|---|
-| A heading | `heading` |
-| A paragraph or rich text | `text` |
-| A picture | `image` · a video `video` |
-| A call to action | `button` |
-| A ticked or bulleted list | `iconlist` |
-| A grid of titled cards | `cards` |
-| A testimonial / quote carousel | `slides` |
-| Questions and answers | `faq` |
-| A figures strip | `stats` |
-| A dated list down a line | `timeline` |
-| A price panel | `pricecard` · a comparison `pricing` · ways to pay `prices` |
-| A ticking deadline | `countdown` |
-| A bar that follows the page | `stickybar` |
-| Columns | `row` |
-| Space / a rule | `spacer` · `divider` |
-
-`html` exists and is the escape hatch. A page made of `html` blocks cannot be
-edited by anyone in the admin, which is most of the point of the builder, so
-treat it as a last resort and tell us when you have used one.
-
-If a pattern in the design is none of these, say so early. Adding a module is
-a reasonable outcome; discovering mid-port that a design needs one is not.
-
-## 3. Markup conventions that make the port mechanical
-
-These cost the designer nothing and save the most time:
+These cost nothing to follow and save the most time:
 
 - **One visual element, one element.** Don't wrap three unrelated things in a
-  single styled div. Each will become its own block.
-- **Repeating items are siblings with identical structure.** A module's items
-  come from that repetition. Four cards where the third has an extra wrapper
-  means the third cannot be the same module.
-- **Mark what each repeating block is.** A `data-mod="cards"` on the container
+  single styled div. Each becomes its own component.
+- **Repeating items are siblings with identical structure.** A list of cards
+  becomes one component holding four items — but only if the four are built
+  the same way. A third card with an extra wrapper cannot be the same
+  component as the other three.
+- **Mark what each repeating block is.** `data-mod="cards"` on the container
   and `data-field="title"` / `"body"` / `"icon"` on the parts removes all
-  guesswork. If you'd rather not, consistent class names do the same job —
-  what matters is that the same role always carries the same name.
-- **Put a single root class on every component**, and write all of its CSS
-  under that class. See the next section for why.
+  guesswork. If you'd rather not use attributes, consistent class names do the
+  same job — what matters is that the same role always carries the same name.
+- **One root class per component**, with all of its CSS written under that
+  class. See §3 for why this one matters more than it looks.
 
-## 4. CSS
+## 2. Components that already exist
 
-Per-block CSS is scoped: `selector` is rewritten to that block's own class
-(`lib/block-style.ts`). Page-level CSS is **not** scoped — it is injected into
-the document as written. A stylesheet authored for a standalone page once
-restyled the storefront chrome and the admin's editor canvas here, and took
-several rounds to undo.
+Not a structure to design to — just the list of things the builder can already
+draw. Where a pattern in your design is one of these, build it as the ordinary
+version of that pattern and mark it, and we use the built-in. That is what
+makes it editable afterwards by someone who is not a developer.
 
-So:
+| The pattern | What it becomes |
+|---|---|
+| Heading, paragraph, rich text | `heading`, `text` |
+| Picture, video | `image`, `video` |
+| Call to action | `button` |
+| Ticked or bulleted list | `iconlist` |
+| Grid of titled cards | `cards` |
+| Testimonial or quote carousel | `slides` |
+| Questions and answers | `faq` |
+| Figures strip | `stats` |
+| Dated list down a line | `timeline` |
+| Price panel, comparison, ways to pay | `pricecard`, `pricing`, `prices` |
+| Ticking deadline | `countdown` |
+| Bar that follows the page down | `stickybar` |
+| Columns, space, a rule | `row`, `spacer`, `divider` |
 
-- **No bare element selectors.** Not `body`, `html`, `*`, `section`, `h1`-`h3`,
-  `p`, `a`, `img`, `footer`. Everything hangs off a component class.
+Anything that is none of these is fine — it just becomes custom markup, which
+is not editable later. Worth a word when you know you're doing it, so we can
+decide whether it's worth building properly.
+
+## 3. CSS
+
+This is the section that bites hardest.
+
+Component CSS is scoped to that component when we port it. Page-level CSS is
+**not** — it is injected into the document as written. A stylesheet authored
+for a standalone page once restyled the store's own navigation and the admin's
+editing screen here, and took several rounds to undo.
+
+- **No bare element selectors.** Not `body`, `html`, `*`, `section`,
+  `h1`-`h3`, `p`, `a`, `img`, `footer`. Everything hangs off a class.
 - **No generic class names.** `.wrap`, `.nav`, `.center`, `.quiet`, `.grid`,
-  `.card` collide with the app's own.
-- **Never style by utility class.** Modules carry Tailwind classes, so a rule
-  like `.thing .grid { grid-template-columns: … }` also hits the icon tile
-  inside a card, which is a `<span class="grid">`. That exact bug shoved every
-  step icon 26px sideways. Use a child combinator or your own class.
-- **Don't rely on margin collapsing.** Blocks are flex items. Adjacent margins
-  **add** instead of collapsing, so a 40px gap between two blocks whose
-  paragraph already carries `1.05em` comes out at 58px. State the gap you want
-  on one side only.
-- **State grid columns explicitly.** Module grids use container queries, not
-  viewport ones, so a grid inside a narrow column collapses to one column at
-  any screen width. `repeat(3, minmax(0,1fr))` ports; relying on `auto-fit`
-  inside a module does not.
+  `.card`, `.title` all collide with the app's own.
+- **Never style by utility class.** The components carry utility classes of
+  their own, so a rule like `.thing .grid { grid-template-columns: … }` also
+  hits an icon tile that happens to be a `<span class="grid">`. That exact
+  collision shoved every step icon 26px sideways on a page we shipped.
+  Use a child combinator, or your own class.
+- **Don't rely on margin collapsing.** Components are laid out as flex items,
+  so adjacent margins **add** instead of collapsing. A 40px gap between two
+  blocks whose paragraph already carries `1.05em` comes out at 58px. Put the
+  gap on one side only.
+- **State grid columns explicitly.** Component grids resolve against their
+  container, not the viewport, so a grid sitting in a narrow column collapses
+  to one column at any screen width. `repeat(3, minmax(0,1fr))` ports;
+  relying on `auto-fit` inside one does not.
 - **Breakpoints are 767 and 1023.** Mobile ≤767, tablet 768–1023, desktop
   ≥1024. Use these and per-device values map onto the builder's own device
-  settings instead of becoming custom CSS.
-- Inline markup inside a text block is wrapped in a `<span>` by the renderer,
-  so `p > span` targets that wrapper, not yours.
+  settings instead of becoming hand-written CSS.
+- Inline markup inside a text component is wrapped in a `<span>` when
+  rendered, so `p > span` targets that wrapper rather than yours.
 
-Aim for raw CSS under roughly **10% of the page**. Above that, it is usually a
-sign that a module was available and wasn't used.
+Aim to keep hand-written CSS under roughly **10% of the page**. Much above
+that usually means a built-in component was available and wasn't used.
 
-## 5. Motion
+## 4. Motion
 
-There is no built-in reveal setting; motion is CSS we port by hand.
-
-- **Scroll-driven CSS only, by default.** `animation-timeline: view()` and a
-  range. It cannot break the page.
+- **Scroll-driven CSS is the default**: `animation-timeline: view()` and a
+  range. It needs no script and cannot break the page.
 - **Use `cover` ranges, not `entry`.** An `entry` range is only as long as the
-  element itself, so a reveal on a heading finishes in ~24px of scroll and
-  reads as no animation at all. `cover` spans the viewport plus the element.
-  See `docs/lessons.md`, 21 Oct.
-- **If motion must run on a clock** (an IntersectionObserver plus a timed
-  transition, which is what most designs assume), flag it. It needs JavaScript
-  that hides elements and depends on itself to bring them back — a decision to
-  take deliberately on a page that takes money, not to discover during the
-  port.
+  element itself, so a reveal on a heading finishes inside about 24px of
+  scroll and reads as no animation at all. `cover` spans the viewport plus the
+  element. See `docs/lessons.md`, 21 Oct.
+- **If motion has to run on a clock** — an IntersectionObserver plus a timed
+  transition, which is what most designs assume — say so. It needs JavaScript
+  that hides elements and depends on itself to bring them back, which is a
+  decision to take deliberately on a page that takes money, not to discover
+  halfway through a port.
 - Always include the `prefers-reduced-motion` fallback.
 
-## 6. Things that behave
+## 5. JavaScript and anything that behaves
 
 - **A buy button has no URL.** It is an action the page resolves to its own
-  checkout. Don't hard-code a checkout link; mark it as the buy button.
-- **Don't build your own carousel.** `slides` and a `cards` shelf both scroll,
-  with arrows and pointer drag.
-- **Anything else needing JavaScript, flag it.** Don't ship a design whose
-  layout only resolves after a script runs.
+  checkout. Don't hard-code a checkout link — mark which button it is.
+- **Don't build your own carousel.** The built-in ones already scroll, with
+  arrows and pointer drag.
+- **Don't ship a layout that only resolves after a script runs.** If something
+  genuinely needs JavaScript, flag it rather than assuming it will survive.
+- Leave out trailing-slash redirect scripts, analytics, and consent banners.
+  The app has its own and they conflict.
 
-## 7. Assets
+## 6. Assets
 
 - Images are uploaded to the store's library and served from its storage.
   Supply the files; don't inline base64, and don't bundle a photo into
-  something reusable.
+  anything meant to be reused.
 - Inline SVG is fine and ports as-is.
 - Name any font the design needs. Don't assume one is already loaded.
 
-## 8. What a standalone page assumes that this is not
+## 7. What a standalone page assumes that this is not
 
-A design file written as its own web page carries assumptions that are all
-false here. Strip these:
+A file written as its own web page carries assumptions that are all false
+here. Strip these:
 
 - Styling or resetting `html` / `body`, including `scroll-behavior` and
   `overflow-x`.
 - A global reset or normalise.
 - A fixed header assuming it owns the window. The store draws its own header
-  and footer. A page can hide them, but then it owns everything they did —
-  including the policy links, which is a thing to decide, not to forget.
-- Trailing-slash redirect scripts, analytics, consent banners. The app has its
-  own.
+  and footer. A page can hide them, but then it owns everything they did,
+  including the policy links.
 
-## 9. What to hand over
+## 8. What to hand over
 
-- The HTML/CSS, cut into bands and named.
-- A note of anything that is none of the modules in §2.
-- A note of anything needing JavaScript.
+- The HTML and CSS.
+- A note of anything that needs JavaScript.
+- A note of anything that is deliberately custom rather than one of §2.
 - The image files.
-- Desktop, tablet and mobile renderings, so the port can be checked against
-  something. Each band's height at a stated width is the fastest check there
-  is — it catches a wrong column count or a lost margin in seconds.
+- Desktop, tablet and mobile renderings. The height of each section at a
+  stated width is the fastest check there is — it catches a wrong column count
+  or a lost margin in seconds.

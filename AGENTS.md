@@ -64,6 +64,10 @@ same PR — that is how the next person's Claude avoids your mistake.
 - **A test must be able to fail.** `textContent` never contains markup, so
   `not.toContain(">4<")` passes forever; a comment naming an assertion's
   target does not test it; a source-text assertion is not a behaviour test.
+- **A page's bands are a fixed list in `lib/page-sections.ts`**, and render
+  order comes from that list, not the `position` column (`lib/pages.ts`). A
+  stored row whose `section_key` is not in it is silently dropped — not an
+  error, it just never renders.
 - **Saving a page writes a draft.** `page_sections.draft` and `page_settings.draft`
   are what the editor and `?preview=1` read; visitors read the live columns,
   and only `publishPage()` moves one into the other. See `docs/lessons.md`.
