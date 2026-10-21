@@ -949,3 +949,169 @@ motion stops when scrolling stops. The design it came from used an
 IntersectionObserver and a 0.9s transition on a clock. Matching that needs
 JavaScript that hides elements and depends on itself to bring them back, which
 on a streamed page that takes money is a worse failure than imperfect motion.
+
+## `!important` beats an animation, so an animated property never paints (21 Oct 2026)
+
+The Book to Bestseller tracker fills twelve bar segments and lights a rail on
+each week as the curriculum scrolls past. Both were written the obvious way —
+a base colour on the element, keyframes changing that colour — and both stayed
+the base colour forever. The keyframes were right, the timelines resolved, the
+ranges resolved to pixels.
+
+Author `!important` outranks a CSS animation. Every rule here clears a
+module's own styling with `!important`, so `background:#E7E7E7!important` and
+`border-left:2px solid #E0E0E0!important` each beat the thing meant to change
+them.
+
+Worse, dropping the `!important` is not always available: a block skin writes
+`border` as an INLINE style, and an inline declaration beats a plain rule, so
+the border genuinely needs `!important` to clear — which means an animated
+`border-left-color` can never win. The rail moved to `box-shadow`, which the
+skin does not set, so a plain rule holds the base and the animation beats it.
+
+Rule: an animated property cannot carry `!important` on its base. If the
+module writes that property inline, animate a DIFFERENT property the module
+leaves alone rather than fighting the cascade.
+
+## An observer band fires at its far edge, not its middle (21 Oct 2026)
+
+The same tracker had to match a design driven by an IntersectionObserver with
+`rootMargin: '-45% 0px -50% 0px'` — a 46px band just above the middle of the
+viewport. Reproducing it in CSS against the band's midpoint (47.5vh) put every
+reading one week behind over most of the list.
+
+A row becomes current when it *starts* intersecting the band, and the rows are
+far taller than the band is. Scrolling down, a row first touches the band at
+the band's BOTTOM edge — so the trigger is the row's top crossing 50% of the
+viewport, the far edge, and the band's height never enters it. Only when rows
+are shorter than the band does the midpoint come into it, and then several
+rows intersect at once and the observer's answer depends on firing order.
+
+Rule: convert an observer's `rootMargin` by asking which edge the element
+reaches first, then verify against the real thing — run the design's own
+observer beside the CSS over a sweep of scroll positions and diff the two,
+landing exactly on each boundary and a pixel either side.
+
+Two traps while measuring that: `scrollTo` under `scroll-behavior:smooth` only
+STARTS a scroll, so anything read on the next frame is mid-flight and every
+reading is wrong together, which looks like a broken animation rather than a
+broken probe. Pass `behavior:'instant'`. And a backgrounded browser tab stops
+laying out — every rect comes back 0 and a grid's computed
+`grid-template-columns` reads back as the literal `repeat(12, 1fr)` instead of
+pixels. Front the tab before measuring.
+
+## A block of only absolute children is 0 wide (21 Oct 2026)
+
+The tracker's numeral is twelve stacked spans, all `position:absolute` so they
+swap places in one numeral's room. The block holding them had no `width`, so
+it shrank to fit its in-flow content — nothing — came out 0 wide, centred
+itself in the column, and took its `border-top` with it. The tracker's rule
+simply was not drawn, and the numeral sat 220px right of where it belonged.
+
+Nothing in the computed CSS looked wrong; the span's own font, colour and
+offsets were all correct. It showed up by measuring the block's box against
+the design's and getting 0 against 440.
+
+Rule: a block whose children are all absolutely positioned needs an explicit
+`width:100%`. And a block pulled out of flow to sit beside another (here the
+bar, under the numeral's centre) should be `position:absolute` rather than
+pulled up with a negative margin: a negative margin drags the column's end up
+with it, so the sibling overflows its own panel and the panel measures short.
+
+## A height diff cannot see decoration (21 Oct 2026)
+
+Book to Bestseller measured within 4px of the designer's page at 1440, 900 and
+390, every band, and was still visibly missing seven things: the 760px circle
+hung off the hero's top right, the 30px rounding and drop shadow on the hero
+photograph, the same rounding on the guide photograph, the 3px orange rule
+beside the pull-quote, the sheen down each book cover's spine, the button's
+hover gradient and press, and the slow push-in every `.ch-photo` has on hover.
+
+Every one of them is decoration: a pseudo-element, a `border-radius`, a
+`box-shadow`, a `:hover`. None of them occupies a single pixel of layout, so
+matching heights column by column proved nothing about them, and reading the
+band's own CSS did not either — four of the seven live in rules selected on a
+class the port had replaced with a module.
+
+Rule: porting a design is two passes, not one. Match the geometry, then walk
+the source stylesheet for every `::before`, `::after`, `:hover`, `transition`,
+`border-radius` and `box-shadow` and tick each one off against the build. Grep
+the stylesheet for those six strings and work the list — it is short, and it
+is the whole set.
+
+Worth knowing while doing it: a `:hover` that depends on an ancestor needs a
+hook, because the renderer puts a wrapper between a column and each block, so
+`:nth-child` counts wrappers rather than blocks. Give the block a `cssClass`
+and select on that. And the pane's screenshot coordinates are scaled from CSS
+pixels, so a hover aimed with a number read out of `getBoundingClientRect`
+lands somewhere else entirely and the rule looks broken when it is fine.
+
+## A sprite `<use>` reaches the page empty (21 Oct 2026)
+
+Three of Book to Bestseller's four bonuses showed no icon. The copy carried
+them as `<svg><use href="#i-map"/></svg>`, which is how the handoff's HTML
+writes them, and two separate things make that nothing here: there is no
+sprite on the page to point at, and `use` is not on `sanitizeIcon`'s
+allowlist either (`lib/sanitize-html.ts`) — so what lands is a bare `<svg>`
+with no content and the right size.
+
+The test did not catch it because it counted `<svg` tags, and three empty
+`<svg>`s count exactly like three full ones. It asserts the path DATA now,
+compared against the JSON (where quotes are escaped, so match on the `d`
+value rather than the markup).
+
+Rule: a handoff's sprite references have to be inlined from the symbols at
+build time. Assert on the glyph's own path data, never on the tag.
+
+## Carry a designer's component whole (21 Oct 2026)
+
+The foil card on the same page is a 3D card that tilts toward the pointer. It
+arrived as a real component: `foil-card.css`, `gi-foil.css` for the brand
+finish, and `foil-card.js`. It was ported as a still approximation — the right
+gradients at the right size — and matched almost none of it, because every
+size in the component is in `cqw` (so it scales with its column, and a fixed
+px copy is right at exactly one width) and because the tilt, the sheen that
+tracks the pointer, the foil emblem and the grain are the object.
+
+A page has `custom_css` and `custom_js` of its own (`page_settings`, 20k each
+per `lib/settings-schema.ts`, injected by `components/page/sales-page.tsx`).
+Both files went in there unchanged and the markup went in as one `html` block.
+The card then measured identical to the designer's at every width, and the
+next drop of those files re-applies without a rewrite.
+
+Rule: when a design ships as a self-contained component with its own CSS and
+JS, carry it rather than reproduce it — a decorative object with no copy in it
+is exactly what the page's custom code slots are for. Two things to know: the
+block sanitiser allows no `data-*`, so a script that finds its elements by
+`data-` hook needs a bootstrap that attaches by class (`FoilCard.attach` was
+already exported); and page CSS is injected UNSCOPED, so any `var(--token)`
+the component reads must be declared on the component's own root, never
+`:root`.
+
+## Heights do not see x, and 1100 is not 1024 (21 Oct 2026)
+
+Book to Bestseller was verified "within 4px at 1440, 900 and 390" and looked
+broken at 1100: every body column 60px right of where it belonged, nine
+bands at once. Two things were wrong with the verification, not one.
+
+The first: the widths. The design has a breakpoint at 1180 that changes
+column WIDTHS (`--ch-left` 400 to 340, `.offer` 440 to 380, `.price` 460 to
+400) as well as gaps and type sizes. The gaps and sizes had been ported; the
+widths had not, and no sampled width fell between 1024 and 1180 to show it.
+Sample INSIDE every breakpoint the design declares, not only at the devices
+the builder names.
+
+The second: the measure. "Within 4px" was section HEIGHTS, column by column.
+A text block that is centred instead of left-aligned has exactly the same
+height. So did 13 of them, in every band, at every width — a `text` block is
+`blockAlign: "center"` by default (lib/blocks.ts, the per-type defaults), and
+one with a `max-width` is centred in whatever room its column has to spare.
+At 1440 that was 6px, at 900 it was 86.
+
+The verification that works is a positional diff: fetch the designer's page
+into a same-origin iframe at the SAME width (the server's frame headers block
+`src`, so write the fetched HTML into it with a `<base>`), snapshot `x` and
+`width` for every heading, paragraph, item, image and link in both, and group
+the mismatches by their (dx, dw). Eighty-six diffs collapsed to five causes,
+and each cause was one number. Run it at every breakpoint edge and one width
+inside each.

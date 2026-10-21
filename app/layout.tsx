@@ -8,7 +8,11 @@ import { Providers } from "./providers";
 // had exactly one, so the page builder's Weight control changed a number and
 // nothing on screen: Regular, Semibold and Bold all rendered as 600 because
 // that was the only weight the browser had been given.
-const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
+// Italic for the same reason Poppins carries it below. A sales page sets
+// Inter italic for a pull quote; without the file the browser slants the
+// roman, which is narrower than the real italic — enough that a line that
+// should wrap does not, and the paragraph comes out a line short.
+const inter = Inter({ variable: "--font-inter", subsets: ["latin"], style: ["normal", "italic"] });
 const poppins = Poppins({
   variable: "--font-poppins",
   subsets: ["latin"],

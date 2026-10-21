@@ -138,6 +138,17 @@ that usually means a built-in component was available and wasn't used.
   Supply the files; don't inline base64, and don't bundle a photo into
   anything meant to be reused.
 - Inline SVG is fine and ports as-is.
+- **Don't reference an icon through a sprite.** `<svg><use href="#i-map"/></svg>`
+  arrives here as an empty `<svg>`: there is no sprite in the page, and `use`
+  is not on the icon sanitiser's allowlist. It fails silently, at the right
+  size, so it looks like a missing icon rather than a broken one. Inline the
+  glyph at each use, or hand over the symbols and say which goes where.
+- A self-contained component with its own stylesheet and script (the foil card
+  is the model) is the easiest thing to port — it goes into the page's own CSS
+  and JS unchanged, and your next version drops straight in. Two constraints
+  that make that work: size it against its own container, not the viewport,
+  and have the script find its elements by CLASS. `data-*` attributes do not
+  survive, so export an `attach(el)` the way foil-card.js does.
 - Name any font the design needs. Don't assume one is already loaded.
 
 ## 7. What a standalone page assumes that this is not

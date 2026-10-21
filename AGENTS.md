@@ -68,6 +68,9 @@ same PR — that is how the next person's Claude avoids your mistake.
   order comes from that list, not the `position` column (`lib/pages.ts`). A
   stored row whose `section_key` is not in it is silently dropped — not an
   error, it just never renders.
+- **A `text` block is centred by default.** Give one a `max-width` and it
+  centres in the column's spare room — invisibly at desktop, 86px off once
+  stacked. State `blockAlign: "left"`. Heights never catch this; diff `x`.
 - **Saving a page writes a draft.** `page_sections.draft` and `page_settings.draft`
   are what the editor and `?preview=1` read; visitors read the live columns,
   and only `publishPage()` moves one into the other. See `docs/lessons.md`.
