@@ -1155,3 +1155,23 @@ into a same-origin iframe at the SAME width (the server's frame headers block
 the mismatches by their (dx, dw). Eighty-six diffs collapsed to five causes,
 and each cause was one number. Run it at every breakpoint edge and one width
 inside each.
+
+## The audit covers the whole handoff, and every link's target (21 Oct 2026)
+
+Asked to check "each section's animation, scroll effect, hover effect", the
+sweep that had already caught seven decorative misses in `page.css` still
+left four more, and one of them was behaviour: five of the nine SAVE MY SEAT
+buttons are anchors to the join section (`href="#join"`) and only the four
+priced ones go to checkout. The port sent all nine to checkout. Nothing in
+the stylesheet says that; it is in the markup, and in `gi.js`, which rewrites
+`[data-checkout]` hrefs and is a different file from the one audited.
+
+The other three were in the shared brand files too: a `.gi-reveal` fade on
+exactly two elements (set up in `gi.css`, triggered by `gi.js`), the keyboard
+focus rings, and the `.m-footer__bar` rules in `gi-min.css`.
+
+Rule: a handoff is every file it links, not the page's own stylesheet. Grep
+`assets/css/*.css` and `assets/js/*.js` with the same six strings, and read
+the scripts for what they do to the DOM. Then diff the CTAs as a table
+(text, target, order) against the port's buttons; a checkout button and a
+scroll-to-section button look identical and measure identical.
