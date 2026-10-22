@@ -6,6 +6,8 @@ import { eventIdFor } from "@/lib/analytics/events";
 import { buyerContextFor } from "@/lib/checkout";
 import { recordError } from "@/lib/errors";
 import { pauseFlowsForBuyer } from "@/lib/post-purchase-stop";
+import { revokeOwnershipForOrder } from "@/lib/subscription-sync";
+import { stripe } from "@/lib/stripe";
 
 /**
  * Money going back, reported.
@@ -91,6 +93,13 @@ export async function reportReversal(args: {
 export async function handleDispute(
   dispute: Stripe.Dispute,
   revoke: (paymentIntentId: string) => Promise<{ revoked: number }>,
+  opts?: {
+    /**
+     * The invoice a disputed charge belongs to. Injected so a test makes no
+     * Stripe call; in production it asks Stripe.
+     */
+    invoiceIdFor?: (dispute: Stripe.Dispute) => Promise<string | null>;
+  },
 ): Promise<void> {
   const piId =
     typeof dispute.payment_intent === "string"
@@ -99,13 +108,38 @@ export async function handleDispute(
   if (!piId) return;
 
   const db = createServiceClient();
-  const { data: order } = await db
+  let { data: order } = await db
     .from("orders")
     .select("id, email, currency, store_id")
     .eq("stripe_payment_intent_id", piId)
     .maybeSingle();
 
-  const { revoked } = await revoke(piId);
+  // A RENEWAL order has no PaymentIntent — it is keyed on stripe_invoice_id —
+  // so the lookup above misses it and so does the item fallback inside
+  // `revoke`, which is keyed on an intent as well. Production's first
+  // chargeback was a renewal and the whole handler ran against `order = null`:
+  // "Access revoked (0)", no pause of the buyer's emails, nothing told to
+  // Meta, and an alert naming an intent rather than the person, on a dispute
+  // with a deadline. Ask Stripe which invoice the charge belongs to and look
+  // again.
+  if (!order) {
+    const invoiceId = await (opts?.invoiceIdFor ?? invoiceIdForDispute)(dispute).catch(() => null);
+    if (invoiceId) {
+      const { data: byInvoice } = await db
+        .from("orders")
+        .select("id, email, currency, store_id")
+        .eq("stripe_invoice_id", invoiceId)
+        .maybeSingle();
+      order = byInvoice;
+    }
+  }
+
+  // Found by either key, revoke what THAT order bought. Only an orphan charge
+  // — an upsell billed on its own intent and recorded on the order item —
+  // still needs the intent-keyed fallback.
+  const { revoked } = order
+    ? await revokeOwnershipForOrder(order.id as string)
+    : await revoke(piId);
 
   // Their follow-up emails pause too, as if they had clicked "Stop these
   // emails" (owner's decision, 30 Sep 2026); buying again resumes them. A
@@ -149,16 +183,50 @@ export async function handleDispute(
   }
 }
 
+/**
+ * The invoice a disputed charge belongs to, asked of Stripe.
+ *
+ * The Dispute object carries a charge and a payment intent, never an invoice,
+ * and the charge is the one that holds it. Returns null for a charge that
+ * belongs to no invoice — a one-off product sale — which is the ordinary case
+ * and not an error.
+ */
+async function invoiceIdForDispute(dispute: Stripe.Dispute): Promise<string | null> {
+  const chargeId = typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
+  if (!chargeId) return null;
+  const charge = await stripe().charges.retrieve(chargeId);
+  const invoice = (charge as { invoice?: string | { id?: string } | null }).invoice;
+  return typeof invoice === "string" ? invoice : (invoice?.id ?? null);
+}
+
 /** A dispute the store won. Says so; does not silently re-grant. */
-export async function disputeWon(dispute: Stripe.Dispute): Promise<void> {
+export async function disputeWon(
+  dispute: Stripe.Dispute,
+  opts?: { invoiceIdFor?: (dispute: Stripe.Dispute) => Promise<string | null> },
+): Promise<void> {
   const piId =
     typeof dispute.payment_intent === "string"
       ? dispute.payment_intent
       : dispute.payment_intent?.id;
   const db = createServiceClient();
-  const { data: order } = piId
+  let { data: order } = piId
     ? await db.from("orders").select("id, email").eq("stripe_payment_intent_id", piId).maybeSingle()
     : { data: null };
+
+  // Same renewal blind spot as handleDispute: no PaymentIntent on the order,
+  // so without this the "you won" alert names an intent and whoever reads it
+  // cannot tell whose access to restore.
+  if (!order) {
+    const invoiceId = await (opts?.invoiceIdFor ?? invoiceIdForDispute)(dispute).catch(() => null);
+    if (invoiceId) {
+      const { data: byInvoice } = await db
+        .from("orders")
+        .select("id, email")
+        .eq("stripe_invoice_id", invoiceId)
+        .maybeSingle();
+      order = byInvoice;
+    }
+  }
 
   await recordError({
     source: "chargeback",

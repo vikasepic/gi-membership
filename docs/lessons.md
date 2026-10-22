@@ -908,6 +908,32 @@ Also, on that script: this package has no `"type": "module"`, so tsx compiles
 it as CJS, where a top-level `await` is a transform error before any line
 runs. Any script under `scripts/` that awaits must wrap it in a function.
 
+## A renewal chargeback found no order, so it revoked nothing (22 Oct 2026)
+
+The store's first chargeback was on a renewal, and the handler logged
+`Access revoked (0)`.
+
+`handleDispute` looked the order up by `stripe_payment_intent_id`, and the
+intent-keyed fallback inside `revokeOwnershipForPaymentIntent` did the same.
+A renewal order has NO payment intent — it is keyed on `stripe_invoice_id` —
+so both missed and the whole handler ran with `order = null`. Three things
+hang off that one null: the buyer kept access, their follow-up emails were
+never paused, and Meta was never told the money came back. All three sit
+inside `if (order)`. The alert itself named a PaymentIntent rather than the
+customer, on a dispute with a two-week evidence deadline.
+
+A Stripe Dispute carries a charge and an intent, never an invoice. The charge
+holds it, so `invoiceIdForDispute` asks Stripe for the charge and reads
+`charge.invoice`, and the order is looked up a second time by that. The
+intent-keyed path stays for an orphan charge — an upsell billed on its own
+intent and recorded on the order ITEM, where there genuinely is no order.
+
+This is the entry above it in AGENTS.md — "a renewal order has no
+PaymentIntent; new kinds of order reach every old reader of `orders`, grep
+them" — written down and still walked into. When a new kind of row lands in a
+table, grep for every `.eq("<the column the old kind had>")`, not just the
+readers you remember.
+
 ## A new custom conversion is not proof that an event arrived (21 Oct 2026)
 
 The ads team created "90 Day AI Team Build Sale" on 20 Oct — rule
@@ -1175,3 +1201,33 @@ Rule: a handoff is every file it links, not the page's own stylesheet. Grep
 the scripts for what they do to the DOM. Then diff the CTAs as a table
 (text, target, order) against the port's buttons; a checkout button and a
 scroll-to-section button look identical and measure identical.
+
+## Re-checking a shipped page against a design revision (22 Oct 2026)
+
+Foundations Weekend went live from the designer's 19 Oct export; the owner
+then pointed at the 20 Oct "c" revision and asked for the copy and alignment
+to match, line by line. Four things are worth carrying to the next one.
+
+Diff the two RENDERED pages, not the sources. Extract every visible text unit
+in order (headless Chrome, `innerText`, `text-align`, x, width, font size),
+sequence-diff the lists, then look at each difference before acting on it.
+Of 14 changed runs, most were markup grouping that draws identically ("Session
+1." as its own element in the design, inside the heading here), and three
+"misaligned" lists were the design measuring a card and this page measuring
+the text inside its padding. Screenshot both before believing a number.
+
+A band's `css_id` and a block's `cssId` share one id namespace. Production's
+faq BAND already carried `join`; giving the order card row `join` too made
+`getElementById` return the band, so the seat bar hid from "Why $197" onwards
+and scrolled to the wrong place. Read the band ids before naming a block.
+
+`position: sticky` holds only inside its containing block. A nav that is the
+first block of the hero band unpins when the hero scrolls away, however the
+design's own page (where the nav is a child of `<body>`) behaves. Pinning it
+for the whole page means `fixed`, plus page CSS giving the band back the
+height the nav no longer takes, with `!important`, because the band writes
+its own per-device padding on the same `#section-…` id.
+
+Never set attributes on `<html>` or `<body>` from page code. React renders
+both, and anything set before hydration is a mismatch. Page code that needs a
+page-wide switch toggles a `<style>` element it created itself.
