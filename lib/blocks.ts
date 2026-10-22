@@ -586,6 +586,11 @@ const DEFAULT_PROPS: Record<BlockType, Record<string, unknown>> = {
     // no photographs draws the plain line today, and switching that to a
     // circle of letters is a change nobody asked for.
     initials: false,
+    // The marks around each quote. Curly is what every slider has always
+    // drawn, so it stays the default and nothing saved repaints. Straight is
+    // for a design whose approved copy uses straight quotes (Foundations
+    // Weekend, 22 Oct 2026); none is for a quote that carries its own.
+    quoteMarks: "curly",
     // The speaker's name and what they do, and how either one looks. Same
     // shape as the cards block's own spacing settings: null size, empty
     // weight, null colour, and every one meaning "whatever the skin already

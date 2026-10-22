@@ -92,6 +92,33 @@ describe("the cards shelf", () => {
   });
 
   /**
+   * The first slide sits at the strip's padding, not at 0. A strip with 4px of
+   * padding and mandatory snapping rests at scrollLeft 4 on its first slide,
+   * and `<= 2` read that as "not the start", leaving Previous enabled with
+   * nowhere to go (Foundations Weekend testimonials, 22 Oct 2026).
+   */
+  it("treats the padding edge as the start, and the far padding edge as the end", () => {
+    const host = mount({ items: six, carousel: true, columns: "3", arrows: true });
+    const strip = host.querySelector<HTMLElement>(".snap-x")!;
+    Object.defineProperty(strip, "clientWidth", { value: 300, configurable: true });
+    Object.defineProperty(strip, "scrollWidth", { value: 1208, configurable: true });
+    strip.style.paddingLeft = "4px";
+    strip.style.paddingRight = "4px";
+    const prev = host.querySelector<HTMLButtonElement>('[aria-label="Previous slides"]')!;
+    const next = host.querySelector<HTMLButtonElement>('[aria-label="Next slides"]')!;
+
+    strip.scrollLeft = 4;
+    act(() => { strip.dispatchEvent(new Event("scroll")); });
+    expect(prev.disabled, "first slide, resting on the padding").toBe(true);
+    expect(next.disabled).toBe(false);
+
+    strip.scrollLeft = 1208 - 300 - 4;
+    act(() => { strip.dispatchEvent(new Event("scroll")); });
+    expect(next.disabled, "last slide, resting on the far padding").toBe(true);
+    expect(prev.disabled).toBe(false);
+  });
+
+  /**
    * Dragging with a mouse. Touch is left alone on purpose — it already scrolls
    * this strip natively, with momentum and snapping no handler here would match.
    */

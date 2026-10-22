@@ -90,7 +90,15 @@ export function SlideRail({
     const el = scroller();
     if (!el) return;
     const max = el.scrollWidth - el.clientWidth;
-    setEnds({ start: el.scrollLeft <= 2, end: el.scrollLeft >= max - 2 });
+    // The ends are the first and last SNAP positions, which sit at the strip's
+    // padding rather than at 0 and max. A testimonial strip with 4px of
+    // padding rests at scrollLeft 4 on its first slide, so `<= 2` called that
+    // "not the start" and left Previous enabled with nowhere to go
+    // (Foundations Weekend, 22 Oct 2026).
+    const pad = getComputedStyle(el);
+    const padStart = parseFloat(pad.paddingLeft) || 0;
+    const padEnd = parseFloat(pad.paddingRight) || 0;
+    setEnds({ start: el.scrollLeft <= padStart + 2, end: el.scrollLeft >= max - padEnd - 2 });
     // Which page is showing, from position rather than from a counter — a
     // counter goes wrong the moment somebody swipes instead of pressing.
     setPage(max <= 0 ? 0 : Math.round((el.scrollLeft / max) * (pages - 1)));

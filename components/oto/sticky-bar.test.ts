@@ -58,7 +58,10 @@ describe("where both bars scroll to", () => {
 
   it("does not override a reduced-motion preference from JavaScript", () => {
     // Naming "smooth" here reaches past the media query, which cannot see it.
-    expect(anchor).toContain('scrollIntoView({ block: "center" })');
+    // Which `block` it asks for depends on the target's size now (centred if it
+    // fits, its top if not); lib/buy-anchor.test.ts asserts the exact options
+    // object, so a `behavior` key there fails as well as here.
+    expect(anchor).toContain("scrollIntoView({ block:");
     expect(anchor).not.toContain("behavior:");
   });
 });

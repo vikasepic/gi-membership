@@ -24,6 +24,15 @@ export function buyAnchor(scrollTo = ""): HTMLElement | null {
  */
 export function scrollToBuy(scrollTo = ""): void {
   const el = buyAnchor(scrollTo);
-  el?.scrollIntoView({ block: "center" });
+  // Centred when it fits on the screen. A target taller than the screen is
+  // read from its top: centring a 2,800px order card (Foundations Weekend,
+  // 22 Oct 2026) landed the reader in its middle with the heading 992px out
+  // of view. `scroll-margin-top` on the target still applies to "start".
+  // "Fits" leaves room for the target's own `scroll-margin-top` on both sides:
+  // a pinned nav covers that much of the screen, and an 874px card centred in
+  // 900 put its top 13px down, under a 70px nav.
+  const margin = el ? parseFloat(getComputedStyle(el).scrollMarginTop) || 0 : 0;
+  const fits = !el || el.getBoundingClientRect().height <= window.innerHeight - 2 * margin;
+  el?.scrollIntoView({ block: fits ? "center" : "start" });
   window.setTimeout(() => el?.querySelector<HTMLInputElement>('input[type="radio"]')?.focus(), 600);
 }

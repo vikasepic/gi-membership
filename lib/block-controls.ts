@@ -865,6 +865,13 @@ export const BLOCK_CONTROLS: Record<BlockType, BlockControls> = {
         hint: "Draws the speaker's initials in a circle instead. Off leaves a slide with no picture as the plain line it has always been.",
       },
       {
+        kind: "select",
+        key: "quoteMarks",
+        label: "Quote marks",
+        options: [["curly", "Curly \u201c \u201d"], ["straight", 'Straight " "'], ["none", "None"]],
+        hint: "The marks around each quote. Match the approved copy: a design written with straight quotes should show straight ones.",
+      },
+      {
         kind: "toggle",
         key: "avatars",
         label: "Avatars",

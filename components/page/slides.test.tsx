@@ -517,3 +517,35 @@ describe("arrow placement", () => {
     expect(controlsFor(b).content.some((c) => (c as { key?: string }).key === "arrowPlacement")).toBe(true);
   });
 });
+
+describe("quote marks", () => {
+  const quoteOf = (props: Record<string, unknown>) => {
+    const html = renderToStaticMarkup(
+      <Blocks blocks={normalizeBlocks([{ id: "b1", type: "slides", props: { items: [slide("It works.")], ...props } }])} theme={theme} />,
+    );
+    const m = html.match(/<span style="white-space:pre-line">(.*?)<\/span>/);
+    expect(m, "the quote span").not.toBeNull();
+    return m![1].replace(/<!-- -->/g, "");
+  };
+
+  it("draws curly marks by default, as every slider always has", () => {
+    expect(quoteOf({})).toBe("\u201cIt works.\u201d");
+  });
+
+  it("draws straight marks when the copy uses them", () => {
+    expect(quoteOf({ quoteMarks: "straight" })).toBe("&quot;It works.&quot;");
+  });
+
+  it("draws none when asked", () => {
+    expect(quoteOf({ quoteMarks: "none" })).toBe("It works.");
+  });
+
+  it("falls back to curly for a value it does not know", () => {
+    expect(quoteOf({ quoteMarks: "fancy" })).toBe("\u201cIt works.\u201d");
+  });
+
+  it("is a control in the editor", () => {
+    const control = controlsFor(newBlock("slides")).content.find((c) => "key" in c && c.key === "quoteMarks");
+    expect(control).toBeDefined();
+  });
+});

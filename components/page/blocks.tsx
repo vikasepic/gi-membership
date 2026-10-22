@@ -75,6 +75,16 @@ const fillTokens = (text: string, money?: BlockMoney): string =>
     ? text.replace(/\{trial\}/g, money?.trialLabel ?? "").replace(/\s{2,}/g, " ").trim()
     : text;
 /**
+ * The marks a slide wraps its quote in, by the block's `quoteMarks`. An
+ * unrecognised value draws the curly pair every slider has always drawn.
+ */
+const QUOTE_MARKS: Record<string, [string, string]> = {
+  curly: ["\u201c", "\u201d"],
+  straight: ['"', '"'],
+  none: ["", ""],
+};
+
+/**
  * The initials a name is known by, for the circle a slide draws when it has no
  * photograph. First and last, so a middle name does not earn a third letter and
  * a one-word name still gets one.
@@ -1282,7 +1292,9 @@ function Inner({
               )}
               <p className="m-0" style={type}>
                 <span style={{ whiteSpace: "pre-line" }}>
-                  &ldquo;{withLineBreaks(str(item.quote))}&rdquo;
+                  {QUOTE_MARKS[str(p.quoteMarks, "curly")]?.[0] ?? "\u201c"}
+                  {withLineBreaks(str(item.quote))}
+                  {QUOTE_MARKS[str(p.quoteMarks, "curly")]?.[1] ?? "\u201d"}
                 </span>
               </p>
               {/* The face beside the name rather than behind the quote — the
