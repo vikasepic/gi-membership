@@ -37,6 +37,9 @@ export type SubscriptionDrift = {
   losingAccess: boolean;
 };
 
+/** A subscription Stripe did not answer about, even when asked a second time. */
+export type UncheckedSubscription = { subscriptionId: string; error: string };
+
 /**
  * Every subscription-backed ownership row whose status Stripe disagrees with.
  *
@@ -47,13 +50,33 @@ export type SubscriptionDrift = {
 /** Stripe lookups in flight at once. Well inside its 100/s live limit, shared with other apps. */
 const STRIPE_BATCH = 20;
 
-export async function findSubscriptionDrift(): Promise<SubscriptionDrift[]> {
+/**
+ * What Stripe says about one subscription: its status, "missing" when Stripe
+ * says it has no such object, or the error when it gave no answer at all.
+ *
+ * Only `resource_missing` is "missing". Every error used to be, so a burst
+ * Stripe rate-limited turned live, paying subscriptions into a page of
+ * "Stripe missing" (23 Oct 2026). A refusal says nothing about the subscription.
+ */
+async function stripeStatusOf(id: string): Promise<OwnershipStatus | "missing" | Error> {
+  try {
+    return mapSubscriptionStatus((await stripe().subscriptions.retrieve(id)).status);
+  } catch (e) {
+    if ((e as { code?: string }).code === "resource_missing") return "missing";
+    return e instanceof Error ? e : new Error(String(e));
+  }
+}
+
+export async function findSubscriptionDrift(): Promise<{
+  drift: SubscriptionDrift[];
+  unchecked: UncheckedSubscription[];
+}> {
   const db = createServiceClient();
   const { data: rows } = await db
     .from("ownership")
     .select("id, user_id, offer_id, product_id, status, stripe_subscription_id")
     .not("stripe_subscription_id", "is", null);
-  if (!rows || rows.length === 0) return [];
+  if (!rows || rows.length === 0) return { drift: [], unchecked: [] };
 
   const userIds = [...new Set(rows.map((r) => r.user_id as string))];
   const offerIds = [...new Set(rows.map((r) => r.offer_id).filter(Boolean) as string[])];
@@ -78,30 +101,35 @@ export async function findSubscriptionDrift(): Promise<SubscriptionDrift[]> {
   // Asked of Stripe STRIPE_BATCH at a time, not one by one. One by one was
   // 123 calls at ~0.4 s each on 28 Sep 2026: the Errors page, which runs this
   // before it can render, took close to a minute and looked broken.
-  const statusOf = new Map<string, OwnershipStatus | "missing">();
+  const answers = new Map<string, OwnershipStatus | "missing" | Error>();
   const ids = [...new Set(rows.map((r) => r.stripe_subscription_id as string))];
   for (let i = 0; i < ids.length; i += STRIPE_BATCH) {
-    await Promise.all(
-      ids.slice(i, i + STRIPE_BATCH).map(async (id) => {
-        try {
-          statusOf.set(id, mapSubscriptionStatus((await stripe().subscriptions.retrieve(id)).status));
-        } catch {
-          // Stripe has never heard of it. Usually a subscription created in
-          // test mode against a store now running live keys. Reported, never
-          // repaired: a wrong key would make every row look missing, and
-          // acting on that would revoke the whole store.
-          statusOf.set(id, "missing");
-        }
-      }),
-    );
+    const batch = ids.slice(i, i + STRIPE_BATCH);
+    const got = await Promise.all(batch.map(stripeStatusOf));
+    batch.forEach((id, j) => answers.set(id, got[j]));
+  }
+  // Whatever the burst could not get, asked again one at a time.
+  for (const id of ids) {
+    if (answers.get(id) instanceof Error) answers.set(id, await stripeStatusOf(id));
+  }
+
+  const statusOf = new Map<string, OwnershipStatus | "missing">();
+  const unchecked: UncheckedSubscription[] = [];
+  for (const [id, answer] of answers) {
+    if (answer instanceof Error) unchecked.push({ subscriptionId: id, error: answer.message });
+    else statusOf.set(id, answer);
+  }
+  if (unchecked.length > 0) {
+    console.error(`[findSubscriptionDrift] Stripe did not answer for ${unchecked.length}:`, unchecked[0].error);
   }
 
   const out: SubscriptionDrift[] = [];
   for (const row of rows) {
     const subscriptionId = row.stripe_subscription_id as string;
     const ours = row.status as OwnershipStatus;
-    const theirs = statusOf.get(subscriptionId) ?? "missing";
-    if (theirs === ours) continue;
+    const theirs = statusOf.get(subscriptionId);
+    // No answer is neither agreement nor drift. It is listed apart.
+    if (theirs === undefined || theirs === ours) continue;
     out.push({
       ownershipId: row.id as string,
       userId: row.user_id as string,
@@ -121,7 +149,7 @@ export async function findSubscriptionDrift(): Promise<SubscriptionDrift[]> {
     });
   }
   // Worst first: someone being billed with no access is the reason this exists.
-  return out.sort((a, b) => Number(b.losingAccess) - Number(a.losingAccess));
+  return { drift: out.sort((a, b) => Number(b.losingAccess) - Number(a.losingAccess)), unchecked };
 }
 
 /**
@@ -134,7 +162,7 @@ export async function repairSubscriptionDrift(): Promise<{
   repaired: SubscriptionDrift[];
   skipped: SubscriptionDrift[];
 }> {
-  const drift = await findSubscriptionDrift();
+  const { drift } = await findSubscriptionDrift();
   const fixable = drift.filter((d) => d.theirs !== "missing");
   const db = createServiceClient();
 

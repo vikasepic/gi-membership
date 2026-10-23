@@ -1,5 +1,5 @@
 import { listErrorEvents, MAX_ATTEMPTS } from "@/lib/errors";
-import { retryNowAction, repairDriftAction } from "./actions";
+import { retryNowAction, repairDriftAction, markHandledAction } from "./actions";
 import { findSubscriptionDrift } from "@/lib/subscription-reconcile";
 import { trackingProblems } from "@/lib/tracking";
 import { shortDateTime } from "@/lib/dates";
@@ -12,7 +12,7 @@ const relative = (iso: string) => {
 };
 
 export default async function AdminErrorsPage() {
-  const [events, drift] = await Promise.all([listErrorEvents(), findSubscriptionDrift()]);
+  const [events, { drift, unchecked }] = await Promise.all([listErrorEvents(), findSubscriptionDrift()]);
   // Tracking that looks configured and cannot work. It fails silently by
   // design — a conversion that never sends breaks nothing — so this is the
   // only place it can be noticed before someone asks why the numbers are zero.
@@ -113,6 +113,15 @@ export default async function AdminErrorsPage() {
         </section>
       )}
 
+      {unchecked.length > 0 && (
+        <p className="rounded-2xl border border-border bg-surface px-5 py-3 text-sm text-muted">
+          Stripe did not answer for {unchecked.length}{" "}
+          {unchecked.length === 1 ? "subscription" : "subscriptions"}, so{" "}
+          {unchecked.length === 1 ? "it was" : "they were"} not checked: {unchecked[0].error}. Reload
+          to ask again.
+        </p>
+      )}
+
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         <Kpi label="Unresolved" value={String(unresolved.length)} />
         <Kpi label="Waiting to retry" value={String(queued.length)} />
@@ -174,20 +183,30 @@ export default async function AdminErrorsPage() {
                   </dl>
                 )}
 
-                {/* Only offered where it can do something: a log-only row has
-                    nothing to run, and a resolved one has nothing left to fix. */}
-                {e.jobKind && !e.resolvedAt && (
-                  <form action={retryNowAction} className="flex items-center gap-3">
-                    <input type="hidden" name="id" value={e.id} />
-                    <button className="w-fit rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-primary">
-                      Try again now
-                    </button>
+                {/* Retry only where there is something to run; a resolved row
+                    has nothing left to do, so it gets neither button. */}
+                {!e.resolvedAt && (
+                  <div className="flex flex-wrap items-center gap-3">
+                    {e.jobKind && (
+                      <form action={retryNowAction}>
+                        <input type="hidden" name="id" value={e.id} />
+                        <button className="w-fit rounded-full border border-border px-4 py-2 text-sm transition-colors hover:border-primary">
+                          Try again now
+                        </button>
+                      </form>
+                    )}
+                    <form action={markHandledAction}>
+                      <input type="hidden" name="id" value={e.id} />
+                      <button className="w-fit rounded-full border border-border px-4 py-2 text-sm text-muted transition-colors hover:border-primary hover:text-fg">
+                        Mark as handled
+                      </button>
+                    </form>
                     {spent && (
                       <span className="text-xs text-muted">
                         Automatic retries stopped. Fix the cause, then run it.
                       </span>
                     )}
-                  </form>
+                  </div>
                 )}
               </div>
             );

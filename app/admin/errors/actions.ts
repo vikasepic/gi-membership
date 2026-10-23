@@ -42,3 +42,25 @@ export async function repairDriftAction(): Promise<void> {
   await repairSubscriptionDrift();
   revalidatePath("/admin/errors");
 }
+
+/**
+ * Close an error by hand: a log-only row once its cause is fixed or the
+ * chargeback answered, or a job someone dealt with outside the queue.
+ *
+ * A log-only row has nothing to retry, so until 23 Oct 2026 nothing could
+ * close it, and fixed problems stayed in "Unresolved" and the sidebar badge
+ * forever. A closed job is also out of the retry sweep, which only picks up
+ * rows with no resolved_at.
+ */
+export async function markHandledAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+
+  await createServiceClient()
+    .from("error_events")
+    .update({ resolved_at: new Date().toISOString() })
+    .eq("id", id)
+    .is("resolved_at", null);
+  revalidatePath("/admin/errors");
+}

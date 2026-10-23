@@ -1231,3 +1231,19 @@ its own per-device padding on the same `#section-…` id.
 Never set attributes on `<html>` or `<body>` from page code. React renders
 both, and anything set before hydration is a mismatch. Page code that needs a
 page-wide switch toggles a `<style>` element it created itself.
+
+## A catch-all is a claim about every error (23 Oct 2026)
+
+The Errors page listed most live subscriptions as "Stripe missing" while the
+nightly sync had read the same ids from Stripe that morning, one by one, with
+the same key. `findSubscriptionDrift` asked 20 at a time and its `catch {}`
+called every failure "missing", so a refused burst read as "Stripe has never
+heard of it". Two identical `*/5` retry crons run the same check, which makes
+bursts on an account five other apps share more likely, not less.
+
+- Name the error you mean. Only `code === "resource_missing"` says an object
+  does not exist; a 429, a timeout or a bad key says nothing about it.
+- An answer you did not get is its own state. Ask once more, slowly, then show
+  it apart from the results instead of folding it into one.
+- Before believing a mass "missing", look for a second reader of the same
+  thing (here the `subscriptions` table, synced at 03:10) and compare.
