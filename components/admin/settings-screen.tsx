@@ -195,6 +195,7 @@ function GroupForm({
           <HomeStepsFields steps={settings.homeSteps} name="homeSteps" />
         </Group>
       )}
+      {group === "recentBuyers" && <RecentBuyersFields s={settings} errors={errors} />}
       {group === "redirects" && (
         <Group
           label="Redirects"
@@ -444,6 +445,45 @@ function CommerceFields({ s, errors }: FieldsProps) {
           placeholder="We answer within one working day"
           className={input}
         />
+      </Field>
+    </>
+  );
+}
+
+function RecentBuyersFields({ s, errors }: FieldsProps) {
+  return (
+    <>
+      <div className={row}>
+        <Field label="Gap between cards" hint="seconds of quiet between one card and the next, 5 to 120" error={errors.recentBuyersGapSeconds}>
+          <input
+            name="recentBuyersGapSeconds"
+            type="number"
+            min={5}
+            max={120}
+            defaultValue={s.recentBuyersGapSeconds}
+            className={input}
+          />
+        </Field>
+        <Field label="Each card stays up" hint="seconds, 3 to 15" error={errors.recentBuyersShowSeconds}>
+          <input
+            name="recentBuyersShowSeconds"
+            type="number"
+            min={3}
+            max={15}
+            defaultValue={s.recentBuyersShowSeconds}
+            className={input}
+          />
+        </Field>
+      </div>
+      <Field
+        label="Home page"
+        hint="a mix of every offer and product whose own Show recent buyers switch is on"
+        error={errors.recentBuyersHome}
+      >
+        <select name="recentBuyersHome" defaultValue={s.recentBuyersHome} className={input}>
+          <option value="on">On</option>
+          <option value="off">Off</option>
+        </select>
       </Field>
     </>
   );

@@ -146,6 +146,26 @@ export const SETTINGS_SCHEMA = z.object({
   // by id; see lib/home-steps-schema.ts.
   homeSteps: homeStepsSchema,
 
+  // ---- Recent buyers ------------------------------------------------------
+  // The popup naming real recent buyers (spec 2026-10-26). The gap is the quiet
+  // time between one card leaving and the next arriving, so two can never
+  // overlap and the two numbers need no rule between them.
+  recentBuyersGapSeconds: z.coerce
+    .number()
+    .int()
+    .min(5, "5 seconds at least")
+    .max(120, "120 seconds at most")
+    .default(12),
+  recentBuyersShowSeconds: z.coerce
+    .number()
+    .int()
+    .min(3, "3 seconds at least")
+    .max(15, "15 seconds at most")
+    .default(6),
+  // A select, not a checkbox: an unticked box posts nothing, nothing parses to
+  // the default, and the default is on, so a checkbox could never turn it off.
+  recentBuyersHome: z.enum(["on", "off"]).default("on"),
+
   // ---- Post-purchase email ------------------------------------------------
   // One nested object rather than twenty flat fields: it is a single document
   // edited by a single form, and flattening it would put twenty names into a
@@ -178,6 +198,7 @@ export const SETTINGS_GROUPS = [
   { key: "email", label: "Post-purchase email" },
   { key: "renewal", label: "Renewal email" },
   { key: "steps", label: "Home steps" },
+  { key: "recentBuyers", label: "Recent buyers" },
   { key: "redirects", label: "Redirects" },
   { key: "advanced", label: "Advanced" },
 ] as const;
@@ -217,6 +238,7 @@ export const GROUP_FIELDS: Record<SettingsGroupKey, readonly (keyof Settings)[]>
   email: ["postPurchaseEmail"],
   renewal: ["renewalEmail"],
   steps: ["homeSteps"],
+  recentBuyers: ["recentBuyersGapSeconds", "recentBuyersShowSeconds", "recentBuyersHome"],
   redirects: ["redirects"],
   advanced: ["customCss", "customJs", "codeSnippets"],
 };

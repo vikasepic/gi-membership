@@ -100,3 +100,38 @@ describe("the groups", () => {
     }
   });
 });
+
+describe("recent buyers timing", () => {
+  const parse = (over: Record<string, unknown>) => SETTINGS_SCHEMA.safeParse(over);
+  const message = (over: Record<string, unknown>) => {
+    const r = parse(over);
+    return r.success ? null : r.error.issues[0]?.message;
+  };
+
+  it("defaults to a 12 second gap, 6 seconds up, and on for the home page", () => {
+    expect(SETTINGS_DEFAULTS.recentBuyersGapSeconds).toBe(12);
+    expect(SETTINGS_DEFAULTS.recentBuyersShowSeconds).toBe(6);
+    expect(SETTINGS_DEFAULTS.recentBuyersHome).toBe("on");
+  });
+
+  it("keeps the gap between 5 and 120 seconds", () => {
+    expect(message({ recentBuyersGapSeconds: "4" })).toBe("5 seconds at least");
+    expect(message({ recentBuyersGapSeconds: "121" })).toBe("120 seconds at most");
+    expect(parse({ recentBuyersGapSeconds: "30" }).data?.recentBuyersGapSeconds).toBe(30);
+  });
+
+  it("keeps a card up between 3 and 15 seconds", () => {
+    expect(message({ recentBuyersShowSeconds: "2" })).toBe("3 seconds at least");
+    expect(message({ recentBuyersShowSeconds: "16" })).toBe("15 seconds at most");
+  });
+
+  it("takes on or off for the home page, nothing else", () => {
+    expect(parse({ recentBuyersHome: "off" }).data?.recentBuyersHome).toBe("off");
+    expect(parse({ recentBuyersHome: "maybe" }).success).toBe(false);
+  });
+
+  it("is its own settings group", () => {
+    expect(SETTINGS_GROUPS.map((g) => g.key)).toContain("recentBuyers");
+    expect(GROUP_FIELDS.recentBuyers).toEqual(["recentBuyersGapSeconds", "recentBuyersShowSeconds", "recentBuyersHome"]);
+  });
+});
