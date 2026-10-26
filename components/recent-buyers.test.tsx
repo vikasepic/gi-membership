@@ -77,18 +77,22 @@ describe("the recent buyers card", () => {
     expect(shown()).toBe("Priya");
   });
 
-  it("keeps a card up for showMs, then is quiet for gapMs, then shows the next", async () => {
+  it("keeps a card up for showMs, lets it leave, then is quiet for gapMs, then shows the next", async () => {
     await mount();
     await wait(4000);
     await wait(1000);
+    // Leaving, not gone: it slides out before the next one comes.
+    expect(document.querySelector(".rb-card.rb-out .rb-name")?.textContent).toBe("Priya");
+    await wait(350);
     expect(shown()).toBeNull();
     await wait(1999);
     expect(shown()).toBeNull();
     await wait(1);
     expect(shown()).toBe("Tomás");
+    expect(document.querySelector(".rb-card.rb-out")).toBeNull();
   });
 
-  it("shows the next card straight away when the gap is zero", async () => {
+  it("hides the card, waits a beat, then shows the next, even when the gap is zero", async () => {
     // A gap of 0 is a setting, not a missing value; it must not fall back.
     respond = () =>
       Promise.resolve(new Response(JSON.stringify({ gapMs: 0, showMs: 5000, cards: [card("Priya"), card("Tomás")] })));
@@ -96,7 +100,12 @@ describe("the recent buyers card", () => {
     await wait(4000);
     expect(shown()).toBe("Priya");
     await wait(5000);
-    // The browser's zero-delay timer: the next task, a millisecond at most.
+    expect(document.querySelector(".rb-card.rb-out")).not.toBeNull();
+    await wait(350);
+    // Hidden first (owner, 26 Oct 2026): a beat with no card, never a swap.
+    expect(shown()).toBeNull();
+    await wait(199);
+    expect(shown()).toBeNull();
     await wait(1);
     expect(shown()).toBe("Tomás");
   });
@@ -108,8 +117,7 @@ describe("the recent buyers card", () => {
     for (let i = 0; i < 12; i++) {
       const name = shown();
       if (name) seen.push(name);
-      await wait(1000);
-      await wait(2000);
+      await wait(3350);
     }
     expect(seen).toEqual(["Priya", "Tomás", "Priya", "Tomás"]);
   });
@@ -162,7 +170,7 @@ describe("the recent buyers card", () => {
     bar.getBoundingClientRect = () => ({ top: window.innerHeight - 64, bottom: window.innerHeight }) as DOMRect;
     document.body.appendChild(bar);
     (document as { elementsFromPoint?: unknown }).elementsFromPoint = () => [bar];
-    await wait(3000);
+    await wait(3350);
     expect(shown()).toBe("Tomás");
     expect((document.querySelector(".rb-card") as HTMLElement).style.bottom).toBe("76px");
   });
