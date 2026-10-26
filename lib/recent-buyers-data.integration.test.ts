@@ -195,6 +195,15 @@ describe.skipIf(!canRun)("loading recent buyers (integration)", () => {
     expect(rows.find((r) => r.userId === u)?.imageUrl).toContain("library/zz-cover.webp");
     expect(rows.find((r) => r.userId === v)?.verb).toBe("joined");
   });
+
+  it("does not count an offer's buyers toward a product whose own switch is off", async () => {
+    const p = await product({ show: false });
+    const granting = await offer({ grantProductId: p });
+    const u = await buyer();
+    await order(u, { kind: "oto", offerId: granting });
+    // Still the offer's buyer, on the offer's page; not the switched-off product's.
+    expect((await mine()).find((r) => r.userId === u)).toMatchObject({ offerId: granting, grantProductId: null });
+  });
 });
 
 afterAll(async () => {

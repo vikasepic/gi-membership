@@ -23,6 +23,7 @@
     "@tiptap/extension-text-style": "^3.29.0",
     "@tiptap/react": "^3.29.0",
     "@tiptap/starter-kit": "^3.29.0",
+    "country-flag-icons": "^1.6.20",
     "docx": "^9.7.1",
     "marked": "^18.0.12",
     "next": "^16.3.4",

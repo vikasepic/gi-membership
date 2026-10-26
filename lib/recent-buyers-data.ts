@@ -102,7 +102,12 @@ export async function loadPurchaseRows(now: Date): Promise<PurchaseRow[]> {
             ...base,
             offerId: i.offer_id,
             productId: null,
-            grantProductId: (off.grant_product_id as string | null) ?? null,
+            // Counted toward the product's own page only while that page's
+            // switch is on: the product's switch decides its page.
+            grantProductId:
+              granted && granted.status === "published" && granted.show_recent_buyers
+                ? (off.grant_product_id as string)
+                : null,
             itemName: off.name as string,
             imageUrl: publicCoverUrl((off.image_url as string | null) ?? null) ?? coverOf(granted),
             verb: off.grant_app_id || off.interval ? "joined" : "enrolled in",
