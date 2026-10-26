@@ -58,6 +58,15 @@ export default async function PrivacyPage() {
         </p>
       </Clause>
 
+      {/* The recent buyers popup (components/recent-buyers.tsx). Wording
+          approved by the owner, 26 Oct 2026. */}
+      <Clause heading="Recent buyers on our sales pages">
+        <p>
+          {"On our sales pages we show recent purchases from the last two weeks: the buyer's first name, their country's flag and what they bought. We never show surnames, email addresses, cities or amounts. Ask us at "}
+          <a href={`mailto:${LEGAL.privacyEmail}`}>{LEGAL.privacyEmail}</a> and we will remove you.
+        </p>
+      </Clause>
+
       <Clause heading="Cookies">
         <ul className="flex list-disc flex-col gap-2 pl-5">
           <li>
