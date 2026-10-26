@@ -108,14 +108,16 @@ describe("recent buyers timing", () => {
     return r.success ? null : r.error.issues[0]?.message;
   };
 
-  it("defaults to a 12 second gap, 6 seconds up, and on for the home page", () => {
-    expect(SETTINGS_DEFAULTS.recentBuyersGapSeconds).toBe(12);
-    expect(SETTINGS_DEFAULTS.recentBuyersShowSeconds).toBe(6);
+  it("defaults to 5 seconds up, the next straight after, and on for the home page", () => {
+    // Owner, 26 Oct 2026: one card for five seconds, then immediately another.
+    expect(SETTINGS_DEFAULTS.recentBuyersGapSeconds).toBe(0);
+    expect(SETTINGS_DEFAULTS.recentBuyersShowSeconds).toBe(5);
     expect(SETTINGS_DEFAULTS.recentBuyersHome).toBe("on");
   });
 
-  it("keeps the gap between 5 and 120 seconds", () => {
-    expect(message({ recentBuyersGapSeconds: "4" })).toBe("5 seconds at least");
+  it("keeps the gap between 0 and 120 seconds", () => {
+    expect(parse({ recentBuyersGapSeconds: "0" }).data?.recentBuyersGapSeconds).toBe(0);
+    expect(message({ recentBuyersGapSeconds: "-1" })).toBe("Cannot be negative");
     expect(message({ recentBuyersGapSeconds: "121" })).toBe("120 seconds at most");
     expect(parse({ recentBuyersGapSeconds: "30" }).data?.recentBuyersGapSeconds).toBe(30);
   });

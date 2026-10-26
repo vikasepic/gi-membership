@@ -97,8 +97,11 @@ export function RecentBuyers({ scope }: { scope: RecentBuyersScope }) {
         return;
       }
       const cards = Array.isArray(data.cards) ? data.cards : [];
-      const showMs = Number(data.showMs) || 6000;
-      const gapMs = Number(data.gapMs) || 12000;
+      // A gap of 0 is a choice (the next card straight away), so only a
+      // missing or broken number falls back.
+      const num = (v: unknown, fallback: number) => (Number.isFinite(Number(v)) && v !== null ? Number(v) : fallback);
+      const showMs = num(data.showMs, 5000);
+      const gapMs = num(data.gapMs, 0);
       if (cancelled || cards.length === 0) return;
       // Twice through, then quiet: two names cycling for ten minutes look made up.
       const total = cards.length * 2;

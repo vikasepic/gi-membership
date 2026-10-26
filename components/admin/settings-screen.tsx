@@ -454,11 +454,11 @@ function RecentBuyersFields({ s, errors }: FieldsProps) {
   return (
     <>
       <div className={row}>
-        <Field label="Gap between cards" hint="seconds of quiet between one card and the next, 5 to 120" error={errors.recentBuyersGapSeconds}>
+        <Field label="Gap between cards" hint="seconds of quiet between one card and the next, 0 to 120" error={errors.recentBuyersGapSeconds}>
           <input
             name="recentBuyersGapSeconds"
             type="number"
-            min={5}
+            min={0}
             max={120}
             defaultValue={s.recentBuyersGapSeconds}
             className={input}

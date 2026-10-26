@@ -22,6 +22,6 @@ export async function GET(req: Request) {
   } catch (e) {
     // A popup that fails says nothing. It sits on pages that take money.
     console.error("[recent-buyers] route failed:", e instanceof Error ? e.message : e);
-    return NextResponse.json({ gapMs: 12_000, showMs: 6_000, cards: [] }, { headers: NO_STORE });
+    return NextResponse.json({ gapMs: 0, showMs: 5_000, cards: [] }, { headers: NO_STORE });
   }
 }

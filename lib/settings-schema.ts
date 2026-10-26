@@ -149,19 +149,20 @@ export const SETTINGS_SCHEMA = z.object({
   // ---- Recent buyers ------------------------------------------------------
   // The popup naming real recent buyers (spec 2026-10-26). The gap is the quiet
   // time between one card leaving and the next arriving, so two can never
-  // overlap and the two numbers need no rule between them.
+  // overlap and the two numbers need no rule between them. Default: five
+  // seconds each, the next straight after (owner, 26 Oct 2026).
   recentBuyersGapSeconds: z.coerce
     .number()
     .int()
-    .min(5, "5 seconds at least")
+    .min(0, "Cannot be negative")
     .max(120, "120 seconds at most")
-    .default(12),
+    .default(0),
   recentBuyersShowSeconds: z.coerce
     .number()
     .int()
     .min(3, "3 seconds at least")
     .max(15, "15 seconds at most")
-    .default(6),
+    .default(5),
   // A select, not a checkbox: an unticked box posts nothing, nothing parses to
   // the default, and the default is on, so a checkbox could never turn it off.
   recentBuyersHome: z.enum(["on", "off"]).default("on"),

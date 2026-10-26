@@ -88,6 +88,19 @@ describe("the recent buyers card", () => {
     expect(shown()).toBe("Tomás");
   });
 
+  it("shows the next card straight away when the gap is zero", async () => {
+    // A gap of 0 is a setting, not a missing value; it must not fall back.
+    respond = () =>
+      Promise.resolve(new Response(JSON.stringify({ gapMs: 0, showMs: 5000, cards: [card("Priya"), card("Tomás")] })));
+    await mount();
+    await wait(4000);
+    expect(shown()).toBe("Priya");
+    await wait(5000);
+    // The browser's zero-delay timer: the next task, a millisecond at most.
+    await wait(1);
+    expect(shown()).toBe("Tomás");
+  });
+
   it("plays a short list twice, then stops", async () => {
     await mount();
     const seen: string[] = [];
