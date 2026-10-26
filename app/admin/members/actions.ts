@@ -131,6 +131,19 @@ export async function toggleAdminAction(formData: FormData) {
   revalidatePath("/admin/members");
 }
 
+/**
+ * Take a member out of the recent buyers popup, or put them back. On the
+ * person, not the order: someone asking not to be named means every purchase.
+ */
+export async function toggleRecentBuyersHiddenAction(formData: FormData) {
+  await requireAdmin();
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) return;
+  const hidden = String(formData.get("hidden") ?? "") === "true";
+  await createServiceClient().from("users").update({ hide_from_recent_buyers: hidden }).eq("id", userId);
+  revalidatePath(`/admin/members/${userId}`);
+}
+
 export async function deleteMemberAction(
   _prev: MemberActionState,
   formData: FormData,

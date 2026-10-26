@@ -11,7 +11,8 @@ import { progressForCourses, lastLessonFor, lastSignInForAll } from "@/lib/learn
 import { deriveMembers } from "@/lib/member-money";
 import { deriveLedger } from "@/lib/ledger";
 import { money } from "@/lib/money";
-import { cancelSubscriptionAction, extendTrialAction, revokeAccessAction, toggleAdminAction, viewAsMemberAction } from "@/app/admin/members/actions";
+import { cancelSubscriptionAction, extendTrialAction, revokeAccessAction, toggleAdminAction, toggleRecentBuyersHiddenAction, viewAsMemberAction } from "@/app/admin/members/actions";
+import { createServiceClient } from "@/lib/supabase/server";
 import { DeleteMember } from "@/components/admin/delete-member";
 import { GrantMore } from "@/components/admin/grant-more";
 import { LearningPanel } from "@/components/admin/learning-panel";
@@ -39,6 +40,12 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
     lastLessonFor(id, courses),
   ]);
   const m = deriveMembers(data).find((x) => x.id === id);
+  const { data: rb } = await createServiceClient()
+    .from("users")
+    .select("hide_from_recent_buyers")
+    .eq("id", id)
+    .maybeSingle();
+  const hiddenFromBuyers = Boolean(rb?.hide_from_recent_buyers);
   if (!m) notFound();
   const rows = deriveLedger(data).filter((r) => r.userId === id);
   const envAdmins = adminEmails();
@@ -222,6 +229,14 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                   <button type="submit" className="text-xs text-muted hover:text-fg">{m.isAdmin ? "Remove admin" : "Make admin"}</button>
                 </form>
               )}
+              <form action={toggleRecentBuyersHiddenAction} className="flex items-center gap-2">
+                <input type="hidden" name="userId" value={m.id} />
+                <input type="hidden" name="hidden" value={hiddenFromBuyers ? "false" : "true"} />
+                {hiddenFromBuyers && <span className="text-xs text-muted">Hidden from recent buyers</span>}
+                <button type="submit" className="text-xs text-muted hover:text-fg">
+                  {hiddenFromBuyers ? "Show in recent buyers" : "Hide from recent buyers"}
+                </button>
+              </form>
               {/* Opens the store as them. Not a login — see lib/view-as.ts. */}
             <form action={viewAsMemberAction}>
               <input type="hidden" name="userId" value={m.id} />
