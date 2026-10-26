@@ -24,6 +24,8 @@ const row = (over: Partial<PurchaseRow> = {}): PurchaseRow => {
     itemName: "Book to Bestseller",
     imageUrl: "https://img/btb.webp",
     verb: "enrolled in",
+    grantProductName: null,
+    grantProductImage: null,
     ...over,
   };
 };
@@ -91,6 +93,15 @@ describe("selectRecentBuyers", () => {
     const cards = selectRecentBuyers([direct, viaOffer, other], { kind: "product", id: "p1" }, now);
     expect(cards).toHaveLength(1);
     expect(cards[0].itemName).toBe("Via offer");
+  });
+
+  it("names the product the visitor is looking at when the buyer came through an offer", () => {
+    const via = row({ offerId: "offer-x", grantProductId: "p1", itemName: "Offer label", imageUrl: "offer.webp", grantProductName: "The course", grantProductImage: "course.webp" });
+    const [card] = selectRecentBuyers([via], { kind: "product", id: "p1" }, now);
+    expect(card.itemName).toBe("The course");
+    expect(card.imageUrl).toBe("course.webp");
+    // The offer's own page still names the offer.
+    expect(selectRecentBuyers([via], { kind: "offer", id: "offer-x" }, now)[0].itemName).toBe("Offer label");
   });
 
   it("names a person once per offer page, their newest purchase", () => {

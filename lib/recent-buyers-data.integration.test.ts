@@ -60,13 +60,13 @@ describe.skipIf(!canRun)("loading recent buyers (integration)", () => {
     return data.id as string;
   }
 
-  async function offer(over: { show?: boolean; active?: boolean; grantProductId?: string; interval?: string } = {}) {
+  async function offer(over: { show?: boolean; active?: boolean; grantProductId?: string; interval?: string; name?: string } = {}) {
     const { data, error } = await db()
       .from("offers")
       .insert({
         store_id: storeId,
         key: `${tag}-o${offers.length}`,
-        name: `${tag} offer ${offers.length}`,
+        name: over.name ?? `${tag} offer ${offers.length}`,
         headline: "zz",
         grant_type: over.grantProductId ? "product" : "course",
         grant_product_id: over.grantProductId ?? null,
@@ -86,7 +86,7 @@ describe.skipIf(!canRun)("loading recent buyers (integration)", () => {
   async function order(
     userId: string,
     item: { kind: "product" | "bump" | "oto" | "renewal"; offerId?: string; productId?: string },
-    over: { status?: string; livemode?: boolean; invoice?: boolean; country?: string | null } = {},
+    over: { status?: string; livemode?: boolean; invoice?: boolean; country?: string | null; orderPi?: string; itemPi?: string } = {},
   ) {
     const { data, error } = await db()
       .from("orders")
@@ -101,6 +101,7 @@ describe.skipIf(!canRun)("loading recent buyers (integration)", () => {
         currency: "usd",
         buyer_country: over.country ?? null,
         stripe_invoice_id: over.invoice ? `in_${tag}_${n}` : null,
+        stripe_payment_intent_id: over.orderPi ?? null,
       })
       .select("id")
       .single();
@@ -113,6 +114,7 @@ describe.skipIf(!canRun)("loading recent buyers (integration)", () => {
       product_id: item.productId ?? null,
       description: tag,
       amount_cents: 2900,
+      stripe_payment_intent_id: over.itemPi ?? null,
     });
     if (res.error) throw new Error(`fixture item: ${res.error.message}`);
   }
@@ -196,6 +198,53 @@ describe.skipIf(!canRun)("loading recent buyers (integration)", () => {
     expect(rows.find((r) => r.userId === v)?.verb).toBe("joined");
   });
 
+  it("leaves out the owner, who is an admin through ADMIN_EMAILS and not the table", async () => {
+    const o = await offer();
+    const owner = await buyer();
+    const { data } = await db().from("users").select("email").eq("id", owner).single();
+    const before = process.env.ADMIN_EMAILS;
+    process.env.ADMIN_EMAILS = `someone-else@example.com, ${String(data?.email).toUpperCase()}`;
+    try {
+      await order(owner, { kind: "oto", offerId: o });
+      expect((await mine()).map((r) => r.userId)).not.toContain(owner);
+    } finally {
+      process.env.ADMIN_EMAILS = before;
+    }
+  });
+
+  it("prints the offer's public name, not the internal label after the dash", async () => {
+    const o = await offer({ name: `${tag} Funnel App — bump $27` });
+    const u = await buyer();
+    await order(u, { kind: "oto", offerId: o });
+    expect((await mine()).find((r) => r.userId === u)?.itemName).toBe(`${tag} Funnel App`);
+  });
+
+  it("carries the granted product's own title and picture for its page", async () => {
+    const p = await product();
+    const granting = await offer({ grantProductId: p });
+    const u = await buyer();
+    await order(u, { kind: "oto", offerId: granting });
+    const r = (await mine()).find((x) => x.userId === u);
+    expect(r?.grantProductName).toBe(`${tag} course`);
+    expect(r?.grantProductImage).toContain("library/zz-cover.webp");
+  });
+
+  it("drops an upsell refunded on its own charge, and keeps one still owned", async () => {
+    const o = await offer();
+    const refunded = await buyer();
+    const kept = await buyer();
+    await order(refunded, { kind: "oto", offerId: o }, { orderPi: `pi_${tag}_a1`, itemPi: `pi_${tag}_b1` });
+    await order(kept, { kind: "oto", offerId: o }, { orderPi: `pi_${tag}_a2`, itemPi: `pi_${tag}_b2` });
+    // revokeOwnershipForItem cancels the access and leaves the order paid.
+    await db().from("ownership").insert([
+      { store_id: storeId, user_id: refunded, offer_id: o, source: "oto", status: "canceled" },
+      { store_id: storeId, user_id: kept, offer_id: o, source: "oto", status: "active" },
+    ]);
+    const ids = (await mine()).map((r) => r.userId);
+    expect(ids).not.toContain(refunded);
+    expect(ids).toContain(kept);
+  });
+
   it("does not count an offer's buyers toward a product whose own switch is off", async () => {
     const p = await product({ show: false });
     const granting = await offer({ grantProductId: p });
@@ -212,6 +261,7 @@ afterAll(async () => {
   for (const u of users) {
     const { data: rows } = await c.from("orders").select("id").eq("user_id", u);
     for (const o of rows ?? []) await c.from("order_items").delete().eq("order_id", o.id);
+    await c.from("ownership").delete().eq("user_id", u);
     await c.from("orders").delete().eq("user_id", u);
     await c.from("users").delete().eq("id", u);
     await c.auth.admin.deleteUser(u);

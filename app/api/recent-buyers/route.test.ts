@@ -47,6 +47,8 @@ const row = (over: Partial<PurchaseRow> = {}): PurchaseRow => ({
   itemName: "Book to Bestseller",
   imageUrl: null,
   verb: "enrolled in",
+  grantProductName: null,
+  grantProductImage: null,
   ...over,
 });
 

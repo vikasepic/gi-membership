@@ -28,6 +28,9 @@ export type PurchaseRow = {
   itemName: string;
   imageUrl: string | null;
   verb: "enrolled in" | "joined";
+  /** The granted product's own title and picture, for its page: the visitor is looking at the product, not the offer. */
+  grantProductName: string | null;
+  grantProductImage: string | null;
 };
 
 /** Everything a card shows, and nothing else: this goes to the public. */
@@ -104,13 +107,16 @@ export function selectRecentBuyers(
     const firstName = displayFirstName(r.username);
     if (!firstName) continue;
     people.add(r.userId);
+    // Came to this product page through an offer that grants it: name what the
+    // visitor is looking at, not the offer they never saw.
+    const viaOffer = scope.kind === "product" && r.productId !== scope.id;
     cards.push({
       firstName,
       initial: firstName.charAt(0).toUpperCase(),
       country: r.country,
       verb: r.verb,
-      itemName: r.itemName,
-      imageUrl: r.imageUrl,
+      itemName: (viaOffer && r.grantProductName) || r.itemName,
+      imageUrl: viaOffer ? (r.grantProductImage ?? r.imageUrl) : r.imageUrl,
       at: r.createdAt,
     });
   }

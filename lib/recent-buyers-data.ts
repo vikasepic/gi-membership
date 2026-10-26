@@ -2,6 +2,7 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { getStoreId } from "@/lib/store";
 import { allRows } from "@/lib/traffic";
+import { isAdminEmail } from "@/lib/admin-guard";
 import { publicCoverUrl } from "@/lib/media-url";
 import { WINDOW_DAYS, type PurchaseRow } from "@/lib/recent-buyers";
 
@@ -18,8 +19,19 @@ type OrderRow = {
   user_id: string;
   created_at: string;
   buyer_country: string | null;
-  order_items: { kind: string; offer_id: string | null; product_id: string | null; created_at: string }[];
+  stripe_payment_intent_id: string | null;
+  order_items: {
+    kind: string;
+    offer_id: string | null;
+    product_id: string | null;
+    created_at: string;
+    stripe_payment_intent_id: string | null;
+  }[];
 };
+
+// An offer's name is an internal label after its dash ("Funnel App — bump
+// $27"); every public place cuts it there, and so does a card.
+const publicName = (name: string) => name.split("—")[0].trim();
 
 const KINDS = new Set(["product", "bump", "oto"]);
 
@@ -32,7 +44,9 @@ export async function loadPurchaseRows(now: Date): Promise<PurchaseRow[]> {
     const orders = await allRows<OrderRow>((from, to) =>
       db
         .from("orders")
-        .select("id, user_id, created_at, buyer_country, order_items(kind, offer_id, product_id, created_at)")
+        .select(
+          "id, user_id, created_at, buyer_country, stripe_payment_intent_id, order_items(kind, offer_id, product_id, created_at, stripe_payment_intent_id)",
+        )
         .eq("store_id", storeId)
         .eq("status", "paid")
         .eq("livemode", true)
@@ -48,15 +62,31 @@ export async function loadPurchaseRows(now: Date): Promise<PurchaseRow[]> {
     const userIds = [...new Set(orders.map((o) => o.user_id))];
     const items = orders.flatMap((o) => o.order_items.filter((i) => KINDS.has(i.kind)));
     const offerIds = [...new Set(items.map((i) => i.offer_id).filter(Boolean) as string[])];
-    const [{ data: users }, { data: offerRows }] = await Promise.all([
-      db.from("users").select("id, username, country, is_admin, hide_from_recent_buyers").in("id", userIds),
+    // An item on its own charge (an upsell) is refunded on that charge alone:
+    // the order stays paid and only its access is cancelled. Its access row is
+    // the only place that refund shows.
+    const ownCharge = (o: OrderRow, i: OrderRow["order_items"][number]) =>
+      !!i.stripe_payment_intent_id && i.stripe_payment_intent_id !== o.stripe_payment_intent_id;
+    const ownChargeUsers = [...new Set(orders.filter((o) => o.order_items.some((i) => ownCharge(o, i))).map((o) => o.user_id))];
+    const [{ data: users }, { data: offerRows }, { data: owned }] = await Promise.all([
+      db.from("users").select("id, email, username, country, is_admin, hide_from_recent_buyers").in("id", userIds),
       offerIds.length > 0
         ? db
             .from("offers")
             .select("id, name, image_url, active, show_recent_buyers, grant_product_id, grant_app_id, interval")
             .in("id", offerIds)
         : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+      ownChargeUsers.length > 0
+        ? db.from("ownership").select("user_id, offer_id, product_id, status").in("user_id", ownChargeUsers)
+        : Promise.resolve({ data: [] as Record<string, unknown>[] }),
     ]);
+    const stillOwns = (userId: string, offerId: string | null, productId: string | null) =>
+      (owned ?? []).some(
+        (w) =>
+          w.user_id === userId &&
+          w.status !== "canceled" &&
+          ((offerId && w.offer_id === offerId) || (productId && w.product_id === productId)),
+      );
     const offerOf = new Map((offerRows ?? []).map((o) => [o.id as string, o]));
     const productIds = [
       ...new Set([
@@ -79,13 +109,15 @@ export async function loadPurchaseRows(now: Date): Promise<PurchaseRow[]> {
     const out: PurchaseRow[] = [];
     for (const o of orders) {
       const u = userOf.get(o.user_id);
-      if (!u || u.is_admin || u.hide_from_recent_buyers) continue;
+      // The owner is an admin through ADMIN_EMAILS, which is_admin never records.
+      if (!u || u.is_admin || isAdminEmail(u.email as string | null) || u.hide_from_recent_buyers) continue;
       // Oldest first within an order, so its main item comes before an upsell
       // added to it later (lib/recent-buyers.ts breaks ties on order seen).
       const own = o.order_items
         .filter((i) => KINDS.has(i.kind))
         .sort((a, b) => a.created_at.localeCompare(b.created_at));
       for (const i of own) {
+        if (ownCharge(o, i) && !stillOwns(o.user_id, i.offer_id, i.product_id)) continue;
         const base = {
           orderId: o.id,
           userId: o.user_id,
@@ -108,8 +140,10 @@ export async function loadPurchaseRows(now: Date): Promise<PurchaseRow[]> {
               granted && granted.status === "published" && granted.show_recent_buyers
                 ? (off.grant_product_id as string)
                 : null,
-            itemName: off.name as string,
+            itemName: publicName(off.name as string),
             imageUrl: publicCoverUrl((off.image_url as string | null) ?? null) ?? coverOf(granted),
+            grantProductName: granted ? (granted.title as string) : null,
+            grantProductImage: coverOf(granted),
             verb: off.grant_app_id || off.interval ? "joined" : "enrolled in",
           });
         } else if (i.product_id) {
@@ -122,6 +156,8 @@ export async function loadPurchaseRows(now: Date): Promise<PurchaseRow[]> {
             grantProductId: null,
             itemName: p.title as string,
             imageUrl: coverOf(p),
+            grantProductName: null,
+            grantProductImage: null,
             verb: p.type === "app" ? "joined" : "enrolled in",
           });
         }
