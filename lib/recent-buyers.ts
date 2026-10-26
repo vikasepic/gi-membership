@@ -16,7 +16,11 @@ export type PurchaseRow = {
   createdAt: string;
   username: string | null;
   country: string | null;
-  itemKind: "purchase" | "bump" | "oto";
+  /**
+   * As order_items.kind stores it. "oto" is also what the offer checkout writes
+   * for the offer itself, so an order's first "oto" is its main item there.
+   */
+  itemKind: "product" | "bump" | "oto";
   offerId: string | null;
   productId: string | null;
   /** The product the item's offer grants, so a product page counts buyers who came through an offer. */
@@ -59,7 +63,9 @@ export function displayFirstName(username: string | null): string | null {
   return first;
 }
 
-const KIND_RANK = { purchase: 0, bump: 1, oto: 2 } as const;
+// Lower wins. A tie keeps the row seen first; the loader lists an order's
+// items oldest first, so an offer beats the upsell added to its order later.
+const KIND_RANK = { product: 0, oto: 1, bump: 2 } as const;
 
 export function selectRecentBuyers(
   rows: PurchaseRow[],

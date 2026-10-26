@@ -17,7 +17,7 @@ const row = (over: Partial<PurchaseRow> = {}): PurchaseRow => {
     createdAt: hoursAgo(1),
     username: "Priya Sharma",
     country: "IN",
-    itemKind: "purchase",
+    itemKind: "product",
     offerId: "offer-a",
     productId: null,
     grantProductId: null,
@@ -104,11 +104,21 @@ describe("selectRecentBuyers", () => {
   });
 
   it("shows one card per order on the home page, the main item before a bump or upsell", () => {
-    const main = row({ orderId: "ord", userId: "u", itemKind: "purchase", itemName: "Main" });
+    const main = row({ orderId: "ord", userId: "u", itemKind: "product", itemName: "Main" });
     const bump = row({ orderId: "ord", userId: "u", itemKind: "bump", itemName: "Bump" });
     const oto = row({ orderId: "ord", userId: "u", itemKind: "oto", itemName: "Upsell" });
     const cards = selectRecentBuyers([bump, oto, main], { kind: "home" }, now);
     expect(cards.map((c) => c.itemName)).toEqual(["Main"]);
+  });
+
+  it("takes an offer checkout's own offer as the main item, though it is stored as oto", () => {
+    // The offer checkout writes its offer as kind "oto"; a bump rides beside it,
+    // and an upsell taken afterwards is a second "oto" row, written later.
+    const offer = row({ orderId: "ord", userId: "u", itemKind: "oto", itemName: "Offer" });
+    const bump = row({ orderId: "ord", userId: "u", itemKind: "bump", itemName: "Bump" });
+    const upsell = row({ orderId: "ord", userId: "u", itemKind: "oto", itemName: "Upsell" });
+    const cards = selectRecentBuyers([offer, bump, upsell], { kind: "home" }, now);
+    expect(cards.map((c) => c.itemName)).toEqual(["Offer"]);
   });
 
   it("names a person once on the home page across two orders", () => {
