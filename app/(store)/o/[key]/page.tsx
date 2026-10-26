@@ -12,6 +12,7 @@ import { isOfferEligible } from "@/lib/offers";
 import { hasPageSections, getPageSections, getPageSettings } from "@/lib/pages";
 import { resolveGlobals } from "@/lib/templates-store";
 import { SalesPage } from "@/components/page/sales-page";
+import { RecentBuyers } from "@/components/recent-buyers";
 import { money } from "@/lib/money";
 import { planMoney } from "@/lib/plan-money";
 import { livePrices } from "@/lib/offer-prices";
@@ -162,6 +163,7 @@ export default async function OfferSalesPage({
         />
       )}
       {!preview && <ScrollTracker path={`/o/${key}`} />}
+      <RecentBuyers scope={{ offer: offer.id }} />
       <SalesPage
         rows={rows}
         settings={settings}

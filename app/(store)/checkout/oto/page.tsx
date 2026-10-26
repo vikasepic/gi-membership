@@ -8,6 +8,7 @@ import { immediateChargeCents } from "@/lib/offers";
 import { otoComponentFor } from "@/components/oto/registry";
 import { resolveGlobals } from "@/lib/templates-store";
 import { SectionsOto } from "@/components/oto/sections-template";
+import { RecentBuyers } from "@/components/recent-buyers";
 import { getPageSections } from "@/lib/pages";
 import type { OtoView } from "@/components/oto/shell";
 import { money } from "@/lib/money";
@@ -133,6 +134,7 @@ export default async function OtoPage({
       <>
         {purchase}
         {viewed}
+        <RecentBuyers scope={{ offer: offer.id }} />
         <SectionsOto view={view} rows={rows} globals={await resolveGlobals(rows)} />
       </>
     );
@@ -143,6 +145,7 @@ export default async function OtoPage({
     <>
       {purchase}
       {viewed}
+      <RecentBuyers scope={{ offer: offer.id }} />
       <Template view={view} />
     </>
   );

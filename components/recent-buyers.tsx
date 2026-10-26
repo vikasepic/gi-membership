@@ -35,9 +35,14 @@ function closedThisVisit(): boolean {
 
 /**
  * Height of the tallest bar fixed to the bottom of the screen, so the card can
- * sit above it. Measured before every card: a page's own bar (the Foundations
- * Weekend seat bar is page custom JS) can arrive after the first one, and the
+ * sit above it. Measured while a card shows: a page's own bar (the Foundations
+ * Weekend seat bar is the builder's sticky bar) slides in on scroll, and the
  * code knows nothing about it.
+ *
+ * A grid of hit tests up from the bottom edge, not one row along it. That
+ * seat bar's fixed wrapper is pointer-events none, which hit testing skips,
+ * and its pill floats clear of the edge; what gets hit is the pill, and the
+ * fixed wrapper is found by walking up from it.
  */
 export function bottomClearance(win: Window): number {
   const doc = win.document;
@@ -45,10 +50,12 @@ export function bottomClearance(win: Window): number {
   const h = win.innerHeight;
   const w = win.innerWidth;
   let clear = 0;
-  for (const x of [8, w / 2, w - 8]) {
-    for (const hit of doc.elementsFromPoint(x, h - 1)) {
-      if (hit.closest(".rb-card")) continue;
-      for (let n: Element | null = hit; n && n !== doc.body; n = n.parentElement) {
+  for (const y of [1, 20, 40, 60, 90, 120]) {
+    for (const x of [8, w / 2, w - 8]) {
+      // The topmost thing under the point that is not the card: a bar you can
+      // see is on top of the page there, so nothing beneath it needs checking.
+      const hit = doc.elementsFromPoint(x, h - y).find((e) => !e.closest(".rb-card"));
+      for (let n: Element | null = hit ?? null; n && n !== doc.body; n = n.parentElement) {
         const pos = win.getComputedStyle(n).position;
         if (pos !== "fixed" && pos !== "sticky") continue;
         const r = n.getBoundingClientRect();
@@ -79,6 +86,8 @@ export function RecentBuyers({ scope }: { scope: RecentBuyersScope }) {
     if (closedThisVisit()) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let watch: ReturnType<typeof setInterval> | undefined;
+    const place = () => setBottom(bottomClearance(window) + gutter(window));
 
     const run = async () => {
       let data: { gapMs?: number; showMs?: number; cards?: Card[] };
@@ -96,10 +105,14 @@ export function RecentBuyers({ scope }: { scope: RecentBuyersScope }) {
       const show = (i: number, delay: number) => {
         timer = setTimeout(() => {
           if (cancelled || closed.current || closedThisVisit()) return;
-          setBottom(bottomClearance(window) + gutter(window));
+          place();
           const c = cards[i % cards.length];
           setCard({ ...c, age: timeAgo(c.at, new Date()) });
+          // A page's bar can slide in on scroll while the card is up; keep
+          // clear of it rather than cover its button. Three hit tests a beat.
+          watch = setInterval(place, 400);
           timer = setTimeout(() => {
+            clearInterval(watch);
             setCard(null);
             if (i + 1 < total) show(i + 1, gapMs);
           }, showMs);
@@ -114,6 +127,7 @@ export function RecentBuyers({ scope }: { scope: RecentBuyersScope }) {
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      clearInterval(watch);
       window.removeEventListener("load", start);
     };
   }, [query]);

@@ -154,6 +154,42 @@ describe("the recent buyers card", () => {
     expect((document.querySelector(".rb-card") as HTMLElement).style.bottom).toBe("76px");
   });
 
+  it("moves up when a bar slides in while a card is already showing", async () => {
+    // The builder's sticky bar (Foundations Weekend's seat bar) slides in on
+    // scroll, which can happen mid-card; the card would cover its button.
+    Object.defineProperty(window, "innerWidth", { value: 390, configurable: true });
+    await mount();
+    await wait(4000);
+    expect((document.querySelector(".rb-card") as HTMLElement).style.bottom).toBe("12px");
+    const bar = document.createElement("div");
+    bar.dataset.testBar = "";
+    bar.style.position = "fixed";
+    bar.getBoundingClientRect = () => ({ top: window.innerHeight - 64, bottom: window.innerHeight }) as DOMRect;
+    document.body.appendChild(bar);
+    (document as { elementsFromPoint?: unknown }).elementsFromPoint = () => [bar];
+    await wait(500);
+    expect(shown()).toBe("Priya");
+    expect((document.querySelector(".rb-card") as HTMLElement).style.bottom).toBe("76px");
+  });
+
+  it("finds a bar whose wrapper lets clicks through and whose pill floats above the edge", async () => {
+    // Foundations Weekend: the fixed wrapper is pointer-events none, so a hit
+    // test never returns it, and the pill inside sits 16px clear of the bottom.
+    Object.defineProperty(window, "innerWidth", { value: 390, configurable: true });
+    const wrapper = document.createElement("div");
+    wrapper.dataset.testBar = "";
+    wrapper.style.position = "fixed";
+    wrapper.getBoundingClientRect = () => ({ top: window.innerHeight - 80, bottom: window.innerHeight }) as DOMRect;
+    const pill = document.createElement("div");
+    wrapper.appendChild(pill);
+    document.body.appendChild(wrapper);
+    (document as { elementsFromPoint?: unknown }).elementsFromPoint = (_x: number, y: number) =>
+      y >= window.innerHeight - 16 ? [document.body] : y >= window.innerHeight - 70 ? [pill] : [document.body];
+    await mount();
+    await wait(4000);
+    expect((document.querySelector(".rb-card") as HTMLElement).style.bottom).toBe("92px");
+  });
+
   it("shows no flag when there is none, and the initial when there is no picture", async () => {
     respond = body([card("Priya", { flagSvg: null, country: null })]);
     await mount();

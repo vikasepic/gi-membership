@@ -19,6 +19,7 @@ import { offersForRows } from "@/lib/block-offers";
 import { shownPrices } from "@/lib/offer-prices";
 import { resolveGlobals } from "@/lib/templates-store";
 import { SalesPage } from "@/components/page/sales-page";
+import { RecentBuyers } from "@/components/recent-buyers";
 import { pageMetadata, absoluteUrl } from "@/lib/page-metadata";
 import { getSettingsOrDefaults } from "@/lib/settings";
 import { recordPageHit } from "@/lib/traffic";
@@ -163,6 +164,7 @@ export default async function ProductPage({
           />
         )}
         {!preview && <ScrollTracker path={`/p/${slug}`} />}
+        <RecentBuyers scope={{ product: product.id }} />
         <SalesPage
           rows={rows}
           settings={settings}
@@ -202,6 +204,7 @@ export default async function ProductPage({
   return (
     <div className="flex flex-col gap-10 md:gap-14">
       {await machine([])}
+      <RecentBuyers scope={{ product: product.id }} />
       <Link href="/" className="kicker w-fit text-muted hover:text-fg">
         &larr; Store
       </Link>

@@ -12,6 +12,7 @@ import { HOME_COPY } from "@/lib/home-starter";
 import { getPageSections } from "@/lib/pages";
 import { isDraftPreview } from "@/lib/draft-preview";
 import { PreviewBar } from "@/components/page/preview-bar";
+import { RecentBuyers } from "@/components/recent-buyers";
 import { getStoreId } from "@/lib/store";
 import { blocksForSection } from "@/lib/section-to-blocks";
 import { buildSectionView } from "@/lib/page-sections";
@@ -193,6 +194,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
       <div className={`flex flex-col${wide ? " store-wide" : ""}`}>
         {machine}
         {preview && <PreviewBar />}
+        <RecentBuyers scope={{ home: true }} />
         {rows.map((row) => (
           <SectionBand
             key={row.sectionKey}
@@ -208,6 +210,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ p
   return (
     <>
       {machine}
+      <RecentBuyers scope={{ home: true }} />
       <DefaultHome d={d} memberships={memberships} />
     </>
   );
