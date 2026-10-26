@@ -1470,6 +1470,18 @@ courses go with them. Until 14 Oct 2026 the product path ignored the status. Spe
 | `offers` | `grant_type` CHECK now `product`, `subscription` or `course` |
 | `ownership` | CHECK `product_id`, `app_id` or `offer_id` not null; unique `(store_id, user_id, offer_id)` where no product and no app |
 
+### Recent buyers popup
+
+Migration 0096 (26 Oct 2026). Which buyers the recent buyers popup on the
+sales and home pages may name. Spec:
+`docs/superpowers/specs/2026-10-26-recent-buyers-popup-design.md`.
+
+| Table | Column |
+|---|---|
+| `offers` | `show_recent_buyers` boolean, default true: its buyers show on its page and in the home mix |
+| `products` | `show_recent_buyers` boolean, default true, same |
+| `users` | `hide_from_recent_buyers` boolean, default false: the admin took this person out, every purchase |
+
 ---
 
 ## Appendix: the raw DDL

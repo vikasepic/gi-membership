@@ -25,6 +25,15 @@ const formPayload = (over: Record<string, string> = {}) => ({
 });
 
 describe("parseProductForm", () => {
+  it("reads an unticked recent buyers box as off, and a ticked one as on", () => {
+    const off = parseProductForm(formPayload());
+    if (!off.ok) throw new Error(JSON.stringify(off.errors));
+    expect(off.data.showRecentBuyers).toBe(false);
+    const on = parseProductForm(formPayload({ showRecentBuyers: "on" }));
+    if (!on.ok) throw new Error(JSON.stringify(on.errors));
+    expect(on.data.showRecentBuyers).toBe(true);
+  });
+
   it("keeps the home page step, and reads none as Everything else", () => {
     const put = parseProductForm(formPayload({ homeStep: "idea" }));
     if (!put.ok) throw new Error(JSON.stringify(put.errors));

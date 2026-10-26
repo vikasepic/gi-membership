@@ -131,6 +131,8 @@ export const productSchema = z.object({
   ),
   // The home page step, by id. Blank is Everything else.
   homeStep: z.preprocess(emptyToNull, z.string().trim().regex(HOME_STEP_ID, "That is not a home step").nullable().default(null)),
+  // An unticked box posts nothing, which is how it says off.
+  showRecentBuyers: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
 });
 
 export type ParsedProduct = {
@@ -156,6 +158,7 @@ export type ParsedProduct = {
   adEventName: string | null;
   contentName: string | null;
   homeStep: string | null;
+  showRecentBuyers: boolean;
 };
 
 export type ParseResult =
@@ -208,6 +211,7 @@ export function parseProductForm(raw: Record<string, unknown>): ParseResult {
       adEventName: v.adEventName,
       contentName: v.contentName,
       homeStep: v.homeStep,
+      showRecentBuyers: v.showRecentBuyers,
     },
   };
 }

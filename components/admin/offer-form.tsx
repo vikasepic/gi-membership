@@ -229,6 +229,20 @@ export function OfferForm({
             )}
           </select>
         </Field>
+        <Field
+          label="Show recent buyers"
+          hint="Real buyers from the last two weeks, on this page and in the home page mix."
+        >
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="showRecentBuyers"
+              defaultChecked={offer?.showRecentBuyers ?? true}
+              className="size-4 accent-[var(--primary)]"
+            />
+            Show the popup
+          </label>
+        </Field>
       </Section>
 
       {/* Grant — what the offer gives. */}

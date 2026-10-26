@@ -73,6 +73,8 @@ export type ProductInput = {
   /** Overrides the title/name as Meta's content_name. Null keeps the old value. */
   contentName?: string | null;
   homeStep?: string | null;
+  /** In the recent buyers popup. Absent (a caller with no form) keeps the default, on. */
+  showRecentBuyers?: boolean;
   checkoutNote?: string | null;
   checkoutBullets?: string[];
 };
@@ -158,6 +160,7 @@ function toRow(input: ProductInput, storeId: string) {
     ad_event_name: input.adEventName?.trim() || null,
     content_name: input.contentName?.trim() || null,
     home_step: input.homeStep ?? null,
+    show_recent_buyers: input.showRecentBuyers ?? true,
     checkout_note: input.checkoutNote?.trim() || null,
     // Blank lines dropped rather than stored: an empty bullet renders as a tick
     // beside nothing, which reads as a missing promise.
@@ -266,6 +269,8 @@ export type OfferInput = {
   contentName?: string | null;
   homeOrder?: number | null;
   homeStep?: string | null;
+  /** In the recent buyers popup. Absent (a caller with no form) keeps the default, on. */
+  showRecentBuyers?: boolean;
   activecampaignTrialTagId?: string | null;
   activecampaignCancelledTagId?: string | null;
   otoTemplate?: string;
@@ -358,6 +363,7 @@ function toOfferRow(input: OfferInput, storeId: string) {
     content_name: input.contentName?.trim() || null,
     home_order: input.homeOrder ?? null,
     home_step: input.homeStep ?? null,
+    show_recent_buyers: input.showRecentBuyers ?? true,
     activecampaign_tag_id: input.activecampaignTagId ?? null,
     activecampaign_trial_tag_id: input.activecampaignTrialTagId ?? null,
     activecampaign_cancelled_tag_id: input.activecampaignCancelledTagId ?? null,

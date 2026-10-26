@@ -135,6 +135,8 @@ const schema = z
     otoFaq: z.string().optional().default(""),
     declineLabel: z.string().trim().min(1).default("No thanks"),
     active: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
+    // An unticked box posts nothing, which is how it says off.
+    showRecentBuyers: z.preprocess((v) => v === "on" || v === "true" || v === true, z.boolean()),
   })
   .refine((v) => v.grantType !== "product" || v.grantProductId, {
     message: "Pick the product this offer grants",
@@ -260,6 +262,7 @@ export async function saveOffer(_prev: SaveState, formData: FormData): Promise<S
     contentName: v.contentName?.trim() || null,
     homeOrder: v.homeOrder,
     homeStep: v.homeStep,
+    showRecentBuyers: v.showRecentBuyers,
     activecampaignTagId: v.activecampaignTagId?.trim() || null,
     activecampaignTrialTagId: v.activecampaignTrialTagId?.trim() || null,
     activecampaignCancelledTagId: v.activecampaignCancelledTagId?.trim() || null,

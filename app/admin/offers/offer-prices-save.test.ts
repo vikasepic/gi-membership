@@ -233,4 +233,14 @@ describe("where the offer sits on the storefront", () => {
     expect(res.error).toBeTruthy();
     expect(updated).not.toHaveBeenCalled();
   });
+
+  it("saves the recent buyers switch off when the box is unticked", async () => {
+    await saveOffer({}, form([PRICE]));
+    expect(updated.mock.calls[0][1]).toMatchObject({ showRecentBuyers: false });
+  });
+
+  it("saves the recent buyers switch on when the box is ticked", async () => {
+    await saveOffer({}, form([PRICE], { showRecentBuyers: "on" }));
+    expect(updated.mock.calls[0][1]).toMatchObject({ showRecentBuyers: true });
+  });
 });

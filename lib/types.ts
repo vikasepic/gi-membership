@@ -50,6 +50,8 @@ export type Product = {
   status: ProductStatus;
   /** The home page step it sits under, by id (settings.homeSteps). Null: Everything else. */
   homeStep?: string | null;
+  /** Its buyers appear in the recent buyers popup (0096). */
+  showRecentBuyers?: boolean;
   bumpOfferId: string | null;
   upsellOfferId: string | null;
   /**
@@ -134,6 +136,8 @@ export type Offer = {
   homeOrder?: number | null;
   /** The home page step it sits under, by id (settings.homeSteps). Null: Everything else. */
   homeStep?: string | null;
+  /** Its buyers appear in the recent buyers popup (0096). */
+  showRecentBuyers?: boolean;
   activecampaignTagId: string | null;
   /**
    * A second price on this offer's OWN page at /o/<key>.
