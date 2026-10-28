@@ -108,7 +108,19 @@ export function CanvasFrame({
   const range = widthRange(device);
 
   return (
-    <div ref={wrap} className="relative mx-auto w-full" style={{ maxWidth: shown ?? undefined }}>
+    <div
+      ref={wrap}
+      className="relative mx-auto w-full"
+      style={{
+        maxWidth: shown ?? undefined,
+        // The containing block for anything a page pins with position:fixed.
+        // Without it a fixed nav (Foundations Weekend's) or the sticky bar
+        // module is placed against the editor's window and lands on the
+        // toolbar, over Save. In here they pin to the canvas; the live page
+        // has no frame, so they still pin to the window there.
+        transform: "translateZ(0)",
+      }}
+    >
       {children}
 
       {/* The handle. Both edges, because a centred frame grows from the middle

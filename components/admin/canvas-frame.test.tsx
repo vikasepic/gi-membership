@@ -90,3 +90,27 @@ describe("the handles", () => {
     expect(device).toBe("mobile");
   });
 });
+
+describe("what the canvas holds", () => {
+  it("is the box a pinned block positions against, not the editor's window", () => {
+    // A page's fixed nav (Foundations Weekend's, 28 Oct 2026) or the sticky
+    // bar module escaped the canvas and sat on the editor's own toolbar,
+    // hiding Save. A transform makes the frame their containing block, so in
+    // here they pin to the canvas while the live page, which has no frame,
+    // keeps them pinned to the window.
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() =>
+      root.render(
+        <CanvasFrame device="desktop" width={null} onWidth={() => {}} onDevice={() => {}}>
+          <div style={{ position: "fixed", top: 0 }}>nav</div>
+        </CanvasFrame>,
+      ),
+    );
+    const frame = host.firstElementChild as HTMLElement;
+    expect(frame.style.transform).toBe("translateZ(0)");
+    act(() => root.unmount());
+    host.remove();
+  });
+});
