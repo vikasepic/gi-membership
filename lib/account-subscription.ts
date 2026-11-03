@@ -1,5 +1,6 @@
 import { subView } from "@/lib/member-money";
 import { dateWithYear, shortDate } from "@/lib/dates";
+import { money } from "@/lib/money";
 import type { SubscriptionRow } from "@/lib/subscriptions";
 
 /**
@@ -26,13 +27,16 @@ export function memberSubscriptionLine(s: SubscriptionRow, now = new Date()): Me
   const on = (iso: string | null) =>
     iso ? (new Date(iso).getUTCFullYear() === now.getUTCFullYear() ? shortDate(iso) : dateWithYear(iso)) : null;
   const ended = on(s.endedAt ?? s.canceledAt);
+  // Stripe's own preview, so a coupon is already in it. Unknown says nothing
+  // rather than quoting the list price as a promise.
+  const amount = v.nextChargeCents != null ? ` for ${money(v.nextChargeCents, s.currency)}` : "";
   switch (v.state) {
     case "on trial":
-      return { state: "Free trial", detail: v.nextChargeAt ? `first payment ${on(v.nextChargeAt)}` : null, tone: "ok" };
+      return { state: "Free trial", detail: v.nextChargeAt ? `first payment ${on(v.nextChargeAt)}${amount}` : null, tone: "ok" };
     case "paying":
       return {
         state: "Active",
-        detail: v.nextChargeAt ? `${s.installments ? "next payment" : "renews"} ${on(v.nextChargeAt)}` : null,
+        detail: v.nextChargeAt ? `${s.installments ? "next payment" : "renews"} ${on(v.nextChargeAt)}${amount}` : null,
         tone: "ok",
       };
     case "free access":

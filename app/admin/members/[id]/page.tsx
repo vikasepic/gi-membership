@@ -77,7 +77,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           <div className="flex flex-wrap gap-2.5">
             <Tile label="Total paid" value={money(m.totalPaidCents - m.refundedCents, m.currency)} hint={`${m.payments} payment${m.payments === 1 ? "" : "s"}${m.refundedCents ? `, ${money(m.refundedCents, m.currency)} refunded` : ""}`} />
             <Tile label="A month" value={money(m.mrrCents, m.currency)} hint={m.mrrCents ? "recurring right now" : "nothing recurring"} />
-            <Tile label="Next event" value={m.nextEvent ? `${m.nextEvent.what} ${relative(m.nextEvent.at, data.now)}` : "—"} hint={m.nextEvent ? `${fmtDate(m.nextEvent.at)} · ${m.nextEvent.name}` : "nothing scheduled"} />
+            <Tile label="Next event" value={m.nextEvent ? `${m.nextEvent.what} ${relative(m.nextEvent.at, data.now)}` : "—"} hint={m.nextEvent ? `${fmtDate(m.nextEvent.at)} · ${m.nextEvent.name}${m.nextEvent.amountCents != null ? ` · ${money(m.nextEvent.amountCents, m.nextEvent.currency)}` : ""}` : "nothing scheduled"} />
           </div>
 
           <section className="rounded-2xl border border-border bg-surface">
@@ -125,8 +125,9 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                   <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
                     <dt className="text-muted">Price</dt><dd>{per(s)}{s.installments ? ` × ${s.installments}` : ""}</dd>
                     <dt className="text-muted">Started</dt><dd>{fmtDate(s.startedAt)}</dd>
-                    {s.trialEnd && <><dt className="text-muted">Trial {new Date(s.trialEnd) > data.now ? "ends" : "ended"}</dt><dd>{fmtDate(s.trialEnd)}</dd></>}
-                    {s.nextChargeAt && s.state !== "on trial" && <><dt className="text-muted">Next charge</dt><dd>{fmtDate(s.nextChargeAt)}</dd></>}
+                    {s.trialEnd && <><dt className="text-muted">Trial {new Date(s.trialEnd) > data.now ? "ends" : "ended"}</dt><dd>{fmtDate(s.trialEnd)}{s.state === "on trial" && s.nextChargeCents != null ? `, then ${money(s.nextChargeCents, s.currency)}` : ""}</dd></>}
+                    {s.nextChargeAt && s.state !== "on trial" && <><dt className="text-muted">Next charge</dt><dd>{fmtDate(s.nextChargeAt)}{s.nextChargeCents != null ? `, ${money(s.nextChargeCents, s.currency)}` : ""}</dd></>}
+                    {s.nextChargeNote && <><dt className="text-muted">Discount</dt><dd>{s.nextChargeNote}</dd></>}
                     {s.state === "free access" && <><dt className="text-muted">Charged</dt><dd>$0, fully discounted</dd></>}
                     {s.cancelsAt && <><dt className="text-muted">Cancels</dt><dd>{fmtDate(s.cancelsAt)}</dd></>}
                     {s.canceledAt && <><dt className="text-muted">Cancelled</dt><dd>{fmtDate(s.canceledAt)}</dd></>}

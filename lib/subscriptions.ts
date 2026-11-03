@@ -1,4 +1,5 @@
 import "server-only";
+import { money } from "@/lib/money";
 import type Stripe from "stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
@@ -41,6 +42,10 @@ export type SubscriptionRow = {
   lastPaidAt: string | null;
   livemode: boolean;
   startedAt: string;
+  /** What Stripe will take at the next renewal, from its preview. Null: unknown or none. */
+  nextChargeCents: number | null;
+  /** The discount behind that figure, in the coupon's own terms. */
+  nextChargeNote: string | null;
 };
 
 /** The row as the table spells it. */
@@ -72,6 +77,8 @@ export type SubscriptionInsert = {
   livemode: boolean;
   started_at: string;
   synced_at: string;
+  next_charge_cents: number | null;
+  next_charge_note: string | null;
 };
 
 const at = (s: number | null | undefined): string | null => (s ? new Date(s * 1000).toISOString() : null);
@@ -97,6 +104,8 @@ export function subscriptionRowFrom(
   invoices: ReadonlyArray<Pick<Stripe.Invoice, "amount_paid" | "created" | "status">>,
   link: SubscriptionLink,
   now = new Date(),
+  /** Stripe's preview of the next invoice. Absent: nothing will be charged, or it could not be read. */
+  next?: { amountDue: number },
 ): SubscriptionInsert {
   const item = sub.items?.data?.[0];
   const legacy = sub as unknown as { current_period_start?: number | null; current_period_end?: number | null };
@@ -133,7 +142,29 @@ export function subscriptionRowFrom(
     livemode: sub.livemode !== false,
     started_at: at(sub.start_date) ?? at(sub.created) ?? now.toISOString(),
     synced_at: now.toISOString(),
+    next_charge_cents: next ? next.amountDue : null,
+    next_charge_note: next ? discountNote(sub.discounts) : null,
   };
+}
+
+/**
+ * The discounts on a subscription, in the coupon's own terms: "Content Engine
+ * free month: 100% off, this charge only". Null when there are none, or when
+ * Stripe handed back an id instead of the discount (the read did not expand
+ * it), because a guessed note is worse than none.
+ */
+export function discountNote(discounts: ReadonlyArray<string | Stripe.Discount> | null | undefined): string | null {
+  const notes = (discounts ?? []).flatMap((d) => {
+    const c = typeof d === "string" ? null : d.source?.coupon;
+    if (!c || typeof c === "string") return [];
+    const off = c.percent_off != null ? `${c.percent_off}% off` : c.amount_off != null ? `${money(c.amount_off, c.currency ?? "usd")} off` : null;
+    if (!off) return [];
+    const months = c.duration_in_months ?? 0;
+    const lasts =
+      c.duration === "once" ? ", this charge only" : c.duration === "forever" ? " every charge" : months ? ` for ${months} month${months === 1 ? "" : "s"}` : "";
+    return [`${c.name ? `${c.name}: ` : ""}${off}${lasts}`];
+  });
+  return notes.length ? notes.join("; ") : null;
 }
 
 /** Who this subscription belongs to on our side, from the access row or the order line that started it. */
@@ -199,16 +230,35 @@ export function belongsToStore(sub: Pick<Stripe.Subscription, "metadata">, link:
 export async function syncSubscription(stripeSubscriptionId: string): Promise<SubscriptionInsert | null> {
   const s = stripe();
   const [sub, invoices] = await Promise.all([
-    s.subscriptions.retrieve(stripeSubscriptionId),
+    // Expanded to the coupon, so the member page can say why a charge is not the price.
+    s.subscriptions.retrieve(stripeSubscriptionId, { expand: ["discounts.source.coupon"] }),
     s.invoices.list({ subscription: stripeSubscriptionId, status: "paid", limit: 100 }),
   ]);
   const link = await linkFor(stripeSubscriptionId);
   if (!belongsToStore(sub, link)) return null;
-  const row = subscriptionRowFrom(sub, invoices.data, link);
+  const row = subscriptionRowFrom(sub, invoices.data, link, new Date(), await nextCharge(sub));
   const db = createServiceClient();
   const { error } = await db.from("subscriptions").upsert(row, { onConflict: "stripe_subscription_id" });
   if (error) throw new Error(`syncSubscription: ${error.message}`);
   return row;
+}
+
+/**
+ * What Stripe will take at the next renewal: its own preview of the next
+ * invoice, so coupons and tax are already in it. Only for a subscription that
+ * will renew; one that is ending has no next charge. A preview that fails
+ * leaves the figure unknown rather than failing the sync around it.
+ */
+async function nextCharge(sub: Stripe.Subscription): Promise<{ amountDue: number } | undefined> {
+  const renews = ["active", "trialing", "past_due"].includes(sub.status) && !sub.cancel_at_period_end && !sub.cancel_at;
+  if (!renews) return undefined;
+  try {
+    const preview = await stripe().invoices.createPreview({ subscription: sub.id });
+    return { amountDue: preview.amount_due };
+  } catch (e) {
+    console.error(`[subscriptions] preview of ${sub.id} failed:`, e instanceof Error ? e.message : e);
+    return undefined;
+  }
 }
 
 /** The same, swallowing failure the way every webhook side effect here does. */
@@ -292,5 +342,7 @@ export function rowOf(r: Record<string, unknown>): SubscriptionRow {
     lastPaidAt: (r.last_paid_at as string) ?? null,
     livemode: r.livemode !== false,
     startedAt: r.started_at as string,
+    nextChargeCents: (r.next_charge_cents as number | null) ?? null,
+    nextChargeNote: (r.next_charge_note as string | null) ?? null,
   };
 }

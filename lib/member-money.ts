@@ -28,6 +28,10 @@ export type SubView = {
   startedAt: string;
   trialEnd: string | null;
   nextChargeAt: string | null;
+  /** What that charge will be, from Stripe's preview. Null: unknown, never "free". */
+  nextChargeCents: number | null;
+  /** Why it differs from the price: the discount, in the coupon's terms. */
+  nextChargeNote: string | null;
   cancelsAt: string | null;
   canceledAt: string | null;
   paidInvoices: number;
@@ -36,7 +40,7 @@ export type SubView = {
   lastPaidAt: string | null;
 };
 
-export type NextEvent = { what: "trial ends" | "renews" | "cancels"; at: string; name: string };
+export type NextEvent = { what: "trial ends" | "renews" | "cancels"; at: string; name: string; amountCents?: number | null; currency?: string };
 
 export type MemberMoney = {
   id: string;
@@ -150,6 +154,8 @@ export function subView(s: SubscriptionRow, name: string): SubView {
     startedAt: s.startedAt,
     trialEnd: s.trialEnd,
     nextChargeAt,
+    nextChargeCents: nextChargeAt ? s.nextChargeCents : null,
+    nextChargeNote: nextChargeAt ? s.nextChargeNote : null,
     cancelsAt,
     canceledAt: s.canceledAt,
     paidInvoices: s.paidInvoices,
@@ -209,9 +215,9 @@ export function deriveMembers(d: MoneyData): MemberMoney[] {
     const converted = subs.some((s) => s.trialEnd && s.paidInvoices > 0);
     const events: NextEvent[] = [];
     for (const s of subs) {
-      if (s.state === "on trial" && s.trialEnd) events.push({ what: "trial ends", at: s.trialEnd, name: s.name });
+      if (s.state === "on trial" && s.trialEnd) events.push({ what: "trial ends", at: s.trialEnd, name: s.name, amountCents: s.nextChargeCents, currency: s.currency });
       else if (s.state === "cancelling" && s.cancelsAt) events.push({ what: "cancels", at: s.cancelsAt, name: s.name });
-      else if ((s.state === "paying" || s.state === "past due") && s.nextChargeAt) events.push({ what: "renews", at: s.nextChargeAt, name: s.name });
+      else if ((s.state === "paying" || s.state === "past due") && s.nextChargeAt) events.push({ what: "renews", at: s.nextChargeAt, name: s.name, amountCents: s.nextChargeCents, currency: s.currency });
     }
     events.sort((a, b) => ms(a.at) - ms(b.at));
     const first = orders[0];

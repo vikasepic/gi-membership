@@ -41,6 +41,8 @@ const sub = (over: Partial<SubscriptionRow>): SubscriptionRow => ({
   lastPaidAt: null,
   livemode: true,
   startedAt: "2026-09-18T10:00:00Z",
+  nextChargeCents: null,
+  nextChargeNote: null,
   ...over,
 });
 const order = (o: Partial<MoneyData["orders"][number]> & { id: string; userId: string }): MoneyData["orders"][number] => ({
@@ -252,6 +254,31 @@ describe("a subscription that is scheduled to end", () => {
     expect(v.state).toBe("paying");
     expect(v.cancelsAt).toBeNull();
     expect(v.nextChargeAt).toBe("2026-10-17T10:00:00Z");
+  });
+});
+
+describe("what the next renewal will charge", () => {
+  it("carries Stripe's figure and its reason through to the member's card", () => {
+    const v = subView(
+      sub({ status: "active", paidInvoices: 1, currentPeriodEnd: "2026-11-04T01:02:57Z", nextChargeCents: 0, nextChargeNote: "Content Engine free month: 100% off, this charge only" }),
+      "Content Engine",
+    );
+    expect(v.nextChargeAt).toBe("2026-11-04T01:02:57Z");
+    expect(v.nextChargeCents).toBe(0);
+    expect(v.nextChargeNote).toBe("Content Engine free month: 100% off, this charge only");
+  });
+
+  it("puts the amount on the member's next event", () => {
+    const d: MoneyData = {
+      ...DATA,
+      users: [{ id: "k", email: "k@e.com", name: "Kerry", isAdmin: false, createdAt: "2026-09-27T10:00:00Z" }],
+      orders: [],
+      items: [],
+      ownership: [],
+      subscriptions: [sub({ userId: "k", status: "active", paidInvoices: 1, currentPeriodEnd: "2026-11-04T01:02:57Z", nextChargeCents: 0 })],
+    };
+    const [m] = deriveMembers(d);
+    expect(m.nextEvent).toMatchObject({ what: "renews", at: "2026-11-04T01:02:57Z", amountCents: 0 });
   });
 });
 

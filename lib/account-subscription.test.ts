@@ -37,6 +37,8 @@ const sub = (over: Partial<SubscriptionRow>): SubscriptionRow => ({
   lastPaidAt: "2026-09-05T00:00:00Z",
   livemode: true,
   startedAt: "2026-09-05T00:00:00Z",
+  nextChargeCents: null,
+  nextChargeNote: null,
   ...over,
 });
 
@@ -50,6 +52,14 @@ describe("the status line under a subscription purchase", () => {
 
   it("a paying subscription says when it renews", () => {
     expect(line(sub({}))).toEqual({ state: "Active", detail: "renews 5 Oct", tone: "ok" });
+  });
+
+  it("a renewal says what it will charge, Stripe's figure, discount included", () => {
+    expect(line(sub({ nextChargeCents: 5800 })).detail).toBe("renews 5 Oct for $58");
+    expect(line(sub({ nextChargeCents: 0 })).detail).toBe("renews 5 Oct for $0");
+    expect(
+      line(sub({ status: "trialing", paidInvoices: 0, trialEnd: "2026-10-05T17:52:59Z", nextChargeCents: 5800 })).detail,
+    ).toBe("first payment 5 Oct for $58");
   });
 
   it("an instalment plan says next payment, not renews", () => {

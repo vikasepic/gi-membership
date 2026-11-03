@@ -39,6 +39,8 @@ const sub = (over: Partial<SubscriptionRow>): SubscriptionRow => ({
   lastPaidAt: "2026-09-30T16:30:31+00:00",
   livemode: true,
   startedAt: "2026-09-23T15:29:38+00:00",
+  nextChargeCents: null,
+  nextChargeNote: null,
   ...over,
 });
 
