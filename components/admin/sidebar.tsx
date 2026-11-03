@@ -72,6 +72,8 @@ function groups(c: NavCounts): { title: string; items: Item[] }[] {
         // Every free trial and what became of it. Its own page: the one
         // question the members list cannot answer at a glance.
         { href: "/admin/trials", label: "Trials", icon: ICON.members },
+        // What comes in over the next 30 days, and who renews (3 Nov 2026).
+        { href: "/admin/renewals", label: "Renewals", icon: ICON.members },
       ],
     },
     {

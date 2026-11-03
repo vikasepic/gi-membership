@@ -162,7 +162,7 @@ export function discountNote(discounts: ReadonlyArray<string | Stripe.Discount> 
     const months = c.duration_in_months ?? 0;
     const lasts =
       c.duration === "once" ? ", this charge only" : c.duration === "forever" ? " every charge" : months ? ` for ${months} month${months === 1 ? "" : "s"}` : "";
-    return [`${c.name ? `${c.name}: ` : ""}${off}${lasts}`];
+    return [`${c.name?.trim() ? `${c.name.trim()}: ` : ""}${off}${lasts}`];
   });
   return notes.length ? notes.join("; ") : null;
 }

@@ -61,6 +61,8 @@ describe("how a discount reads", () => {
       "$10 off for 3 months",
     );
     expect(discountNote([discount(coupon({ name: "Founders", percent_off: 20, duration: "forever" }))])).toBe("Founders: 20% off every charge");
+    // Kerry's coupon on 3 Nov 2026 was named "content 30d " and read "content 30d : 100% off".
+    expect(discountNote([discount(coupon({ name: "content 30d ", percent_off: 100, duration: "repeating", duration_in_months: 1 }))])).toBe("content 30d: 100% off for 1 month");
     expect(discountNote([discount(coupon({ percent_off: 50, duration: "repeating", duration_in_months: 1 }))])).toBe("50% off for 1 month");
   });
 
