@@ -26,25 +26,29 @@ export async function GET(request: Request) {
   const tokenHash = url.searchParams.get("token_hash");
   const type = url.searchParams.get("type");
 
+  // Only ever redirect somewhere on our own site — `next` arrives from a URL,
+  // and an open redirect here would hand a live session to another origin.
+  const requested = url.searchParams.get("next");
+  const ownPage = requested && requested.startsWith("/") && !requested.startsWith("//") ? requested : null;
+  const next = ownPage ?? "/library";
+  // A failed link sends them back to log in, still carrying where they were
+  // going, so the next link they ask for from there lands on it too.
+  const back = ownPage ? `&next=${encodeURIComponent(ownPage)}` : "";
+
   // GoTrue redirects HERE with an error when the link itself is bad — a reused
   // or expired one arrives as error_code=otp_expired. Without this the request
   // falls through to "missing_link" and tells someone their link was incomplete
   // when in fact they had already used it.
   const errorCode = url.searchParams.get("error_code");
   if (errorCode) {
-    return go(`/login?error=${encodeURIComponent(errorCode === "otp_expired" ? "link_expired" : errorCode)}`);
+    return go(`/login?error=${encodeURIComponent(errorCode === "otp_expired" ? "link_expired" : errorCode)}${back}`);
   }
-
-  // Only ever redirect somewhere on our own site — `next` arrives from a URL,
-  // and an open redirect here would hand a live session to another origin.
-  const requested = url.searchParams.get("next") ?? "/library";
-  const next = requested.startsWith("/") && !requested.startsWith("//") ? requested : "/library";
 
   const supabase = await createClient();
 
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    return go(error ? `/login?error=${encodeURIComponent(reason(error.message))}` : next);
+    return go(error ? `/login?error=${encodeURIComponent(reason(error.message))}${back}` : next);
   }
 
   if (tokenHash && type) {
@@ -52,10 +56,10 @@ export async function GET(request: Request) {
       type: type as "magiclink" | "email" | "recovery" | "invite" | "signup" | "email_change",
       token_hash: tokenHash,
     });
-    return go(error ? `/login?error=${encodeURIComponent(reason(error.message))}` : next);
+    return go(error ? `/login?error=${encodeURIComponent(reason(error.message))}${back}` : next);
   }
 
-  return go("/login?error=missing_link");
+  return go(`/login?error=missing_link${back}`);
 }
 
 // Redirect to a path, never an absolute URL.

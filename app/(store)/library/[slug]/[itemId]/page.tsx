@@ -16,7 +16,9 @@ export default async function ItemPage({
 }) {
   const { slug, itemId } = await params;
   const user = await viewer();
-  if (!user) redirect("/login");
+  // Back to this lesson after logging in: a shared link must not lose its way
+  // at the login page and land on the library instead.
+  if (!user) redirect(`/login?next=${encodeURIComponent(`/library/${slug}/${itemId}`)}`);
 
   const course = await getCourseBySlug(slug);
   if (!course || !(await userOwnsCourse(user.id, course.id))) redirect("/library");

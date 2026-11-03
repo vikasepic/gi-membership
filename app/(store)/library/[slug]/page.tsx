@@ -11,7 +11,9 @@ export const metadata = NOINDEX;
 export default async function CoursePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const user = await viewer();
-  if (!user) redirect("/login");
+  // Back to this course after logging in: a shared link must not lose its way
+  // at the login page and land on the library instead.
+  if (!user) redirect(`/login?next=${encodeURIComponent(`/library/${slug}`)}`);
 
   const course = await getCourseBySlug(slug);
   // Ownership is via ANY product that grants this course.
