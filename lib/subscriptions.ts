@@ -105,7 +105,7 @@ export function subscriptionRowFrom(
   link: SubscriptionLink,
   now = new Date(),
   /** Stripe's preview of the next invoice. Absent: nothing will be charged, or it could not be read. */
-  next?: { amountDue: number },
+  next?: { amountDue: number; discounted: boolean },
 ): SubscriptionInsert {
   const item = sub.items?.data?.[0];
   const legacy = sub as unknown as { current_period_start?: number | null; current_period_end?: number | null };
@@ -143,7 +143,9 @@ export function subscriptionRowFrom(
     started_at: at(sub.start_date) ?? at(sub.created) ?? now.toISOString(),
     synced_at: now.toISOString(),
     next_charge_cents: next ? next.amountDue : null,
-    next_charge_note: next ? discountNote(sub.discounts) : null,
+    // A coupon whose months are used stays attached; only one that still
+    // takes something off this charge is worth a note beside its amount.
+    next_charge_note: next?.discounted ? discountNote(sub.discounts) : null,
   };
 }
 
@@ -249,12 +251,12 @@ export async function syncSubscription(stripeSubscriptionId: string): Promise<Su
  * will renew; one that is ending has no next charge. A preview that fails
  * leaves the figure unknown rather than failing the sync around it.
  */
-async function nextCharge(sub: Stripe.Subscription): Promise<{ amountDue: number } | undefined> {
+async function nextCharge(sub: Stripe.Subscription): Promise<{ amountDue: number; discounted: boolean } | undefined> {
   const renews = ["active", "trialing", "past_due"].includes(sub.status) && !sub.cancel_at_period_end && !sub.cancel_at;
   if (!renews) return undefined;
   try {
     const preview = await stripe().invoices.createPreview({ subscription: sub.id });
-    return { amountDue: preview.amount_due };
+    return { amountDue: preview.amount_due, discounted: (preview.total_discount_amounts ?? []).some((d) => d.amount > 0) };
   } catch (e) {
     console.error(`[subscriptions] preview of ${sub.id} failed:`, e instanceof Error ? e.message : e);
     return undefined;

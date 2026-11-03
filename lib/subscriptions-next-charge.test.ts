@@ -37,7 +37,7 @@ describe("the next charge on a subscription row", () => {
       [],
       LINK,
       new Date(),
-      { amountDue: 0 },
+      { amountDue: 0, discounted: true },
     );
     expect(row.amount_cents).toBe(5800);
     expect(row.next_charge_cents).toBe(0);
@@ -51,7 +51,22 @@ describe("the next charge on a subscription row", () => {
   });
 
   it("has no note when nothing changes the price", () => {
-    expect(subscriptionRowFrom(sub(), [], LINK, new Date(), { amountDue: 5800 }).next_charge_note).toBeNull();
+    expect(subscriptionRowFrom(sub(), [], LINK, new Date(), { amountDue: 5800, discounted: false }).next_charge_note).toBeNull();
+  });
+
+  // 3 Nov: a "100% off for 1 month" coupon stays on the subscription after its
+  // month is used, and the row read "$58 · 100% off". The preview says whether
+  // the coupon still takes anything off this charge; when it does not, no note.
+  it("has no note when the coupon is attached but no longer lowers this charge", () => {
+    const row = subscriptionRowFrom(
+      sub({ discounts: [discount(coupon({ name: "content 30d", percent_off: 100, duration: "repeating", duration_in_months: 1 }))] }),
+      [],
+      LINK,
+      new Date(),
+      { amountDue: 5800, discounted: false },
+    );
+    expect(row.next_charge_cents).toBe(5800);
+    expect(row.next_charge_note).toBeNull();
   });
 });
 
