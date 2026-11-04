@@ -36,6 +36,19 @@ export function trialOutcomeOf(
   if (s.status === "active") return "free access";
   return "ended unpaid";
 }
+/**
+ * When a trial's outcome happened: the first payment for a conversion, the
+ * cancel for a cancellation, the trial end otherwise. The Trials table and the
+ * Subscriptions page both date outcomes by this one rule.
+ */
+export function trialOutcomeAt(
+  s: Pick<SubscriptionRow, "paidInvoices" | "status" | "cancelAt" | "cancelAtPeriodEnd" | "canceledAt" | "firstPaidAt" | "trialEnd">,
+): string | null {
+  if (s.paidInvoices > 0) return s.firstPaidAt;
+  const outcome = trialOutcomeOf(s);
+  return s.canceledAt ?? (outcome === "ended unpaid" || outcome === "free access" ? s.trialEnd : null);
+}
+
 export type TrialRow = {
   stripeSubscriptionId: string;
   userId: string | null;
@@ -86,7 +99,7 @@ export function deriveTrials(d: MoneyData): TrialRow[] {
       startedAt: s.trialStart ?? s.startedAt,
       endsAt: s.trialEnd,
       outcome,
-      outcomeAt: paid ? s.firstPaidAt : s.canceledAt ?? (outcome === "ended unpaid" || outcome === "free access" ? s.trialEnd : null),
+      outcomeAt: trialOutcomeAt(s),
       daysLeft: Math.round((ms(s.trialEnd) - d.now.getTime()) / 864e5),
       paidTotalCents: s.paidTotalCents,
       cancelledSince: paid && !!s.canceledAt,
