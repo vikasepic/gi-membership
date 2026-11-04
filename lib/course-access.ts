@@ -16,12 +16,14 @@ import { allRows } from "@/lib/traffic";
 export type CourseAccessRow = { userId: string; email: string; name: string | null; how: string[]; since: string };
 export type CourseRemovedRow = { userId: string; email: string; name: string | null; removedBy: string; at: string };
 
+type Who = { email: string; username: string | null } | null;
 type Holding = {
   user_id: string;
   product_id: string | null;
   offer_id: string | null;
   source: string;
   created_at: string;
+  users: Who;
 };
 
 /** The products and offers that give this course. */
@@ -41,8 +43,12 @@ async function givers(courseId: string): Promise<{ productIds: string[]; offerId
 
 /**
  * Ownership rows that still give this course (not canceled, the rule
- * coursesForUser uses), optionally for one person. All of them: PostgREST stops
- * at 1000 without saying so.
+ * coursesForUser uses), optionally for one person, each with its person. All
+ * of them: PostgREST stops at 1000 without saying so.
+ *
+ * A failed read throws. allRows forgives one, because the traffic readers it
+ * was written for promise a list; here an empty answer decides a write, and
+ * "no purchases" would turn Remove into a silent no-op.
  */
 async function holdings(courseId: string, userId?: string): Promise<Holding[]> {
   const { productIds, offerIds } = await givers(courseId);
@@ -55,11 +61,18 @@ async function holdings(courseId: string, userId?: string): Promise<Holding[]> {
   return allRows<Holding>((from, to) => {
     let q = db
       .from("ownership")
-      .select("user_id, product_id, offer_id, source, created_at")
+      .select("user_id, product_id, offer_id, source, created_at, users (email, username)")
       .neq("status", "canceled")
       .or(either.join(","));
     if (userId) q = q.eq("user_id", userId);
-    return q.order("created_at").order("id").range(from, to);
+    return q
+      .order("created_at")
+      .order("id")
+      .range(from, to)
+      .then((r) => {
+        if (r.error) throw new Error(`course access (ownership): ${r.error.message}`);
+        return { data: r.data as unknown as Holding[] };
+      });
   });
 }
 
@@ -69,21 +82,36 @@ export async function listCourseAccess(
   const db = createServiceClient();
   const [held, { data: exceptions, error }] = await Promise.all([
     holdings(courseId),
-    db.from("course_access").select("user_id, kind, granted_by, created_at").eq("course_id", courseId).order("created_at"),
+    // The person rides on each row rather than a second lookup by every
+    // holder's id, which would grow with the store past PostgREST's 1000 rows
+    // and a URL the proxy refuses.
+    db
+      .from("course_access")
+      .select("user_id, kind, granted_by, created_at, users (email, username)")
+      .eq("course_id", courseId)
+      .order("created_at"),
   ]);
   if (error) throw new Error(`listCourseAccess: ${error.message}`);
 
   const productIds = [...new Set(held.map((h) => h.product_id).filter(Boolean))] as string[];
   const offerIds = [...new Set(held.map((h) => h.offer_id).filter(Boolean))] as string[];
-  const userIds = [...new Set([...held.map((h) => h.user_id), ...(exceptions ?? []).map((e) => e.user_id as string)])];
-  const [products, offers, users] = await Promise.all([
-    productIds.length ? db.from("products").select("id, title").in("id", productIds) : Promise.resolve({ data: [] }),
-    offerIds.length ? db.from("offers").select("id, name").in("id", offerIds) : Promise.resolve({ data: [] }),
-    userIds.length ? db.from("users").select("id, email, username").in("id", userIds) : Promise.resolve({ data: [] }),
+  // Bounded by what gives this one course, not by how many hold it.
+  const [products, offers] = await Promise.all([
+    productIds.length
+      ? db.from("products").select("id, title").in("id", productIds)
+      : Promise.resolve({ data: [], error: null }),
+    offerIds.length
+      ? db.from("offers").select("id, name").in("id", offerIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
+  if (products.error) throw new Error(`listCourseAccess (products): ${products.error.message}`);
+  if (offers.error) throw new Error(`listCourseAccess (offers): ${offers.error.message}`);
   const title = new Map((products.data ?? []).map((p) => [p.id as string, p.title as string]));
   const offerName = new Map((offers.data ?? []).map((o) => [o.id as string, o.name as string]));
-  const person = new Map((users.data ?? []).map((u) => [u.id as string, u]));
+  const person = new Map<string, Who>();
+  for (const r of [...held, ...((exceptions ?? []) as unknown as { user_id: string; users: Who }[])]) {
+    if (r.users) person.set(r.user_id, r.users);
+  }
 
   const people = new Map<string, CourseAccessRow>();
   const removed: CourseRemovedRow[] = [];
@@ -94,8 +122,8 @@ export async function listCourseAccess(
     removedIds.add(e.user_id as string);
     removed.push({
       userId: e.user_id as string,
-      email: (u?.email as string) ?? "",
-      name: (u?.username as string | null) ?? null,
+      email: u?.email ?? "",
+      name: u?.username ?? null,
       removedBy: e.granted_by as string,
       at: e.created_at as string,
     });
@@ -106,8 +134,8 @@ export async function listCourseAccess(
     const u = person.get(userId);
     const row = people.get(userId) ?? {
       userId,
-      email: (u?.email as string) ?? "",
-      name: (u?.username as string | null) ?? null,
+      email: u?.email ?? "",
+      name: u?.username ?? null,
       how: [],
       since: at,
     };
