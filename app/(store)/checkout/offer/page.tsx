@@ -1,5 +1,5 @@
 import { redirect, notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { viewer } from "@/lib/view-as";
 import { getOffer } from "@/lib/store";
 import { offerAsSoldTo } from "@/lib/trial-history";
 import { ownershipFor } from "@/lib/checkout";
@@ -46,10 +46,9 @@ export default async function OfferCheckoutPage({
   // library upsell — a member being offered an add-on. Offers have public sales
   // pages now, so that redirect met every cold click with a demand for an
   // account before it would take their money.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Through viewer(), so an admin viewing as a member sees the member's terms
+  // and ownership (4 Nov 2026). Paying is refused while viewing as.
+  const user = await viewer();
 
   const listed = await getOffer(offerId);
   if (!listed || !listed.active) notFound();

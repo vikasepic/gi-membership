@@ -5,7 +5,7 @@ import { pageJsonLd, offerLine } from "@/lib/structured-data";
 import { faqsIn } from "@/lib/store-facts";
 import { siteUrl } from "@/lib/env";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { viewer } from "@/lib/view-as";
 import { getOffer, getOfferByKey } from "@/lib/store";
 import { ownershipFor } from "@/lib/checkout";
 import { isOfferEligible } from "@/lib/offers";
@@ -110,8 +110,9 @@ export default async function OfferSalesPage({
   // Who is reading it decides what it may promise: a free trial is a thing you
   // get once, so anyone who has had this one is shown what they will be
   // charged rather than an offer we would not honour.
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Through viewer(), so an admin viewing as a member sees what the member
+  // would be offered and whether they already have it (4 Nov 2026).
+  const user = await viewer();
   const offer = await offerAsSoldTo(user?.email ?? null, listed);
 
   const [rows, settings] = await Promise.all([

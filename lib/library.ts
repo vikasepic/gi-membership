@@ -5,7 +5,7 @@ import { builtinAppRoute } from "@/lib/builtin-apps/registry";
 import { camelize } from "@/lib/case";
 import { getStoreId, hydrateOffer, hydrateProduct, listHomeOffers, listPublishedProducts, OFFER_COLUMNS, PRODUCT_COLUMNS } from "@/lib/store";
 import { ownershipFor } from "@/lib/checkout";
-import { createClient } from "@/lib/supabase/server";
+import { viewer } from "@/lib/view-as";
 import { coursesForProduct, productDisplay } from "@/lib/courses";
 import { publicCoverUrl } from "@/lib/media";
 import { isOfferEligible, type Ownership } from "@/lib/offers";
@@ -393,14 +393,15 @@ export async function ownedProductIdsForViewer(): Promise<Set<string>> {
  * offer is displayed, since an app subscription is not a product and would
  * otherwise be offered to someone who already subscribes.
  * An anonymous viewer owns nothing, so this is empty and costs no query.
+ *
+ * Through viewer(), so an admin viewing as a member sees what the MEMBER owns.
+ * It read the signed-in admin until 4 Nov 2026, and the home page showed the
+ * admin's purchases under the member's banner.
  */
 export async function viewerOwnership(): Promise<Ownership> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { productIds: new Set(), appIds: new Set(), appChannels: new Map() };
-  return ownershipFor(user.id);
+  const v = await viewer();
+  if (!v) return { productIds: new Set(), appIds: new Set(), appChannels: new Map() };
+  return ownershipFor(v.id);
 }
 
 // Where "Access now" should land for an owned product: straight into the

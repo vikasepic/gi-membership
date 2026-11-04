@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getProductBySlug, getOffer } from "@/lib/store";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
+import { viewer } from "@/lib/view-as";
 import { shouldShowOffer, offerAtPrice } from "@/lib/offers";
 import { livePrices, shownPrices } from "@/lib/offer-prices";
 import { ownershipFor } from "@/lib/checkout";
@@ -83,10 +84,10 @@ export default async function CheckoutPage({
   // billing country is reused so a repeat buyer doesn't re-pick it. This has to
   // come BEFORE the bump is resolved: what they already own decides whether the
   // bump may be shown at all.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  //
+  // Through viewer(): an admin viewing as a member sees the member's checkout
+  // (4 Nov 2026). Paying is refused while viewing as, in the actions.
+  const user = await viewer();
 
   // These three are independent of each other, so they run together rather than
   // adding three round-trips to the time before anything renders.
@@ -122,7 +123,9 @@ export default async function CheckoutPage({
   // moment we know they are considering it — the equivalent of the anonymous
   // buyer filling in the field. Guarded and not awaited for its result: a
   // marketing timer must not be able to stop a checkout rendering.
-  if (user?.email) {
+  // Not while viewing as: an admin looking is not the member starting a
+  // checkout, and a lead could send the member a follow-up.
+  if (user?.email && !user.viewingAs) {
     try {
       await rememberLead({ visitorKey: user.id, productId: product.id, email: user.email });
     } catch {

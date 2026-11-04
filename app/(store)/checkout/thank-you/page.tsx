@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { confirmCheckout } from "@/app/(store)/checkout/actions";
-import { createClient } from "@/lib/supabase/server";
+import { viewer } from "@/lib/view-as";
 import { purchaseSummary } from "@/lib/purchase-summary";
 import { PurchaseReceipt } from "@/components/checkout/purchase-receipt";
 import { TrackPurchase } from "@/components/track-purchase";
@@ -74,10 +74,8 @@ export default async function ThankYouPage({
   // in the moment payment succeeds, and the upsell sends them here carrying
   // only `?oto=…`. Null falls back to the plain confirmation below, so a
   // summary that cannot be built never costs anyone their receipt.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Through viewer(), so an admin viewing as a member sees the member's page.
+  const user = await viewer();
   const summary =
     payment_intent || user
       ? await purchaseSummary({ userId: user?.id ?? null, paymentIntentId: payment_intent ?? null })
