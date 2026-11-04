@@ -111,18 +111,14 @@ export function deriveTrials(d: MoneyData): TrialRow[] {
 /**
  * Narrow to one product or offer.
  *
- * Applied BEFORE the view, so the tiles, the chip counts and the weekly
- * table all describe the same population the table is showing. A filter that
- * only moved the rows would leave the numbers above them describing
- * something else.
- *
- * An id that matches nothing returns everything, because a stale link should
- * show the whole picture rather than an empty page that reads as no trials.
+ * No fallback for an id that matches nothing: the Subscriptions page
+ * whitelists the offer first, so a stale link is already the whole picture,
+ * and an offer that never had a trial must show none, not every trial in the
+ * store (review, 4 Nov 2026).
  */
 export function trialsOf(rows: TrialRow[], id: string): TrialRow[] {
   if (!id) return rows;
-  const hit = rows.filter((t) => t.offerId === id || t.productId === id);
-  return hit.length > 0 ? hit : rows;
+  return rows.filter((t) => t.offerId === id || t.productId === id);
 }
 
 export type TrialWeek = { weekStart: string; started: number; converted: number; lost: number; pending: number; free: number; paidCents: number };

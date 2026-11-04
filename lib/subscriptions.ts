@@ -4,6 +4,7 @@ import type Stripe from "stripe";
 import { createServiceClient } from "@/lib/supabase/server";
 import { stripe } from "@/lib/stripe";
 import { getStoreId } from "@/lib/store";
+import { allRows } from "@/lib/traffic";
 
 /**
  * Subscriptions as billing facts, copied from Stripe. Migration 0086.
@@ -300,20 +301,33 @@ export async function backfillSubscriptions(): Promise<{ scanned: number; synced
   return out;
 }
 
-/** Every row, newest first. */
+/**
+ * Every row, newest first. Paged: PostgREST stops at 1000 without saying so,
+ * and newest first would drop the oldest subscriptions with their renewals.
+ */
 export async function listSubscriptions(): Promise<SubscriptionRow[]> {
   const db = createServiceClient();
-  const { data, error } = await db
-    .from("subscriptions")
-    .select("*")
-    .eq("store_id", await getStoreId())
-    // Grow-sold only. Rows written before belongsToStore existed include
-    // other systems' subscriptions and connected apps' own billing. Hidden,
-    // not deleted.
-    .or("offer_id.not.is.null,product_id.not.is.null")
-    .order("started_at", { ascending: false });
-  if (error) throw new Error(`listSubscriptions: ${error.message}`);
-  return (data ?? []).map(rowOf);
+  const storeId = await getStoreId();
+  const rows = await allRows<Record<string, unknown>>((from, to) =>
+    db
+      .from("subscriptions")
+      .select("*")
+      .eq("store_id", storeId)
+      // Grow-sold only. Rows written before belongsToStore existed include
+      // other systems' subscriptions and connected apps' own billing. Hidden,
+      // not deleted.
+      .or("offer_id.not.is.null,product_id.not.is.null")
+      .order("started_at", { ascending: false })
+      .order("id")
+      .range(from, to)
+      // allRows forgives a failed page; a money screen must not read it as
+      // "no subscriptions".
+      .then((r) => {
+        if (r.error) throw new Error(`listSubscriptions: ${r.error.message}`);
+        return { data: r.data as Record<string, unknown>[] };
+      }),
+  );
+  return rows.map(rowOf);
 }
 
 export function rowOf(r: Record<string, unknown>): SubscriptionRow {

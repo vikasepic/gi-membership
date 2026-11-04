@@ -63,10 +63,13 @@ export function subFilterFrom(sp: Record<string, string | string[] | undefined>,
   const one = (k: string) => (Array.isArray(sp[k]) ? sp[k]?.[0] : sp[k]) ?? "";
   const t = dayMs(today);
   const shift = (n: number) => isoDay(t + n * DAY_MS);
+  const d = new Date(t);
+  const monthEnd = isoDay(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
   const presets: Record<Exclude<SubPreset, "custom">, [string, string]> = {
     around: [shift(-30), shift(30)],
     "last-30": [shift(-29), today],
-    "this-month": [`${today.slice(0, 7)}-01`, today],
+    // The whole month: what came in so far and what is still to come.
+    "this-month": [`${today.slice(0, 7)}-01`, monthEnd],
     "next-30": [today, shift(29)],
   };
   const state = one("state");
@@ -76,12 +79,15 @@ export function subFilterFrom(sp: Record<string, string | string[] | undefined>,
     sort: one("sort") === "amount" ? ("amount" as const) : ("date" as const),
   };
   const preset = one("preset");
-  if (preset in presets) {
+  // hasOwn, not `in`: "toString" is in every object and would crash the page.
+  if (Object.hasOwn(presets, preset)) {
     const [from, to] = presets[preset as keyof typeof presets];
     return { preset: preset as SubPreset, from, to, ...base };
   }
   const [from, to] = [one("from"), one("to")];
-  if (isDay(from) && isDay(to)) {
+  // Five years at most: every subscription's charges are stepped through the
+  // range, and a range of millennia holds the server for seconds.
+  if (isDay(from) && isDay(to) && Math.abs(dayMs(to) - dayMs(from)) <= 5 * 366 * DAY_MS) {
     return { preset: "custom", ...(from <= to ? { from, to } : { from: to, to: from }), ...base };
   }
   const [dFrom, dTo] = presets.around;
@@ -108,24 +114,18 @@ export function deriveSubscriptions(d: MoneyData): SubRow[] {
   const mine = d.subscriptions.filter((s) => s.livemode && (s.offerId || s.productId));
   const ids = new Set(mine.map((s) => s.stripeSubscriptionId));
 
-  // Paid order lines, by subscription. A recurring product's first charge is a
-  // `product` line written before the subscription existed, so it carries no
-  // id (lib/checkout.ts, the SetupIntent path): it goes to the same person's
-  // subscription for that product, the earliest if there are several.
-  const orders = new Map(d.orders.filter((o) => o.status === "paid").map((o) => [o.id, o]));
-  const productSub = new Map<string, string>();
-  for (const s of [...mine].sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt))) {
-    const key = `${s.userId}|${s.productId}`;
-    if (s.productId && s.userId && !productSub.has(key)) productSub.set(key, s.stripeSubscriptionId);
-  }
+  // Paid, live order lines that carry the subscription's id. That covers every
+  // charge: a bump's or OTO's first charge is written with it, and so is every
+  // renewal. A recurring product's checkout line has no id, but Stripe's first
+  // invoice then finds no order with it and records a renewal line
+  // (lib/renewals.ts, fromOrder false); that line is the charge, so the
+  // checkout line is not counted again (review, 4 Nov 2026).
+  const orders = new Map(d.orders.filter((o) => o.status === "paid" && o.livemode).map((o) => [o.id, o]));
   const charges = new Map<string, { at: string; cents: number }[]>();
   for (const it of d.items) {
     const o = orders.get(it.orderId);
-    if (!o) continue;
-    const subId =
-      it.stripeSubscriptionId ??
-      (it.kind === "product" && it.productId && o.userId ? productSub.get(`${o.userId}|${it.productId}`) : undefined);
-    if (!subId || !ids.has(subId)) continue;
+    const subId = it.stripeSubscriptionId;
+    if (!o || !subId || !ids.has(subId)) continue;
     charges.set(subId, [...(charges.get(subId) ?? []), { at: o.createdAt, cents: it.amountCents }]);
   }
 
@@ -170,7 +170,8 @@ const endOf = (day: string) => dayMs(day) + DAY_MS - 1;
 /** `n` billing periods after `iso`, by the calendar for months and years (UTC). */
 function addPeriods(iso: string, interval: string | null, count: number | null, n: number): string {
   const d = new Date(iso);
-  const k = (count ?? 1) * n;
+  // A count below 1 would never move the date, and the caller loops until it does.
+  const k = Math.max(1, count ?? 1) * n;
   if (interval === "year") d.setUTCFullYear(d.getUTCFullYear() + k);
   else if (interval === "week") d.setUTCDate(d.getUTCDate() + 7 * k);
   else if (interval === "day") d.setUTCDate(d.getUTCDate() + k);

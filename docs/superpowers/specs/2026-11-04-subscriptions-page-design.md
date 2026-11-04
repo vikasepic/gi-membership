@@ -97,6 +97,64 @@ Reuse what exists; do not write a second rule for anything already decided.
   `refunded`). On production 4 Nov: 72 paid renewal lines carry
   `stripe_subscription_id`, and the first charges of subscription bumps and
   OTOs (163 paid lines) do too.
+  Test-mode orders are out too, even on a live subscription.
+  **A recurring product's first charge is the renewal line, not the checkout
+  line** (corrected after the final review, 4 Nov). The checkout writes a
+  `product` line before the subscription exists, so it carries no id
+  (lib/checkout.ts:560-568). Stripe's first invoice then finds no order line
+  with the id, falls back to ownership (`fromOrder: false`, lib/renewals.ts),
+  and records a `renewal` line for that same charge. So only lines carrying
+  the subscription's id are counted; counting the checkout line as well
+  counted the first charge twice. (This document first said the reverse.)
+- **Expected** (today to range end): money due in the range.
+   - **Running now**: subscriptions that still give access and have paid:
+     `subView` states paying + cancelling + past due, the same set Members'
+     MRR counts (lib/member-money.ts:241). Hint: "N paying, N cancelling,
+     N past due". "Now" figures ignore the date range, labelled so (my call).
+   - **On trial now**, with "N end this week".
+   - **Trials converted in range**: count and rate (see Rules).
+   - **Ended in range**, with "N set to cancel" beside it (see Rules).
+3. **State chips**, each with its count. They narrow the list only, not the
+   numbers above (my call; the numbers answer "how is the business", the chips
+   answer "show me these people"). `subView`'s eight states map onto them
+   (my call):
+   - All
+   - Active: `paying`
+   - On trial: `on trial`
+   - Free access: `free access`
+   - Past due: `past due`
+   - Cancelling: `cancelling`, and `trial cancelled` while the subscription
+     is still trialing (a running trial set to cancel), as Renewals counts it
+     (lib/renewals-view.ts:51)
+   - Ended: `cancelled`, `trial ended`, and `trial cancelled` once it is no
+     longer live
+4. **The list**: one row per subscription with something in the range (see
+   above). Person (links to `/admin/members/<id>`), offer, state with the
+   trial outcome line when it began as a trial, next charge (Stripe's figure
+   and date, with the coupon note as on Renewals), started, paid so far. Sort by
+   next charge date (default) or amount, as Renewals has.
+5. **By the week they started**: the existing trials table, unchanged,
+   following the offer filter.
+
+## Rules for the numbers
+
+Reuse what exists; do not write a second rule for anything already decided.
+
+- **States** come from `subView` (lib/member-money.ts) and trial outcomes
+  from `trialOutcomeOf` (lib/trials-view.ts), including "free access" (an
+  active subscription after a trial with nothing paid: a 100% coupon, not a
+  failed payment, 30 Sep).
+- **Which subscriptions**: Grow's own, live mode only, as both pages do now
+  (`livemode`, and an offer or product id; a connected app's own signup has
+  neither and is not this store's money).
+- **Days are UTC**, as Traffic's ranges are (lib/traffic-funnel.ts:342-364,
+  `rangeOf`) and as `fmtDate` prints (components/admin/money-ui.tsx:69).
+- **Collected** = the amounts of `order_items` that belong to one of those
+  subscriptions, on `paid` orders, by the order's `created_at`, inside the
+  range and not after now. Refunded orders are out (their status is
+  `refunded`). On production 4 Nov: 72 paid renewal lines carry
+  `stripe_subscription_id`, and the first charges of subscription bumps and
+  OTOs (163 paid lines) do too.
   **A recurring product's first charge has no subscription id on its line**
   (checked 4 Nov): the base product line is written when the SetupIntent is
   created, before the subscription exists (lib/checkout.ts:560-568), and

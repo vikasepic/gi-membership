@@ -115,13 +115,25 @@ describe("subFilterFrom", () => {
       return [f.preset, f.from, f.to];
     };
     expect(r("last-30")).toEqual(["last-30", "2026-10-06", "2026-11-04"]);
-    expect(r("this-month")).toEqual(["this-month", "2026-11-01", "2026-11-04"]);
+    // The whole month, so it shows what came in and what is still to come.
+    expect(r("this-month")).toEqual(["this-month", "2026-11-01", "2026-11-30"]);
     expect(r("next-30")).toEqual(["next-30", "2026-11-04", "2026-12-03"]);
   });
 
   it("takes a custom range and swaps one given backwards", () => {
     const f = subFilterFrom({ from: "2026-12-01", to: "2026-11-01" }, "2026-11-04");
     expect([f.preset, f.from, f.to]).toEqual(["custom", "2026-11-01", "2026-12-01"]);
+  });
+
+  it("a preset that is an object's own property name, not a preset, picks the default", () => {
+    for (const preset of ["toString", "constructor", "__proto__", "hasOwnProperty"]) {
+      expect(subFilterFrom({ preset }, "2026-11-04").preset).toBe("around");
+    }
+  });
+
+  it("refuses a range longer than five years", () => {
+    expect(subFilterFrom({ from: "1000-01-01", to: "9999-12-31" }, "2026-11-04").preset).toBe("around");
+    expect(subFilterFrom({ from: "2024-01-01", to: "2028-12-31" }, "2026-11-04").preset).toBe("custom");
   });
 
   it("whitelists everything off the URL", () => {
@@ -201,25 +213,38 @@ describe("deriveSubscriptions", () => {
     expect(r.charges).toEqual([]);
   });
 
-  it("collects a recurring product's first charge, which carries no subscription id", () => {
+  it("counts a recurring product's first charge once: the renewal line its first invoice writes", () => {
+    // The checkout writes a `product` line before the subscription exists, so
+    // it carries no id; Stripe's first invoice then finds no order with the id
+    // and records a renewal line (lib/renewals.ts, fromOrder false). That line
+    // is the charge. Counting the product line too counted it twice (review,
+    // 4 Nov).
     const [r] = deriveSubscriptions(
       data(
         [sub({ offerId: null, productId: "p" })],
-        [order({ id: "o1", createdAt: at(-57), totalCents: 2700 })],
-        [item({ orderId: "o1", kind: "product", offerId: null, productId: "p", stripeSubscriptionId: null, amountCents: 2700 })],
+        [order({ id: "checkout", createdAt: at(-57) }), order({ id: "first-invoice", createdAt: at(-57) })],
+        [
+          item({ orderId: "checkout", kind: "product", offerId: null, productId: "p", stripeSubscriptionId: null, amountCents: 2700 }),
+          item({ orderId: "first-invoice", kind: "renewal", offerId: null, productId: "p", amountCents: 2700 }),
+        ],
       ),
     );
     expect(r.charges).toEqual([{ at: at(-57), cents: 2700 }]);
   });
 
-  it("does not give a one-off product line to a subscription for a different product", () => {
+  it("never takes a one-off line for the same product", () => {
     const [r] = deriveSubscriptions(
       data(
         [sub({ offerId: null, productId: "p" })],
-        [order({ id: "o1" })],
-        [item({ orderId: "o1", kind: "product", offerId: null, productId: "q", stripeSubscriptionId: null })],
+        [order({ id: "o1", stripePaymentIntentId: "pi_1" })],
+        [item({ orderId: "o1", kind: "product", offerId: null, productId: "p", stripeSubscriptionId: null })],
       ),
     );
+    expect(r.charges).toEqual([]);
+  });
+
+  it("leaves out a test-mode order, even on a live subscription", () => {
+    const [r] = deriveSubscriptions(data([sub({})], [order({ id: "o1", livemode: false })], [item({ orderId: "o1" })]));
     expect(r.charges).toEqual([]);
   });
 
@@ -266,6 +291,10 @@ describe("expected charges", () => {
   it("a payment plan stops after its last instalment", () => {
     const r = one({ installments: 3, paidInvoices: 2 });
     expect(expectedCharges(r, NOW, day(120))).toHaveLength(1);
+  });
+
+  it("a zero billing interval cannot loop for ever", () => {
+    expect(expectedCharges(one({ intervalCount: 0 }), NOW, day(90)).length).toBeLessThanOrEqual(4);
   });
 
   it("a cancelling or ended subscription expects nothing", () => {

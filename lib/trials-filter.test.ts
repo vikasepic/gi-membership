@@ -49,10 +49,12 @@ describe("narrowing to one product or offer", () => {
     expect(trialsOf(rows, "")).toHaveLength(4);
   });
 
-  it("falls back to everything for an id that matches nothing", () => {
-    // A stale link should show the whole picture, not an empty page that
-    // reads as "no trials".
-    expect(trialsOf(rows, "deleted-offer")).toHaveLength(4);
+  it("an offer with no trials has none", () => {
+    // The Subscriptions page whitelists the offer before it gets here, so a
+    // stale link is already the whole picture. An offer that sells
+    // subscriptions but never had a trial must show no trials, not every
+    // trial in the store (review, 4 Nov).
+    expect(trialsOf(rows, "no-trials-offer")).toHaveLength(0);
   });
 
   it("narrows the counts the tiles are built from, not just the table", () => {
