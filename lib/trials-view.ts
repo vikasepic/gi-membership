@@ -108,8 +108,6 @@ export function deriveTrials(d: MoneyData): TrialRow[] {
   return out.sort((a, b) => ms(b.startedAt) - ms(a.startedAt));
 }
 
-export type TrialView = "all" | "on trial" | "ending" | "converted" | "free" | "lost";
-
 /**
  * Narrow to one product or offer.
  *
@@ -125,27 +123,6 @@ export function trialsOf(rows: TrialRow[], id: string): TrialRow[] {
   if (!id) return rows;
   const hit = rows.filter((t) => t.offerId === id || t.productId === id);
   return hit.length > 0 ? hit : rows;
-}
-
-/** The products and offers that actually have a trial, for the picker. */
-export function trialThings(rows: TrialRow[]): { id: string; name: string }[] {
-  const out = new Map<string, string>();
-  for (const t of rows) {
-    const id = t.offerId ?? t.productId;
-    if (id) out.set(id, t.what);
-  }
-  return [...out.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-}
-
-export function trialsFor(rows: TrialRow[], view: TrialView): TrialRow[] {
-  switch (view) {
-    case "on trial": return rows.filter((t) => t.outcome === "on trial");
-    case "ending": return rows.filter((t) => t.outcome === "on trial" && t.daysLeft <= 7);
-    case "converted": return rows.filter((t) => t.outcome === "converted");
-    case "free": return rows.filter((t) => t.outcome === "free access");
-    case "lost": return rows.filter((t) => t.outcome === "cancelled" || t.outcome === "ended unpaid");
-    default: return rows;
-  }
 }
 
 export type TrialWeek = { weekStart: string; started: number; converted: number; lost: number; pending: number; free: number; paidCents: number };

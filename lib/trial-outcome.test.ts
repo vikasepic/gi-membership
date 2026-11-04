@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { trialOutcomeOf, trialsByWeek, trialsFor, type TrialRow } from "@/lib/trials-view";
+import { trialOutcomeOf, trialsByWeek, type TrialRow } from "@/lib/trials-view";
 
 /**
  * What became of a trial, one rule for the Trials page and the ledger.
@@ -41,9 +41,9 @@ describe("free access in the numbers", () => {
   const rows = [row("converted"), row("free access"), row("free access"), row("ended unpaid")];
 
   it("is neither converted nor lost", () => {
-    expect(trialsFor(rows, "lost")).toHaveLength(1);
-    expect(trialsFor(rows, "converted")).toHaveLength(1);
-    expect(trialsFor(rows, "free")).toHaveLength(2);
+    expect(rows.filter((t) => t.outcome === "cancelled" || t.outcome === "ended unpaid")).toHaveLength(1);
+    expect(rows.filter((t) => t.outcome === "converted")).toHaveLength(1);
+    expect(rows.filter((t) => t.outcome === "free access")).toHaveLength(2);
   });
 
   it("has its own count in the week, so paid + lost + free + pending = started", () => {

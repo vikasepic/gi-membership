@@ -3,7 +3,7 @@ import type { MoneyData } from "@/lib/money-data";
 import type { SubscriptionRow } from "@/lib/subscriptions";
 import { deriveMembers, applyMemberFilter, memberTiles, DEFAULT_MEMBER_FILTER, monthlyCents, sourceOf, subView } from "@/lib/member-money";
 import { deriveLedger, applyLedgerFilter, ledgerTotals, breakdown, DEFAULT_LEDGER_FILTER } from "@/lib/ledger";
-import { deriveTrials, trialsFor, trialsByWeek } from "@/lib/trials-view";
+import { deriveTrials, trialsByWeek } from "@/lib/trials-view";
 
 /**
  * The money screens' arithmetic, on one fixture.
@@ -212,8 +212,8 @@ describe("trials", () => {
       ["ismat@e.com", "cancelled", -3],
       ["dael@e.com", "converted", -4],
     ]);
-    expect(trialsFor(rows, "ending").map((t) => t.email)).toEqual(["eric@e.com"]);
-    expect(trialsFor(rows, "lost").map((t) => t.email)).toEqual(["ismat@e.com"]);
+    expect(rows.filter((t) => t.outcome === "on trial" && t.daysLeft <= 7).map((t) => t.email)).toEqual(["eric@e.com"]);
+    expect(rows.filter((t) => t.outcome === "cancelled" || t.outcome === "ended unpaid").map((t) => t.email)).toEqual(["ismat@e.com"]);
   });
   it("groups by the week the trial started", () => {
     const weeks = trialsByWeek(rows);
@@ -303,8 +303,8 @@ describe("a trial that is already scheduled to stop", () => {
     const data = { ...DATA, subscriptions: [sub({ stripeSubscriptionId: "sub_out", userId: "eric", status: "trialing", cancelAt: "2026-09-25T10:00:00Z", canceledAt: "2026-09-20T10:00:00Z" })] };
     const rows = deriveTrials(data);
     expect(rows[0].outcome).toBe("cancelled");
-    expect(trialsFor(rows, "on trial")).toHaveLength(0);
-    expect(trialsFor(rows, "lost")).toHaveLength(1);
+    expect(rows.filter((t) => t.outcome === "on trial")).toHaveLength(0);
+    expect(rows.filter((t) => t.outcome === "cancelled" || t.outcome === "ended unpaid")).toHaveLength(1);
   });
 });
 

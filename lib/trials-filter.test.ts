@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { trialsOf, trialThings, trialsFor, trialsByWeek, type TrialRow } from "@/lib/trials-view";
+import { trialsOf, trialsByWeek, type TrialRow } from "@/lib/trials-view";
 
 /**
  * Filtering the trials page by what the trial is for.
@@ -57,26 +57,8 @@ describe("narrowing to one product or offer", () => {
 
   it("narrows the counts the tiles are built from, not just the table", () => {
     const narrowed = trialsOf(rows, "ce-ig");
-    expect(trialsFor(narrowed, "converted")).toHaveLength(1);
-    expect(trialsFor(narrowed, "on trial")).toHaveLength(1);
+    expect(narrowed.filter((t) => t.outcome === "converted")).toHaveLength(1);
+    expect(narrowed.filter((t) => t.outcome === "on trial")).toHaveLength(1);
     expect(trialsByWeek(narrowed)[0]).toMatchObject({ started: 2, converted: 1, pending: 1 });
-  });
-});
-
-describe("the picker", () => {
-  it("lists only things that actually have a trial, named and sorted", () => {
-    expect(trialThings(rows)).toEqual([
-      { id: "ce-ig", name: "Content Engine — Instagram" },
-      { id: "dpv", name: "Digital Product Validator" },
-      { id: "funnel", name: "Funnel App" },
-    ]);
-  });
-
-  it("lists each thing once however many trials it has", () => {
-    expect(trialThings(rows).filter((t) => t.id === "ce-ig")).toHaveLength(1);
-  });
-
-  it("is empty when there is nothing to choose between", () => {
-    expect(trialThings([])).toEqual([]);
   });
 });

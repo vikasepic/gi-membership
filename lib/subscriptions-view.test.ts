@@ -149,6 +149,18 @@ describe("deriveSubscriptions", () => {
     expect(rows[0]).toMatchObject({ email: "kerry@e.com", name: "Kerry", what: "Content Engine", priceCents: 5800 });
   });
 
+  it("carries Stripe's figure, its discount, the price and the history", () => {
+    expect(one({ nextChargeCents: 0, nextChargeNote: "100% off, this charge only" })).toMatchObject({
+      nextChargeAt: at(10),
+      nextChargeCents: 0,
+      nextChargeNote: "100% off, this charge only",
+      priceCents: 5800,
+      startedAt: at(-57),
+      paidInvoices: 2,
+      paidTotalCents: 11600,
+    });
+  });
+
   it("maps every subView state onto a chip", () => {
     const chip = (over: Partial<SubscriptionRow>) =>
       deriveSubscriptions(data([sub({ stripeSubscriptionId: "x", ...over })]))[0].chip;
@@ -240,6 +252,10 @@ describe("expected charges", () => {
   it("the first is Stripe's figure, later ones in the range at list price", () => {
     const r = one({ currentPeriodEnd: at(10), nextChargeCents: 0, amountCents: 5800 });
     expect(expectedCharges(r, NOW, day(90)).map((c) => c.cents)).toEqual([0, 5800, 5800]);
+  });
+
+  it("a paying row whose date is already behind us expects nothing: the sync stopped updating it", () => {
+    expect(expectedCharges(one({ currentPeriodEnd: at(-5) }), NOW, day(30))).toEqual([]);
   });
 
   it("an unknown preview stays unknown", () => {
