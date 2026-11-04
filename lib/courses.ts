@@ -201,37 +201,50 @@ export async function setOfferCourses(offerId: string, courseIds: string[]): Pro
 // it. Before 14 Oct 2026 the product path ignored the status, so a refunded
 // buyer kept every course. A paid-off payment plan is set back to `active`
 // (markPlanPaidOff), so finishing a plan never reads as cancelling it.
+//
+// Then one person's exceptions (course_access, 0098, Access tab on a course):
+// a `grant` row is the same as owning the course, and a `remove` row takes it
+// away whatever gave it. Read before the "owns nothing" return, or a member
+// whose only course was added by hand would never see it.
 export async function coursesForUser(userId: string): Promise<Course[]> {
   const db = createServiceClient();
-  const { data: owns, error: ownErr } = await db
-    .from("ownership")
-    .select("product_id, offer_id")
-    .eq("user_id", userId)
-    .neq("status", "canceled");
+  const [{ data: owns, error: ownErr }, { data: exceptions, error: excErr }] = await Promise.all([
+    db.from("ownership").select("product_id, offer_id").eq("user_id", userId).neq("status", "canceled"),
+    db.from("course_access").select("course_id, kind").eq("user_id", userId),
+  ]);
   if (ownErr) throw new Error(`coursesForUser (ownership): ${ownErr.message}`);
+  if (excErr) throw new Error(`coursesForUser (course_access): ${excErr.message}`);
   const productIds = [...new Set((owns ?? []).filter((o) => o.product_id).map((o) => o.product_id as string))];
   const offerIds = [...new Set((owns ?? []).filter((o) => o.offer_id).map((o) => o.offer_id as string))];
-  if (productIds.length === 0 && offerIds.length === 0) return [];
+  const grantIds = (exceptions ?? []).filter((e) => e.kind === "grant").map((e) => e.course_id as string);
+  const removed = new Set((exceptions ?? []).filter((e) => e.kind === "remove").map((e) => e.course_id as string));
+  if (productIds.length === 0 && offerIds.length === 0 && grantIds.length === 0) return [];
 
-  const [byProduct, byOffer] = await Promise.all([
+  const [byProduct, byOffer, byGrant] = await Promise.all([
     productIds.length
       ? db.from("product_courses").select(`course_id, courses (${COURSE_COLUMNS})`).in("product_id", productIds)
       : Promise.resolve({ data: [], error: null }),
     offerIds.length
       ? db.from("offer_courses").select(`course_id, courses (${COURSE_COLUMNS})`).in("offer_id", offerIds)
       : Promise.resolve({ data: [], error: null }),
+    grantIds.length
+      ? db.from("courses").select(COURSE_COLUMNS).in("id", grantIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (byProduct.error) throw new Error(`coursesForUser: ${byProduct.error.message}`);
   if (byOffer.error) throw new Error(`coursesForUser (offers): ${byOffer.error.message}`);
+  if (byGrant.error) throw new Error(`coursesForUser (grants): ${byGrant.error.message}`);
 
-  const rows = [...(byProduct.data ?? []), ...(byOffer.data ?? [])] as unknown as {
-    courses: Record<string, unknown> | null;
-  }[];
+  const rows = [
+    ...(byProduct.data ?? []),
+    ...(byOffer.data ?? []),
+    ...((byGrant.data ?? []) as unknown[]).map((courses) => ({ courses })),
+  ] as unknown as { courses: Record<string, unknown> | null }[];
   const byId = new Map<string, Course>();
   for (const r of rows) {
     if (!r.courses) continue;
     const c = camelize<Course>(r.courses);
-    if (c.status === "published") byId.set(c.id, c);
+    if (c.status === "published" && !removed.has(c.id)) byId.set(c.id, c);
   }
   return [...byId.values()];
 }
