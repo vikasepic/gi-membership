@@ -69,11 +69,9 @@ function groups(c: NavCounts): { title: string; items: Item[] }[] {
         { href: "/admin/checkout", label: "Checkout", icon: ICON.checkout },
         { href: "/admin/orders", label: "Transactions", icon: ICON.orders, badge: n(c.orders) },
         { href: "/admin/members", label: "Members", icon: ICON.members, badge: n(c.members) },
-        // Every free trial and what became of it. Its own page: the one
-        // question the members list cannot answer at a glance.
-        { href: "/admin/trials", label: "Trials", icon: ICON.members },
-        // What comes in over the next 30 days, and who renews (3 Nov 2026).
-        { href: "/admin/renewals", label: "Renewals", icon: ICON.members },
+        // Trials and Renewals on one page (4 Nov 2026): what came in, what is
+        // coming, who is on trial and what became of them.
+        { href: "/admin/subscriptions", label: "Subscriptions", icon: ICON.members },
       ],
     },
     {

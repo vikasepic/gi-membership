@@ -18,7 +18,11 @@ vi.mock("@/lib/admin-guard", () => ({
   isAdminEmail: (e: string) => e === "admin@example.com",
 }));
 // useRouter for the clickable Transactions rows (components/admin/clickable-row.tsx).
-vi.mock("next/navigation", () => ({ notFound: () => { throw new Error("notFound"); }, useRouter: () => ({ push: () => {} }) }));
+vi.mock("next/navigation", () => ({
+  notFound: () => { throw new Error("notFound"); },
+  redirect: (to: string) => { throw new Error(`redirect:${to}`); },
+  useRouter: () => ({ push: () => {} }),
+}));
 
 describe.skipIf(!canRun)("the money screens (integration)", () => {
   it("Members renders its tiles, chips and rows", async () => {
@@ -45,20 +49,27 @@ describe.skipIf(!canRun)("the money screens (integration)", () => {
     expect(html).toContain("By product or offer");
   });
 
-  it("Trials renders even with nothing to show", async () => {
-    const { default: Page } = await import("@/app/admin/trials/page");
+  it("Subscriptions renders even with nothing to show", async () => {
+    const { default: Page } = await import("@/app/admin/subscriptions/page");
     const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({}) }));
-    expect(html).toContain("Trials");
-    expect(html).toContain("On trial now");
+    for (const text of ["Subscriptions", "Collected", "Expected", "Running now", "By the week they started"]) {
+      expect(html).toContain(text);
+    }
   });
 
-  it("Trials survives a product filter naming something that no longer exists", async () => {
+  it("Subscriptions survives an offer filter naming something that no longer exists", async () => {
     // A stale link must show the whole picture rather than throw or render an
-    // empty page that reads as "no trials".
-    const { default: Page } = await import("@/app/admin/trials/page");
-    const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ offer: "no-such-offer", view: "converted" }) }));
-    expect(html).toContain("Trials");
-    expect(html).toContain("On trial now");
+    // empty page that reads as "no subscriptions".
+    const { default: Page } = await import("@/app/admin/subscriptions/page");
+    const html = renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ offer: "no-such-offer", state: "ended" }) }));
+    expect(html).toContain("Running now");
+  });
+
+  it("the old Trials and Renewals links land on Subscriptions", async () => {
+    const { default: Trials } = await import("@/app/admin/trials/page");
+    const { default: Renewals } = await import("@/app/admin/renewals/page");
+    await expect(Promise.resolve().then(() => Trials())).rejects.toThrow("redirect:/admin/subscriptions?state=trial");
+    await expect(Promise.resolve().then(() => Renewals())).rejects.toThrow("redirect:/admin/subscriptions?preset=next-30");
   });
 
   it("a person page renders for a real member", async () => {

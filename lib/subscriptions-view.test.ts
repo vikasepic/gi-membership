@@ -287,6 +287,12 @@ describe("subTotals", () => {
     expect(subTotals(rows, range(1, 30), NOW).expectedCents).toBe(5800);
   });
 
+  it("a range ending today has no expected; one starting today, no collected", () => {
+    const rows = deriveSubscriptions(data([sub({})]));
+    expect(subTotals(rows, range(-29, 0), NOW).expectedCents).toBeNull();
+    expect(subTotals(rows, range(0, 29), NOW).collectedCents).toBeNull();
+  });
+
   it("running is paying + cancelling + past due", () => {
     const rows = deriveSubscriptions(
       data([

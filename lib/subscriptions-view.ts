@@ -238,14 +238,17 @@ export function subTotals(all: SubRow[], f: SubFilter, now: Date): SubTotals {
   const end = endOf(f.to);
   const within = (iso: string | null) => !!iso && ms(iso) >= from && ms(iso) <= end;
 
+  // Today belongs to neither side on its own: a range that ends today has no
+  // future part worth a figure, and one that starts today no past part.
+  const today = isoDay(t);
   let collectedCents: number | null = null;
-  if (from <= t) {
+  if (f.from < today) {
     collectedCents = 0;
     for (const r of rows) for (const c of r.charges) if (ms(c.at) >= from && ms(c.at) <= Math.min(end, t)) collectedCents += c.cents;
   }
   let expectedCents: number | null = null;
   let unknown = 0;
-  if (end >= t) {
+  if (f.to > today) {
     expectedCents = 0;
     for (const r of rows) {
       for (const c of expectedCharges(r, now, f.to)) {
