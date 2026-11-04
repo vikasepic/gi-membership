@@ -1,8 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createServiceClient } from "@/lib/supabase/server";
-import { getStoreId } from "@/lib/store";
+import { getStoreId, getOffer } from "@/lib/store";
+import { grantOfferOwnership } from "@/lib/checkout";
+import { grantProduct } from "@/lib/members";
 import { coursesForUser } from "@/lib/courses";
-import { listCourseAccess, addCourseAccess, removeCourseAccess, giveBackCourseAccess } from "@/lib/course-access";
+import {
+  listCourseAccess,
+  addCourseAccess,
+  removeCourseAccess,
+  giveBackCourseAccess,
+  liftRemovals,
+} from "@/lib/course-access";
 
 /**
  * One person added to, or removed from, one course (asked 3-4 Nov 2026).
@@ -52,6 +60,10 @@ describe.skipIf(!canRun)("course access (integration)", () => {
   }
 
   async function offer(...gives: string[]): Promise<string> {
+    return offerGranting(null, ...gives);
+  }
+
+  async function offerGranting(productId: string | null, ...gives: string[]): Promise<string> {
     const db = createServiceClient();
     const id = crypto.randomUUID();
     const { error } = await db.from("offers").insert({
@@ -59,7 +71,8 @@ describe.skipIf(!canRun)("course access (integration)", () => {
       store_id: storeId,
       key: tag(),
       name: `zz offer ${id.slice(0, 4)}`,
-      grant_type: "course",
+      grant_type: productId ? "product" : "course",
+      grant_product_id: productId,
       billing_type: "one_time",
       price_cents: 2900,
       currency: "usd",
@@ -117,8 +130,8 @@ describe.skipIf(!canRun)("course access (integration)", () => {
       await db.from("users").delete().eq("id", data.id);
       await db.auth.admin.deleteUser(data.id as string);
     }
-    for (const id of productIds.splice(0)) await db.from("products").delete().eq("id", id);
     for (const id of offerIds.splice(0)) await db.from("offers").delete().eq("id", id);
+    for (const id of productIds.splice(0)) await db.from("products").delete().eq("id", id);
     for (const id of courseIds.splice(0)) await db.from("courses").delete().eq("id", id);
   });
 
@@ -279,6 +292,45 @@ describe.skipIf(!canRun)("course access (integration)", () => {
       await access(c, "grant");
       await giveBackCourseAccess({ courseId: c, userId });
       expect(await rowsFor(c)).toEqual([{ kind: "grant" }]);
+    });
+  });
+
+  describe("a purchase lifts a removal", () => {
+    it("lifts a removal for a course the product includes", async () => {
+      const c = await course();
+      const p = await product(c);
+      await access(c, "remove");
+      await liftRemovals(userId, { productId: p });
+      expect(await rowsFor(c)).toEqual([]);
+    });
+
+    it("leaves a removal for a course the product does not include", async () => {
+      const [c, d] = [await course(), await course()];
+      await product(c);
+      const p2 = await product(d);
+      await access(c, "remove");
+      await liftRemovals(userId, { productId: p2 });
+      expect(await rowsFor(c)).toEqual([{ kind: "remove" }]);
+    });
+
+    it("an offer that grants a product lifts the product's courses and its own", async () => {
+      const [a, b] = [await course(), await course()];
+      const p = await product(a);
+      const o = await offerGranting(p, b);
+      await access(a, "remove");
+      await access(b, "remove");
+      await grantOfferOwnership(storeId, userId, (await getOffer(o))!, "grant", null);
+      expect(await rowsFor(a)).toEqual([]);
+      expect(await rowsFor(b)).toEqual([]);
+      expect(await ids()).toEqual([a, b].sort());
+    });
+
+    it("an admin grantProduct lifts nothing", async () => {
+      const c = await course();
+      const p = await product(c);
+      await access(c, "remove");
+      await grantProduct({ userId, productId: p, grantedBy: "zz-test" });
+      expect(await rowsFor(c)).toEqual([{ kind: "remove" }]);
     });
   });
 });

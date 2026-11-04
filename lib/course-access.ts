@@ -210,3 +210,41 @@ export async function giveBackCourseAccess(args: { courseId: string; userId: str
     .eq("kind", "remove");
   if (error) throw new Error(`giveBackCourseAccess: ${error.message}`);
 }
+
+/**
+ * A purchase gives back a course the admin took away (owner, 4 Nov 2026):
+ * nobody is charged for a course they cannot open. Called only where a
+ * purchase writes its ownership row, never on a renewal or an admin grant,
+ * so a monthly charge does not undo a removal.
+ *
+ * Best-effort, like tagAccessGranted: the card is already charged and a failed
+ * delete must not fail a paid order. The admin can still Give back by hand.
+ */
+export async function liftRemovals(
+  userId: string,
+  from: { productId?: string | null; offerId?: string | null },
+): Promise<void> {
+  try {
+    const db = createServiceClient();
+    const [p, o] = await Promise.all([
+      from.productId
+        ? db.from("product_courses").select("course_id").eq("product_id", from.productId)
+        : Promise.resolve({ data: [], error: null }),
+      from.offerId
+        ? db.from("offer_courses").select("course_id").eq("offer_id", from.offerId)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (p.error || o.error) throw new Error((p.error ?? o.error)!.message);
+    const courseIds = [...(p.data ?? []), ...(o.data ?? [])].map((r) => r.course_id as string);
+    if (courseIds.length === 0) return;
+    const { error } = await db
+      .from("course_access")
+      .delete()
+      .eq("user_id", userId)
+      .eq("kind", "remove")
+      .in("course_id", courseIds);
+    if (error) throw new Error(error.message);
+  } catch (err) {
+    console.error("liftRemovals", userId, from, err);
+  }
+}

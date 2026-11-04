@@ -39,6 +39,7 @@ import { stripeAttributionWithNames } from "@/lib/attribution-names";
 import { stampOrderMetadata } from "@/lib/order-stripe-metadata";
 import { recordVisitStep } from "@/lib/visits";
 import type { Offer } from "@/lib/types";
+import { liftRemovals } from "@/lib/course-access";
 
 const OTO_TTL_SECONDS = 15 * 60; // 15 minutes
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -1247,6 +1248,8 @@ export async function finalizeOrder(intentId: string): Promise<void> {
       status: baseTrialDays && baseTrialDays > 0 ? "trialing" : "active",
     });
     if (error && error.code !== "23505") throw new Error(`grant base: ${error.message}`);
+    // Paying for a course gives it back to someone an admin removed it from.
+    await liftRemovals(order.user_id, { productId });
   }
 
   // Fulfil the bump if one was taken.
@@ -1755,6 +1758,10 @@ export async function grantOfferOwnership(
     }
     await tagAccessGranted({ userId, offerId: offer.id, status });
   }
+  // Every caller is a purchase (bump, OTO, the offer page), so paying for a
+  // course gives it back to someone an admin removed it from. Admin grants go
+  // through grantOfferAccess and renewals never come here.
+  await liftRemovals(userId, { productId: offer.grantProductId, offerId: offer.id });
 }
 
 // ---------------------------------------------------------------------------
