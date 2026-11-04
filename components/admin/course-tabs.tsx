@@ -4,17 +4,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /**
- * The three jobs a course has, kept apart.
+ * The jobs a course has, kept apart.
  *
  * Building the curriculum, writing what a buyer reads, and uploading files are
  * different sittings with different save behaviour — the curriculum writes as
  * you go, details need an explicit Save. Stacked on one page that difference is
- * invisible and the Save button quietly lies about its scope.
+ * invisible and the Save button quietly lies about its scope. Access (who can
+ * open it, add or remove one person) writes as you go, like the curriculum.
  */
 const TABS = [
   { href: "", label: "Curriculum" },
   { href: "/details", label: "Details" },
   { href: "/files", label: "Cover & files" },
+  { href: "/access", label: "Access" },
 ] as const;
 
 export function CourseTabs({ courseId }: { courseId: string }) {
