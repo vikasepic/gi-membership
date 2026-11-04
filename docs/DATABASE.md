@@ -1482,6 +1482,20 @@ sales and home pages may name. Spec:
 | `products` | `show_recent_buyers` boolean, default true, same |
 | `users` | `hide_from_recent_buyers` boolean, default false: the admin took this person out, every purchase |
 
+### Course access exceptions
+
+Migration 0098 (4 Nov 2026). The Access tab on a course adds one person to
+that one course, or takes it away from them whatever they bought. Spec:
+`docs/superpowers/specs/2026-11-04-course-access-tab-design.md`.
+
+`course_access` (primary key `user_id, course_id`): `store_id`, `user_id`,
+`course_id`, `kind` (`grant` or `remove`), `granted_by` (admin email),
+`created_at`. A `remove` row beats every product and offer; a `grant` row
+counts as owning the course. Only `coursesForUser` reads it. A new purchase
+that includes the course deletes its `remove` row (`liftRemovals`); renewals
+and admin grants do not. Revoked from anon and authenticated, RLS on with no
+policies.
+
 ---
 
 ## Appendix: the raw DDL
