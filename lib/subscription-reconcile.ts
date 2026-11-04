@@ -60,7 +60,12 @@ const STRIPE_BATCH = 20;
  */
 async function stripeStatusOf(id: string): Promise<OwnershipStatus | "missing" | Error> {
   try {
-    return mapSubscriptionStatus((await stripe().subscriptions.retrieve(id)).status);
+    const sub = await stripe().subscriptions.retrieve(id);
+    // A status nothing here reads is no more actionable than silence, so it is
+    // listed with the unanswered rather than repaired into a guess.
+    return (
+      mapSubscriptionStatus(sub.status) ?? new Error(`unread Stripe status "${sub.status}"`)
+    );
   } catch (e) {
     if ((e as { code?: string }).code === "resource_missing") return "missing";
     return e instanceof Error ? e : new Error(String(e));

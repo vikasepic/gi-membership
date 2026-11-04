@@ -12,10 +12,20 @@ import { tagLifecycle, untagRevoked } from "@/lib/ac-tags";
 
 export type OwnershipStatus = "active" | "trialing" | "canceled" | "past_due";
 
-// Stripe subscription.status -> our ownership.status.
-// Anything unrecognised degrades to past_due: we would rather flag an account
-// for dunning than silently grant access on a status we do not understand.
-export function mapSubscriptionStatus(stripeStatus: string): OwnershipStatus {
+// Stripe subscription.status -> our ownership.status, or null when the status
+// is one nothing here reads.
+//
+// Unrecognised used to degrade to past_due, "rather flag an account for
+// dunning than silently grant access on a status we do not understand". That
+// reasoning held until past_due started counting as live in unionEntitlement
+// (7 Sep 2026): after it, past_due hands over the subscription's channels, so
+// the safe-looking fallback was granting app access on exactly the statuses
+// nobody had looked at. Stripe's `paused` is one of them.
+//
+// Null keeps both intents. The known dunning statuses still read as past_due
+// and still keep access while Stripe collects; a status we cannot read decides
+// nothing at all, and every caller leaves the row as it found it.
+export function mapSubscriptionStatus(stripeStatus: string): OwnershipStatus | null {
   switch (stripeStatus) {
     case "trialing":
       return "trialing";
@@ -29,7 +39,7 @@ export function mapSubscriptionStatus(stripeStatus: string): OwnershipStatus {
     case "incomplete": // off-session 3DS pending — not paid yet
       return "past_due";
     default:
-      return "past_due";
+      return null;
   }
 }
 
@@ -70,6 +80,14 @@ export async function syncSubscriptionOwnership(
 ): Promise<void> {
   const db = createServiceClient();
   const status = mapSubscriptionStatus(stripeStatus);
+  // A status we cannot read is not a decision. Writing one would either grant
+  // the channels (past_due is live) or take them away, and neither is anything
+  // Stripe told us. The row stays as it is and the next event, which carries a
+  // status we do read, settles it.
+  if (status === null) {
+    console.error(`[syncSubscriptionOwnership] unread Stripe status "${stripeStatus}" on ${stripeSubscriptionId}; left alone`);
+    return;
+  }
 
   // Read the current state before writing, so the CRM can be told about real
   // transitions only. Stripe sends customer.subscription.updated for far more
