@@ -14,6 +14,7 @@ import {
 import { setViewAsCookie } from "@/lib/view-as";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/server";
+import { changeMemberEmail, describeEmailChange } from "@/lib/email-change";
 
 /**
  * One sentence for any mix of outcomes.
@@ -187,4 +188,21 @@ export async function viewAsMemberAction(formData: FormData) {
   if (!member) return;
   await setViewAsCookie(admin.id, userId);
   redirect("/library");
+}
+
+/**
+ * Change a member's email everywhere that knows them by it, in place.
+ * The work and every rule is in lib/email-change.ts.
+ */
+export async function changeEmailAction(
+  _prev: MemberActionState,
+  formData: FormData,
+): Promise<MemberActionState> {
+  await requireAdmin();
+  const userId = String(formData.get("userId") ?? "");
+  if (!userId) return { error: "Missing member." };
+  const r = await changeMemberEmail(userId, String(formData.get("newEmail") ?? ""));
+  if (!r.ok) return { error: r.error };
+  revalidatePath(`/admin/members/${userId}`);
+  return { message: describeEmailChange(r) };
 }

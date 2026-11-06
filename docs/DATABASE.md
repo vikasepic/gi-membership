@@ -1496,6 +1496,18 @@ that includes the course deletes its `remove` row (`liftRemovals`); renewals
 and admin grants do not. Revoked from anon and authenticated, RLS on with no
 policies.
 
+### Changing a member's email
+
+Migration 0099 (6 Nov 2026). No new table: the function
+`change_member_email(p_user_id, p_new)` moves one member's address in one
+transaction. It updates `users.email`, every `orders.email` of theirs,
+`post_purchase_flows`, pending `post_purchase_sends` and `checkout_leads`. It
+copies `trial_history` rows to the new address and keeps the old ones. It
+returns the old email; a repeat is a no-op, and an address another member holds
+fails on `users_store_id_email_key`. Only the service role may run it. The
+caller (`lib/email-change.ts`) changes the login first. Spec:
+`docs/superpowers/specs/2026-11-06-change-member-email-design.md`.
+
 ---
 
 ## Appendix: the raw DDL

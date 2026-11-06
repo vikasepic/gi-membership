@@ -1,7 +1,8 @@
 import "server-only";
 import { createServiceClient } from "@/lib/supabase/server";
 import { tagContact } from "@/lib/activecampaign";
-import { notifyAppEntitlement } from "@/lib/apps";
+import { notifyAppEntitlement, getAppById } from "@/lib/apps";
+import { tellApp, SETTLED } from "@/lib/email-change";
 import { sendCrmEvent, type CrmEvent } from "@/lib/crm";
 import { fulfilBump } from "@/lib/checkout";
 import { trackPurchase, type PurchaseEvent } from "@/lib/tracking";
@@ -56,6 +57,21 @@ export const RUNNERS: Record<JobKind, Runner> = {
     // notifyAppEntitlement reports failure by return value rather than by
     // throwing, so without this the sweep would mark a still-broken push done.
     if (!res.ok) throw new Error(res.error ?? `app returned ${res.status}`);
+  },
+  // An app that did not take an admin's email change. Safe twice: the app
+  // answers already_changed once it has it.
+  //
+  // Always toward the member's email NOW, not the one queued: a later change
+  // or a revert supersedes it, and replaying the queued address would move the
+  // app somewhere Grow no longer is.
+  app_email_change: async (p) => {
+    const app = await getAppById(String(p.appId));
+    if (!app || !app.active) return;
+    const { data: user } = await createServiceClient().from("users").select("email").eq("id", String(p.userId)).maybeSingle();
+    const current = (user?.email as string | undefined)?.toLowerCase();
+    if (!current || current === String(p.oldEmail)) return;
+    const answer = await tellApp(app, String(p.oldEmail), current, false);
+    if (!SETTLED.has(answer)) throw new Error(`${app.name} answered ${answer}`);
   },
   bump_charge: async (p) => {
     // The same steps the purchase runs, not a second copy of them — charge,

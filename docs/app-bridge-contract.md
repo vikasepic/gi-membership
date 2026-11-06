@@ -159,3 +159,4 @@ seam must be resolved before pointing ads at the funnel.
 |---|---|---|---|
 | Grant app subscription | `POST /api/store/provision` | `x-store-secret` header | by email |
 | User clicks "Open the app" | `GET /auth/store-handoff?token=` | HMAC over shared secret | single-use token |
+| Admin changes a member's email | `POST /api/store/email-change` ([`app-email-change.md`](./app-email-change.md)) | `x-store-secret` header | repeat answers `already_changed` |

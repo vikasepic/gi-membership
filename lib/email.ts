@@ -307,3 +307,28 @@ export function buildPaymentFailedEmail(args: {
     text: `We could not take payment for ${args.productName}. You still have access and we will retry — update your card here: ${args.manageUrl}`,
   };
 }
+
+/**
+ * Sent to BOTH addresses when an admin changes someone's email: the old one so
+ * a change nobody asked for is noticed, the new one so they know to sign in
+ * with it.
+ */
+export function buildEmailChangedEmail(args: { oldEmail: string; newEmail: string; signInUrl: string }): BuiltEmail {
+  const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return {
+    subject: "The email on your Greater Inside account was changed",
+    html: shell(`
+      <h1 style="font-size:22px;margin:0 0 12px;color:#0b0b0d;">Your email was changed</h1>
+      <p style="font-size:15px;line-height:1.6;color:#0b0b0d;margin:0 0 16px;">
+        Our team changed the email on your account from <strong>${esc(args.oldEmail)}</strong>
+        to <strong>${esc(args.newEmail)}</strong>. Your purchases and access moved with it,
+        including the apps you use.
+      </p>
+      <p style="font-size:15px;line-height:1.6;color:#0b0b0d;margin:0 0 24px;">
+        From now on, sign in with <strong>${esc(args.newEmail)}</strong>. If you did not ask for this, reply to this email.
+      </p>
+      ${btn(args.signInUrl, "Sign in")}
+    `),
+    text: `Our team changed the email on your Greater Inside account from ${args.oldEmail} to ${args.newEmail}. Your purchases and access moved with it, including the apps you use. From now on, sign in with ${args.newEmail}: ${args.signInUrl}. If you did not ask for this, reply to this email.`,
+  };
+}

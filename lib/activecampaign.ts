@@ -38,7 +38,7 @@ export function activeCampaignEnabled(): boolean {
 async function acFetch(
   path: string,
   body?: unknown,
-  method: "POST" | "GET" | "DELETE" = "POST",
+  method: "POST" | "GET" | "DELETE" | "PUT" = "POST",
 ): Promise<Response | null> {
   const cfg = config();
   if (!cfg) return null;
@@ -184,4 +184,36 @@ export async function tagContact(args: {
   for (const tagId of add) ok = (await addTag(contactId, tagId)) && ok;
   for (const tagId of drop) ok = (await removeTag(contactId, tagId)) && ok;
   return { ok };
+}
+
+async function contactIdFor(email: string): Promise<string | null | undefined> {
+  const res = await acFetch(`/contacts?email=${encodeURIComponent(email)}`, undefined, "GET");
+  if (!res?.ok) return undefined;
+  try {
+    const json = (await res.json()) as { contacts?: { id?: string | number }[] };
+    const id = json.contacts?.[0]?.id;
+    return id == null ? null : String(id);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Move a contact to a new email, in place, keeping its tags and history.
+ *
+ * `both`: the new address already has its own contact. Nothing is merged; a
+ * person decides which one to keep. `none`: no contact on the old address, or
+ * the integration is off. `failed`: AC could not be reached or refused.
+ */
+export async function changeContactEmail(
+  oldEmail: string,
+  newEmail: string,
+): Promise<"changed" | "both" | "none" | "failed"> {
+  if (!activeCampaignEnabled()) return "none";
+  const [oldId, newId] = [await contactIdFor(oldEmail), await contactIdFor(newEmail)];
+  if (oldId === undefined || newId === undefined) return "failed";
+  if (!oldId) return "none";
+  if (newId) return "both";
+  const res = await acFetch(`/contacts/${oldId}`, { contact: { email: newEmail } }, "PUT");
+  return res?.ok ? "changed" : "failed";
 }

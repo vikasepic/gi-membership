@@ -14,6 +14,7 @@ import { money } from "@/lib/money";
 import { cancelSubscriptionAction, extendTrialAction, revokeAccessAction, toggleAdminAction, toggleRecentBuyersHiddenAction, viewAsMemberAction } from "@/app/admin/members/actions";
 import { createServiceClient } from "@/lib/supabase/server";
 import { DeleteMember } from "@/components/admin/delete-member";
+import { ChangeEmail } from "@/components/admin/change-email";
 import { GrantMore } from "@/components/admin/grant-more";
 import { LearningPanel } from "@/components/admin/learning-panel";
 import { RefundButton } from "@/components/admin/refund-button";
@@ -244,6 +245,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
               <button type="submit" className="text-xs text-muted hover:text-primary">Open the store as them &rarr;</button>
             </form>
             <DeleteMember userId={m.id} email={m.email} orders={m.payments} isOwner={isOwner} isSelf={me.email?.toLowerCase() === m.email.toLowerCase()} />
+            {!isOwner && <ChangeEmail userId={m.id} email={m.email} />}
             </div>
           </section>
         </div>
