@@ -11,6 +11,7 @@
 - After each work session: run /wrap (updates this Work log, the vault and graphify).
 
 ## Work log (newest first, one line per session)
+- 2026-11-10 Course Access tab, Subscriptions page (Trials+Renewals folded in), View as on every page, and admin "Change email" in place everywhere (34ab10b, 0099 applied by hand): login, store rows, all three apps, Stripe, AC, notice to both addresses; Lisa Gu moved to lisa@renucoaching.ca incl. orders; Funnel App + Book Writer endpoints verified live 10 Nov; pending: spec doc edit uncommitted, Lisa's Stripe customer email + AC tag move by hand, keep/revert 993e095 unanswered
 - 2026-11-04 An app can ask the store whether an email still has access: POST /api/apps/entitlement/lookup, scoped by the caller's own secret, built on the same union the push uses
 - 2026-10-28 Page builder canvas holds a page's pinned blocks so a fixed nav cannot cover Save
 - 2026-10-26 Recent buyers popup shipped: purchase rules, settings group, public read, card, per-member hide, privacy policy wording (13 commits)
