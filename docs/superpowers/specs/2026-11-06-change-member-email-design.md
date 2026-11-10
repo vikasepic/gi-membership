@@ -23,7 +23,7 @@ The admin sees one line saying what happened in each place.
 
 ## The app side
 
-One endpoint, the same for every external app: `docs/app-email-change.md`. Content Engine shipped it on 6 Nov (`8fbc1c4` in Content-Machine-Ajit). Funnel App and Book Writer are to follow. Until then they show as "not updated" and are logged.
+One endpoint, the same for every external app: `docs/app-email-change.md`. Content Engine shipped it on 6 Nov (`8fbc1c4` in Content-Machine-Ajit). Funnel App and Book Writer shipped theirs by 10 Nov; all three answered a signed `check: true` probe with `not_found` that day. An app connected later without the endpoint shows as "not updated" and is logged.
 
 ## Known limit
 
