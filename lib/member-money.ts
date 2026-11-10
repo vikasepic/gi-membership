@@ -12,8 +12,8 @@ import type { Labels } from "@/lib/attribution";
  * less refunds — the same ledger the Transactions page sums.
  */
 
-export type Journey = "paying" | "on trial" | "free access" | "trial cancelled" | "cancelling" | "lapsed" | "one-off buyer" | "no access";
-export const JOURNEYS: Journey[] = ["paying", "on trial", "free access", "trial cancelled", "cancelling", "lapsed", "one-off buyer", "no access"];
+export type Journey = "paying" | "on trial" | "free access" | "trial cancelled" | "cancelling" | "lapsed" | "one-off buyer" | "granted" | "no access";
+export const JOURNEYS: Journey[] = ["paying", "on trial", "free access", "trial cancelled", "cancelling", "lapsed", "one-off buyer", "granted", "no access"];
 
 export type SubView = {
   stripeSubscriptionId: string;
@@ -178,6 +178,10 @@ export function deriveMembers(d: MoneyData): MemberMoney[] {
   }
   const ownByUser = new Map<string, MoneyData["ownership"]>();
   for (const o of d.ownership) ownByUser.set(o.userId, [...(ownByUser.get(o.userId) ?? []), o]);
+  // Courses added by hand on a course's Access tab (course_access). Nothing
+  // above sees them, so a member whose only access is one read as "no access".
+  const grantsByUser = new Map<string, string[]>();
+  for (const g of d.courseGrants ?? []) grantsByUser.set(g.userId, [...(grantsByUser.get(g.userId) ?? []), g.courseTitle]);
 
   const nameOf = subscriptionNamer(d);
 
@@ -201,6 +205,7 @@ export function deriveMembers(d: MoneyData): MemberMoney[] {
         ),
       ),
     ];
+    const granted = grantsByUser.get(u.id) ?? [];
     const has = (st: SubView["state"]) => subs.some((s) => s.state === st);
     const cancelling = has("cancelling");
     let journey: Journey;
@@ -211,6 +216,7 @@ export function deriveMembers(d: MoneyData): MemberMoney[] {
     else if (has("trial cancelled") || has("trial ended")) journey = "trial cancelled";
     else if (has("cancelled")) journey = "lapsed";
     else if (holds.length > 0) journey = "one-off buyer";
+    else if (granted.length > 0) journey = "granted";
     else journey = "no access";
     const converted = subs.some((s) => s.trialEnd && s.paidInvoices > 0);
     const events: NextEvent[] = [];
@@ -244,7 +250,7 @@ export function deriveMembers(d: MoneyData): MemberMoney[] {
       refundedCents: refunded.reduce((n, o) => n + o.totalCents, 0),
       lastPaidAt: paidOrders.length ? paidOrders[paidOrders.length - 1].createdAt : null,
       nextEvent: events[0] ?? null,
-      holds,
+      holds: [...new Set([...holds, ...granted])],
       holdIds: [...new Set(activeHolds.flatMap((o) => [o.offerId, o.productId].filter((x): x is string => !!x)))],
       subs,
       currency: paidOrders[0]?.currency ?? subs[0]?.currency ?? "usd",

@@ -65,6 +65,8 @@ export type MoneyData = {
   items: ItemRow[];
   subscriptions: SubscriptionRow[];
   ownership: OwnershipRow[];
+  /** Courses added to one person by hand (course_access grants), by title. */
+  courseGrants?: { userId: string; courseTitle: string }[];
   names: Names;
   now: Date;
 };
@@ -78,7 +80,7 @@ export async function loadMoneyData(): Promise<MoneyData> {
   // decide which. Found 23 Sep 2026 on a local store of 1062 users, where a
   // real member 404ed on their own page. Offers, products and apps are
   // hand-made lists and will not approach it.
-  const [users, orders, subscriptions, ownership, offers, products, apps] = await Promise.all([
+  const [users, orders, subscriptions, ownership, offers, products, apps, grants] = await Promise.all([
     allRows<Record<string, unknown>>((from, to) =>
       db.from("users").select("id, email, username, is_admin, created_at").eq("store_id", storeId)
         .order("created_at", { ascending: true }).range(from, to),
@@ -101,6 +103,10 @@ export async function loadMoneyData(): Promise<MoneyData> {
     db.from("offers").select("id, name, content_name, billing_type, price_cents").eq("store_id", storeId),
     db.from("products").select("id, title, price_cents").eq("store_id", storeId),
     db.from("apps").select("id, name"),
+    allRows<Record<string, unknown>>((from, to) =>
+      db.from("course_access").select("user_id, course_id, courses(title)").eq("store_id", storeId).eq("kind", "grant")
+        .order("user_id", { ascending: true }).order("course_id", { ascending: true }).range(from, to),
+    ),
   ]);
   for (const r of [offers, products, apps]) {
     if (r.error) throw new Error(`loadMoneyData: ${r.error.message}`);
@@ -168,6 +174,10 @@ export async function loadMoneyData(): Promise<MoneyData> {
       appId: (o.app_id as string) ?? null,
       status: o.status as string,
       stripeSubscriptionId: (o.stripe_subscription_id as string) ?? null,
+    })),
+    courseGrants: grants.map((g) => ({
+      userId: g.user_id as string,
+      courseTitle: (g.courses as { title: string } | null)?.title ?? "A course",
     })),
     names: {
       offers: new Map(

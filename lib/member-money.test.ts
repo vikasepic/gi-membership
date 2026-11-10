@@ -137,6 +137,20 @@ describe("members", () => {
     expect(by("nobody")).toMatchObject({ journey: "no access", totalPaidCents: 0 });
   });
 
+  it("names a course added by hand, and calls someone with only that 'granted', not 'no access'", () => {
+    const ms = deriveMembers({
+      ...DATA,
+      courseGrants: [
+        { userId: "nobody", courseTitle: "Foundation Weekend" },
+        { userId: "jenny", courseTitle: "Foundation Weekend" },
+      ],
+    });
+    const m = (id: string) => ms.find((x) => x.id === id)!;
+    expect(m("nobody")).toMatchObject({ journey: "granted", holds: ["Foundation Weekend"] });
+    // A buyer stays a buyer; the course is listed beside what they bought.
+    expect(m("jenny")).toMatchObject({ journey: "one-off buyer", holds: ["Digital Product Validator", "Foundation Weekend"] });
+  });
+
   it("counts what each person has paid us, renewals in, refunds and test mode out", () => {
     expect(by("dael")).toMatchObject({ payments: 1, totalPaidCents: 5800, lastPaidAt: "2026-09-17T10:00:00Z" });
     expect(by("jenny")).toMatchObject({ payments: 1, refunds: 1, totalPaidCents: 2900, refundedCents: 4700 });

@@ -4,6 +4,8 @@ import { getStoreId, getOffer } from "@/lib/store";
 import { grantOfferOwnership } from "@/lib/checkout";
 import { grantProduct } from "@/lib/members";
 import { coursesForUser } from "@/lib/courses";
+import { loadMoneyData } from "@/lib/money-data";
+import { deriveMembers } from "@/lib/member-money";
 import {
   listCourseAccess,
   addCourseAccess,
@@ -332,5 +334,14 @@ describe.skipIf(!canRun)("course access (integration)", () => {
       await grantProduct({ userId, productId: p, grantedBy: "zz-test" });
       expect(await rowsFor(c)).toEqual([{ kind: "remove" }]);
     });
+  });
+
+  // The members page (10 Nov 2026): 96 people added to a course by hand all
+  // read "no access", because it only looked at ownership and subscriptions.
+  it("shows the members page a course added by hand", async () => {
+    const c = await course();
+    await access(c, "grant");
+    const me = deriveMembers(await loadMoneyData()).find((m) => m.id === userId)!;
+    expect(me).toMatchObject({ journey: "granted", holds: ["zz access course"] });
   });
 });
