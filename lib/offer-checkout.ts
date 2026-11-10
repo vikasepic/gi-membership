@@ -1,6 +1,7 @@
 import "server-only";
 import type Stripe from "stripe";
 import { createServiceClient } from "@/lib/supabase/server";
+import { reportAffiliateSale } from "@/lib/affiliate-tracker";
 import { getStoreId, getOffer, getStoreName } from "@/lib/store";
 import { isOfferEligible, shouldShowOffer, immediateChargeCents, offerAtPrice, offerWithCouponTrial } from "@/lib/offers";
 import { livePrices, priceForChoice, shownPrices } from "@/lib/offer-prices";
@@ -832,6 +833,9 @@ export async function completeOfferCheckout(
       // reports its own share.
       ...(paid ? { valueCents: totalCents - bumpNowCents } : {}),
     });
+    // The affiliate tracker, for the offers it follows. Never throws, and not
+    // awaited: the buyer is not kept waiting on someone else's server.
+    if (paid) void reportAffiliateSale(orderId);
   } catch (e) {
     // The card saved (and may already be charged or subscribed) but
     // fulfilment did not finish — granting access or recording the line can

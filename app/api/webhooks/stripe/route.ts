@@ -1,6 +1,7 @@
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { recordRenewal, subscriptionIdOf } from "@/lib/renewals";
+import { reportAffiliateRefund } from "@/lib/affiliate-tracker";
 import { reportReversal, handleDispute, disputeWon } from "@/lib/reversals";
 import { orderForPaymentIntent, orderForInvoicePayment } from "@/lib/orders";
 import { finalizeOrder } from "@/lib/checkout";
@@ -201,6 +202,14 @@ export async function POST(req: Request) {
           currency: charge.currency ?? order.currency,
           kind: "Refund",
           stripeId: charge.id,
+        });
+        // This refund's own amount: amount_refunded is the running total, so
+        // a second partial refund must not be reported as the sum of both.
+        const before = (event.data.previous_attributes as { amount_refunded?: number } | undefined)?.amount_refunded ?? 0;
+        await reportAffiliateRefund({
+          orderId: order.id,
+          eventId: event.id,
+          refundedCents: (charge.amount_refunded ?? 0) - before,
         });
       }
       break;

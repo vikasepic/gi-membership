@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { tagContact } from "@/lib/activecampaign";
 import { notifyAppEntitlement, getAppById } from "@/lib/apps";
 import { tellApp, SETTLED } from "@/lib/email-change";
+import { postToTracker, type TrackerBody } from "@/lib/affiliate-tracker";
 import { sendCrmEvent, type CrmEvent } from "@/lib/crm";
 import { fulfilBump } from "@/lib/checkout";
 import { trackPurchase, type PurchaseEvent } from "@/lib/tracking";
@@ -72,6 +73,12 @@ export const RUNNERS: Record<JobKind, Runner> = {
     if (!current || current === String(p.oldEmail)) return;
     const answer = await tellApp(app, String(p.oldEmail), current, false);
     if (!SETTLED.has(answer)) throw new Error(`${app.name} answered ${answer}`);
+  },
+  // One sale or refund for the affiliate tracker, replayed as queued. Its
+  // event_id makes a replay of one that did land a `duplicate`, not a second
+  // commission. postToTracker throws only on a network error or a 5xx.
+  affiliate_event: async (p) => {
+    await postToTracker(p as unknown as TrackerBody);
   },
   bump_charge: async (p) => {
     // The same steps the purchase runs, not a second copy of them — charge,

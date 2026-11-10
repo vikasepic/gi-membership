@@ -10,7 +10,7 @@ import { getStoreId } from "@/lib/store";
 // protect a completed purchase.
 
 /** Jobs the retry sweep knows how to perform again. */
-export type JobKind = "ac_tag" | "app_entitlement" | "crm_event" | "bump_charge" | "tracking_event" | "app_email_change";
+export type JobKind = "ac_tag" | "app_entitlement" | "crm_event" | "bump_charge" | "tracking_event" | "app_email_change" | "affiliate_event";
 
 /**
  * Backoff in minutes by attempt number: 1, 5, 15, 60, 180.
