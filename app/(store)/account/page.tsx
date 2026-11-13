@@ -130,9 +130,9 @@ export default async function AccountPage({
                     );
                   })()}
                 </div>
-                {p.documentUrl ? (
+                {p.receiptUrl ? (
                   <a
-                    href={p.documentUrl}
+                    href={p.receiptUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="shrink-0 text-sm text-primary hover:underline"
