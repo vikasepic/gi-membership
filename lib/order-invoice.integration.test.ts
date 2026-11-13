@@ -162,23 +162,26 @@ describe.skipIf(!canRun)("3. one-off and a subscription in one checkout", () => 
 
 describe.skipIf(!canRun)("4. subscriptions", () => {
   it("creates nothing for a paid first charge or a $0 trial, and shows Stripe's own invoice", async () => {
-    const { userId, email } = await member("Zz Sub Buyer");
-    const paid = await buy(userId, email, await offerOf(2900, { billing_type: "recurring", interval: "month", trial_days: null }));
-    const trial = await buy(userId, email, await offerOf(3900, { billing_type: "recurring", interval: "month", trial_days: 7 }));
-    const customer = paid.stripe_customer_id;
-    const before = (await stripe().invoices.list({ customer, limit: 20 })).data.length;
+    // Two members: one person can't hold two subscriptions to the same app.
+    const a = await member("Zz Sub Buyer");
+    const b = await member("Zz Trial Buyer");
+    const paid = await buy(a.userId, a.email, await offerOf(2900, { billing_type: "recurring", interval: "month", trial_days: null }));
+    const trial = await buy(b.userId, b.email, await offerOf(3900, { billing_type: "recurring", interval: "month", trial_days: 7 }));
+    const count = async (customer: string) => (await stripe().invoices.list({ customer, limit: 20 })).data.length;
+    const before = [await count(paid.stripe_customer_id), await count(trial.stripe_customer_id)];
 
-    const docs = await purchaseDocsForUser(userId);
-    expect(docs.find((d) => d.orderId === paid.id)).toMatchObject({
+    expect((await purchaseDocsForUser(a.userId)).find((d) => d.orderId === paid.id)).toMatchObject({
       invoiceUrl: expect.stringContaining("stripe.com"),
       receiptUrl: expect.stringContaining("stripe.com"),
       canMakeInvoice: false,
     });
-    expect(docs.find((d) => d.orderId === trial.id)).toMatchObject({ invoiceUrl: null, receiptUrl: null, canMakeInvoice: false });
+    expect((await purchaseDocsForUser(b.userId)).find((d) => d.orderId === trial.id)).toMatchObject({
+      invoiceUrl: null, receiptUrl: null, canMakeInvoice: false,
+    });
 
-    expect((await invoiceForOrder({ orderId: paid.id, userId, create: true })).ok).toBe(false);
-    expect((await invoiceForOrder({ orderId: trial.id, userId, create: true })).ok).toBe(false);
-    expect((await stripe().invoices.list({ customer, limit: 20 })).data.length).toBe(before);
+    expect((await invoiceForOrder({ orderId: paid.id, userId: a.userId, create: true })).ok).toBe(false);
+    expect((await invoiceForOrder({ orderId: trial.id, userId: b.userId, create: true })).ok).toBe(false);
+    expect([await count(paid.stripe_customer_id), await count(trial.stripe_customer_id)]).toEqual(before);
   });
 });
 
