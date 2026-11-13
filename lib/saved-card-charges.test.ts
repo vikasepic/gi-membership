@@ -33,6 +33,10 @@ const ALLOWED = new Set([
   "lib/checkout.ts › acceptOto › fulfilOffer(",
   // A bump that failed at checkout, retried by the queue. Ticked at checkout by the buyer.
   "lib/retry.ts › bump_charge › fulfilBump(",
+  // Not a charge: `paid_out_of_band: true` only marks the after-the-fact
+  // invoice for an order already paid, if Stripe refuses to attach that
+  // payment (owner, 13 Nov 2026: a Stripe invoice per purchase).
+  "lib/order-invoice.ts › invoiceForOrder › invoices.pay(",
 ]);
 
 const PATTERNS = ["fulfilOffer(", "fulfilBump(", "paymentIntents.create(", "subscriptions.create(", "invoices.pay("];
