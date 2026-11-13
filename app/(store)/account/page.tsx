@@ -20,9 +20,9 @@ const when = (iso: string | number) => dateWithYear(typeof iso === "number" ? ne
 export default async function AccountPage({
   searchParams,
 }: {
-  searchParams: Promise<{ billing?: string }>;
+  searchParams: Promise<{ billing?: string; invoice?: string }>;
 }) {
-  const { billing } = await searchParams;
+  const { billing, invoice } = await searchParams;
   const user = await viewer();
 
   // Straight to the login, the way the library already does it.
@@ -43,8 +43,13 @@ export default async function AccountPage({
     getLegal(),
     hasBillingAccount(user.id),
   ]);
-  // A renewal's document is its invoice, which is already on the list below.
-  const invoiceById = new Map(invoices.map((i) => [i.id, i]));
+  // Whitelisted: anything else off the URL shows nothing.
+  const invoiceNotice =
+    invoice === "view-as"
+      ? "Viewing as a member: an invoice is made only when they open it themselves."
+      : invoice === "unavailable"
+        ? "That invoice isn\u2019t available right now. Try again in a moment."
+        : null;
   const subs = await subscriptionsForUser(
     user.id,
     purchases.map((p) => p.subscriptionId).filter((id): id is string => !!id),
@@ -89,13 +94,20 @@ export default async function AccountPage({
         )}
       </section>
 
-      {/* Purchases, each with whatever document Stripe actually issued for it.
-          A one-off payment gets a hosted receipt; only subscriptions produce a
-          real invoice, so the two are labelled differently rather than both
-          called "invoice" and one of them quietly not being one. */}
+      {/* Purchases, each with Stripe's receipt and Stripe's invoice. A one-off
+          payment's invoice is made on the first click (lib/order-invoice), so
+          the hint about billing details comes before that click, not after:
+          Stripe freezes an invoice once it is made. */}
       {purchases.length > 0 && (
         <section className="flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5">
           <span className="kicker text-muted">Your purchases</span>
+          {invoiceNotice && <p className="text-sm font-medium text-primary">{invoiceNotice}</p>}
+          {canBill && purchases.some((p) => p.canMakeInvoice) && (
+            <p className="text-xs text-muted">
+              Need your company name or address on an invoice? Update it under Manage billing first. An
+              invoice can&rsquo;t be changed once it&rsquo;s made.
+            </p>
+          )}
           <ul className="flex flex-col divide-y divide-border">
             {purchases.map((p) => (
               <li key={p.orderId} className="flex items-start justify-between gap-x-4 py-3 first:pt-0 last:pb-0">
@@ -130,27 +142,26 @@ export default async function AccountPage({
                     );
                   })()}
                 </div>
-                {p.receiptUrl ? (
-                  <a
-                    href={p.receiptUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 text-sm text-primary hover:underline"
-                  >
-                    Receipt &rarr;
-                  </a>
-                ) : p.invoiceId && invoiceById.get(p.invoiceId)?.hostedUrl ? (
-                  <a
-                    href={invoiceById.get(p.invoiceId)!.hostedUrl!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 text-sm text-primary hover:underline"
-                  >
-                    Invoice &rarr;
-                  </a>
-                ) : (
-                  <span className="shrink-0 text-xs text-muted">No receipt</span>
-                )}
+                {(() => {
+                  const invoiceHref = p.invoiceUrl ?? (p.canMakeInvoice ? `/account/invoice/${p.orderId}` : null);
+                  if (!p.receiptUrl && !invoiceHref) return <span className="shrink-0 text-xs text-muted">No receipt</span>;
+                  // Plain links in a new tab: the Invoice one makes the invoice on
+                  // the click, so it must never be a prefetching <Link>.
+                  return (
+                    <span className="flex shrink-0 flex-col items-end gap-1 text-sm">
+                      {p.receiptUrl && (
+                        <a href={p.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                          Receipt &rarr;
+                        </a>
+                      )}
+                      {invoiceHref && (
+                        <a href={invoiceHref} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                          Invoice &rarr;
+                        </a>
+                      )}
+                    </span>
+                  );
+                })()}
               </li>
             ))}
           </ul>
