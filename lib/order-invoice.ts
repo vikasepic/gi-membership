@@ -111,7 +111,13 @@ export async function invoiceForOrder(args: { orderId: string; userId: string; c
     const s = stripe();
     const pi = await s.paymentIntents.retrieve(piId);
     const charged = pi.amount_received ?? 0;
-    if (charged <= 0) return { ok: false, reason: "not_eligible" };
+    const piCustomer = typeof pi.customer === "string" ? pi.customer : pi.customer?.id;
+    // The payment is attached to the invoice, so both must be the same customer's.
+    if (charged <= 0 || piCustomer !== customerId) return { ok: false, reason: "not_eligible" };
+    const fail = async (why: string): Promise<InvoiceResult> => {
+      await recordError({ source: "order_invoice", message: `No invoice for order ${order.id}: ${why}`, context: { orderId: order.id } });
+      return { ok: false, reason: "stripe_error" };
+    };
 
     let invoice: Stripe.Invoice | null = null;
     let voided: string | null = null;
@@ -126,6 +132,10 @@ export async function invoiceForOrder(args: { orderId: string; userId: string; c
 
     if (!invoice) {
       const customer = await s.customers.retrieve(customerId);
+      // Stripe spends a customer's balance on the next invoice it finalizes:
+      // their credit would go on money already taken. Left to a person.
+      const balance = "deleted" in customer && customer.deleted ? 0 : ((customer as Stripe.Customer).balance ?? 0);
+      if (balance !== 0) return fail(`customer ${customerId} has a Stripe balance of ${balance}`);
       if (!("deleted" in customer && customer.deleted) && !(customer as Stripe.Customer).name) {
         const { data: user } = await db.from("users").select("username").eq("id", args.userId).maybeSingle();
         const name = ((user?.username as string | null) ?? "").trim();
@@ -153,7 +163,8 @@ export async function invoiceForOrder(args: { orderId: string; userId: string; c
     }
 
     const id = invoice.id ?? "";
-    if (invoice.status === "draft") {
+    // Lines only on a draft with none: a resume past the 24h key window would add them twice.
+    if (invoice.status === "draft" && (invoice.lines?.data?.length ?? 0) === 0) {
       const lines = invoiceLines({
         items: items.map((i) => ({ description: i.description, amountCents: i.amount_cents, subscription: !!i.stripe_subscription_id })),
         taxCents: (order.tax_cents as number) ?? 0,
@@ -168,23 +179,23 @@ export async function invoiceForOrder(args: { orderId: string; userId: string; c
           ),
         );
       }
+    }
+    if (invoice.status === "draft") {
       invoice = await s.invoices.finalizeInvoice(id, { auto_advance: false }).catch(() => s.invoices.retrieve(id));
     }
     if (invoice.status === "open") {
-      try {
-        invoice = await s.invoices.attachPayment(id, { payment_intent: piId });
-      } catch (e) {
-        const now = await s.invoices.retrieve(id);
-        if (now.status === "paid") invoice = now;
-        else {
-          // ponytail: logged, not queued; a refused attach is Stripe's rule about that payment, and out of band is the documented fallback.
-          console.warn(`[order_invoice] attach refused for ${id}, marking paid out of band: ${messageOf(e)}`);
-          invoice = await s.invoices.pay(id, { paid_out_of_band: true });
-        }
+      // Never attach to an invoice that disagrees with the money. Voiding gives
+      // back any balance Stripe applied; the next click starts a clean one.
+      if (invoice.amount_due !== charged || (invoice.starting_balance ?? 0) !== 0) {
+        await s.invoices.voidInvoice(id);
+        return fail(`invoice ${id} came to ${invoice.amount_due} against a charge of ${charged}; voided`);
       }
+      // ponytail: no out-of-band fallback. A failed or timed-out attach stays open and unshown; the next click retries it.
+      invoice = await s.invoices.attachPayment(id, { payment_intent: piId }).catch(() => s.invoices.retrieve(id));
+      if (invoice.status !== "paid") invoice = await s.invoices.retrieve(id);
     }
-    // attachPayment can answer before the invoice reads paid; the next click finds it either way.
-    if (invoice.status !== "paid") invoice = await s.invoices.retrieve(id);
+    // Only a paid invoice reaches the buyer: an open one's page has a live Pay button.
+    if (invoice.status !== "paid") return fail(`invoice ${id} is ${invoice.status}, not paid`);
     return done(invoice);
   } catch (e) {
     await recordError({ source: "order_invoice", message: `Could not make the invoice for order ${order.id}: ${messageOf(e)}`, context: { orderId: order.id } });

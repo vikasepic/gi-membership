@@ -209,6 +209,18 @@ describe.skipIf(!canRun)("5. refunds", () => {
   });
 });
 
+describe.skipIf(!canRun)("6. a customer with a Stripe balance (final review, 13 Nov)", () => {
+  it("makes no invoice and leaves the customer's credit untouched", async () => {
+    const { userId, email } = await member("Zz Credit Buyer");
+    const order = await buy(userId, email, await offerOf(19700));
+    await stripe().customers.update(order.stripe_customer_id, { balance: -500 });
+
+    expect(await invoiceForOrder({ orderId: order.id, userId, create: true })).toEqual({ ok: false, reason: "stripe_error" });
+    expect(((await stripe().customers.retrieve(order.stripe_customer_id)) as Stripe.Customer).balance).toBe(-500);
+    expect(await ourInvoices(order.stripe_customer_id, order.id)).toHaveLength(0);
+  });
+});
+
 afterAll(async () => {
   if (!canRun) return;
   const db = createServiceClient();

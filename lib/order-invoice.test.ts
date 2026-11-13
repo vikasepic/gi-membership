@@ -57,9 +57,17 @@ vi.mock("@/lib/stripe", () => {
         return inv;
       },
       retrieve: async (id: string) => s.invoices[id],
-      finalizeInvoice: async (id: string) => ((s.invoices[id].status = "open"), s.invoices[id]),
+      // Stripe applies the customer's balance at finalize: amount_due is the lines plus it.
+      finalizeInvoice: async (id: string) => {
+        const inv = s.invoices[id];
+        const lines = (inv.lines as { data: { amount: number }[] }).data;
+        const bal = (s.customer.balance as number) ?? 0;
+        Object.assign(inv, { status: "open", starting_balance: bal, amount_due: Math.max(0, lines.reduce((n, l) => n + l.amount, 0) + bal) });
+        return inv;
+      },
+      voidInvoice: async (id: string) => (s.calls.push("invoices.void"), (s.invoices[id].status = "void"), s.invoices[id]),
       attachPayment: async (id: string) => ((s.invoices[id].status = "paid"), s.invoices[id]),
-      pay: async (id: string) => ((s.invoices[id].status = "paid"), s.invoices[id]),
+      pay: async (id: string) => (s.calls.push("invoices.pay"), (s.invoices[id].status = "paid"), s.invoices[id]),
     },
     invoiceItems: {
       create: async (p: Row) => {
@@ -90,7 +98,7 @@ beforeEach(() => {
     users: [{ id: "u1", username: "Zz Buyer" }],
   };
   s.pi = { id: "pi_1", status: "succeeded", amount_received: 29700, currency: "usd", customer: "cus_1", metadata: {} };
-  s.customer = { id: "cus_1", name: null };
+  s.customer = { id: "cus_1", name: null, balance: 0 };
   s.invoices = {};
   s.calls = [];
 });
@@ -192,19 +200,60 @@ describe("invoiceForOrder", () => {
     s.calls = [];
     s.invoices = {};
     s.pi = { ...s.pi, metadata: {} };
-    s.customer = { id: "cus_1", name: "WINR GmbH" };
+    s.customer = { id: "cus_1", name: "WINR GmbH", balance: 0 };
     await invoiceForOrder({ orderId: "o1", userId: "u1", create: true });
     expect(s.calls.some((c) => c.startsWith("customers.update"))).toBe(false);
   });
 
-  it("falls back to paid out of band when Stripe refuses the attach", async () => {
+  it("never builds on a customer's Stripe balance: their credit is not spent on money already taken", async () => {
+    s.customer = { id: "cus_1", name: "Zz", balance: -500 };
+    expect(await invoiceForOrder({ orderId: "o1", userId: "u1", create: true })).toEqual({ ok: false, reason: "stripe_error" });
+    expect(created()).toBe(0);
+    expect(recordError).toHaveBeenCalled();
+  });
+
+  it("refuses a payment that belongs to a different Stripe customer than the order", async () => {
+    s.pi = { ...s.pi, customer: "cus_other" };
+    expect(await invoiceForOrder({ orderId: "o1", userId: "u1", create: true })).toEqual({ ok: false, reason: "not_eligible" });
+    expect(created()).toBe(0);
+  });
+
+  it("does not add lines again to a draft that already has them", async () => {
+    s.invoices.in_d = { id: "in_d", status: "draft", currency: "usd", lines: { data: [{ amount: 29700 }] } };
+    s.pi = { ...s.pi, metadata: { grow_invoice_id: "in_d" } };
+    const r = await invoiceForOrder({ orderId: "o1", userId: "u1", create: true });
+    expect(s.calls).not.toContain("invoiceItems.create");
+    expect(r).toMatchObject({ ok: true, invoiceId: "in_d" });
+  });
+
+  it("voids an invoice whose total disagrees with the charge, and hands nothing out", async () => {
+    s.invoices.in_d = { id: "in_d", status: "draft", currency: "usd", lines: { data: [{ amount: 29700 }, { amount: 29700 }] } };
+    s.pi = { ...s.pi, metadata: { grow_invoice_id: "in_d" } };
+    expect(await invoiceForOrder({ orderId: "o1", userId: "u1", create: true })).toEqual({ ok: false, reason: "stripe_error" });
+    expect(s.invoices.in_d.status).toBe("void");
+    expect(recordError).toHaveBeenCalled();
+  });
+
+  it("never marks paid out of band, and hands out nothing unpaid, when the attach fails", async () => {
     const { stripe } = await import("@/lib/stripe");
     const inv = stripe().invoices;
     const attach = inv.attachPayment;
-    inv.attachPayment = async () => { throw new Error("payment_intent_unexpected_state"); };
+    inv.attachPayment = async () => { throw new Error("timeout"); };
     try {
-      const r = await invoiceForOrder({ orderId: "o1", userId: "u1", create: true });
-      expect(r.ok).toBe(true);
+      expect(await invoiceForOrder({ orderId: "o1", userId: "u1", create: true })).toEqual({ ok: false, reason: "stripe_error" });
+      expect(s.calls).not.toContain("invoices.pay");
+    } finally {
+      inv.attachPayment = attach;
+    }
+  });
+
+  it("hands out nothing that is not paid, even when the attach answers", async () => {
+    const { stripe } = await import("@/lib/stripe");
+    const inv = stripe().invoices;
+    const attach = inv.attachPayment;
+    inv.attachPayment = (async (id: string) => s.invoices[id]) as unknown as typeof attach;
+    try {
+      expect(await invoiceForOrder({ orderId: "o1", userId: "u1", create: true })).toEqual({ ok: false, reason: "stripe_error" });
     } finally {
       inv.attachPayment = attach;
     }

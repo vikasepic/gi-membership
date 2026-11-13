@@ -54,6 +54,14 @@ Each is drawn from a real shape in the live orders and becomes a test in Stripe 
 
 After deploy, one live check on a team-owned order, with the owner's go-ahead (it costs Stripe's fee on that one invoice).
 
+## Rules added by the final review (13 Nov)
+
+- Only a **paid** invoice whose total equals the charge ever reaches the buyer. An open one's page has a live Pay button, and paying it would be a second charge Grow never sees.
+- **No invoice for a customer with a Stripe balance.** Stripe spends the balance on the next invoice it finalizes, so the buyer's credit would go on money already taken. It is logged on the Errors page for a person.
+- If the finalized total disagrees with the charge, the invoice is voided (which returns any balance Stripe applied) and nothing is handed out.
+- The invoice is paid only by attaching the order's own payment. There is no "paid out of band" fallback: a failed attach stays unshown and the next click tries again.
+- Known Stripe behaviour, seen in test mode: the PDF is drawn at finalize, so it reads "due" and "Pay online" like the owner's Circle sample, while the hosted page reads Paid; and finalizing opens a PaymentIntent of Stripe's own, cancelled when the real payment is attached, so each invoice leaves one cancelled, never-charged entry in Stripe's payments list.
+
 ## Not included
 
 - A tax/VAT ID field.
@@ -63,6 +71,5 @@ After deploy, one live check on a team-owned order, with the owner's go-ahead (i
 
 ## Left to the builder
 
-- Paying the invoice with the existing PaymentIntent (Stripe's attach-payment call, available on the SDK in use, v22) versus marking it paid out of band. Prefer attach, so the invoice shows the real card payment; fall back only if Stripe refuses it for older payments.
 - Hosted invoice page or direct PDF as the Invoice link.
 - The exact wording of the hint line.
