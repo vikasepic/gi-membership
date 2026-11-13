@@ -44,12 +44,7 @@ export default async function AccountPage({
     hasBillingAccount(user.id),
   ]);
   // Whitelisted: anything else off the URL shows nothing.
-  const invoiceNotice =
-    invoice === "view-as"
-      ? "Viewing as a member: an invoice is made only when they open it themselves."
-      : invoice === "unavailable"
-        ? "That invoice isn\u2019t available right now. Try again in a moment."
-        : null;
+  const invoiceNotice = invoice === "unavailable" ? "That invoice isn\u2019t available right now. Try again in a moment." : null;
   const subs = await subscriptionsForUser(
     user.id,
     purchases.map((p) => p.subscriptionId).filter((id): id is string => !!id),

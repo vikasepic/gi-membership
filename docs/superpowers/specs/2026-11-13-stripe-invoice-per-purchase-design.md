@@ -73,3 +73,7 @@ After deploy, one live check on a team-owned order, with the owner's go-ahead (i
 
 - Hosted invoice page or direct PDF as the Invoice link.
 - The exact wording of the hint line.
+
+## Changed after launch (13 Nov)
+
+An admin in "View as" makes the member's invoice on click too (owner: "it must work when I see as admin too"). It is made in the member's name with their billing details as they stand, and costs the same Stripe fee.

@@ -41,17 +41,11 @@ describe("the Invoice link", () => {
     expect(invoiceForOrder).not.toHaveBeenCalled();
   });
 
-  it("only looks, never makes, for an admin viewing as the member", async () => {
+  it("makes the member's invoice for an admin viewing as them too (owner, 13 Nov)", async () => {
     state.user = { id: "u1", viewingAs: true };
-    state.result = { ok: false, reason: "view_only" };
     const res = await get("o1");
-    expect(invoiceForOrder).toHaveBeenCalledWith({ orderId: "o1", userId: "u1", create: false });
-    expect(res.headers.get("location")).toBe("/account?invoice=view-as");
-  });
-
-  it("opens an invoice that already exists for an admin viewing as the member", async () => {
-    state.user = { id: "u1", viewingAs: true };
-    expect((await get("o1")).headers.get("location")).toBe("https://invoice.stripe.com/i/in_1");
+    expect(invoiceForOrder).toHaveBeenCalledWith({ orderId: "o1", userId: "u1", create: true });
+    expect(res.headers.get("location")).toBe("https://invoice.stripe.com/i/in_1");
   });
 
   it.each(["not_found", "not_eligible", "stripe_error"])("goes back to the account page when the answer is %s", async (reason) => {
