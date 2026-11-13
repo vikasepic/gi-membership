@@ -1247,3 +1247,16 @@ bursts on an account five other apps share more likely, not less.
   it apart from the results instead of folding it into one.
 - Before believing a mass "missing", look for a second reader of the same
   thing (here the `subscriptions` table, synced at 03:10) and compare.
+
+## A Stripe invoice made after the payment (13 Nov 2026)
+
+**An invoice is not a document, it is a bill.** The final review of the
+invoice-per-purchase branch found that an after-the-fact invoice could spend
+the customer's Stripe credit (Stripe applies the balance to the next invoice
+it finalizes) and could hand the buyer an open invoice whose page has a live
+Pay button. Rule: hand out only a `paid` invoice whose `amount_due` equals the
+charge; never finalize one on a customer with a non-zero `balance`; void one
+that disagrees. Mocks hid all of it, and also hid that Stripe refuses an
+`expand` deeper than four levels and refuses `attachPayment` on a draft. Run
+anything that writes to Stripe against test mode, not only against a mock.
+`lib/order-invoice.ts`, commits 4501623 and c466e01.
