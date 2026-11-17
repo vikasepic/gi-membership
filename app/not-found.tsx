@@ -59,7 +59,7 @@ export default async function NotFound() {
  * be quietly turned back into a 404.
  */
 async function sendAnywhereItShould(): Promise<void> {
-  let rule: { to: string; permanent: boolean } | null = null;
+  let rule: { location: string; status: 301 | 302 } | null = null;
   try {
     const path = (await headers()).get("x-pathname");
     if (!path) return;
@@ -71,6 +71,6 @@ async function sendAnywhereItShould(): Promise<void> {
   if (!rule) return;
   // Outside the try: these throw to interrupt rendering, and catching that
   // would turn a working redirect into a 404 page.
-  if (rule.permanent) permanentRedirect(rule.to);
-  redirect(rule.to);
+  if (rule.status === 301) permanentRedirect(rule.location);
+  redirect(rule.location);
 }

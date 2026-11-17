@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { normalizePath, type StoreRedirect } from "@/lib/redirects";
+import { normalizePath, redirectSchema, type StoreRedirect } from "@/lib/redirects";
 
 /**
  * Old addresses, and where they go now.
@@ -17,7 +17,7 @@ import { normalizePath, type StoreRedirect } from "@/lib/redirects";
 const input =
   "w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-primary";
 
-const blank = (): StoreRedirect => ({ from: "", to: "", permanent: true });
+const blank = (): StoreRedirect => redirectSchema.parse({});
 
 export function RedirectFields({
   redirects,

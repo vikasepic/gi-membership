@@ -1,8 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { matchRedirect, normalizePath, redirectsSchema, type StoreRedirect } from "@/lib/redirects";
+import {
+  isProtectedPath,
+  matchRedirect,
+  normalizePath,
+  redirectSchema,
+  redirectsSchema,
+  traceRedirect,
+  validateRules,
+  type StoreRedirect,
+} from "@/lib/redirects";
 
-const rule = (from: string, to: string, permanent = true): StoreRedirect => ({ from, to, permanent });
+/** The redirect manager's rules. Spec: docs/superpowers/specs/2026-11-17-redirect-manager-design.md. */
+const r = (o: Partial<StoreRedirect>): StoreRedirect => redirectSchema.parse({ to: "https://greaterinside.com", ...o });
 
 describe("a path is matched however it was typed", () => {
   it("settles the slashes and the case", () => {
@@ -33,43 +43,102 @@ describe("a path is matched however it was typed", () => {
 });
 
 describe("which rule wins", () => {
-  it("matches whatever the visitor typed against whatever was configured", () => {
-    const rules = [rule("O/Funnel/", "/p/funnel-app")];
-    expect(matchRedirect(rules, "/o/funnel")?.to).toBe("/p/funnel-app");
+  it("reads an old rule with today's defaults", () => {
+    expect(redirectSchema.parse({ from: "/a", to: "/b", permanent: false })).toEqual({
+      name: "", from: "/a", to: "/b", match: "exact", permanent: false, query: "keep", enabled: true,
+    });
   });
 
-  it("takes the first match, so a specific rule can sit above a broad one", () => {
-    const rules = [rule("/old", "/new-one"), rule("/old", "/new-two")];
-    expect(matchRedirect(rules, "/old")?.to).toBe("/new-one");
+  it("protects the admin, checkout and members' areas on a segment boundary", () => {
+    for (const p of ["/admin", "/Admin/members", "/checkout", "/checkout-preview", "/account", "/library/x", "/apps", "/reset", "/api/webhooks/stripe", "/robots.txt", "/_next/data"]) {
+      expect(isProtectedPath(p), p).toBe(true);
+    }
+    for (const p of ["/", "/o/foundation-weekend", "/appsy", "/libraryx", "/p/guide"]) expect(isProtectedPath(p), p).toBe(false);
   });
 
-  it("ignores a half-typed rule", () => {
-    // Somebody mid-thought is not a rule they want applied to the live site.
-    expect(matchRedirect([rule("/old", "")], "/old")).toBeNull();
-    expect(matchRedirect([rule("", "/new")], "/old")).toBeNull();
+  it("matches an exact rule however the address was typed, 301 by default, 302 when temporary", () => {
+    expect(matchRedirect([r({ from: "/o/Old/" })], "/o/old")).toEqual({ location: "https://greaterinside.com/", status: 301, ruleIndex: 0 });
+    expect(matchRedirect([r({ from: "/o/old", permanent: false })], "/o/old")?.status).toBe(302);
   });
 
-  it("refuses a rule that points at itself", () => {
-    // A browser follows a loop about twenty times before saying something
-    // unhelpful, and the page it was meant to fix never renders.
-    expect(matchRedirect([rule("/old", "/old/")], "/old")).toBeNull();
-    expect(matchRedirect([rule("/old", "OLD")], "/old")).toBeNull();
-  });
-
-  it("allows an external target that looks like the same path", () => {
-    // Only a same-site target can loop.
-    expect(matchRedirect([rule("/old", "https://elsewhere.com/old")], "/old")?.to).toBe(
-      "https://elsewhere.com/old",
+  it("reuses a pattern's captures with the visitor's letter case", () => {
+    expect(matchRedirect([r({ match: "pattern", from: "^/blog/(.*)$", to: "https://x.test/news/$1" })], "/blog/My-Post/")?.location).toBe(
+      "https://x.test/news/My-Post",
     );
   });
 
-  it("says nothing about a path with no rule", () => {
-    expect(matchRedirect([rule("/old", "/new")], "/something-else")).toBeNull();
+  it("keeps the visitor's query by default, the destination's own value winning, and never passes _rsc", () => {
+    expect(matchRedirect([r({ from: "/a", to: "https://x.test/b?utm_source=site" })], "/a", "?utm_source=meta&fbclid=9&_rsc=abc")?.location).toBe(
+      "https://x.test/b?utm_source=site&fbclid=9",
+    );
+    expect(matchRedirect([r({ from: "/a", to: "/b", query: "drop" })], "/a", "?utm_source=meta")?.location).toBe("/b");
   });
 
-  it("carries whether it is permanent", () => {
-    expect(matchRedirect([rule("/a", "/b", true)], "/a")?.permanent).toBe(true);
-    expect(matchRedirect([rule("/a", "/b", false)], "/a")?.permanent).toBe(false);
+  it("skips switched-off rules, half-typed rules, self-loops and stored patterns that no longer compile", () => {
+    expect(matchRedirect([r({ from: "/a", enabled: false }), r({ from: "/a", to: "/b" })], "/a")?.ruleIndex).toBe(1);
+    expect(matchRedirect([r({ from: "", to: "/b" }), r({ from: "/a", to: "/a/" }), r({ match: "pattern", from: "(" })], "/a")).toBeNull();
+  });
+
+  it("takes the first match", () => {
+    expect(matchRedirect([r({ from: "/a", to: "/one" }), r({ match: "pattern", from: "^/(.*)$", to: "/two" })], "/a")?.location).toBe("/one");
+  });
+
+  it("never matches a protected address, even with a pattern that would", () => {
+    expect(matchRedirect([r({ match: "pattern", from: "^/(.*)$" })], "/admin")).toBeNull();
+    expect(matchRedirect([r({ match: "pattern", from: "^/(.*)$" })], "/o/x")).not.toBeNull();
+  });
+
+  it("says nothing about a path with no rule", () => {
+    expect(matchRedirect([r({ from: "/a" })], "/b")).toBeNull();
+  });
+});
+
+describe("checked on save", () => {
+  const bad = (rules: StoreRedirect[]) => validateRules(rules).map((p) => p.index);
+
+  it("refuses a protected exact address, a bad scheme, and a bad, slow or long pattern", () => {
+    expect(bad([r({ from: "/checkout" })])).toEqual([0]);
+    expect(bad([r({ from: "/a", to: "javascript:alert(1)" })])).toEqual([0]);
+    expect(bad([r({ match: "pattern", from: "(" })])).toEqual([0]);
+    expect(bad([r({ match: "pattern", from: "^/(a+)+$" })])).toEqual([0]);
+    expect(bad([r({ match: "pattern", from: "^/" + "a".repeat(300) })])).toEqual([0]);
+  });
+
+  it("refuses rules that send visitors in a circle", () => {
+    expect(bad([r({ from: "/a", to: "/b" }), r({ from: "/b", to: "/a" })])).toEqual([0, 1]);
+    expect(bad([r({ match: "pattern", from: "^/(.*)$", to: "/new/$1" })])).toEqual([0]);
+  });
+
+  it("accepts rules that end somewhere", () => {
+    expect(bad([r({ match: "pattern", from: "^/old/(.*)$", to: "/new/$1" }), r({ from: "/x", to: "https://greaterinside.com" })])).toEqual([]);
+  });
+
+  it("says why, in plain words", () => {
+    expect(validateRules([r({ from: "/checkout" })])[0].message).toBe(
+      "That address is part of the admin, checkout or members' area, so it can't be redirected.",
+    );
+  });
+});
+
+describe("the address test", () => {
+  it("follows an address through every rule it meets", () => {
+    const rules = [r({ from: "/a", to: "/b" }), r({ from: "/b", to: "https://greaterinside.com" })];
+    expect(traceRedirect(rules, "/a")).toEqual({
+      steps: [
+        { ruleIndex: 0, location: "/b", status: 301 },
+        { ruleIndex: 1, location: "https://greaterinside.com/", status: 301 },
+      ],
+      protectedPath: false,
+      loop: false,
+    });
+  });
+
+  it("says a protected address is never redirected, even pasted as a full URL", () => {
+    expect(traceRedirect([r({ match: "pattern", from: "^/(.*)$" })], "https://grow.greaterinside.com/admin").protectedPath).toBe(true);
+  });
+
+  it("spots a circle", () => {
+    expect(traceRedirect([r({ from: "/a", to: "/b" }), r({ from: "/b", to: "/a" })], "/a").loop).toBe(true);
   });
 });
 
