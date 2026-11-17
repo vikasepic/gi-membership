@@ -199,7 +199,7 @@ function GroupForm({
       {group === "redirects" && (
         <Group
           label="Redirects"
-          hint="Old addresses and where they should send somebody now. Checked only when a page would 404, so nothing that works is slowed down by them."
+          hint="Send any address on this site anywhere, live page or not. Checked before the page loads; a saved change is live straight away."
         >
           <RedirectFields redirects={settings.redirects} name="redirects" />
         </Group>

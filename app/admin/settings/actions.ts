@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { validateRules, type StoreRedirect } from "@/lib/redirects";
+import { clearRedirectCache } from "@/lib/redirect-cache";
 import { requireAdmin } from "@/lib/admin-guard";
 import { availableFamilies } from "@/lib/fonts";
 import { TYPOGRAPHY_ELEMENTS, type SiteTypography } from "@/lib/site-typography";
@@ -117,6 +119,12 @@ export async function saveSettingsGroup(
               | "homeSteps"
           ];
         patch[field as string] = shape.parse(JSON.parse(raw));
+        // A rule that would lock someone out, loop or hang every page never
+        // reaches the proxy. Numbered as the list posts them.
+        if (field === "redirects") {
+          const [first] = validateRules(patch.redirects as StoreRedirect[]);
+          if (first) errors.redirects = `Rule ${first.index + 1}: ${first.message}`;
+        }
       } catch {
         errors[field as string] = "That could not be read. Reload and try again.";
       }
@@ -201,6 +209,8 @@ export async function saveSettingsGroup(
     return { errors: { _form: e instanceof Error ? e.message : "Save failed" }, group };
   }
 
+  // The proxy holds the redirect rules in memory; the next request reads these.
+  if ("redirects" in patch) clearRedirectCache();
   // Legal and brand values are read by pages all over the store, not just here.
   revalidatePath("/", "layout");
   return { saved: true, group };

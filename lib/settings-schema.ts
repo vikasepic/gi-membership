@@ -137,8 +137,8 @@ export const SETTINGS_SCHEMA = z.object({
   codeSnippets: codeSnippetsSchema,
 
   // ---- Redirects ----------------------------------------------------------
-  // Old addresses and where they should send somebody now. Checked only when a
-  // page would 404, so a working page pays nothing for them.
+  // Old addresses and where they should send somebody now. Checked in the
+  // proxy before any page renders (lib/redirect-cache holds them in memory).
   redirects: redirectsSchema,
 
   // ---- Home steps ---------------------------------------------------------

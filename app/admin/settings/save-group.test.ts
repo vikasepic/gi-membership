@@ -24,6 +24,8 @@ const saved = vi.fn(async (_p: Partial<Settings>) => {});
 const families = vi.fn(async () => ["Lora"]);
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
+const clearRedirectCache = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/redirect-cache", () => ({ clearRedirectCache }));
 vi.mock("@/lib/admin-guard", () => ({ requireAdmin: async () => {} }));
 vi.mock("@/lib/fonts", () => ({ availableFamilies: () => families() }));
 vi.mock("@/lib/settings", async () => {
@@ -189,5 +191,28 @@ describe("saving one settings group", () => {
     const out = await saveSettingsGroup({}, form("shell", { siteShell: JSON.stringify(shell) }));
     expect(out.saved).toBe(true);
     expect((patchOf().siteShell as { footerLogoHeight: string }).footerLogoHeight).toBe("40px");
+  });
+});
+
+describe("saving redirects (17 Nov 2026)", () => {
+  const redirects = (rules: unknown[]) => form("redirects", { redirects: JSON.stringify(rules) });
+
+  it("refuses rules with a problem, naming the rule, and saves nothing", async () => {
+    clearRedirectCache.mockClear();
+    const res = await saveSettingsGroup({}, redirects([
+      { from: "/a", to: "https://greaterinside.com" },
+      { from: "/checkout", to: "https://greaterinside.com" },
+    ]));
+    expect(res.errors?.redirects).toBe("Rule 2: That address is part of the admin, checkout or members' area, so it can't be redirected.");
+    expect(saved).not.toHaveBeenCalled();
+    expect(clearRedirectCache).not.toHaveBeenCalled();
+  });
+
+  it("saves good rules and clears the proxy's cache so the next request sees them", async () => {
+    clearRedirectCache.mockClear();
+    const res = await saveSettingsGroup({}, redirects([{ from: "/o/old", to: "https://greaterinside.com", query: "drop", permanent: false }]));
+    expect(res.saved).toBe(true);
+    expect(patchOf().redirects?.[0]).toMatchObject({ from: "/o/old", query: "drop", permanent: false, enabled: true });
+    expect(clearRedirectCache).toHaveBeenCalledTimes(1);
   });
 });
