@@ -156,28 +156,9 @@ describe("what gets stored", () => {
 });
 
 describe("where they are checked", () => {
-  const src = readFileSync("app/not-found.tsx", "utf8");
-
-  it("runs at the 404 boundary, not in middleware", () => {
-    // A redirect only matters once the router has decided there is nothing
-    // here. In middleware it would cost a settings read on every request to
-    // every working page, to answer a question almost always answered "no".
-    expect(src).toContain("matchRedirect");
-    const mw = readFileSync("proxy.ts", "utf8");
-    expect(mw).not.toContain("matchRedirect");
-  });
-
-  it("cannot take the 404 page down with it", () => {
-    // This page is the last thing standing between a bad link and a stack
-    // trace, so an unreadable settings row costs it its redirects and nothing
-    // more.
-    expect(src).toContain("catch");
-  });
-
-  it("lets the redirect itself through the catch", () => {
-    // `redirect` throws by design in Next — that is how it stops rendering.
-    // Swallowing it would turn every working redirect back into a 404.
-    const fn = src.slice(src.indexOf("async function sendAnywhereItShould"));
-    expect(fn.indexOf("permanentRedirect(")).toBeGreaterThan(fn.indexOf("} catch {"));
+  it("runs in the proxy and no longer at the 404 boundary", () => {
+    // Since 17 Nov a live page can be redirected too, before it renders.
+    expect(readFileSync("proxy.ts", "utf8")).toContain("matchRedirect");
+    expect(readFileSync("app/not-found.tsx", "utf8")).not.toContain("matchRedirect");
   });
 });

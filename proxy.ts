@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { applyAttributionCookie } from "@/lib/attribution-cookie";
+import { matchRedirect } from "@/lib/redirects";
+import { cachedRedirectRules } from "@/lib/redirect-cache";
 
 // - Gates /admin to admin users (ADMIN_EMAILS); redirects others to /login.
 // - Refreshes the Supabase auth session so server components see it.
 // - Ensures a first-party anon id cookie so attribution can be captured on
 //   landing (events don't send until phase 6, but the id must exist now or
 //   early traffic is permanently unattributable).
+// - Sends an address with a redirect rule on, before the page renders
+//   (Settings › Redirects; docs/superpowers/specs/2026-11-17-redirect-manager-design.md).
 // - Maintains the gi_utm cookie: first-touch and last-touch campaign labels
 //   plus the landing referrer, for everyone, no JavaScript needed.
 export async function proxy(req: NextRequest) {
@@ -21,6 +25,14 @@ export async function proxy(req: NextRequest) {
   // and referrer that mattered are already gone.
   const existingAnon = req.cookies.get("gi_anon")?.value;
   const anon = existingAnon ?? crypto.randomUUID();
+
+  const redirected = await redirectFor(req);
+  if (redirected) {
+    // The campaign and the visitor still count: a redirected ad link credits its sale.
+    if (!existingAnon) setAnonCookie(redirected, anon);
+    applyAttributionCookie(req, redirected);
+    return redirected;
+  }
 
   // The path, forwarded to the server components. A layout cannot read the URL
   // any other way, and the store layout needs it to keep pasted snippets off
@@ -101,20 +113,42 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  if (!existingAnon) {
-    res.cookies.set("gi_anon", anon, {
-      httpOnly: true,
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 365,
-      path: "/",
-    });
-  }
+  if (!existingAnon) setAnonCookie(res, anon);
   // The campaign that brought them, captured on the server so a visitor who
   // bounces before JavaScript runs is still recorded, and kept for a year so
   // a purchase weeks later still carries it. Labels only — the consent gate
   // stays on click ids, IP and user agent (see lib/attribution.ts).
   applyAttributionCookie(req, res);
   return res;
+}
+
+function setAnonCookie(res: NextResponse, anon: string): void {
+  res.cookies.set("gi_anon", anon, {
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 365,
+    path: "/",
+  });
+}
+
+/**
+ * The store's redirect rule for this request, as a response, or null. GET and
+ * HEAD only, never a page-editor preview, never a protected address (the
+ * matcher refuses those). Never throws: a redirect that cannot be worked out
+ * must cost the visitor nothing but the redirect.
+ */
+async function redirectFor(req: NextRequest): Promise<NextResponse | null> {
+  if (req.method !== "GET" && req.method !== "HEAD") return null;
+  if (req.nextUrl.searchParams.get("preview") === "1") return null;
+  try {
+    const hit = matchRedirect(await cachedRedirectRules(), req.nextUrl.pathname, req.nextUrl.search);
+    if (!hit) return null;
+    // A same-site destination stays relative: behind the proxy req.url is the container.
+    return new NextResponse(null, { status: hit.status, headers: { Location: hit.location } });
+  } catch (e) {
+    console.error("[redirects] skipped:", e);
+    return null;
+  }
 }
 
 export const config = {
