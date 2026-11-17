@@ -1260,3 +1260,16 @@ that disagrees. Mocks hid all of it, and also hid that Stripe refuses an
 `expand` deeper than four levels and refuses `attachPayment` on a draft. Run
 anything that writes to Stripe against test mode, not only against a mock.
 `lib/order-invoice.ts`, commits 4501623 and c466e01.
+
+## A redirect in the proxy is not a redirect in a route handler (17 Nov 2026)
+
+The redirect manager's tests called `proxy()` directly and passed; the final
+review ran Next's real adapter and found that a relative `Location` returned
+from `proxy.ts` is a 500 (`new URL(location)` with no base). AGENTS.md's
+"relative Location" rule is for route handlers; in the proxy, return
+`NextResponse.redirect(new URL(path, req.nextUrl))` and Next makes a same-host
+URL relative itself. The same review found the proxy and server actions load
+separate copies of a module, so module-level state cleared in one is not
+cleared in the other: share it on `globalThis`. Rule: anything the proxy
+returns is checked with curl against `next dev`, not only a unit test.
+`proxy.ts`, `lib/redirect-cache.ts`, commit c711cfc.
