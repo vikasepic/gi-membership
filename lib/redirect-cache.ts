@@ -14,10 +14,15 @@ import { STORE_SLUG } from "@/lib/store-slug";
 const TTL_MS = 30_000;
 const FAILED_TTL_MS = 5_000;
 
-let held: { rules: StoreRedirect[]; until: number } | null = null;
+// On globalThis: the proxy and the save action each load their own copy of
+// this module in one process, so module state would be cleared in one and not
+// the other (final review, 17 Nov).
+const box = ((globalThis as Record<symbol, unknown>)[Symbol.for("gi.redirectRules")] ??= {
+  held: null,
+}) as { held: { rules: StoreRedirect[]; until: number } | null };
 
 export function clearRedirectCache(): void {
-  held = null;
+  box.held = null;
 }
 
 export async function loadRedirectRules(): Promise<StoreRedirect[]> {
@@ -35,13 +40,13 @@ export async function cachedRedirectRules(
   load: () => Promise<StoreRedirect[]> = loadRedirectRules,
   now: number = Date.now(),
 ): Promise<StoreRedirect[]> {
-  if (held && now < held.until) return held.rules;
+  if (box.held && now < box.held.until) return box.held.rules;
   try {
     const rules = await load();
-    held = { rules, until: now + TTL_MS };
+    box.held = { rules, until: now + TTL_MS };
   } catch (e) {
     console.error("[redirects] could not read the rules:", e);
-    held = { rules: [], until: now + FAILED_TTL_MS };
+    box.held = { rules: [], until: now + FAILED_TTL_MS };
   }
-  return held.rules;
+  return box.held.rules;
 }

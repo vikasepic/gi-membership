@@ -94,17 +94,63 @@ function cleanPath(raw: string): string {
   return withSlash.length > 1 ? withSlash.replace(/\/+$/, "") : withSlash;
 }
 
+const STATIC_FILE = /\.(png|jpe?g|gif|webp|avif|svg|ico|js|mjs|css|json|map|woff2?|ttf|otf|txt|xml|pdf|mp4|webm|mp3|wav|zip|webmanifest)$/i;
 const isExternal = (to: string) => /^https?:\/\//i.test(to);
 const isValidTarget = (to: string) => to.startsWith("/") || isExternal(to);
 const complete = (r: StoreRedirect) => !!r.from.trim() && !!r.to.trim();
 
+/**
+ * Whether a pattern could take seconds on a short path. Matching runs on every
+ * request, on the one Node process that also takes payments, so a slow pattern
+ * stops the whole site (final review, 17 Nov). Refused:
+ *   - a repeated group that itself repeats or has alternatives: (a+)+, (a|a)+
+ *   - more than three unbounded repeats (+, *, {n,}) in one pattern.
+ * Walks the source rather than regexing it, so escapes and [classes] count right.
+ */
+export function slowPattern(source: string): boolean {
+  const groups: { inner: boolean }[] = [];
+  let unbounded = 0;
+  let lastGroupInner: boolean | null = null;
+  const quantifierAt = (i: number): "unbounded" | "bounded" | null => {
+    const c = source[i];
+    if (c === "+" || c === "*") return "unbounded";
+    if (c === "?") return "bounded";
+    if (c === "{") return /^\{\d+,\}/.test(source.slice(i)) ? "unbounded" : /^\{\d+(,\d+)?\}/.test(source.slice(i)) ? "bounded" : null;
+    return null;
+  };
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    const prevGroup = lastGroupInner;
+    lastGroupInner = null;
+    if (c === "\\") { i++; continue; }
+    if (c === "[") {
+      for (i++; i < source.length && source[i] !== "]"; i++) if (source[i] === "\\") i++;
+      continue;
+    }
+    if (c === "(") { groups.push({ inner: false }); continue; }
+    if (c === "|") { if (groups.length) groups[groups.length - 1].inner = true; continue; }
+    if (c === ")") {
+      const g = groups.pop();
+      lastGroupInner = g?.inner ?? false;
+      if (g?.inner && groups.length) groups[groups.length - 1].inner = true;
+      continue;
+    }
+    const q = quantifierAt(i);
+    if (!q) continue;
+    if (q === "unbounded") unbounded++;
+    if (groups.length && q !== "bounded") groups[groups.length - 1].inner = true;
+    if (q === "unbounded" && prevGroup) return true;
+  }
+  return unbounded > 3;
+}
+
 const compiled = new Map<string, RegExp | null>();
-/** A stored pattern that no longer compiles is skipped, never thrown. */
+/** A stored pattern that no longer compiles, or could be slow, is skipped, never thrown. */
 function patternOf(source: string): RegExp | null {
   if (!compiled.has(source)) {
     let re: RegExp | null = null;
     try {
-      re = new RegExp(source, "i");
+      re = slowPattern(source) ? null : new RegExp(source, "i");
     } catch {
       re = null;
     }
@@ -122,7 +168,9 @@ function destinationFor(rule: StoreRedirect, path: string): string | null {
   if (rule.match === "pattern") {
     const re = patternOf(rule.from.trim());
     const visited = cleanPath(path);
-    if (!re || visited.length > 1024) return null;
+    // A pattern never sees a long path, nor a file: a broad rule must not
+    // take the checkout's card logos or the admin's icon list with it.
+    if (!re || visited.length > 256 || STATIC_FILE.test(visited)) return null;
     const m = re.exec(visited);
     if (!m) return null;
     dest = to.replace(/\$([1-9])/g, (_, n: string) => m[Number(n)] ?? "");
@@ -198,8 +246,6 @@ export function traceRedirect(
 
 export type RuleProblem = { index: number; message: string };
 
-const NESTED_QUANTIFIER = /\([^)]*[+*{][^)]*\)[+*{]/;
-
 /**
  * What stops a save, one problem per rule. The loop check is best effort: a
  * pattern is followed from its own destination with every `$n` as "x", and
@@ -219,7 +265,9 @@ export function validateRules(rules: StoreRedirect[]): RuleProblem[] {
       else {
         try {
           new RegExp(from, "i");
-          if (NESTED_QUANTIFIER.test(from)) problems.set(i, "That pattern could slow every page down. Avoid a repeated group like (a+)+.");
+          if (slowPattern(from)) {
+            problems.set(i, "That pattern could slow every page down. Avoid a repeated group like (a+)+ or (a|b)+, and use at most three * or +.");
+          }
         } catch (e) {
           problems.set(i, `That pattern isn't valid: ${e instanceof Error ? e.message : String(e)}.`);
         }

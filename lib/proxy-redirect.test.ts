@@ -32,7 +32,10 @@ describe("redirects in the proxy", () => {
     state.rules = [rule({ from: "/o/x", to: "/p/y" })];
     const res = await hit("/o/x");
     expect(res.status).toBe(301);
-    expect(res.headers.get("location")).toBe("/p/y");
+    // Absolute: Next's adapter runs new URL(location) with no base and turns a
+    // bare path into a 500 (final review, 17 Nov). It makes a same-host one relative itself.
+    expect(res.headers.get("location")).toBe("https://grow.greaterinside.com/p/y");
+    expect(() => new URL(res.headers.get("location")!)).not.toThrow();
   });
 
   it("sends an external destination as it is, with the visitor's query", async () => {
@@ -56,6 +59,11 @@ describe("redirects in the proxy", () => {
     const res = await hit(p);
     // /admin still meets its own sign-in redirect; it must never meet the rule.
     expect(res.headers.get("location") ?? "").not.toMatch(/^https:\/\/greaterinside\.com/);
+  });
+
+  it("lets browsers forget a redirect within an hour, so a mistaken rule heals itself", async () => {
+    state.rules = [rule({ from: "/o/x", to: "https://greaterinside.com" })];
+    expect((await hit("/o/x")).headers.get("cache-control")).toBe("max-age=3600");
   });
 
   it("never redirects a preview or a POST", async () => {

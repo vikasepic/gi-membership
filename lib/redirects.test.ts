@@ -120,6 +120,34 @@ describe("checked on save", () => {
   });
 });
 
+describe("final review fixes (17 Nov)", () => {
+  const bad = (rules: StoreRedirect[]) => validateRules(rules).map((p) => p.index);
+
+  it("refuses patterns that could freeze the site, not only (a+)+", () => {
+    for (const from of ["^/(a|a)+$", "^/((a+))+$", "^/(.*)-(.*)-(.*)-(.*)-x$", "^/(\\w+\\s?)*$"]) {
+      expect(bad([r({ match: "pattern", from })]), from).toEqual([0]);
+    }
+  });
+
+  it("still accepts ordinary patterns", () => {
+    for (const from of ["^/blog/(.*)$", "^/old/(.*)/(.*)$", "^/(products|courses)/(.*)$", "^/o/fw-[0-9]+$"]) {
+      expect(bad([r({ match: "pattern", from })]), from).toEqual([]);
+    }
+  });
+
+  it("matches a pattern only against a path of a sane length", () => {
+    expect(matchRedirect([r({ match: "pattern", from: "^/(.*)$" })], "/" + "a".repeat(300))).toBeNull();
+  });
+
+  it("never lets a pattern catch an image, script or data file, while a page with .html still can be", () => {
+    const all = [r({ match: "pattern", from: "^/(.*)$" })];
+    for (const p of ["/brand/payment-marks.webp", "/fa-icons.json", "/funnel.js", "/templates/author/a.png", "/ai90-local/x.css"]) {
+      expect(matchRedirect(all, p), p).toBeNull();
+    }
+    expect(matchRedirect(all, "/old-page.html")).not.toBeNull();
+  });
+});
+
 describe("the address test", () => {
   it("follows an address through every rule it meets", () => {
     const rules = [r({ from: "/a", to: "/b" }), r({ from: "/b", to: "https://greaterinside.com" })];

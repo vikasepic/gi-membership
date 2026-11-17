@@ -143,8 +143,15 @@ async function redirectFor(req: NextRequest): Promise<NextResponse | null> {
   try {
     const hit = matchRedirect(await cachedRedirectRules(), req.nextUrl.pathname, req.nextUrl.search);
     if (!hit) return null;
-    // A same-site destination stays relative: behind the proxy req.url is the container.
-    return new NextResponse(null, { status: hit.status, headers: { Location: hit.location } });
+    // Absolute, unlike a route handler: Next's adapter runs new URL(location)
+    // with no base after the proxy returns, so a bare path is a 500 (final
+    // review, 17 Nov). It turns a same-host URL back into a relative one itself,
+    // as it does for the admin gate above.
+    const res = NextResponse.redirect(new URL(hit.location, req.nextUrl), hit.status);
+    // A browser keeps a 301 for ever unless told otherwise; an hour lets a
+    // mistaken rule heal itself once it is removed.
+    res.headers.set("Cache-Control", "max-age=3600");
+    return res;
   } catch (e) {
     console.error("[redirects] skipped:", e);
     return null;

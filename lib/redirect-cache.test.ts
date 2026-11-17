@@ -60,6 +60,18 @@ describe("cachedRedirectRules", () => {
   });
 });
 
+describe("two copies of this module in one process (final review, 17 Nov)", () => {
+  it("clearing one clears the other, because the proxy and the save action each load their own", async () => {
+    const load = vi.fn(async () => [rule]);
+    await cachedRedirectRules(load, 0);
+    vi.resetModules();
+    const other = await import("@/lib/redirect-cache");
+    other.clearRedirectCache();
+    await cachedRedirectRules(load, 1);
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("loadRedirectRules", () => {
   it("reads this store's rules and fills the new fields on an old one", async () => {
     db.settings = [{ from: "/o/foundation-weekend", to: "https://greaterinside.com", permanent: false }];
