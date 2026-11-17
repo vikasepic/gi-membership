@@ -9,7 +9,7 @@ import { sortPrices, type OfferPrice } from "@/lib/offer-prices";
 // RSC/route handlers, and tenant RLS is deferred until a second store exists
 // (per plan). One store is seeded; we resolve it by its stable slug.
 
-const STORE_SLUG = "greater-inside";
+import { STORE_SLUG } from "@/lib/store-slug";
 
 /**
  * Every column a Product is built from — in ONE place, for the reason the
