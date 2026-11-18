@@ -16,7 +16,15 @@ import type { Labels } from "@/lib/attribution";
  * this, which is what makes them testable without a database.
  */
 
-export type UserRow = { id: string; email: string; name: string | null; isAdmin: boolean; createdAt: string };
+export type UserRow = {
+  id: string;
+  email: string;
+  name: string | null;
+  isAdmin: boolean;
+  /** Read-only access to the report pages (users.is_viewer). Optional so hand-built rows in older tests stay valid; the loader always sets it. */
+  isViewer?: boolean;
+  createdAt: string;
+};
 export type OrderRowLite = {
   id: string;
   userId: string | null;
@@ -52,6 +60,10 @@ export type OwnershipRow = {
   appId: string | null;
   status: string;
   stripeSubscriptionId: string | null;
+  /** How it was got: purchase, bump, oto, app or grant. A later purchase overwrites a grant. */
+  source?: string;
+  /** When the row was first written. A re-bought row keeps its first date. */
+  createdAt?: string;
 };
 export type Names = {
   offers: Map<string, { name: string; contentName: string | null; billingType: string; priceCents: number }>;
@@ -66,7 +78,7 @@ export type MoneyData = {
   subscriptions: SubscriptionRow[];
   ownership: OwnershipRow[];
   /** Courses added to one person by hand (course_access grants), by title. */
-  courseGrants?: { userId: string; courseTitle: string }[];
+  courseGrants?: { userId: string; courseTitle: string; createdAt?: string | null }[];
   names: Names;
   now: Date;
 };
@@ -82,7 +94,7 @@ export async function loadMoneyData(): Promise<MoneyData> {
   // hand-made lists and will not approach it.
   const [users, orders, subscriptions, ownership, offers, products, apps, grants] = await Promise.all([
     allRows<Record<string, unknown>>((from, to) =>
-      db.from("users").select("id, email, username, is_admin, created_at").eq("store_id", storeId)
+      db.from("users").select("id, email, username, is_admin, is_viewer, created_at").eq("store_id", storeId)
         .order("created_at", { ascending: true }).range(from, to),
     ),
     allRows<Record<string, unknown>>((from, to) =>
@@ -97,14 +109,14 @@ export async function loadMoneyData(): Promise<MoneyData> {
     ),
     listSubscriptions(),
     allRows<Record<string, unknown>>((from, to) =>
-      db.from("ownership").select("user_id, product_id, offer_id, app_id, status, stripe_subscription_id")
+      db.from("ownership").select("user_id, product_id, offer_id, app_id, status, stripe_subscription_id, source, created_at")
         .eq("store_id", storeId).order("user_id", { ascending: true }).range(from, to),
     ),
     db.from("offers").select("id, name, content_name, billing_type, price_cents").eq("store_id", storeId),
     db.from("products").select("id, title, price_cents").eq("store_id", storeId),
     db.from("apps").select("id, name"),
     allRows<Record<string, unknown>>((from, to) =>
-      db.from("course_access").select("user_id, course_id, courses(title)").eq("store_id", storeId).eq("kind", "grant")
+      db.from("course_access").select("user_id, course_id, created_at, courses(title)").eq("store_id", storeId).eq("kind", "grant")
         .order("user_id", { ascending: true }).order("course_id", { ascending: true }).range(from, to),
     ),
   ]);
@@ -145,6 +157,7 @@ export async function loadMoneyData(): Promise<MoneyData> {
       email: u.email as string,
       name: (u.username as string) ?? null,
       isAdmin: Boolean(u.is_admin),
+      isViewer: Boolean(u.is_viewer),
       createdAt: u.created_at as string,
     })),
     orders: (growOrders).map((o) => ({
@@ -174,10 +187,13 @@ export async function loadMoneyData(): Promise<MoneyData> {
       appId: (o.app_id as string) ?? null,
       status: o.status as string,
       stripeSubscriptionId: (o.stripe_subscription_id as string) ?? null,
+      source: (o.source as string) ?? "",
+      createdAt: o.created_at as string,
     })),
     courseGrants: grants.map((g) => ({
       userId: g.user_id as string,
       courseTitle: (g.courses as { title: string } | null)?.title ?? "A course",
+      createdAt: (g.created_at as string) ?? null,
     })),
     names: {
       offers: new Map(

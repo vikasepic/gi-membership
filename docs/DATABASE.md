@@ -1508,6 +1508,18 @@ fails on `users_store_id_email_key`. Only the service role may run it. The
 caller (`lib/email-change.ts`) changes the login first. Spec:
 `docs/superpowers/specs/2026-11-06-change-member-email-design.md`.
 
+### Read-only access
+
+Migration 0100 (18 Nov 2026). `users.is_viewer boolean not null default false`.
+A person with it may open the admin's report pages (the list in
+`lib/viewer-paths.ts`) and nothing else. It is a column of its own, not a
+second value of `is_admin`, because every guard that lets something be changed
+reads `is_admin`; a viewer passes none of them. `is_admin` and `ADMIN_EMAILS`
+win when both are set. Only the service role can write `users`, so nobody can
+flag themselves. Apply it before the image that reads it: the proxy selects the
+column on every `/admin` request. Spec:
+`docs/superpowers/specs/2026-11-18-journeys-and-read-only-login-design.md`.
+
 ---
 
 ## Appendix: the raw DDL
