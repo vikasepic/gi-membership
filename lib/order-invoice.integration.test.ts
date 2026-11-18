@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 import type Stripe from "stripe";
 import { startOfferCheckout, completeOfferCheckout } from "@/lib/offer-checkout";
 import { stripe } from "@/lib/stripe";
@@ -9,6 +9,13 @@ import { recordRenewal } from "@/lib/renewals";
 import { orderForPaymentIntent } from "@/lib/orders";
 import { purchaseDocsForUser, subscriptionInvoicesForUser } from "@/lib/receipts";
 import { invoiceForOrder } from "@/lib/order-invoice";
+
+// Every case here is a dozen or more round trips to Stripe's test API, one
+// after another (customer, payment, invoice, lines, finalize, attach, read
+// back). At 0.5 to 6 seconds a call, which is what the API gave on 18 Nov
+// 2026, the suite's 30 seconds is not enough: a different case timed out on
+// each run and blocked the full local run the push rule asks for.
+vi.setConfig({ testTimeout: 180_000, hookTimeout: 180_000 });
 
 /**
  * The five scenarios the owner asked for before any invoice code was written
@@ -234,4 +241,4 @@ afterAll(async () => {
   }
   for (const id of made) await db.from("offers").update({ bump_offer_id: null }).eq("id", id);
   for (const id of made) await db.from("offers").delete().eq("id", id);
-}, 60_000);
+});
