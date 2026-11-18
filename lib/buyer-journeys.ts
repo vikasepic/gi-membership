@@ -156,8 +156,10 @@ export function deriveJourneys(d: MoneyData, opts: { range: JourneyRange; teamEm
         its.find((it) => it.kind === "oto" && o.hostOfferId && it.offerId === o.hostOfferId) ??
         its.find((it) => it.kind !== "bump") ??
         its[0];
-      const mainPaidLater = Boolean(main?.stripeSubscriptionId && paidSubs.has(main.stripeSubscriptionId));
-      if (value === 0 && !mainPaidLater) {
+      // Any line, not only the main one: a product on a 100% coupon whose
+      // upsell trial went on to pay is an order somebody paid on.
+      const paidLater = its.some((it) => it.stripeSubscriptionId && paidSubs.has(it.stripeSubscriptionId));
+      if (value === 0 && !paidLater) {
         // A free start that has taken no money: a trial, or a 100% coupon.
         const what = main ? nameOf(main) : "An order";
         startedFree.push({ what, at: o.createdAt });
@@ -189,9 +191,15 @@ export function deriveJourneys(d: MoneyData, opts: { range: JourneyRange; teamEm
     // 25 hand grants. A hand grant that was later bought has had its source
     // overwritten (lib/checkout.ts), so it reads as bought, which is right.
     const given: BuyerJourney["given"] = [];
+    const bought = new Set(orders.flatMap((o) => (itemsOf.get(o.id) ?? []).map(keyOf)));
     if (userId) {
       for (const own of d.ownership) {
         if (own.userId !== userId || own.source !== "grant" || !own.grantedBy) continue;
+        // Taken back, so they do not hold it.
+        if (own.status === "canceled") continue;
+        // Bought since on its own offer page: the checkout writes "grant"
+        // again and leaves the granter's name on the row.
+        if (bought.has(own.offerId ? `offer:${own.offerId}` : `product:${own.productId}`)) continue;
         const what =
           (own.offerId && d.names.offers.get(own.offerId)?.name) ||
           (own.productId && d.names.products.get(own.productId)?.name) ||

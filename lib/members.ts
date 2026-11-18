@@ -402,10 +402,15 @@ export async function revokeOwnership(ownershipId: string): Promise<{ ok: boolea
  *
  * ADMIN_EMAILS is separate and always wins, so nobody can remove the
  * break-glass accounts from in here and lock the team out.
+ *
+ * Either way read-only access is dropped. An admin does not need it, and the
+ * person page hides that switch on an admin, so a flag left behind could not
+ * be seen or cleared, and taking admin away would leave them reading every
+ * customer (final review, 18 Nov 2026).
  */
 export async function setMemberAdmin(userId: string, isAdmin: boolean): Promise<void> {
   const db = createServiceClient();
-  await db.from("users").update({ is_admin: isAdmin }).eq("id", userId);
+  await db.from("users").update({ is_admin: isAdmin, is_viewer: false }).eq("id", userId);
 }
 
 /**

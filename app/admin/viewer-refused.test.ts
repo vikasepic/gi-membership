@@ -1,5 +1,7 @@
 // @vitest-environment node
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * A read-only person changes nothing, whatever they send.
@@ -93,6 +95,57 @@ beforeEach(() => {
   state.row = { is_admin: false, is_viewer: true };
   state.writes = [];
   state.stripe = 0;
+});
+
+/**
+ * The tripwire for every other admin action (final review, 18 Nov 2026).
+ *
+ * A read-only person's session passes the proxy on five paths, and a server
+ * action is reachable by anyone who can find its id. What keeps them out is
+ * requireAdmin() as the first thing every action does. That is a habit, and
+ * a habit needs a test: every exported function in every "use server" file
+ * under app/admin is called here as a read-only person. Each must refuse
+ * before it writes. A new action without its guard fails this by name.
+ */
+const SERVER_FILES = (() => {
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, e.name);
+      if (e.isDirectory()) walk(path);
+      else if (/\.tsx?$/.test(e.name) && !/\.test\./.test(e.name) && /^["']use server["']/.test(readFileSync(path, "utf8"))) out.push(path);
+    }
+  };
+  walk("app/admin");
+  return out.sort();
+})();
+
+describe("every admin action, called by a read-only person", () => {
+  it("finds the action files", () => {
+    expect(SERVER_FILES.length).toBeGreaterThanOrEqual(19);
+    expect(SERVER_FILES).toContain("app/admin/members/actions.ts");
+  });
+
+  it.each(SERVER_FILES)("%s: every export refuses and writes nothing", async (file) => {
+    const mod = (await import(/* @vite-ignore */ `@/${file.replace(/\.tsx?$/, "")}`)) as Record<string, unknown>;
+    const actions = Object.entries(mod).filter(([, v]) => typeof v === "function") as [string, (...a: unknown[]) => Promise<unknown>][];
+    expect(actions.length, "no exported actions found").toBeGreaterThan(0);
+    for (const [name, action] of actions) {
+      state.writes = [];
+      state.stripe = 0;
+      // A FormData in both places suits (formData) and (prev, formData) alike;
+      // the guard comes before any argument is read.
+      const outcome = await Promise.resolve()
+        .then(() => action(form(), form()))
+        .then(
+          () => "returned without refusing",
+          (e: unknown) => (e instanceof Error ? e.message : String(e)),
+        );
+      expect(outcome, `${file} ${name}`).toBe("redirect:/login");
+      expect(state.writes, `${file} ${name} wrote`).toEqual([]);
+      expect(state.stripe, `${file} ${name} reached Stripe`).toBe(0);
+    }
+  });
 });
 
 describe("a read-only person calling the admin's actions directly", () => {

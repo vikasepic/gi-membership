@@ -75,6 +75,29 @@ describe("a read-only person at the admin gate", () => {
     expect(pathOf(await hit("/admin/settings?tab=redirects"))).toBe("/admin/journeys");
   });
 
+  it.each([
+    ["/admin/members/../settings", "a parent step"],
+    ["/admin/members/%2e%2e/settings", "an encoded parent step"],
+    ["/admin/orders%2f..%2fsettings", "an encoded slash"],
+    ["/admin/orders/..%2fsettings", "a half-encoded parent step"],
+    ["/admin/membersX/abc", "a name that only starts like a report page"],
+    ["/admin/traffic/caf%C3%A9", "anything percent-encoded at all"],
+  ])("is sent to Journeys from %s (%s)", async (p) => {
+    expect(pathOf(await hit(p))).toBe("/admin/journeys");
+  });
+
+  it("opens a report page with a trailing slash", async () => {
+    expect((await hit("/admin/orders/")).status).toBe(200);
+  });
+
+  it("/Admin is not an admin address: the gate does not apply and the router has no such page", async () => {
+    // Next matches routes case-sensitively, so this is a 404 for everyone. The
+    // gate must not treat it as a report page either.
+    const res = await hit("/Admin/Settings");
+    expect(pathOf(res)).toBeNull();
+    expect(state.lookups).toBe(0);
+  });
+
   it("may post to a report page: the action's own guard is what refuses it", async () => {
     expect((await hit("/admin/members/abc-123", "POST")).status).toBe(200);
   });

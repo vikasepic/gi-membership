@@ -133,7 +133,8 @@ export default async function TransactionsPage({
                         )}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3">
-                        {r.couponCode ? <Pill tone="warn">{r.couponCode}</Pill> : <span className="text-xs text-muted">—</span>}
+                        {/* A code that still works at checkout is not a read-only person's to read. */}
+                        {canEdit && r.couponCode ? <Pill tone="warn">{r.couponCode}</Pill> : <span className="text-xs text-muted">—</span>}
                       </td>
                       <td className="min-w-[11rem] px-3 py-3 text-xs text-muted">{r.source}</td>
                       <td className={`whitespace-nowrap px-3 py-3 text-right font-display tabular-nums ${r.amountCents < 0 ? "text-primary" : r.amountCents === 0 ? "text-muted" : ""}`}>
@@ -159,7 +160,7 @@ export default async function TransactionsPage({
         <div className="flex flex-col gap-4">
           <Breakdown title="By product or offer" rows={breakdown(shown, (r) => r.what)} cur={cur} />
           <Breakdown title="By source" rows={breakdown(shown.filter((r) => r.source), (r) => r.source)} cur={cur} />
-          <Breakdown title="By coupon" rows={breakdown(shown.filter((r) => r.couponCode), (r) => r.couponCode!)} cur={cur} />
+          {canEdit && <Breakdown title="By coupon" rows={breakdown(shown.filter((r) => r.couponCode), (r) => r.couponCode!)} cur={cur} />}
         </div>
       </div>
     </div>

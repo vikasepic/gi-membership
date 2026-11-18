@@ -201,6 +201,25 @@ describe("a free start", () => {
     expect(people[0].lines.map((l) => [l.how, l.purchaseNo])).toEqual([["started free", null], ["first", 1]]);
   });
 
+  it("whose upsell trial went on to pay makes the order a purchase: nobody who paid is left out", () => {
+    // A product on a 100% coupon, with a trial taken as the upsell. The trial
+    // paid; the order's own line never did. Found in the final review: looking
+    // only at the main line's subscription dropped the person and their $47.
+    const { people } = run({
+      orders: [order({ id: "o1", createdAt: "2026-10-01T10:00:00Z", couponCode: "GIFT" }), order({ id: "r1", createdAt: "2026-10-08T10:00:00Z", stripeInvoiceId: "in_1", totalCents: 4700 })],
+      items: [
+        item({ orderId: "o1", productId: "dpv", amountCents: 0 }),
+        item({ orderId: "o1", kind: "oto", offerId: "ce", amountCents: 0, stripeSubscriptionId: "sub_1" }),
+        item({ orderId: "r1", kind: "renewal", offerId: "ce", amountCents: 4700, stripeSubscriptionId: "sub_1" }),
+      ],
+      subscriptions: [sub("sub_1", 1)],
+    });
+    expect(people).toHaveLength(1);
+    expect(people[0].first).toMatchObject({ what: "Digital Product Validator", at: "2026-10-01T10:00:00Z", valueCents: 0 });
+    expect(people[0].first.withIt).toEqual(["Content Engine"]);
+    expect(people[0].totalSpentCents).toBe(4700);
+  });
+
   it("taken as an upsell is bought with the order, not a purchase of its own", () => {
     const { people } = run({
       orders: [order({ id: "o1" })],
@@ -291,6 +310,18 @@ describe("access that was given, not bought", () => {
     const r = run({ ...VALIDATOR_THEN_FW, ownership: [{ userId: "a", productId: null, offerId: "fw", appId: null, status: "active", stripeSubscriptionId: null, source: "grant", grantedBy: null, createdAt: "2026-11-09T10:00:00Z" }] });
     expect(r.people[0].given).toEqual([]);
     expect(r.people[0].lines.filter((l) => l.how === "given")).toEqual([]);
+  });
+
+  it("a hand grant they later bought on its own page is bought, not given", () => {
+    // The offer checkout writes source "grant" again and never clears who
+    // granted it (lib/checkout.ts), so the row alone still looks like a gift.
+    const r = run({ ...VALIDATOR_THEN_FW, ownership: [{ userId: "a", productId: null, offerId: "fw", appId: null, status: "active", stripeSubscriptionId: null, source: "grant", grantedBy: "owner@x.test", createdAt: "2026-10-01T00:00:00Z" }] });
+    expect(r.people[0].given).toEqual([]);
+  });
+
+  it("a grant that was taken back is not listed as given", () => {
+    const r = run({ ...VALIDATOR_THEN_FW, ownership: [{ userId: "a", productId: null, offerId: "mpb", appId: null, status: "canceled", stripeSubscriptionId: null, source: "grant", grantedBy: "owner@x.test", createdAt: "2026-10-01T00:00:00Z" }] });
+    expect(r.people[0].given).toEqual([]);
   });
 
   it("access they bought is not called given", () => {

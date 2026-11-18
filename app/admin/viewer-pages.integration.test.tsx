@@ -42,6 +42,9 @@ const stamp = Date.now();
 const userId = crypto.randomUUID();
 const email = `zz-viewer-pages-${stamp}@example.test`;
 let orderId = "";
+// A working coupon code is not a read-only person's to see, and a name that starts like a formula must not run in their spreadsheet.
+const coupon = `ZZVIEW${stamp}`;
+const formulaName = `=zz formula ${stamp}`;
 // Journeys leaves test-mode orders out, so its buyer has a live one.
 const buyerId = crypto.randomUUID();
 const buyerEmail = `zz-viewer-buyer-${stamp}@example.test`;
@@ -59,16 +62,16 @@ describe.skipIf(!canRun)("the report pages for a read-only person (integration)"
     const { getStoreId } = await import("@/lib/store");
     const db = createServiceClient();
     const storeId = await getStoreId();
-    const u = await db.from("users").insert({ id: userId, store_id: storeId, email });
+    const u = await db.from("users").insert({ id: userId, store_id: storeId, email, username: formulaName });
     if (u.error) throw new Error(`fixture user: ${u.error.message}`);
-    const o = await db.from("orders").insert({ store_id: storeId, user_id: userId, email, status: "paid", livemode: false, total_cents: 2900, subtotal_cents: 2900, currency: "usd" }).select("id").single();
+    const o = await db.from("orders").insert({ store_id: storeId, user_id: userId, email, status: "paid", livemode: false, total_cents: 2900, subtotal_cents: 2900, currency: "usd", coupon_code: coupon }).select("id").single();
     if (o.error || !o.data) throw new Error(`fixture order: ${o.error?.message}`);
     orderId = o.data.id as string;
     const i = await db.from("order_items").insert({ store_id: storeId, order_id: orderId, kind: "product", description: `zz viewer thing ${stamp}`, amount_cents: 2900 });
     if (i.error) throw new Error(`fixture item: ${i.error.message}`);
     const b = await db.from("users").insert({ id: buyerId, store_id: storeId, email: buyerEmail });
     if (b.error) throw new Error(`fixture buyer: ${b.error.message}`);
-    const bo = await db.from("orders").insert({ store_id: storeId, user_id: buyerId, email: buyerEmail, status: "paid", livemode: true, total_cents: 2700, subtotal_cents: 2700, currency: "usd" }).select("id").single();
+    const bo = await db.from("orders").insert({ store_id: storeId, user_id: buyerId, email: buyerEmail, status: "paid", livemode: true, total_cents: 2700, subtotal_cents: 2700, currency: "usd", coupon_code: coupon }).select("id").single();
     if (bo.error || !bo.data) throw new Error(`fixture buyer order: ${bo.error?.message}`);
     buyerOrderId = bo.data.id as string;
     const bi = await db.from("order_items").insert({ store_id: storeId, order_id: buyerOrderId, kind: "product", description: `zz journey thing ${stamp}`, amount_cents: 2700 });
@@ -101,16 +104,24 @@ describe.skipIf(!canRun)("the report pages for a read-only person (integration)"
     expect(admin).toMatch(REFUND_BUTTON);
     expect(viewer).not.toMatch(REFUND_BUTTON);
     for (const text of [email, "Gross", "Export CSV"]) expect(viewer).toContain(text);
+    // A code that still works at checkout is the admin's to see.
+    expect(admin).toContain(coupon);
+    expect(admin).toContain("By coupon");
+    expect(viewer).not.toContain(coupon);
+    expect(viewer).not.toContain("By coupon");
   });
 
   it("Members: the list and the download, without Add a member", async () => {
     const { default: Page } = await import("@/app/admin/members/page");
-    const draw = () => Page({ searchParams: Promise.resolve({ q: email }) });
+    // Both fixture members: Members reads coupons off live orders, which only the buyer has.
+    const draw = () => Page({ searchParams: Promise.resolve({ q: String(stamp) }) });
     const admin = await as("admin", draw);
     const viewer = await as("viewer", draw);
     expect(admin).toContain("Add a member");
     expect(viewer).not.toContain("Add a member");
     for (const text of [email, "Collected", "Export CSV"]) expect(viewer).toContain(text);
+    expect(admin).toContain(coupon);
+    expect(viewer).not.toContain(coupon);
   });
 
   it("a person's page: everything about them, and not one button or form", async () => {
@@ -126,6 +137,8 @@ describe.skipIf(!canRun)("the report pages for a read-only person (integration)"
     expect(viewer).not.toContain("<form");
     expect(viewer).not.toContain("<button");
     for (const text of [email, "Money timeline", `zz viewer thing ${stamp}`]) expect(viewer).toContain(text);
+    expect(admin).toContain(coupon);
+    expect(viewer).not.toContain(coupon);
   });
 
   it.each(["admin", "viewer"] as const)("Journeys draws for a signed-in %s: the table, the people, the download and what it covers", async (role) => {
@@ -166,13 +179,19 @@ describe.skipIf(!canRun)("the report pages for a read-only person (integration)"
 
   it.each([
     ["Transactions", "@/app/admin/orders/export/route", "/admin/orders/export?range=all&live=0"],
-    ["Members", "@/app/admin/members/export/route", "/admin/members/export"],
+    ["Members", "@/app/admin/members/export/route", `/admin/members/export?q=${stamp}`],
   ])("the %s download works for a read-only person", async (_name, path, url) => {
     const { GET } = (await import(/* @vite-ignore */ path)) as { GET: (req: Request) => Promise<Response> };
     who.role = "viewer";
     const res = await GET(new Request(`https://grow.greaterinside.com${url}`));
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/csv");
-    expect(await res.text()).toContain(email);
+    const text = await res.text();
+    expect(text).toContain(email);
+    // Their name starts with "=": plain text in the file, not a formula.
+    expect(text).toContain(`"'${formulaName}"`);
+    expect(text).not.toContain(coupon);
+    who.role = "admin";
+    expect(await (await GET(new Request(`https://grow.greaterinside.com${url}`))).text()).toContain(coupon);
   });
 });
