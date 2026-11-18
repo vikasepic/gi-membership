@@ -14,6 +14,9 @@ const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 vi.mock("@/lib/admin-guard", () => ({
   requireAdmin: async () => ({ id: "admin", email: "admin@example.com" }),
+  // Members, Transactions and the person page are open to a read-only person
+  // too since 18 Nov 2026, so they ask this guard; here it is an admin asking.
+  requireViewer: async () => ({ user: { id: "admin", email: "admin@example.com" }, role: "admin" }),
   adminEmails: () => ["admin@example.com"],
   isAdminEmail: (e: string) => e === "admin@example.com",
 }));
