@@ -13,9 +13,19 @@ import { getSettingsOrDefaults } from "@/lib/settings";
  * The placeholders are GoTrue's and are left EXACTLY as they are — Go's
  * templating fills them in at send time:
  *
- *   {{ .ConfirmationURL }}  the one-time link
+ *   {{ .TokenHash }}        the one-time token, in the form the server can verify
+ *   {{ .RedirectTo }}       the address the login page asked to come back to
  *   {{ .Email }}            who asked for it
  *   {{ .SiteURL }}          the store's address
+ *
+ * NOT {{ .ConfirmationURL }}. That link goes through GoTrue and comes back
+ * with a code that only the browser which asked for the link can trade for a
+ * session (PKCE). On a phone the mail app opens links in a browser of its
+ * own, so the trade never happened: the person was put back on the login
+ * page, tapped the link again and was told it had expired. Between 10 and 17
+ * Nov 2026 that caught eleven of the 85 members who asked for a link, five of
+ * whom never got in. SIGN_IN_LINK goes straight to app/auth/callback, which
+ * verifies the token on the server, so it works wherever it is opened.
  *
  * Nothing here may HTML-escape them, which is why this is assembled as a string
  * rather than rendered through React.
@@ -24,6 +34,14 @@ import { getSettingsOrDefaults } from "@/lib/settings";
  * only, because Gmail and Outlook strip `<style>` blocks and a flexbox email
  * collapses in half the clients that receive it.
  */
+/**
+ * `redirect_to` carries the address the login page gave GoTrue, which is this
+ * same callback with `next` on it. The callback reads only that `next`. It is
+ * passed whole because a Go template cannot tell whether to join with ? or &.
+ * `&amp;` because this is HTML, in the href and in the address written out.
+ */
+const SIGN_IN_LINK = "{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&amp;type=magiclink&amp;redirect_to={{ .RedirectTo }}";
+
 export async function magicLinkEmailHtml(): Promise<string> {
   // Borrowed from the post-purchase email so the two look like one shop. A
   // buyer sees the welcome and the sign-in link within minutes of each other.
@@ -47,7 +65,7 @@ export async function magicLinkEmailHtml(): Promise<string> {
         ${header}
         <tr><td style="padding:34px 8px 8px;">
           ${p("Here is your sign-in link.")}
-          ${p("It opens your library straight away — there is no password to remember or reset.")}
+          ${p("It signs you in straight away, on any device. There is no password to remember.")}
 
           <!-- A button, and the address underneath it.
                Some clients strip buttons, some people paste links into another
@@ -57,7 +75,7 @@ export async function magicLinkEmailHtml(): Promise<string> {
                there. -->
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 22px;">
             <tr><td align="center" bgcolor="#b0532f" style="border-radius:999px;">
-              <a href="{{ .ConfirmationURL }}"
+              <a href="${SIGN_IN_LINK}"
                  style="display:inline-block;padding:14px 32px;font-family:${s.fontFamily};font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:999px;">
                 Sign in
               </a>
@@ -66,7 +84,7 @@ export async function magicLinkEmailHtml(): Promise<string> {
 
           <p style="margin:0 0 18px;font-size:13px;line-height:1.7;color:${s.textColor};opacity:0.75;">
             Button not working? Paste this into your browser:<br />
-            <a href="{{ .ConfirmationURL }}" style="color:${s.linkColor};word-break:break-all;">{{ .ConfirmationURL }}</a>
+            <a href="${SIGN_IN_LINK}" style="color:${s.linkColor};word-break:break-all;">${SIGN_IN_LINK}</a>
           </p>
 
           <!-- Said because it is the question somebody asks when a sign-in

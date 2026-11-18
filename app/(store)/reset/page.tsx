@@ -14,8 +14,16 @@ export default function ResetRequestPage() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { error } = await createClient().auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset/update`,
+    // The store's own sign-in link, pointed at the new-password page. Not
+    // resetPasswordForEmail: GoTrue's recovery email carries the link that
+    // only finishes in the browser that asked for it, and opened anywhere else
+    // it left people on "Choose a new password" with no session (17 Nov 2026).
+    const callback = new URL("/auth/callback", window.location.origin);
+    callback.searchParams.set("next", "/reset/update");
+    const { error } = await createClient().auth.signInWithOtp({
+      email,
+      // Asking to reset must never mint an account for a mistyped address.
+      options: { emailRedirectTo: callback.toString(), shouldCreateUser: false },
     });
     if (error) setError(error.message);
     else setSent(true);
@@ -27,7 +35,7 @@ export default function ResetRequestPage() {
       <h1 className="text-2xl">Reset password</h1>
       {sent ? (
         <p className="text-muted">
-          If an account exists for {email}, a reset link is on its way. Check your inbox.
+          If an account exists for {email}, an email called “Your sign-in link” is on its way. Open it on any device and it will take you straight to choosing a new password.
         </p>
       ) : (
         <form onSubmit={onSubmit} className="flex flex-col gap-4">

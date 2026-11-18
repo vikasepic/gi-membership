@@ -1289,3 +1289,30 @@ column before giving its values a meaning. The same review found "Remove
 admin" left `is_viewer` set where no screen could show it: two flags that
 exclude each other are cleared together. `lib/buyer-journeys.ts`,
 `lib/members.ts`, commits a80ca83 and a64c92e.
+
+## A sign-in link that only works in the browser that asked for it (18 Nov 2026)
+
+Two members wrote in: every link "expired" at once, the password reset said
+"Auth session missing!", one was sent round the login page six times. Nothing
+was down. The sign-in email carried `{{ .ConfirmationURL }}`, which comes back
+with a code that only the browser holding the code verifier can trade for a
+session (PKCE). On a phone the mail app opens links in a browser of its own.
+The auth server accepted the link, the trade never happened, the person landed
+on the login page, tapped the same link again and was told it had expired.
+Between 10 and 17 Nov that caught 11 of the 85 members who asked for a link;
+five never got in. It had been failing quietly since launch: `auth.flow_state`
+keeps a row for every code that was issued and never traded.
+
+The email now links to `/auth/callback?token_hash=…`, verified on the server,
+which works wherever it is opened. The password reset sends the same link,
+pointed at the new-password page, instead of GoTrue's recovery email.
+
+Rules. A login page that has to tell people which device to use is describing
+a bug. Read the auth server's own log before believing "expired": it showed the
+link accepted and the next step missing. Count unfinished flows
+(`auth.flow_state` rows with `auth_code_issued_at` set) to see who is locked
+out before they write in. And prove an email template against a real auth
+server before it ships: the local stack takes a template file
+(`[auth.email.template.magic_link]` in `supabase/config.toml`), sends to the
+local mail catcher on 54324, and the link can be opened with curl, a browser
+that never asked. `lib/auth-email.ts`, `app/auth/callback/route.ts`.

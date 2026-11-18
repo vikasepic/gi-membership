@@ -10,7 +10,7 @@ import { Logo } from "@/components/logo";
 // Errors the callback route bounces back here, in the reader's words.
 const CALLBACK_ERRORS: Record<string, string> = {
   wrong_device:
-    "That link has to be opened on the device that asked for it. Request a new one here and it will work.",
+    "That was an older kind of link, which only worked in the browser that asked for it. Request a new one here: it will work on any device.",
   link_expired: "That link has expired. Request a new one below.",
   missing_link: "That link was incomplete. Request a new one below.",
 };
@@ -93,8 +93,8 @@ export default function LoginPage() {
             inbox. It expires shortly, so use it soon.
           </p>
           <p className="rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm text-muted">
-            Open it on <span className="text-fg">this device</span> — a login link only works in the
-            browser that asked for it.
+            Open it on <span className="text-fg">any device</span>. It signs you in wherever you
+            tap it, and works once.
           </p>
           <div className="flex flex-wrap items-center gap-5 pt-1">
             <button

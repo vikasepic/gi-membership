@@ -13,13 +13,14 @@ export const dynamic = "force-dynamic";
 //   ?code=…                  PKCE. What supabase-js sends by default. Requires
 //                            the code verifier cookie from the SAME browser
 //                            that asked for the link.
-//   ?token_hash=…&type=…     Verifiable without the verifier, so it survives
-//                            being opened on a different device. Used if the
-//                            magic-link email template is switched to
-//                            {{ .TokenHash }}.
+//   ?token_hash=…&type=…     Verified here on the server, so it works in
+//                            whichever browser opens it. What the sign-in
+//                            email has sent since 18 Nov 2026
+//                            (lib/auth-email.ts), and what the post-purchase
+//                            email always sent.
 //
-// Supporting both is a few lines and means changing the template later needs no
-// code change.
+// ?code= stays for links already in inboxes and for anything GoTrue still
+// sends that way.
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
@@ -28,8 +29,19 @@ export async function GET(request: Request) {
 
   // Only ever redirect somewhere on our own site — `next` arrives from a URL,
   // and an open redirect here would hand a live session to another origin.
-  const requested = url.searchParams.get("next");
-  const ownPage = requested && requested.startsWith("/") && !requested.startsWith("//") ? requested : null;
+  const own = (path: string | null) => (path && path.startsWith("/") && !path.startsWith("//") ? path : null);
+  // The sign-in email's link (lib/auth-email.ts) cannot carry `next` itself, so
+  // it carries the address the login page gave GoTrue, which has `next` on it.
+  // Only that `next` is read, and only as a path of ours. The address itself is
+  // never gone to.
+  const cameFrom = (() => {
+    try {
+      return new URL(url.searchParams.get("redirect_to") ?? "").searchParams.get("next");
+    } catch {
+      return null;
+    }
+  })();
+  const ownPage = own(url.searchParams.get("next")) ?? own(cameFrom);
   const next = ownPage ?? "/library";
   // A failed link sends them back to log in, still carrying where they were
   // going, so the next link they ask for from there lands on it too.

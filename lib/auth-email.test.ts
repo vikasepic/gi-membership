@@ -12,9 +12,23 @@ describe("the sign-in email", () => {
     // Escaped or renamed, GoTrue fills in nothing and the email ships with a
     // dead button — the one email where a dead button locks somebody out.
     const html = await magicLinkEmailHtml();
-    expect(html).toContain("{{ .ConfirmationURL }}");
+    expect(html).toContain("{{ .TokenHash }}");
     expect(html).toContain("{{ .Email }}");
     expect(html).not.toContain("&#123;");
+  });
+
+  it("links to this store's own callback with a token any browser can use", async () => {
+    // {{ .ConfirmationURL }} is the link that only finishes in the browser
+    // that asked for it. On a phone the mail app opens links somewhere else,
+    // and between 10 and 17 Nov 2026 eleven of 85 members who asked for a
+    // link were bounced back to the login page by it, five for good. The
+    // token hash is verified on the server instead (app/auth/callback), and
+    // where they were going rides along as the address GoTrue was given.
+    const html = await magicLinkEmailHtml();
+    const link = "{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&amp;type=magiclink&amp;redirect_to={{ .RedirectTo }}";
+    expect(html.split(link).length - 1).toBe(3);
+    expect(html).toContain(`<a href="${link}"`);
+    expect(html).not.toContain("{{ .ConfirmationURL }}");
   });
 
   it("gives the link a button AND the address in full", async () => {
@@ -24,8 +38,8 @@ describe("the sign-in email", () => {
     const html = await magicLinkEmailHtml();
     expect(html).toContain(">\n                Sign in\n              </a>");
     expect(html).toContain("Paste this into your browser");
-    // Twice: once in the button, once in the open.
-    expect(html.split("{{ .ConfirmationURL }}").length - 1).toBeGreaterThanOrEqual(3);
+    // The button, the anchor under it, and the address written out.
+    expect(html.split("{{ .TokenHash }}").length - 1).toBe(3);
   });
 
   it("survives an email client", async () => {
