@@ -1273,3 +1273,19 @@ separate copies of a module, so module-level state cleared in one is not
 cleared in the other: share it on `globalThis`. Rule: anything the proxy
 returns is checked with curl against `next dev`, not only a unit test.
 `proxy.ts`, `lib/redirect-cache.ts`, commit c711cfc.
+
+## `source = 'grant'` is not "given by hand" (18 Nov 2026)
+
+The Journeys report was specified to call access with `ownership.source =
+'grant'` "given". Its 25 unit tests passed. Run over a copy of production's
+rows it called 228 purchases gifts: the offer checkout writes `'grant'` for
+every offer it sells (`lib/offer-checkout.ts`), 309 rows against 25 real hand
+grants. A hand grant is a row with `granted_by` set, that is not `canceled`,
+for something the person has not since bought. I had already told the owner
+the wrong numbers from a SQL query on the same column. Rule: before a report
+ships, run its derivation over real rows and read the totals; a number that
+says nearly everyone did the rare thing is the bug. And read who writes a
+column before giving its values a meaning. The same review found "Remove
+admin" left `is_viewer` set where no screen could show it: two flags that
+exclude each other are cleared together. `lib/buyer-journeys.ts`,
+`lib/members.ts`, commits a80ca83 and a64c92e.
