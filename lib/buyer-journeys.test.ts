@@ -220,6 +220,40 @@ describe("a free start", () => {
     expect(people[0].totalSpentCents).toBe(4700);
   });
 
+  it("that paid and was then refunded is back to a free start: nothing of theirs was kept", () => {
+    const base = {
+      orders: [order({ id: "t1", createdAt: "2026-10-01T10:00:00Z", hostOfferId: "ce" }), order({ id: "r1", createdAt: "2026-10-08T10:00:00Z", stripeInvoiceId: "in_1", totalCents: 4700, status: "refunded" as const })],
+      items: [
+        item({ orderId: "t1", kind: "oto", offerId: "ce", amountCents: 0, stripeSubscriptionId: "sub_1" }),
+        item({ orderId: "r1", kind: "renewal", offerId: "ce", amountCents: 4700, stripeSubscriptionId: "sub_1" }),
+      ],
+    };
+    // One payment, refunded: not a buyer.
+    expect(run({ ...base, subscriptions: [sub("sub_1", 1)] }).people).toEqual([]);
+    // Two payments, one refunded: a buyer, for the payment that was kept.
+    const kept = run({
+      ...base,
+      orders: [...base.orders, order({ id: "r2", createdAt: "2026-11-08T10:00:00Z", stripeInvoiceId: "in_2", totalCents: 4700 })],
+      items: [...base.items, item({ orderId: "r2", kind: "renewal", offerId: "ce", amountCents: 4700, stripeSubscriptionId: "sub_1" })],
+      subscriptions: [sub("sub_1", 2)],
+    });
+    expect(kept.people).toHaveLength(1);
+    expect(kept.people[0].totalSpentCents).toBe(4700);
+  });
+
+  it("beside a paid bump: the purchase is named for what was paid for, not the trial that never paid", () => {
+    // A trial offer's page, the trial unpaid so far, and a $11 bump taken with it.
+    const { people, summary } = run({
+      orders: [order({ id: "o1", hostOfferId: "ce" })],
+      items: [item({ orderId: "o1", kind: "oto", offerId: "ce", amountCents: 0, stripeSubscriptionId: "sub_1" }), item({ orderId: "o1", kind: "bump", productId: "ideas", amountCents: 1100 })],
+      subscriptions: [sub("sub_1", 0)],
+    });
+    expect(people[0].first).toMatchObject({ what: "150 Digital Product Ideas", key: "product:ideas", valueCents: 1100 });
+    expect(people[0].first.withIt).toEqual(["Content Engine"]);
+    expect(summary.map((r) => r.what)).toEqual(["150 Digital Product Ideas"]);
+    expect(people[0].lines.map((l) => [l.how, l.what])).toEqual([["first", "150 Digital Product Ideas"], ["bought with", "Content Engine"]]);
+  });
+
   it("taken as an upsell is bought with the order, not a purchase of its own", () => {
     const { people } = run({
       orders: [order({ id: "o1" })],

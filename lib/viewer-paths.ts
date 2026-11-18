@@ -16,10 +16,22 @@ export const VIEWER_HOME = "/admin/journeys";
 
 /**
  * Whole path segments only, so /admin/membersX does not ride on
- * /admin/members. A ".." segment or any percent-encoding is refused outright:
- * no real page under these five has either, and neither is worth reasoning about.
+ * /admin/members.
+ *
+ * Each segment is decoded before it is judged, so an encoded "..", "/" or "\"
+ * cannot pass as a name, and one that does not decode is refused. A name that
+ * merely needed encoding (a funnel called "café") is still a name. The five
+ * prefixes themselves are matched as written: /admin/%6Frders is not a page.
  */
 export function viewerMayOpen(pathname: string): boolean {
-  if (pathname.includes("%") || pathname.split("/").includes("..")) return false;
+  for (const raw of pathname.split("/")) {
+    let seg: string;
+    try {
+      seg = decodeURIComponent(raw);
+    } catch {
+      return false;
+    }
+    if (seg === "." || seg === ".." || seg.includes("/") || seg.includes("\\")) return false;
+  }
   return VIEWER_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }

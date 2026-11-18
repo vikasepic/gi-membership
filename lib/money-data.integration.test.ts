@@ -13,6 +13,7 @@ const canRun = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
 const stamp = Date.now();
 const userId = crypto.randomUUID();
 let appId = "";
+let orderId = "";
 
 describe.skipIf(!canRun)("loadMoneyData (integration)", () => {
   const db = () => createServiceClient();
@@ -29,9 +30,21 @@ describe.skipIf(!canRun)("loadMoneyData (integration)", () => {
     if (u.error) throw new Error(`fixture user: ${u.error.message}`);
     const o = await db().from("ownership").insert({ store_id: storeId, user_id: userId, app_id: appId, status: "active", source: "grant", granted_by: "zz-owner@example.test" });
     if (o.error) throw new Error(`fixture ownership: ${o.error.message}`);
+    // Two lines written in the wrong order: the one created later goes in first.
+    const ord = await db().from("orders").insert({ store_id: storeId, user_id: userId, email: `zz-money-${stamp}@example.test`, status: "paid", livemode: false, total_cents: 4000, subtotal_cents: 4000, currency: "usd" }).select("id").single();
+    if (ord.error || !ord.data) throw new Error(`fixture order: ${ord.error?.message}`);
+    orderId = ord.data.id as string;
+    for (const [description, at] of [["zz second", "2026-11-18T10:05:00Z"], ["zz first", "2026-11-18T10:00:00Z"]]) {
+      const i = await db().from("order_items").insert({ store_id: storeId, order_id: orderId, kind: "oto", description, amount_cents: 2000, created_at: at });
+      if (i.error) throw new Error(`fixture item: ${i.error.message}`);
+    }
   });
 
   afterAll(async () => {
+    if (orderId) {
+      await db().from("order_items").delete().eq("order_id", orderId);
+      await db().from("orders").delete().eq("id", orderId);
+    }
     await db().from("ownership").delete().eq("user_id", userId);
     await db().from("users").delete().eq("id", userId);
     if (appId) await db().from("apps").delete().eq("id", appId);
@@ -40,6 +53,13 @@ describe.skipIf(!canRun)("loadMoneyData (integration)", () => {
   it("says who has read-only access", async () => {
     const d = await loadMoneyData();
     expect(d.users.find((u) => u.id === userId)?.isViewer).toBe(true);
+  });
+
+  it("hands an order's lines over in the order they were written", async () => {
+    // Journeys names an old offer order after its first line that is not a
+    // bump. Postgres promises no order without an ORDER BY.
+    const d = await loadMoneyData();
+    expect(d.items.filter((i) => i.orderId === orderId).map((i) => i.description)).toEqual(["zz first", "zz second"]);
   });
 
   it("says how each piece of access was got, and when", async () => {

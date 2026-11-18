@@ -19,8 +19,11 @@ import { sourceOf } from "@/lib/member-money";
  *   - An order is worth the sum of its lines. orders.total_cents is not
  *     updated when an upsell is accepted.
  *   - A $0 order (a trial start, a 100% coupon) is a "free start", not a
- *     purchase, until its subscription has taken money. Then it is a purchase
- *     dated the day it started. Renewals are never a purchase of their own.
+ *     purchase, until its subscription has taken money it still holds. Then it
+ *     is a purchase dated the day it started. Renewals are never a purchase of
+ *     their own.
+ *   - A purchase is named for what was paid for: a paid bump beside an unpaid
+ *     trial is a purchase of the bump.
  *   - Refunded, unpaid and test-mode orders do not exist here.
  *   - Access an admin gave by hand is listed on the person and counted nowhere.
  *   - The team (admins, read-only people) is left out.
@@ -92,7 +95,19 @@ const DAY = 86_400_000;
 export function deriveJourneys(d: MoneyData, opts: { range: JourneyRange; teamEmails: string[] }): Journeys {
   const itemsOf = new Map<string, Item[]>();
   for (const it of d.items) itemsOf.set(it.orderId, [...(itemsOf.get(it.orderId) ?? []), it]);
-  const paidSubs = new Set(d.subscriptions.filter((s) => s.paidInvoices > 0).map((s) => s.stripeSubscriptionId));
+  // A subscription has paid when it still holds a payment: its paid invoices,
+  // less the renewals that were refunded. One payment, refunded, is back to
+  // a free start.
+  const refundedBySub = new Map<string, number>();
+  for (const o of d.orders) {
+    if (o.status !== "refunded" || !o.livemode) continue;
+    for (const id of new Set((itemsOf.get(o.id) ?? []).map((it) => it.stripeSubscriptionId).filter((v): v is string => Boolean(v)))) {
+      refundedBySub.set(id, (refundedBySub.get(id) ?? 0) + 1);
+    }
+  }
+  const paidSubs = new Set(
+    d.subscriptions.filter((s) => s.paidInvoices - (refundedBySub.get(s.stripeSubscriptionId) ?? 0) > 0).map((s) => s.stripeSubscriptionId),
+  );
   const userById = new Map(d.users.map((u) => [u.id, u]));
   const userIdByEmail = new Map(d.users.map((u) => [u.email.toLowerCase(), u.id]));
   const teamEmails = new Set(opts.teamEmails.map((e) => e.toLowerCase()));
@@ -151,11 +166,19 @@ export function deriveJourneys(d: MoneyData, opts: { range: JourneyRange; teamEm
       // opened on, never a bump. Offer orders from before host_offer_id was
       // recorded (migration 0077) have no host, so the first line that is not
       // a bump stands in.
-      const main =
+      const wasFor =
         its.find((it) => it.kind === "product") ??
         its.find((it) => it.kind === "oto" && o.hostOfferId && it.offerId === o.hostOfferId) ??
         its.find((it) => it.kind !== "bump") ??
         its[0];
+      // Named for what was paid for. When money was taken but the thing the
+      // order was opened for cost nothing and has not paid since (a trial, a
+      // 100% coupon), the purchase is the line that was paid, upsell before
+      // bump, and the free thing is "bought with" it.
+      const wasForPaid = Boolean(wasFor && (wasFor.amountCents > 0 || (wasFor.stripeSubscriptionId && paidSubs.has(wasFor.stripeSubscriptionId))));
+      const main = wasForPaid
+        ? wasFor
+        : (its.find((it) => it.amountCents > 0 && it.kind !== "bump") ?? its.find((it) => it.amountCents > 0) ?? wasFor);
       // Any line, not only the main one: a product on a 100% coupon whose
       // upsell trial went on to pay is an order somebody paid on.
       const paidLater = its.some((it) => it.stripeSubscriptionId && paidSubs.has(it.stripeSubscriptionId));

@@ -69,7 +69,8 @@ describe.skipIf(!canRun)("the report pages for a read-only person (integration)"
     orderId = o.data.id as string;
     const i = await db.from("order_items").insert({ store_id: storeId, order_id: orderId, kind: "product", description: `zz viewer thing ${stamp}`, amount_cents: 2900 });
     if (i.error) throw new Error(`fixture item: ${i.error.message}`);
-    const b = await db.from("users").insert({ id: buyerId, store_id: storeId, email: buyerEmail });
+    // Hidden from the recent buyers popup: its order is live-mode, and other suites read that list while this one runs.
+    const b = await db.from("users").insert({ id: buyerId, store_id: storeId, email: buyerEmail, hide_from_recent_buyers: true });
     if (b.error) throw new Error(`fixture buyer: ${b.error.message}`);
     const bo = await db.from("orders").insert({ store_id: storeId, user_id: buyerId, email: buyerEmail, status: "paid", livemode: true, total_cents: 2700, subtotal_cents: 2700, currency: "usd", coupon_code: coupon }).select("id").single();
     if (bo.error || !bo.data) throw new Error(`fixture buyer order: ${bo.error?.message}`);
@@ -173,6 +174,17 @@ describe.skipIf(!canRun)("the report pages for a read-only person (integration)"
     const guard = await import("@/lib/admin-guard");
     const asked = vi.spyOn(guard, "requireViewer");
     expect(renderToStaticMarkup(await Page({ searchParams: Promise.resolve(sp) })).length).toBeGreaterThan(0);
+    expect(asked).toHaveBeenCalled();
+    asked.mockRestore();
+  });
+
+  it("a Traffic funnel page asks who they are before it looks anything up", async () => {
+    const { default: Page } = await import("@/app/admin/traffic/[key]/page");
+    who.role = "viewer";
+    const guard = await import("@/lib/admin-guard");
+    const asked = vi.spyOn(guard, "requireViewer");
+    // No funnel by this name: the page gets as far as "not found", past the guard.
+    await expect(Page({ params: Promise.resolve({ key: `zz-no-such-funnel-${stamp}` }), searchParams: Promise.resolve({}) })).rejects.toThrow("notFound");
     expect(asked).toHaveBeenCalled();
     asked.mockRestore();
   });

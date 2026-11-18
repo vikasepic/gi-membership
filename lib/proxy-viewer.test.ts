@@ -13,11 +13,17 @@ const state = vi.hoisted(() => ({
   throws: false,
   lookups: 0,
   selected: "",
+  refreshed: null as null | { name: string; value: string },
 }));
 vi.mock("@/lib/redirect-cache", () => ({ cachedRedirectRules: async () => [] }));
 vi.mock("@supabase/ssr", () => ({
-  createServerClient: () => ({
-    auth: { getUser: async () => ({ data: { user: state.user } }) },
+  createServerClient: (_url: string, _key: string, opts: { cookies: { setAll: (l: { name: string; value: string; options: object }[]) => void } }) => ({
+    auth: {
+      getUser: async () => {
+        if (state.refreshed) opts.cookies.setAll([{ ...state.refreshed, options: { path: "/" } }]);
+        return { data: { user: state.user } };
+      },
+    },
     from: () => {
       const q = {
         select: (cols: string) => ((state.selected = cols), q),
@@ -49,6 +55,7 @@ beforeEach(() => {
   state.row = { is_admin: false, is_viewer: true };
   state.throws = false;
   state.lookups = 0;
+  state.refreshed = null;
 });
 
 describe("a read-only person at the admin gate", () => {
@@ -81,9 +88,23 @@ describe("a read-only person at the admin gate", () => {
     ["/admin/orders%2f..%2fsettings", "an encoded slash"],
     ["/admin/orders/..%2fsettings", "a half-encoded parent step"],
     ["/admin/membersX/abc", "a name that only starts like a report page"],
-    ["/admin/traffic/caf%C3%A9", "anything percent-encoded at all"],
+    ["/admin/traffic/%ZZ", "an encoding that does not decode"],
   ])("is sent to Journeys from %s (%s)", async (p) => {
     expect(pathOf(await hit(p))).toBe("/admin/journeys");
+  });
+
+  it("opens a funnel whose name needed encoding", async () => {
+    expect((await hit("/admin/traffic/caf%C3%A9")).status).toBe(200);
+  });
+
+  it("keeps a session refreshed on this request when it sends them to Journeys", async () => {
+    // getUser() may rotate the tokens and hand the new ones to setAll. They
+    // were set on the response the gate then threw away; it only worked
+    // because the auth server tolerates the old token for a few seconds.
+    state.refreshed = { name: "sb-zz-auth-token", value: "fresh-token" };
+    const res = await hit("/admin/settings");
+    expect(pathOf(res)).toBe("/admin/journeys");
+    expect(res.headers.getSetCookie().join("\n")).toContain("sb-zz-auth-token=fresh-token");
   });
 
   it("opens a report page with a trailing slash", async () => {

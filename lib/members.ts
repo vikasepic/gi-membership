@@ -410,7 +410,9 @@ export async function revokeOwnership(ownershipId: string): Promise<{ ok: boolea
  */
 export async function setMemberAdmin(userId: string, isAdmin: boolean): Promise<void> {
   const db = createServiceClient();
-  await db.from("users").update({ is_admin: isAdmin, is_viewer: false }).eq("id", userId);
+  const { error } = await db.from("users").update({ is_admin: isAdmin, is_viewer: false }).eq("id", userId);
+  // A switch that did not save must not look as if it did.
+  if (error) throw new Error(error.message);
 }
 
 /**
@@ -421,7 +423,8 @@ export async function setMemberAdmin(userId: string, isAdmin: boolean): Promise<
  */
 export async function setMemberViewer(userId: string, isViewer: boolean): Promise<void> {
   const db = createServiceClient();
-  await db.from("users").update({ is_viewer: isViewer }).eq("id", userId);
+  const { error } = await db.from("users").update({ is_viewer: isViewer }).eq("id", userId);
+  if (error) throw new Error(error.message);
 }
 
 /** What a member currently holds, for the admin row. */

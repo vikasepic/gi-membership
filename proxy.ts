@@ -118,7 +118,12 @@ export async function proxy(req: NextRequest) {
       const to = req.nextUrl.clone();
       to.pathname = viewer ? VIEWER_HOME : "/login";
       to.search = "";
-      return NextResponse.redirect(to);
+      const away = NextResponse.redirect(to);
+      // getUser() above may have rotated the session and set the new tokens
+      // on `res`. They go with the redirect, or the next request arrives with
+      // tokens the auth server has already replaced.
+      for (const c of res.cookies.getAll()) away.cookies.set(c);
+      return away;
     }
   }
 

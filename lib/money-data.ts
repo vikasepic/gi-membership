@@ -137,7 +137,12 @@ export async function loadMoneyData(): Promise<MoneyData> {
     const { data, error } = await db
       .from("order_items")
       .select("order_id, kind, description, amount_cents, offer_id, product_id, stripe_subscription_id")
-      .in("order_id", orderIds.slice(i, i + 200));
+      .in("order_id", orderIds.slice(i, i + 200))
+      // As written. Journeys names an old offer order after its first line
+      // that is not a bump, and Postgres promises no order without this. An
+      // order's lines are all in one slice, so the order holds across slices.
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
     if (error) throw new Error(`loadMoneyData items: ${error.message}`);
     for (const it of data ?? []) {
       items.push({

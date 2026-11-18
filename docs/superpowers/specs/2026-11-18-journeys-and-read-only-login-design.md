@@ -91,6 +91,19 @@ Address `/admin/journeys`, in the sidebar's Customers group, labelled "Journeys"
 - **The owner cannot be locked out or demoted.** `ADMIN_EMAILS` still wins over both columns.
 - **The migration goes first.** `0100`, applied to production by hand with `notify pgrst, 'reload schema';` before the push, since the proxy reads the column on every `/admin` request.
 
+## Changed after the first release (18 Nov 2026)
+
+Decided by the owner or found in the final review, all on the day it shipped:
+
+- **Coupon codes are hidden from read-only people** (owner): on Transactions, Members, the person page and both older downloads.
+- **Making or removing an admin clears read-only access**, so the two flags never sit together unseen.
+- **Every admin page outside the five asks for an admin itself**, first. The proxy is no longer the only thing in front of them. `app/admin/viewer-refused.test.ts` opens each page and calls each action as a read-only person.
+- **Given** also leaves out a grant that was taken back and one the person has since bought.
+- **A free start counts once its subscription holds a payment**: a single payment that was refunded puts it back to a free start. An order counts when any of its lines' subscriptions has paid.
+- **A purchase is named for what was paid for.** A paid bump or upsell beside an unpaid trial or a 100% coupon is a purchase of the paid line; the free thing is "bought with" it.
+- **A path segment is decoded before it is judged**, so a name that only needed encoding opens and an encoded `..` or `/` does not.
+- **All three downloads** make a cell that starts like a formula plain text.
+
 ## Non-goals
 
 - Pulling Stripe or ActiveCampaign into the report.

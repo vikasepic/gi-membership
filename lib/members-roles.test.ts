@@ -9,11 +9,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  * Take admin away later and they fell back, unseen, to reading every customer.
  */
 const updates = vi.hoisted(() => [] as { table: string; values: Record<string, unknown>; id: string }[]);
+const fail = vi.hoisted(() => ({ message: null as string | null }));
 vi.mock("@/lib/supabase/server", () => ({
   createServiceClient: () => ({
     from: (table: string) => ({
       update: (values: Record<string, unknown>) => ({
-        eq: async (_col: string, id: string) => (updates.push({ table, values, id }), { error: null }),
+        eq: async (_col: string, id: string) => (updates.push({ table, values, id }), { error: fail.message ? { message: fail.message } : null }),
       }),
     }),
   }),
@@ -23,6 +24,17 @@ const { setMemberAdmin, setMemberViewer } = await import("@/lib/members");
 
 beforeEach(() => {
   updates.length = 0;
+  fail.message = null;
+});
+
+describe("a switch that did not save", () => {
+  it.each([
+    ["admin", () => setMemberAdmin("u1", true)],
+    ["read-only", () => setMemberViewer("u1", true)],
+  ])("the %s switch says so instead of looking as if it worked", async (_name, call) => {
+    fail.message = 'column "is_viewer" does not exist';
+    await expect(call()).rejects.toThrow('column "is_viewer" does not exist');
+  });
 });
 
 describe("making or unmaking an admin", () => {
