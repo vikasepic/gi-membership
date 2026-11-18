@@ -11,7 +11,7 @@ import { progressForCourses, lastLessonFor, lastSignInForAll } from "@/lib/learn
 import { deriveMembers } from "@/lib/member-money";
 import { deriveLedger } from "@/lib/ledger";
 import { money } from "@/lib/money";
-import { cancelSubscriptionAction, extendTrialAction, revokeAccessAction, toggleAdminAction, toggleRecentBuyersHiddenAction, viewAsMemberAction } from "@/app/admin/members/actions";
+import { cancelSubscriptionAction, extendTrialAction, revokeAccessAction, toggleAdminAction, toggleRecentBuyersHiddenAction, toggleViewerAction, viewAsMemberAction } from "@/app/admin/members/actions";
 import { createServiceClient } from "@/lib/supabase/server";
 import { DeleteMember } from "@/components/admin/delete-member";
 import { ChangeEmail } from "@/components/admin/change-email";
@@ -51,6 +51,8 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
   const rows = deriveLedger(data).filter((r) => r.userId === id);
   const envAdmins = adminEmails();
   const isOwner = envAdmins.includes(m.email.toLowerCase());
+  // Read-only access to the report pages. Means nothing on an admin, who sees everything.
+  const isViewer = !m.isAdmin && !isOwner && Boolean(data.users.find((u) => u.id === id)?.isViewer);
   const customer = data.subscriptions.find((s) => s.userId === id && s.stripeCustomerId)?.stripeCustomerId ?? null;
   const grants = [
     ...products.map((p) => ({ value: `product:${p.id}`, label: `Product — ${p.title}` })),
@@ -70,6 +72,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
           {m.converted && <> <Pill tone="good">converted</Pill></>}
           {m.coupons.map((c) => <span key={c}> <Pill tone="quiet">coupon {c}</Pill></span>)}
           {(m.isAdmin || isOwner) && <> <Pill tone="quiet">{isOwner ? "owner" : "admin"}</Pill></>}
+          {isViewer && <> <Pill tone="quiet">read-only access</Pill></>}
         </p>
       </div>
 
@@ -229,6 +232,17 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                   <input type="hidden" name="email" value={m.email} />
                   <input type="hidden" name="makeAdmin" value={m.isAdmin ? "false" : "true"} />
                   <button type="submit" className="text-xs text-muted hover:text-fg">{m.isAdmin ? "Remove admin" : "Make admin"}</button>
+                </form>
+              )}
+              {/* The ads team's login: Journeys, Transactions, Members, Traffic
+                  and Attribution, and nothing they can change. Not offered on
+                  an admin, who already sees everything. */}
+              {!isOwner && !m.isAdmin && (
+                <form action={toggleViewerAction}>
+                  <input type="hidden" name="userId" value={m.id} />
+                  <input type="hidden" name="email" value={m.email} />
+                  <input type="hidden" name="makeViewer" value={isViewer ? "false" : "true"} />
+                  <button type="submit" className="text-xs text-muted hover:text-fg">{isViewer ? "Remove read-only access" : "Give read-only access"}</button>
                 </form>
               )}
               <form action={toggleRecentBuyersHiddenAction} className="flex items-center gap-2">

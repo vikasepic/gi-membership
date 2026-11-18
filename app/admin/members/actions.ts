@@ -10,6 +10,7 @@ import {
   extendTrial,
   revokeOwnership,
   setMemberAdmin,
+  setMemberViewer,
 } from "@/lib/members";
 import { setViewAsCookie } from "@/lib/view-as";
 import { redirect } from "next/navigation";
@@ -129,6 +130,21 @@ export async function toggleAdminAction(formData: FormData) {
     return;
   }
   if (userId) await setMemberAdmin(userId, makeAdmin);
+  revalidatePath("/admin/members");
+}
+
+/**
+ * Give or take away read-only access to the report pages (users.is_viewer).
+ * An admin's switch: a read-only person is refused here like everywhere else.
+ */
+export async function toggleViewerAction(formData: FormData) {
+  await requireAdmin();
+  const userId = String(formData.get("userId") ?? "");
+  const email = String(formData.get("email") ?? "");
+  const makeViewer = String(formData.get("makeViewer") ?? "") === "true";
+  // An environment admin already sees everything, and the guard reads the
+  // environment first: a flag on them would claim a limit that is not there.
+  if (userId && !isAdminEmail(email)) await setMemberViewer(userId, makeViewer);
   revalidatePath("/admin/members");
 }
 

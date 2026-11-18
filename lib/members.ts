@@ -408,6 +408,17 @@ export async function setMemberAdmin(userId: string, isAdmin: boolean): Promise<
   await db.from("users").update({ is_admin: isAdmin }).eq("id", userId);
 }
 
+/**
+ * Give or take away read-only access to the admin's report pages.
+ *
+ * Which pages is lib/viewer-paths.ts; what it can never do is everything
+ * behind requireAdmin(). is_admin and ADMIN_EMAILS win over it.
+ */
+export async function setMemberViewer(userId: string, isViewer: boolean): Promise<void> {
+  const db = createServiceClient();
+  await db.from("users").update({ is_viewer: isViewer }).eq("id", userId);
+}
+
 /** What a member currently holds, for the admin row. */
 /** One thing a member holds, and whether it was granted by hand. */
 export type AccessRow = {
