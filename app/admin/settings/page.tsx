@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-guard";
 import { SettingsScreen } from "@/components/admin/settings-screen";
 import { PostPurchaseSection } from "@/components/admin/post-purchase-section";
 import { getSettings } from "@/lib/settings";
@@ -14,6 +15,8 @@ async function sampleOfferName(storeId: string): Promise<string> {
 }
 
 export default async function AdminSettingsPage() {
+  // Admins only, asked here as well as in the proxy: a read-only person's session passes the gate on some paths (lib/viewer-paths.ts).
+  await requireAdmin();
   const [settings, fonts, storeId] = await Promise.all([getSettings(), listFonts(), getStoreId()]);
   const [storeSeries, sample] = await Promise.all([getSequence("store", storeId), sampleOfferName(storeId)]);
   const mail = settings.postPurchaseEmail;

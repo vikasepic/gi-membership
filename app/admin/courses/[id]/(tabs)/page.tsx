@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-guard";
 import { notFound } from "next/navigation";
 import { Curriculum } from "@/components/admin/curriculum";
 import { getCourse } from "@/lib/courses";
@@ -5,6 +6,8 @@ import { listCurriculum } from "@/lib/curriculum";
 
 // The reason you opened this course. It gets the page to itself.
 export default async function CurriculumTab({ params }: { params: Promise<{ id: string }> }) {
+  // Admins only, asked here as well as in the proxy: a read-only person's session passes the gate on some paths (lib/viewer-paths.ts).
+  await requireAdmin();
   const { id } = await params;
   const [course, nodes] = await Promise.all([
     getCourse(id),

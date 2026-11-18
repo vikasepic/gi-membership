@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-guard";
 import Link from "next/link";
 import { listCourses } from "@/lib/courses";
 import { listCurriculum } from "@/lib/curriculum";
@@ -6,6 +7,8 @@ import { publicCoverUrl } from "@/lib/media-url";
 // Courses are CONTENT. Products (priced, sold) are a separate section — a
 // product grants one or more courses, so a bundle is just a product with several.
 export default async function AdminCoursesPage() {
+  // Admins only, asked here as well as in the proxy: a read-only person's session passes the gate on some paths (lib/viewer-paths.ts).
+  await requireAdmin();
   const courses = await listCourses();
   const counts = await Promise.all(
     courses.map(async (c) => {

@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-guard";
 import Link from "next/link";
 import { listApps } from "@/lib/apps";
 import { appKindFrom, appKindTabs, appsOfKind } from "@/lib/app-kind-filter";
@@ -10,6 +11,8 @@ export default async function AdminAppsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // Admins only, asked here as well as in the proxy: a read-only person's session passes the gate on some paths (lib/viewer-paths.ts).
+  await requireAdmin();
   const all = await listApps();
   const filter = appKindFrom(await searchParams);
   const tabs = appKindTabs(all);

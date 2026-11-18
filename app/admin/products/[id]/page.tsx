@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-guard";
 import { notFound } from "next/navigation";
 import { ProductForm } from "@/components/admin/product-form";
 import { publicCoverUrl } from "@/lib/media";
@@ -17,6 +18,8 @@ export default async function EditProductPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ warning?: string | string[] }>;
 }) {
+  // Admins only, asked here as well as in the proxy: a read-only person's session passes the gate on some paths (lib/viewer-paths.ts).
+  await requireAdmin();
   const { id } = await params;
   const { warning } = await searchParams;
   const warnings = warning ? (Array.isArray(warning) ? warning : [warning]) : [];

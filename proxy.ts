@@ -81,7 +81,8 @@ export async function proxy(req: NextRequest) {
   // The env list is checked first and costs nothing; the table is only queried
   // for someone who is not on it, and both columns come from that one query.
   //
-  // requireAdmin() in lib/admin-guard.ts repeats both checks on every mutating
+  // requireAdmin() in lib/admin-guard.ts repeats the admin checks on every
+  // admin page and every mutating
   // action. This gate is convenience; that one is the security boundary.
   if (pathname.startsWith("/admin")) {
     const admins = (process.env.ADMIN_EMAILS ?? "")

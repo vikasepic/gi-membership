@@ -48,7 +48,9 @@ const PRESETS: { key: Exclude<SubPreset, "custom">; label: string }[] = [
 
 export default async function SubscriptionsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
-  const [, data] = await Promise.all([requireAdmin(), loadMoneyData()]);
+  // First, not beside the read: nothing is loaded for someone who is not an admin.
+  await requireAdmin();
+  const data = await loadMoneyData();
   const now = data.now;
   const today = now.toISOString().slice(0, 10);
   const raw = subFilterFrom(sp, today);

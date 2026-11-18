@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-guard";
 import { listMedia, KINDS, type MediaKind } from "@/lib/media-library";
 import { withUrls } from "@/lib/media-urls";
 import { MediaGrid } from "@/components/admin/media-grid";
@@ -7,6 +8,8 @@ export default async function AdminMediaPage({
 }: {
   searchParams: Promise<{ kind?: string }>;
 }) {
+  // Admins only, asked here as well as in the proxy: a read-only person's session passes the gate on some paths (lib/viewer-paths.ts).
+  await requireAdmin();
   const { kind: raw } = await searchParams;
   const kind = raw && raw in KINDS ? (raw as MediaKind) : undefined;
   const items = await withUrls(await listMedia(kind));

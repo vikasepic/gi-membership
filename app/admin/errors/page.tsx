@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-guard";
 import { listErrorEvents, MAX_ATTEMPTS } from "@/lib/errors";
 import { retryNowAction, repairDriftAction, markHandledAction } from "./actions";
 import { findSubscriptionDrift } from "@/lib/subscription-reconcile";
@@ -12,6 +13,8 @@ const relative = (iso: string) => {
 };
 
 export default async function AdminErrorsPage() {
+  // Admins only, asked here as well as in the proxy: a read-only person's session passes the gate on some paths (lib/viewer-paths.ts).
+  await requireAdmin();
   const [events, { drift, unchecked }] = await Promise.all([listErrorEvents(), findSubscriptionDrift()]);
   // Tracking that looks configured and cannot work. It fails silently by
   // design — a conversion that never sends breaks nothing — so this is the

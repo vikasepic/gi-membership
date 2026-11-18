@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-guard";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCourseItem } from "@/lib/curriculum";
@@ -12,6 +13,8 @@ export default async function ItemEditorPage({
   params: Promise<{ id: string; itemId: string }>;
   searchParams: Promise<{ error?: string }>;
 }) {
+  // Admins only, asked here as well as in the proxy: a read-only person's session passes the gate on some paths (lib/viewer-paths.ts).
+  await requireAdmin();
   const { id, itemId } = await params;
   const { error } = await searchParams;
   const [item, course] = await Promise.all([getCourseItem(itemId), getCourse(id)]);

@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-guard";
 import Link from "next/link";
 import { ProductForm } from "@/components/admin/product-form";
 import { listOfferOptions } from "@/lib/admin";
@@ -5,6 +6,8 @@ import { listCourses } from "@/lib/courses";
 import { getSettingsOrDefaults } from "@/lib/settings";
 
 export default async function NewProductPage() {
+  // Admins only, asked here as well as in the proxy: a read-only person's session passes the gate on some paths (lib/viewer-paths.ts).
+  await requireAdmin();
   // Courses must be loaded here too, not only on the edit page. A published
   // product requires at least one course, so without this list the Content
   // section reads "No courses yet" even when courses exist, and a product can

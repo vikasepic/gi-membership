@@ -59,11 +59,14 @@ export async function getAdminUser() {
   return (await isAdminInDb(user.id)) ? user : null;
 }
 
-// Guard for admin server actions (defense in depth beyond the middleware/layout).
+// Guard for admin server actions and admin pages (the proxy is the first gate,
+// this is the boundary). It reads the same per-request lookup the layout and
+// requireViewer() use (getAdminRole, below), so a page that asks first costs
+// no second round trip. Only the "admin" role passes: a read-only person never does.
 export async function requireAdmin() {
-  const user = await getAdminUser();
-  if (!user) redirect("/login");
-  return user;
+  const who = await getAdminRole();
+  if (who?.role !== "admin") redirect("/login");
+  return who.user;
 }
 
 /**

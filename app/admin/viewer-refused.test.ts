@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { viewerMayOpen } from "@/lib/viewer-paths";
 
 /**
  * A read-only person changes nothing, whatever they send.
@@ -145,6 +146,56 @@ describe("every admin action, called by a read-only person", () => {
       expect(state.writes, `${file} ${name} wrote`).toEqual([]);
       expect(state.stripe, `${file} ${name} reached Stripe`).toBe(0);
     }
+  });
+});
+
+/**
+ * The same tripwire for pages. The proxy keeps a read-only person to the
+ * paths in lib/viewer-paths.ts, and until 18 Nov 2026 it was the only thing
+ * in front of the other admin pages. Each of those now asks for an admin
+ * itself, first, so the gate is no longer the only wall. A new admin page
+ * without requireAdmin() fails this by name; one meant for read-only people
+ * goes on the list and calls requireViewer() instead.
+ */
+const ADMIN_PAGES = (() => {
+  const out: { file: string; route: string }[] = [];
+  const walk = (dir: string) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, e.name);
+      if (e.isDirectory()) walk(path);
+      else if (e.name === "page.tsx") {
+        // The address the file serves: no route groups, a stand-in for each parameter.
+        const route = "/" + path.replace(/^app\//, "").replace(/\/page\.tsx$/, "").split("/").filter((seg) => !/^\(.*\)$/.test(seg)).map((seg) => (/^\[.*\]$/.test(seg) ? "x" : seg)).join("/");
+        out.push({ file: path, route });
+      }
+    }
+  };
+  walk("app/admin");
+  return out.sort((a, b) => a.file.localeCompare(b.file));
+})();
+const ADMIN_ONLY_PAGES = ADMIN_PAGES.filter((p) => !viewerMayOpen(p.route));
+
+describe("every admin page outside the report pages, opened by a read-only person", () => {
+  it("finds the pages and leaves the report pages to their own test", () => {
+    expect(ADMIN_PAGES.length).toBeGreaterThanOrEqual(40);
+    expect(ADMIN_ONLY_PAGES.map((p) => p.route)).toContain("/admin/settings");
+    expect(ADMIN_ONLY_PAGES.map((p) => p.route)).toContain("/admin");
+    expect(ADMIN_ONLY_PAGES.map((p) => p.route)).not.toContain("/admin/journeys");
+    expect(ADMIN_ONLY_PAGES.map((p) => p.route)).not.toContain("/admin/members/x");
+  });
+
+  it.each(ADMIN_ONLY_PAGES)("$route refuses before it reads anything", async ({ file }) => {
+    const mod = (await import(/* @vite-ignore */ `@/${file.replace(/\.tsx$/, "")}`)) as { default: (props: unknown) => unknown };
+    state.writes = [];
+    const props = { params: Promise.resolve({ id: "x", itemId: "y", key: "k" }), searchParams: Promise.resolve({}) };
+    const outcome = await Promise.resolve()
+      .then(() => mod.default(props))
+      .then(
+        () => "drew the page",
+        (e: unknown) => (e instanceof Error ? e.message : String(e)),
+      );
+    expect(outcome, file).toBe("redirect:/login");
+    expect(state.writes).toEqual([]);
   });
 });
 

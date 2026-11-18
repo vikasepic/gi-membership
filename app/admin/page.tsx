@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-guard";
 import Link from "next/link";
 import { listAllProducts } from "@/lib/admin";
 import { productCourseIds } from "@/lib/courses";
@@ -10,6 +11,8 @@ import { CatalogueThumb } from "@/components/admin/catalogue-thumb";
 import { productDisplay } from "@/lib/courses";
 
 export default async function AdminProductsPage() {
+  // Admins only, asked here as well as in the proxy: a read-only person's session passes the gate on some paths (lib/viewer-paths.ts).
+  await requireAdmin();
   const [products, take] = await Promise.all([listAllProducts(), storeTake()]);
   const published = products.filter((p) => p.status === "published").length;
   const drafts = products.length - published;

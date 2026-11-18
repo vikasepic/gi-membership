@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-guard";
 import Link from "next/link";
 import { listOffers, listAllProducts } from "@/lib/admin";
 import { productDisplay } from "@/lib/courses";
@@ -8,6 +9,8 @@ import { money } from "@/lib/money";
 import { livePrices, priceLabel, priceTerms } from "@/lib/offer-prices";
 
 export default async function AdminOffersPage() {
+  // Admins only, asked here as well as in the proxy: a read-only person's session passes the gate on some paths (lib/viewer-paths.ts).
+  await requireAdmin();
   const [offers, products] = await Promise.all([listOffers(), listAllProducts()]);
 
   // Where each offer is attached. Offers are the only shared records in the

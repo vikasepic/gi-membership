@@ -19,14 +19,19 @@ export const metadata = NOINDEX;
 
 const NO_COUNTS: NavCounts = { products: 0, courses: 0, offers: 0, orders: 0, members: 0, media: 0, apps: { active: 0, total: 0 }, errors: 0 };
 
-// Admin access is gated in proxy.ts (ADMIN_EMAILS); mutating actions also
-// call requireAdmin() as defense in depth.
+// Admin access is gated in proxy.ts first (ADMIN_EMAILS, users.is_admin, and
+// users.is_viewer for the report pages). Every page then asks for itself:
+// requireAdmin(), or requireViewer() on the pages in lib/viewer-paths.ts.
+// Every action calls requireAdmin(). app/admin/viewer-refused.test.ts opens
+// each page and calls each action as a read-only person to keep it so.
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   // A read-only person gets the report pages only (lib/viewer-paths.ts). The
   // counts and the list of jobs are the admin's, and props to a client
-  // component travel to the browser, so for a viewer they are never read.
-  const viewer = (await getAdminRole())?.role === "viewer";
-  const [counts, settings] = await Promise.all([viewer ? NO_COUNTS : navCounts(), getSettings()]);
+  // component travel to the browser, so a viewer is handed zeros. All three
+  // reads start together; the role is the same lookup the page's guard uses.
+  const [who, realCounts, settings] = await Promise.all([getAdminRole(), navCounts(), getSettings()]);
+  const viewer = who?.role === "viewer";
+  const counts = viewer ? NO_COUNTS : realCounts;
   return (
     <div className="admin-shell flex min-h-dvh flex-col lg:flex-row">
       <AdminSidebar

@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/admin-guard";
 import Link from "next/link";
 import { getSettings } from "@/lib/settings";
 import { OfferForm } from "@/components/admin/offer-form";
@@ -5,6 +6,8 @@ import { listProductOptions, listAppOptions, listOfferOptions } from "@/lib/admi
 import { listCourses } from "@/lib/courses";
 
 export default async function NewOfferPage() {
+  // Admins only, asked here as well as in the proxy: a read-only person's session passes the gate on some paths (lib/viewer-paths.ts).
+  await requireAdmin();
   const [products, apps, offers, settings, courses] = await Promise.all([
     listProductOptions(),
     listAppOptions(),
