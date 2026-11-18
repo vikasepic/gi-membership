@@ -185,9 +185,19 @@ export function deriveMembers(d: MoneyData): MemberMoney[] {
 
   const nameOf = subscriptionNamer(d);
 
+  // What an order took is the sum of its lines, as Transactions reads it. An
+  // upsell accepted afterwards is charged on its own and written as one more
+  // line; orders.total_cents is never raised (lib/checkout.ts, acceptOto). On
+  // 18 Nov 2026 that hid $246 across two live orders, one of them a $0 trial
+  // order that was not counted as a payment at all. The order's own total is
+  // only for an order with nothing written beside it.
+  const linesCents = new Map<string, number>();
+  for (const it of d.items) linesCents.set(it.orderId, (linesCents.get(it.orderId) ?? 0) + it.amountCents);
+  const paidCents = (o: OrderRowLite) => linesCents.get(o.id) ?? o.totalCents;
+
   return d.users.map((u) => {
     const orders = (ordersByUser.get(u.id) ?? []).sort((a, b) => ms(a.createdAt) - ms(b.createdAt));
-    const paidOrders = orders.filter((o) => o.status === "paid" && o.totalCents > 0);
+    const paidOrders = orders.filter((o) => o.status === "paid" && paidCents(o) > 0);
     const refunded = orders.filter((o) => o.status === "refunded");
     const subs = (subsByUser.get(u.id) ?? [])
       .map((s) => subView(s, nameOf(s)))
@@ -246,7 +256,14 @@ export function deriveMembers(d: MoneyData): MemberMoney[] {
       mrrCents: subs.filter((s) => s.state === "paying" || s.state === "past due" || s.state === "cancelling").reduce((n, s) => n + monthlyCents(s), 0),
       payments: paidOrders.length,
       refunds: refunded.length,
-      totalPaidCents: paidOrders.reduce((n, o) => n + o.totalCents, 0),
+      // Gross: a refunded order was paid before it went back, so it is here
+      // and in refundedCents, and every screen shows the difference. Leaving
+      // it out took each refund off money that was never added, so a member
+      // whose only order was refunded read as owing the store (18 Nov 2026).
+      totalPaidCents: [...paidOrders, ...refunded].reduce((n, o) => n + paidCents(o), 0),
+      // Deliberately the order's own total, not its lines: refunding an order
+      // returns the order's own payment (lib/orders.ts, refundOrder) and never
+      // an upsell charged separately, and the ledger's refund row says the same.
       refundedCents: refunded.reduce((n, o) => n + o.totalCents, 0),
       lastPaidAt: paidOrders.length ? paidOrders[paidOrders.length - 1].createdAt : null,
       nextEvent: events[0] ?? null,
@@ -326,7 +343,8 @@ export function applyMemberFilter(
   const by: Record<MemberFilter["sort"], (a: MemberMoney, b: MemberMoney) => number> = {
     newest: (a, b) => ms(b.joinedAt) - ms(a.joinedAt),
     next: (a, b) => (a.nextEvent ? ms(a.nextEvent.at) : Infinity) - (b.nextEvent ? ms(b.nextEvent.at) : Infinity),
-    total: (a, b) => b.totalPaidCents - a.totalPaidCents,
+    // The figure the column shows, so the order matches what is read down it.
+    total: (a, b) => b.totalPaidCents - b.refundedCents - (a.totalPaidCents - a.refundedCents),
     last: (a, b) => (b.lastPaidAt ? ms(b.lastPaidAt) : 0) - (a.lastPaidAt ? ms(a.lastPaidAt) : 0),
     // Never-seen sorts last rather than first: the question this sort asks is
     // "who was here recently", and an answer led by people who have never

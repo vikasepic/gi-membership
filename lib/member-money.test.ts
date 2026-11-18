@@ -153,13 +153,30 @@ describe("members", () => {
 
   it("counts what each person has paid us, renewals in, refunds and test mode out", () => {
     expect(by("dael")).toMatchObject({ payments: 1, totalPaidCents: 5800, lastPaidAt: "2026-09-17T10:00:00Z" });
-    expect(by("jenny")).toMatchObject({ payments: 1, refunds: 1, totalPaidCents: 2900, refundedCents: 4700 });
+    // The refunded $47 was paid before it went back, so it is on both sides:
+    // every screen shows total paid less refunded, and hers is the $29 she kept.
+    expect(by("jenny")).toMatchObject({ payments: 1, refunds: 1, totalPaidCents: 2900 + 4700, refundedCents: 4700 });
     expect(by("eric")).toMatchObject({ payments: 1, totalPaidCents: 2900 });
+  });
+
+  it("nets a member whose only order was refunded to nothing, not below it", () => {
+    const [m] = deriveMembers({
+      ...DATA,
+      users: [{ id: "otto", email: "otto@e.com", name: null, isAdmin: false, createdAt: "2026-09-08T09:00:00Z" }],
+      orders: [order({ id: "o6", userId: "otto", totalCents: 4700, status: "refunded" })],
+    });
+    expect(m.totalPaidCents - m.refundedCents).toBe(0);
+    expect(memberTiles([m], NOW).collectedCents).toBe(0);
+  });
+
+  it("collects what Transactions nets, refunds taken off once", () => {
+    const net = ledgerTotals(applyLedgerFilter(deriveLedger(DATA), { ...DEFAULT_LEDGER_FILTER, range: "all" }, NOW)).netCents;
+    expect(memberTiles(members, NOW).collectedCents).toBe(net);
   });
 
   it("tiles follow the filter", () => {
     const all = memberTiles(members, NOW);
-    expect(all).toMatchObject({ members: 5, paying: 1, mrrCents: 5800, onTrial: 1, endingThisWeek: 1, convertedThisMonth: 1, cancelledThisMonth: 1, collectedCents: 2900 + 5800 + 2900 - 4700 });
+    expect(all).toMatchObject({ members: 5, paying: 1, mrrCents: 5800, onTrial: 1, endingThisWeek: 1, convertedThisMonth: 1, cancelledThisMonth: 1, collectedCents: 2900 + 5800 + 2900 });
     const trials = applyMemberFilter(members, { ...DEFAULT_MEMBER_FILTER, journey: "on trial" }, NOW);
     expect(trials.map((m) => m.id)).toEqual(["eric"]);
     expect(memberTiles(trials, NOW).collectedCents).toBe(2900);
@@ -168,6 +185,7 @@ describe("members", () => {
   it("filters by what they hold and by an event within the week, and sorts by total", () => {
     expect(applyMemberFilter(members, { ...DEFAULT_MEMBER_FILTER, offer: "dpv" }, NOW).map((m) => m.id)).toEqual(["jenny"]);
     expect(applyMemberFilter(members, { ...DEFAULT_MEMBER_FILTER, soon: true }, NOW).map((m) => m.id)).toEqual(["eric"]);
+    // By what they kept paying us: Jenny's $76 less the $47 refund ranks below Dael's $58.
     expect(applyMemberFilter(members, { ...DEFAULT_MEMBER_FILTER, sort: "total" }, NOW)[0].id).toBe("dael");
     expect(applyMemberFilter(members, { ...DEFAULT_MEMBER_FILTER, journey: "converted" }, NOW).map((m) => m.id)).toEqual(["dael"]);
   });
@@ -176,6 +194,75 @@ describe("members", () => {
     expect(monthlyCents({ amountCents: 12000, interval: "year", intervalCount: 1 })).toBe(1000);
     expect(sourceOf({}, "https://www.facebook.com/")).toBe("facebook.com");
     expect(sourceOf({}, null)).toBe("direct");
+  });
+});
+
+/**
+ * An accepted upsell is charged on its own and written as one more line on
+ * the order it followed; orders.total_cents is never raised. On 18 Nov 2026
+ * two live orders stood that way, $246 between them, and Members left that
+ * money out while Transactions, which reads the lines, counted it.
+ */
+describe("an order with an upsell accepted after it", () => {
+  const user = (id: string) => ({ id, email: `${id}@e.com`, name: null, isAdmin: false, createdAt: "2026-10-01T09:00:00Z" });
+  const line = (orderId: string, kind: "product" | "oto", amountCents: number, stripeSubscriptionId: string | null = null) =>
+    ({ orderId, kind, description: kind, amountCents, offerId: kind === "oto" ? "bw" : null, productId: kind === "product" ? "dpv" : null, stripeSubscriptionId });
+  const at = "2026-10-23T10:00:00Z";
+  const data: MoneyData = {
+    ...DATA,
+    users: [user("kira"), user("lee"), user("moss"), user("nell")],
+    subscriptions: [],
+    ownership: [],
+    orders: [
+      order({ id: "k1", userId: "kira", totalCents: 2900, createdAt: at, updatedAt: at }),
+      // A free trial at checkout, then a paid upsell on the thank-you page.
+      order({ id: "l1", userId: "lee", totalCents: 0, createdAt: at, updatedAt: at, stripePaymentIntentId: null }),
+      // Nothing written beside it: the order's own total is all there is.
+      order({ id: "m1", userId: "moss", totalCents: 2900, createdAt: at, updatedAt: at }),
+      order({ id: "n1", userId: "nell", totalCents: 2900, status: "refunded", createdAt: at, updatedAt: at }),
+    ],
+    items: [
+      line("k1", "product", 2900),
+      line("k1", "oto", 19700),
+      line("l1", "oto", 0, "sub_lee"),
+      line("l1", "oto", 4700),
+      line("n1", "product", 2900),
+      line("n1", "oto", 19700),
+    ],
+  };
+  const by = (id: string) => deriveMembers(data).find((m) => m.id === id)!;
+
+  it("counts the upsell in what the member paid", () => {
+    expect(by("kira")).toMatchObject({ payments: 1, totalPaidCents: 22600 });
+  });
+
+  it("counts an order that charged nothing itself as a payment once its upsell was paid", () => {
+    expect(by("lee")).toMatchObject({ payments: 1, totalPaidCents: 4700, lastPaidAt: at });
+  });
+
+  it("falls back to the order's own total when it has no lines", () => {
+    expect(by("moss")).toMatchObject({ payments: 1, totalPaidCents: 2900 });
+  });
+
+  it("reaches the Collected tile, which then agrees with Transactions", () => {
+    // Kira and Lee only: the ledger has no row for an order without lines.
+    const two = { ...data, users: [user("kira"), user("lee")], orders: data.orders.filter((o) => o.userId === "kira" || o.userId === "lee") };
+    expect(memberTiles(deriveMembers(two), NOW).collectedCents).toBe(22600 + 4700);
+    expect(ledgerTotals(deriveLedger(two)).netCents).toBe(22600 + 4700);
+  });
+
+  // Refunding an order gives back the order's own payment (lib/orders.ts,
+  // refundOrder). The upsell was a separate charge that refund never touches,
+  // so the lines would overstate what went back by the whole upsell.
+  it("reports a refund as the order's own total, which is what a refund returns", () => {
+    expect(by("nell")).toMatchObject({ payments: 0, refunds: 1, refundedCents: 2900 });
+  });
+
+  it("keeps the upsell of a refunded order in what the member paid, as Transactions does", () => {
+    const nell = by("nell");
+    expect(nell.totalPaidCents - nell.refundedCents).toBe(19700);
+    const only = { ...data, users: [user("nell")], orders: data.orders.filter((o) => o.userId === "nell") };
+    expect(ledgerTotals(deriveLedger(only)).netCents).toBe(19700);
   });
 });
 
