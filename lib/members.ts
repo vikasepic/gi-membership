@@ -468,7 +468,9 @@ export async function accessForMember(userId: string): Promise<AccessRow[]> {
         ? (pName.get(r.product_id as string) ?? "Product")
         : `${oName.get(r.offer_id as string) ?? "Offer"} (courses)`,
     status: r.status as string,
-    granted: r.source === "grant",
+    // By hand means an admin is named on the row. The offer checkout writes
+    // source "grant" for every offer it sells, with nobody as the granter.
+    granted: r.source === "grant" && Boolean(r.granted_by),
     // An offer grant is recorded with the offer that granted it (0069); a bare
     // product grant has only the product. Either way this is the value that
     // would grant it again, which is exactly what the picker must not offer.
