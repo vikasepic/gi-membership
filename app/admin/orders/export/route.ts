@@ -1,10 +1,10 @@
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireViewer } from "@/lib/admin-guard";
 import { loadMoneyData } from "@/lib/money-data";
 import { deriveLedger, applyLedgerFilter, ledgerFilterFrom } from "@/lib/ledger";
 
 /** The filtered ledger as CSV, the same rows the page shows. */
 export async function GET(req: Request) {
-  await requireAdmin();
+  await requireViewer();
   const sp = Object.fromEntries(new URL(req.url).searchParams.entries());
   const data = await loadMoneyData();
   const rows = applyLedgerFilter(deriveLedger(data), ledgerFilterFrom(sp), data.now);

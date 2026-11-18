@@ -1,10 +1,10 @@
-import { requireAdmin, adminEmails } from "@/lib/admin-guard";
+import { requireViewer, adminEmails } from "@/lib/admin-guard";
 import { loadMoneyData } from "@/lib/money-data";
 import { deriveMembers, applyMemberFilter, memberFilterFrom } from "@/lib/member-money";
 
 /** The filtered members list as CSV, the same rows the page shows. */
 export async function GET(req: Request) {
-  await requireAdmin();
+  await requireViewer();
   const sp = Object.fromEntries(new URL(req.url).searchParams.entries());
   const data = await loadMoneyData();
   const rows = applyMemberFilter(deriveMembers(data), memberFilterFrom(sp), data.now, adminEmails());

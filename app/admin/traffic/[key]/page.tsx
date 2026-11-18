@@ -1,3 +1,4 @@
+import { requireViewer } from "@/lib/admin-guard";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -39,6 +40,8 @@ export default async function TrafficFunnelPage({
   params: Promise<{ key: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // Open to an admin or a read-only person (lib/viewer-paths.ts); the proxy is not the only gate.
+  await requireViewer();
   const { key } = await params;
   const sp = await searchParams;
   const preset = presetFrom(sp);

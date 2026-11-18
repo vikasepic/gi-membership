@@ -1,3 +1,4 @@
+import { requireViewer } from "@/lib/admin-guard";
 import Link from "next/link";
 import { clickRows, scrollPaths, scrollRows } from "@/lib/visit-reports";
 import { PRESETS, presetFrom, rangeOf } from "@/lib/traffic-funnel";
@@ -18,6 +19,8 @@ export default async function ScrollPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // Open to an admin or a read-only person (lib/viewer-paths.ts); the proxy is not the only gate.
+  await requireViewer();
   const params = await searchParams;
   const preset = presetFrom(params);
   const range = rangeOf(preset, todayUtc());

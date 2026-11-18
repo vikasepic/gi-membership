@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { announceDeploy, currentNotice } from "@/lib/deploy-notice";
-import { requireAdmin } from "@/lib/admin-guard";
+import { getAdminRole } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -42,16 +42,13 @@ export async function POST(request: Request) {
 /**
  * What the admin shell polls.
  *
- * Admin-only, because it says something about the shape of the deploy pipeline
- * and there is no reason for a buyer's browser to ask. Returns `null` rather
+ * For whoever is in the admin, an admin or a read-only person, because the
+ * deploy is about to throw both off their tab. Not for a buyer's browser: it
+ * says something about the shape of the deploy pipeline. Returns `null` rather
  * than a 404 when nothing is happening — which is almost always — so the client
  * has one shape to read and nothing to catch.
  */
 export async function GET() {
-  try {
-    await requireAdmin();
-  } catch {
-    return NextResponse.json({ notice: null }, { status: 401 });
-  }
+  if (!(await getAdminRole())) return NextResponse.json({ notice: null }, { status: 401 });
   return NextResponse.json({ notice: await currentNotice() });
 }

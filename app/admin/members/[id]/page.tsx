@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { requireAdmin, adminEmails } from "@/lib/admin-guard";
+import { requireViewer, adminEmails } from "@/lib/admin-guard";
 import { listProductOptions, listOfferOptions } from "@/lib/admin";
 import { accessForMember } from "@/lib/members";
 import { activityFor } from "@/lib/member-activity";
@@ -26,8 +26,8 @@ import { Tile, Pill, journeyTone, kindTone, KIND_LABEL, fmtDate, relative, Soon 
  */
 export default async function MemberPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [me, data, access, products, offers, courses, signIns, clicks] = await Promise.all([
-    requireAdmin(),
+  const [{ user: me, role }, data, access, products, offers, courses, signIns, clicks] = await Promise.all([
+    requireViewer(),
     loadMoneyData(),
     accessForMember(id),
     listProductOptions(),
@@ -40,6 +40,8 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
     progressForCourses(id, courses),
     lastLessonFor(id, courses),
   ]);
+  // A read-only person sees everything about the member and none of the levers.
+  const canEdit = role === "admin";
   const m = deriveMembers(data).find((x) => x.id === id);
   const { data: rb } = await createServiceClient()
     .from("users")
@@ -100,7 +102,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                       )}
                       {!r.livemode && <> <Pill tone="quiet">test mode</Pill></>}
                       {r.couponCode && <> <Pill tone="quiet">coupon {r.couponCode}</Pill></>}
-                      {r.kind === "purchase" && r.orderId && !r.refunded && r.amountCents > 0 && (
+                      {canEdit && r.kind === "purchase" && r.orderId && !r.refunded && r.amountCents > 0 && (
                         <span className="ml-2 inline-block"><RefundButton orderId={r.orderId} email={r.email} amount={money(r.amountCents, r.currency)} /></span>
                       )}
                     </span>
@@ -137,7 +139,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                     {s.canceledAt && <><dt className="text-muted">Cancelled</dt><dd>{fmtDate(s.canceledAt)}</dd></>}
                     <dt className="text-muted">Paid so far</dt><dd>{s.paidInvoices} payment{s.paidInvoices === 1 ? "" : "s"}, {money(s.paidTotalCents, s.currency)}</dd>
                   </dl>
-                  {s.state === "on trial" && (
+                  {canEdit && s.state === "on trial" && (
                     <form action={extendTrialAction} className="mt-2 flex flex-wrap items-center gap-2">
                       <input type="hidden" name="subscriptionId" value={s.stripeSubscriptionId} />
                       <label className="text-xs text-muted" htmlFor={`days-${s.stripeSubscriptionId}`}>Extend trial by</label>
@@ -148,7 +150,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                       <span className="w-full text-[0.7rem] text-muted">Moves the charge date in Stripe. No charge for the extra days; the 1-day reminder goes out before the new date.</span>
                     </form>
                   )}
-                  {(s.state === "paying" || s.state === "on trial" || s.state === "past due") && (
+                  {canEdit && (s.state === "paying" || s.state === "on trial" || s.state === "past due") && (
                     <form action={cancelSubscriptionAction} className="mt-2">
                       <input type="hidden" name="subscriptionId" value={s.stripeSubscriptionId} />
                       <button type="submit" className="rounded-full border border-border px-3 py-1 text-xs hover:border-primary hover:text-primary">Cancel at period end</button>
@@ -176,7 +178,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                 {access.map((a) => (
                   <li key={a.id} className="flex items-center justify-between gap-2">
                     <span>{a.label} <span className="text-xs text-muted">{a.status}{a.granted ? " · granted" : ""}</span></span>
-                    {a.status !== "canceled" && (
+                    {canEdit && a.status !== "canceled" && (
                       <form action={revokeAccessAction}>
                         <input type="hidden" name="ownershipId" value={a.id} />
                         <button type="submit" className="text-xs text-muted hover:text-primary">Revoke</button>
@@ -186,10 +188,12 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
                 ))}
               </ul>
             )}
-            <details className="mt-3">
-              <summary className="cursor-pointer text-sm text-primary hover:underline">Grant access</summary>
-              <div className="mt-2"><GrantMore userId={m.id} held={held} grants={grants} /></div>
-            </details>
+            {canEdit && (
+              <details className="mt-3">
+                <summary className="cursor-pointer text-sm text-primary hover:underline">Grant access</summary>
+                <div className="mt-2"><GrantMore userId={m.id} held={held} grants={grants} /></div>
+              </details>
+            )}
           </section>
 
           <section className="rounded-2xl border border-border bg-surface p-4">
@@ -215,6 +219,9 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
             )}
           </section>
 
+          {/* Every control in here changes something or opens Stripe, so a
+              read-only person gets none of the section. */}
+          {canEdit && (
           <section className="rounded-2xl border border-border bg-surface p-4 text-sm">
             <h2 className="text-sm font-medium">Account</h2>
             <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -262,6 +269,7 @@ export default async function MemberPage({ params }: { params: Promise<{ id: str
             {!isOwner && <ChangeEmail userId={m.id} email={m.email} />}
             </div>
           </section>
+          )}
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { NavCounts } from "@/lib/admin-nav";
+import { viewerMayOpen } from "@/lib/viewer-paths";
 
 // The admin navigation.
 //
@@ -97,9 +98,12 @@ export function AdminSidebar({
   counts,
   live,
   nudges = [],
+  viewer = false,
 }: {
   counts: NavCounts;
   live: boolean;
+  /** A read-only person: only the report pages, no counts, no nudges. */
+  viewer?: boolean;
   /** Things the admin already knows are wrong. Absent when there are none. */
   nudges?: { label: string; href: string }[];
 }) {
@@ -120,12 +124,20 @@ export function AdminSidebar({
   // exactly — otherwise Products stays lit on all nine pages.
   const isOn = (href: string) => (href === "/admin" ? path === "/admin" : path.startsWith(href));
 
+  // A read-only person is shown what they can open and nothing that would
+  // only bounce them back (lib/viewer-paths.ts is the one list).
+  const shown = viewer
+    ? groups(counts)
+        .map((g) => ({ ...g, items: g.items.filter((i) => viewerMayOpen(i.href)).map((i) => ({ ...i, badge: undefined })) }))
+        .filter((g) => g.items.length > 0)
+    : groups(counts);
+
   const nav = (
     <nav className="flex h-full flex-col gap-0.5 p-3" aria-label="Admin">
       {/* Only where there is something. A panel that is absent when nothing is
           wrong is one you believe the moment it appears — and every line in it
           is a fact the admin already held and mentioned nowhere you look. */}
-      {nudges.length > 0 && !tight && (
+      {nudges.length > 0 && !tight && !viewer && (
         <div className="mb-2 flex flex-col gap-1 rounded-lg bg-[#f0c98a]/20 p-2.5">
           <span className="text-[0.68rem] font-semibold text-[#f0c98a]">
             {nudges.length} need{nudges.length === 1 ? "s" : ""} you
@@ -143,7 +155,7 @@ export function AdminSidebar({
         </div>
       )}
 
-      {groups(counts).map((g) => (
+      {shown.map((g) => (
         <div key={g.title} className="flex flex-col gap-0.5">
           <span
             className={`pb-1 pt-4 text-[0.62rem] font-semibold uppercase tracking-[0.13em] text-white/55 ${

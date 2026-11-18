@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireViewer } from "@/lib/admin-guard";
 import { listProductOptions, listOfferOptions } from "@/lib/admin";
 import { loadMoneyData } from "@/lib/money-data";
 import {
@@ -39,7 +39,9 @@ export default async function TransactionsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const filter = ledgerFilterFrom(await searchParams);
-  const [, data, products, offers] = await Promise.all([requireAdmin(), loadMoneyData(), listProductOptions(), listOfferOptions()]);
+  const [{ role }, data, products, offers] = await Promise.all([requireViewer(), loadMoneyData(), listProductOptions(), listOfferOptions()]);
+  // A read-only person sees the same rows with nothing to press (lib/viewer-paths.ts).
+  const canEdit = role === "admin";
   const all = deriveLedger(data);
   const shown = applyLedgerFilter(all, filter, data.now);
   const t = ledgerTotals(shown);
@@ -138,7 +140,7 @@ export default async function TransactionsPage({
                         {r.amountCents === 0 ? "$0" : money(r.amountCents, r.currency)}
                       </td>
                       <td className="px-3 py-3 text-right">
-                        {(r.kind === "purchase" || r.kind === "upsell" || r.kind === "renewal") && r.orderId && !r.refunded && r.amountCents > 0 && (
+                        {canEdit && (r.kind === "purchase" || r.kind === "upsell" || r.kind === "renewal") && r.orderId && !r.refunded && r.amountCents > 0 && (
                           <RefundButton orderId={r.orderId} email={r.email} amount={money(r.amountCents, r.currency)} />
                         )}
                       </td>

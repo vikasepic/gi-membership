@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireAdmin, adminEmails } from "@/lib/admin-guard";
+import { requireViewer, adminEmails } from "@/lib/admin-guard";
 import { listProductOptions, listOfferOptions } from "@/lib/admin";
 import { loadMoneyData } from "@/lib/money-data";
 import {
@@ -44,7 +44,9 @@ export default async function AdminMembersPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const filter = memberFilterFrom(await searchParams);
-  const [, data, products, offers] = await Promise.all([requireAdmin(), loadMoneyData(), listProductOptions(), listOfferOptions()]);
+  const [{ role }, data, products, offers] = await Promise.all([requireViewer(), loadMoneyData(), listProductOptions(), listOfferOptions()]);
+  // A read-only person sees the same rows with nothing to press (lib/viewer-paths.ts).
+  const canEdit = role === "admin";
   const envAdmins = adminEmails();
   const all = deriveMembers(data);
   // Last seen is the later of signing in and opening a lesson: someone who
@@ -81,10 +83,12 @@ export default async function AdminMembersPage({
         </p>
       </div>
 
-      <details className="rounded-2xl border border-border bg-surface">
-        <summary className="cursor-pointer list-none px-5 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">+ Add a member</summary>
-        <div className="border-t border-border p-5"><AddMember grants={grants} /></div>
-      </details>
+      {canEdit && (
+        <details className="rounded-2xl border border-border bg-surface">
+          <summary className="cursor-pointer list-none px-5 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">+ Add a member</summary>
+          <div className="border-t border-border p-5"><AddMember grants={grants} /></div>
+        </details>
+      )}
 
       <div className="flex flex-wrap gap-2.5">
         <Tile label={shown.length === all.length ? "Members" : "Showing"} value={String(tiles.members)} hint={shown.length === all.length ? undefined : `of ${all.length}`} />

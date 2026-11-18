@@ -149,3 +149,44 @@ describe("the working rail", () => {
     expect(renderToStaticMarkup(<AdminSidebar counts={REAL} live />)).toContain("Collapse");
   });
 });
+
+/**
+ * A read-only person (users.is_viewer) sees the report pages and nothing that
+ * leads anywhere else. Spec: docs/superpowers/specs/2026-11-18-journeys-and-read-only-login-design.md
+ */
+describe("the sidebar for a read-only person", () => {
+  const viewer = (nudges?: { label: string; href: string }[]) => {
+    path = "/admin/orders";
+    return renderToStaticMarkup(<AdminSidebar counts={REAL} live viewer nudges={nudges} />);
+  };
+  const adminLinks = (out: string) => [...out.matchAll(/href="(\/admin[^"]*)"/g)].map((m) => m[1]);
+
+  it("links only to pages they may open", async () => {
+    const { viewerMayOpen } = await import("@/lib/viewer-paths");
+    const links = adminLinks(viewer());
+    expect(links.length).toBeGreaterThan(0);
+    expect(links.filter((h) => !viewerMayOpen(h))).toEqual([]);
+    for (const href of ["/admin/orders", "/admin/members", "/admin/traffic", "/admin/attribution"]) expect(links).toContain(href);
+  });
+
+  it("drops the groups that are now empty", () => {
+    const out = viewer();
+    expect(out).not.toContain("Catalogue");
+    expect(out).not.toContain("System");
+    expect(out).toContain("Customers");
+  });
+
+  it("carries no counts and no nudges", () => {
+    const out = viewer([{ label: "Set your legal pages", href: "/admin/settings" }]);
+    expect(out).not.toContain("needs you");
+    expect(out).not.toContain("Set your legal pages");
+    expect(out).not.toMatch(/tabular-nums/);
+  });
+
+  it("is unchanged for an admin", () => {
+    path = "/admin/orders";
+    const out = renderToStaticMarkup(<AdminSidebar counts={REAL} live />);
+    expect(adminLinks(out)).toContain("/admin/settings");
+    expect(out).toMatch(/tabular-nums/);
+  });
+});

@@ -1,3 +1,4 @@
+import { requireViewer } from "@/lib/admin-guard";
 import {
   pageCountsSince,
   paidByProduct,
@@ -32,6 +33,8 @@ export default async function AdminTrafficPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // Open to an admin or a read-only person (lib/viewer-paths.ts); the proxy is not the only gate.
+  await requireViewer();
   // Captured once: awaiting the same promise twice in one render is a latent
   // bug even where it happens to work, and both presetFrom and
   // overviewFilterFrom need the same params.

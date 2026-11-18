@@ -1,3 +1,4 @@
+import { requireViewer } from "@/lib/admin-guard";
 import Link from "next/link";
 import { campaignRows } from "@/lib/visit-reports";
 import { CampaignTable, type CampaignSort } from "@/components/admin/campaign-table";
@@ -14,6 +15,8 @@ export default async function AttributionPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // Open to an admin or a read-only person (lib/viewer-paths.ts); the proxy is not the only gate.
+  await requireViewer();
   const params = await searchParams;
   const preset = presetFrom(params);
   const range = rangeOf(preset, todayUtc());
