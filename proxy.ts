@@ -4,8 +4,10 @@ import { createServerClient } from "@supabase/ssr";
 import { applyAttributionCookie } from "@/lib/attribution-cookie";
 import { matchRedirect } from "@/lib/redirects";
 import { cachedRedirectRules } from "@/lib/redirect-cache";
+import { VIEWER_HOME, viewerMayOpen } from "@/lib/viewer-paths";
 
-// - Gates /admin to admin users (ADMIN_EMAILS); redirects others to /login.
+// - Gates /admin to admin users (ADMIN_EMAILS, users.is_admin) and lets a
+//   read-only person (users.is_viewer) into the report pages; others to /login.
 // - Refreshes the Supabase auth session so server components see it.
 // - Ensures a first-party anon id cookie so attribution can be captured on
 //   landing (events don't send until phase 6, but the id must exist now or
@@ -67,14 +69,17 @@ export async function proxy(req: NextRequest) {
     userId = user?.id ?? null;
   }
 
-  // Admin gate. Two lists, checked in this order:
+  // Admin gate. Three lists, checked in this order:
   //
-  //   ADMIN_EMAILS   break-glass, set in the environment, cannot be edited from
-  //                  inside the app, so the owner can never be locked out.
-  //   users.is_admin flagged through Admin -> Members.
+  //   ADMIN_EMAILS    break-glass, set in the environment, cannot be edited from
+  //                   inside the app, so the owner can never be locked out.
+  //   users.is_admin  flagged through Admin -> Members.
+  //   users.is_viewer read-only: the report pages in lib/viewer-paths.ts and
+  //                   nothing else. Any other admin address sends them to
+  //                   Journeys rather than to a login they are already past.
   //
   // The env list is checked first and costs nothing; the table is only queried
-  // for someone who is not on it, so the common case adds no round-trip.
+  // for someone who is not on it, and both columns come from that one query.
   //
   // requireAdmin() in lib/admin-guard.ts repeats both checks on every mutating
   // action. This gate is convenience; that one is the security boundary.
@@ -84,6 +89,7 @@ export async function proxy(req: NextRequest) {
       .map((e) => e.trim().toLowerCase())
       .filter(Boolean);
     let allowed = Boolean(userEmail) && admins.includes((userEmail ?? "").toLowerCase());
+    let viewer = false;
 
     if (!allowed && userId) {
       try {
@@ -94,20 +100,22 @@ export async function proxy(req: NextRequest) {
         );
         const { data } = await service
           .from("users")
-          .select("is_admin")
+          .select("is_admin, is_viewer")
           .eq("id", userId)
           .maybeSingle();
-        allowed = Boolean(data?.is_admin);
+        viewer = !data?.is_admin && Boolean(data?.is_viewer);
+        allowed = Boolean(data?.is_admin) || (viewer && viewerMayOpen(pathname));
       } catch {
         // A lookup failure denies rather than allows. An admin gate that opens
         // when the database is unreachable is not a gate.
         allowed = false;
+        viewer = false;
       }
     }
 
     if (!allowed) {
       const to = req.nextUrl.clone();
-      to.pathname = "/login";
+      to.pathname = viewer ? VIEWER_HOME : "/login";
       to.search = "";
       return NextResponse.redirect(to);
     }

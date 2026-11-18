@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -63,4 +64,44 @@ export async function requireAdmin() {
   const user = await getAdminUser();
   if (!user) redirect("/login");
   return user;
+}
+
+/**
+ * A read-only person (users.is_viewer), or an admin.
+ *
+ * The ads team's login, 18 Nov 2026: it opens the report pages listed in
+ * lib/viewer-paths.ts and changes nothing. Everything above this line reads
+ * is_admin alone and must stay that way. requireAdmin(), getAdminUser() and
+ * userIsAdmin() are what every action, write route, View as and preview
+ * calls, and a viewer passes none of them. Only pages and downloads on that
+ * list call requireViewer().
+ *
+ * cache() is per request, so a layout and its page share one lookup and a
+ * flag taken away is gone on the next request.
+ */
+export type AdminRole = "admin" | "viewer";
+
+export const getAdminRole = cache(async (): Promise<{ user: NonNullable<Awaited<ReturnType<typeof getAdminUser>>>; role: AdminRole } | null> => {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  if (isAdminEmail(user.email)) return { user, role: "admin" };
+  try {
+    const { createServiceClient } = await import("@/lib/supabase/server");
+    const { data } = await createServiceClient().from("users").select("is_admin, is_viewer").eq("id", user.id).maybeSingle();
+    if (data?.is_admin) return { user, role: "admin" };
+    if (data?.is_viewer) return { user, role: "viewer" };
+  } catch {
+    // A lookup that fails denies, as the proxy's does.
+  }
+  return null;
+});
+
+/** Guard for a page or download a read-only person may open. Never for anything that writes. */
+export async function requireViewer() {
+  const who = await getAdminRole();
+  if (!who) redirect("/login");
+  return who;
 }

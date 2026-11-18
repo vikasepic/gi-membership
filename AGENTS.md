@@ -87,6 +87,11 @@ same PR — that is how the next person's Claude avoids your mistake.
   server throws. Round-trip through JSON first (`docOf`).
 - **A grant records its target at that moment.** Fix an offer's grant before
   granting anyone; a wrong one means revoke, then re-grant.
+- **A read-only person (`users.is_viewer`) opens only the paths in
+  `lib/viewer-paths.ts`.** A new admin page is closed to them until it is
+  added there, and a page on the list calls `requireViewer()` itself. Nothing
+  that writes ever does: every action and write route keeps `requireAdmin()`,
+  which a viewer never passes.
 - **After any deploy, a tab left open breaks on its next navigation** (404 or
   a dead link). Hard-refresh before debugging. `deploymentId` in
   `next.config.ts` is what makes that a reload instead of a 404 — keep it.
