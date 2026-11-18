@@ -174,7 +174,7 @@ describe("a free start", () => {
 
   it("is not a purchase, and someone with nothing else is not a buyer", () => {
     expect(run(trial(0)).people).toEqual([]);
-    expect(run({ ...trial(0), ownership: [{ userId: "a", productId: null, offerId: "fw", appId: null, status: "active", stripeSubscriptionId: null, source: "grant", createdAt: "2026-11-12T00:00:00Z" }] }).people).toEqual([]);
+    expect(run({ ...trial(0), ownership: [{ userId: "a", productId: null, offerId: "fw", appId: null, status: "active", stripeSubscriptionId: null, source: "grant", grantedBy: "owner@x.test", createdAt: "2026-11-12T00:00:00Z" }] }).people).toEqual([]);
   });
 
   it("becomes a purchase from the day it started once it has taken money", () => {
@@ -258,7 +258,7 @@ describe("what does not count", () => {
 describe("access that was given, not bought", () => {
   const GIVEN = {
     ...VALIDATOR_THEN_FW,
-    ownership: [{ userId: "a", productId: null, offerId: "mpb", appId: null, status: "active", stripeSubscriptionId: null, source: "grant", createdAt: "2026-11-12T00:00:00Z" }],
+    ownership: [{ userId: "a", productId: null, offerId: "mpb", appId: null, status: "active", stripeSubscriptionId: null, source: "grant", grantedBy: "owner@x.test", createdAt: "2026-11-12T00:00:00Z" }],
     courseGrants: [{ userId: "a", courseTitle: "Foundations Weekend replays", createdAt: null }],
   };
 
@@ -282,6 +282,15 @@ describe("access that was given, not bought", () => {
       ["The Micro-Product Builder", "2026-11-12T00:00:00Z", 0, null],
       ["Foundations Weekend replays", null, 0, null],
     ]);
+  });
+
+  it("access the offer checkout wrote is not called given: it writes source 'grant' too, with nobody as the granter", () => {
+    // lib/offer-checkout.ts records every offer sale's access as source
+    // "grant". On 18 Nov 2026 production held 309 such rows and 25 hand grants;
+    // reading the source alone called nearly every buyer's own purchase a gift.
+    const r = run({ ...VALIDATOR_THEN_FW, ownership: [{ userId: "a", productId: null, offerId: "fw", appId: null, status: "active", stripeSubscriptionId: null, source: "grant", grantedBy: null, createdAt: "2026-11-09T10:00:00Z" }] });
+    expect(r.people[0].given).toEqual([]);
+    expect(r.people[0].lines.filter((l) => l.how === "given")).toEqual([]);
   });
 
   it("access they bought is not called given", () => {

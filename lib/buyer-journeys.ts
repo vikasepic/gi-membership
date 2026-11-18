@@ -22,7 +22,7 @@ import { sourceOf } from "@/lib/member-money";
  *     purchase, until its subscription has taken money. Then it is a purchase
  *     dated the day it started. Renewals are never a purchase of their own.
  *   - Refunded, unpaid and test-mode orders do not exist here.
- *   - Access that was given is listed on the person and counted nowhere.
+ *   - Access an admin gave by hand is listed on the person and counted nowhere.
  *   - The team (admins, read-only people) is left out.
  *
  * Spec: docs/superpowers/specs/2026-11-18-journeys-and-read-only-login-design.md
@@ -183,12 +183,15 @@ export function deriveJourneys(d: MoneyData, opts: { range: JourneyRange; teamEm
     if (!firstPurchaseOrder || purchases.length === 0) continue;
     if (ms(purchases[0].at) < from) continue;
 
-    // Given, not bought. A grant that was later bought has had its source
+    // Given, not bought: an admin's name on the row. The source alone does
+    // not say so, because the offer checkout writes "grant" for every offer it
+    // sells (lib/offer-checkout.ts); on 18 Nov 2026 that was 309 rows against
+    // 25 hand grants. A hand grant that was later bought has had its source
     // overwritten (lib/checkout.ts), so it reads as bought, which is right.
     const given: BuyerJourney["given"] = [];
     if (userId) {
       for (const own of d.ownership) {
-        if (own.userId !== userId || own.source !== "grant") continue;
+        if (own.userId !== userId || own.source !== "grant" || !own.grantedBy) continue;
         const what =
           (own.offerId && d.names.offers.get(own.offerId)?.name) ||
           (own.productId && d.names.products.get(own.productId)?.name) ||

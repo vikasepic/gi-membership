@@ -16,7 +16,7 @@ The owner decided (18 Nov): Grow's own data only, no Stripe pull. Grow's orders 
 ## What exists today
 
 - `lib/money-data.ts` `loadMoneyData()` reads users, orders, order lines, subscriptions and access once, paged past PostgREST's 1000-row cap. Transactions, Members, the person page and both CSV exports are pure derivations over it (`lib/member-money.ts`, `lib/ledger.ts`). Journeys is one more derivation over the same rows.
-- The loader's access rows do not carry `source` (purchase, bump, oto, app, grant) or `created_at`. Journeys needs both to show "given" access with its date.
+- The loader's access rows do not carry `source`, `granted_by` or `created_at`. Journeys needs `granted_by` and the date to show "given" access.
 - An order line's `kind` is `product`, `bump`, `oto` (any offer, on its own sales page or as an upsell) or `renewal`. A bump and an accepted upsell are both extra lines on the same order (`lib/checkout.ts`, the upsell insert near line 2177), so one order is one checkout. `lib/ledger.ts` already tells an order's purchase line from its upsell and add-on lines.
 - `orders.total_cents` is not updated when an upsell is accepted, so an order's value is the sum of its lines. On 18 Nov two live orders differ, by $246 together. Members' "Total paid" sums `total_cents` and so runs low for those two people; that is an existing fault, outside this work, reported to the owner.
 - 145 of the 434 paid live orders are $0: trial starts and 100% coupons. 86 of 311 people with a paid order have only $0 orders. Members already ignores $0 orders when counting payments.
@@ -53,7 +53,7 @@ Address `/admin/journeys`, in the sidebar's Customers group, labelled "Journeys"
 
 **Later purchases.** The purchase line of each later one, in date order.
 
-**Given access.** Access with source `grant`, and courses added by hand, are shown on the person's row marked "given", with the date where one is recorded. They are never counted as purchases or in spend. This is the answer to the bundle question.
+**Given access.** Access an admin gave by hand (an `ownership` row with `granted_by` set), and courses added by hand, are shown on the person's row marked "given", with the date where one is recorded. *(Corrected during the build, 18 Nov: `source = 'grant'` alone is not "given". The offer checkout writes it for every offer it sells: 309 rows in production against 25 hand grants.)* They are never counted as purchases or in spend. This is the answer to the bundle question.
 
 **The summary table.** One row per first purchase:
 

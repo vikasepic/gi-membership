@@ -42,6 +42,10 @@ const stamp = Date.now();
 const userId = crypto.randomUUID();
 const email = `zz-viewer-pages-${stamp}@example.test`;
 let orderId = "";
+// Journeys leaves test-mode orders out, so its buyer has a live one.
+const buyerId = crypto.randomUUID();
+const buyerEmail = `zz-viewer-buyer-${stamp}@example.test`;
+let buyerOrderId = "";
 
 const REFUND_BUTTON = /<button[^>]*>\s*Refund\s*<\/button>/;
 const as = async (role: "admin" | "viewer", draw: () => Promise<React.ReactElement>) => {
@@ -62,6 +66,13 @@ describe.skipIf(!canRun)("the report pages for a read-only person (integration)"
     orderId = o.data.id as string;
     const i = await db.from("order_items").insert({ store_id: storeId, order_id: orderId, kind: "product", description: `zz viewer thing ${stamp}`, amount_cents: 2900 });
     if (i.error) throw new Error(`fixture item: ${i.error.message}`);
+    const b = await db.from("users").insert({ id: buyerId, store_id: storeId, email: buyerEmail });
+    if (b.error) throw new Error(`fixture buyer: ${b.error.message}`);
+    const bo = await db.from("orders").insert({ store_id: storeId, user_id: buyerId, email: buyerEmail, status: "paid", livemode: true, total_cents: 2700, subtotal_cents: 2700, currency: "usd" }).select("id").single();
+    if (bo.error || !bo.data) throw new Error(`fixture buyer order: ${bo.error?.message}`);
+    buyerOrderId = bo.data.id as string;
+    const bi = await db.from("order_items").insert({ store_id: storeId, order_id: buyerOrderId, kind: "product", description: `zz journey thing ${stamp}`, amount_cents: 2700 });
+    if (bi.error) throw new Error(`fixture buyer item: ${bi.error.message}`);
   });
 
   afterAll(async () => {
@@ -71,7 +82,11 @@ describe.skipIf(!canRun)("the report pages for a read-only person (integration)"
       await db.from("order_items").delete().eq("order_id", orderId);
       await db.from("orders").delete().eq("id", orderId);
     }
-    await db.from("users").delete().eq("id", userId);
+    if (buyerOrderId) {
+      await db.from("order_items").delete().eq("order_id", buyerOrderId);
+      await db.from("orders").delete().eq("id", buyerOrderId);
+    }
+    await db.from("users").delete().in("id", [userId, buyerId]);
   });
 
   beforeEach(() => {
@@ -111,6 +126,26 @@ describe.skipIf(!canRun)("the report pages for a read-only person (integration)"
     expect(viewer).not.toContain("<form");
     expect(viewer).not.toContain("<button");
     for (const text of [email, "Money timeline", `zz viewer thing ${stamp}`]) expect(viewer).toContain(text);
+  });
+
+  it.each(["admin", "viewer"] as const)("Journeys draws for a signed-in %s: the table, the people, the download and what it covers", async (role) => {
+    const { default: Page } = await import("@/app/admin/journeys/page");
+    const html = await as(role, () => Page({ searchParams: Promise.resolve({}) }));
+    for (const text of [
+      "Journeys", "First purchase", "Bought again later", "Download CSV", buyerEmail, `zz journey thing ${stamp}`,
+      "Sales made on Grow since 12 Aug 2026. Book Writer and anything sold elsewhere is not included.",
+    ]) expect(html, text).toContain(text);
+    expect(html).toContain('href="/admin/journeys/export"');
+    expect(html).not.toContain("<form");
+  });
+
+  it("Journeys marks the range it is showing and carries it to the download", async () => {
+    const { default: Page } = await import("@/app/admin/journeys/page");
+    const html = await as("viewer", () => Page({ searchParams: Promise.resolve({ range: "90" }) }));
+    expect(html).toMatch(/<a[^>]*aria-current="page"[^>]*>90 days<\/a>/);
+    expect(html).toContain('href="/admin/journeys/export?range=90"');
+    const all = await as("viewer", () => Page({ searchParams: Promise.resolve({ range: "nonsense" }) }));
+    expect(all).toMatch(/<a[^>]*aria-current="page"[^>]*>All time<\/a>/);
   });
 
   it.each([

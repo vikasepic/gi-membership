@@ -66,6 +66,8 @@ function groups(c: NavCounts): { title: string; items: Item[] }[] {
         { href: "/admin/traffic", label: "Traffic", icon: ICON.orders },
         // Traffic answers "how many". This answers "who from".
         { href: "/admin/attribution", label: "Attribution", icon: ICON.attribution },
+        // What each buyer bought first, and what they went on to buy.
+        { href: "/admin/journeys", label: "Journeys", icon: ICON.members },
         // Above Orders, because it is the page an order comes from.
         { href: "/admin/checkout", label: "Checkout", icon: ICON.checkout },
         { href: "/admin/orders", label: "Transactions", icon: ICON.orders, badge: n(c.orders) },

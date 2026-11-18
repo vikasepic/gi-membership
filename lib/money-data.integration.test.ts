@@ -27,7 +27,7 @@ describe.skipIf(!canRun)("loadMoneyData (integration)", () => {
     appId = app.id as string;
     const u = await db().from("users").insert({ id: userId, store_id: storeId, email: `zz-money-${stamp}@example.test`, is_viewer: true });
     if (u.error) throw new Error(`fixture user: ${u.error.message}`);
-    const o = await db().from("ownership").insert({ store_id: storeId, user_id: userId, app_id: appId, status: "active", source: "grant" });
+    const o = await db().from("ownership").insert({ store_id: storeId, user_id: userId, app_id: appId, status: "active", source: "grant", granted_by: "zz-owner@example.test" });
     if (o.error) throw new Error(`fixture ownership: ${o.error.message}`);
   });
 
@@ -46,6 +46,8 @@ describe.skipIf(!canRun)("loadMoneyData (integration)", () => {
     const d = await loadMoneyData();
     const row = d.ownership.find((o) => o.userId === userId);
     expect(row?.source).toBe("grant");
+    // A hand grant names who gave it; the offer checkout writes source "grant" with nobody.
+    expect(row?.grantedBy).toBe("zz-owner@example.test");
     expect(Number.isNaN(new Date(row?.createdAt ?? "").getTime())).toBe(false);
   });
 });

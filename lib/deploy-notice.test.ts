@@ -61,9 +61,11 @@ describe("who may raise one", () => {
     expect(post).not.toContain("requireAdmin");
   });
 
-  it("only lets an admin read one", () => {
+  it("only lets someone in the admin read one", () => {
+    // An admin or a read-only person (18 Nov 2026): both have a tab the deploy
+    // is about to break. Who passes is tested in app/api/deploy-notice/route.test.ts.
     const get = route.slice(route.indexOf("export async function GET"));
-    expect(get).toContain("requireAdmin");
+    expect(get).toContain("getAdminRole");
   });
 });
 

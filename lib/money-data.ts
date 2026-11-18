@@ -60,8 +60,14 @@ export type OwnershipRow = {
   appId: string | null;
   status: string;
   stripeSubscriptionId: string | null;
-  /** How it was got: purchase, bump, oto, app or grant. A later purchase overwrites a grant. */
+  /**
+   * How it was got: purchase, bump, oto, app or grant. NOT "given by hand":
+   * the offer checkout writes "grant" for every offer it sells
+   * (lib/offer-checkout.ts). A hand grant is one with `grantedBy` set.
+   */
   source?: string;
+  /** The admin who gave it by hand (ownership.granted_by); null when it was bought. */
+  grantedBy?: string | null;
   /** When the row was first written. A re-bought row keeps its first date. */
   createdAt?: string;
 };
@@ -109,7 +115,7 @@ export async function loadMoneyData(): Promise<MoneyData> {
     ),
     listSubscriptions(),
     allRows<Record<string, unknown>>((from, to) =>
-      db.from("ownership").select("user_id, product_id, offer_id, app_id, status, stripe_subscription_id, source, created_at")
+      db.from("ownership").select("user_id, product_id, offer_id, app_id, status, stripe_subscription_id, source, granted_by, created_at")
         .eq("store_id", storeId).order("user_id", { ascending: true }).range(from, to),
     ),
     db.from("offers").select("id, name, content_name, billing_type, price_cents").eq("store_id", storeId),
@@ -188,6 +194,7 @@ export async function loadMoneyData(): Promise<MoneyData> {
       status: o.status as string,
       stripeSubscriptionId: (o.stripe_subscription_id as string) ?? null,
       source: (o.source as string) ?? "",
+      grantedBy: (o.granted_by as string) ?? null,
       createdAt: o.created_at as string,
     })),
     courseGrants: grants.map((g) => ({
